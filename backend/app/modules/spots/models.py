@@ -130,6 +130,12 @@ class Spot(Base):
             "show_flag",
             postgresql_where=text("show_flag = 1"),
         ),
+        # Quality-gate random pool for the home feed (M2, migration 0012).
+        Index(
+            "idx_spots_image_pool",
+            "ldong_regn_cd",
+            postgresql_where=text("show_flag = 1 AND first_image_url IS NOT NULL"),
+        ),
     )
 
     content_id: Mapped[str] = mapped_column(String(32), primary_key=True)
