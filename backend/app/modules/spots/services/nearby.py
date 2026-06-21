@@ -15,7 +15,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
-from app.modules.spots.models import Spot, SpotDetail
+from app.modules.spots.models import LclsSystmCode, Spot, SpotDetail
 
 _MAX_NUM_OF_ROWS = 50
 _EARTH_RADIUS_M = 6_371_000.0
@@ -35,15 +35,21 @@ class NearbySpotRow:
     content_id: str
     title: str
     first_image_url: str | None
-    first_image2_url: str | None
     addr1: str | None
     mapx: float | None
     mapy: float | None
     dist: float | None
-    category: str | None = None  # 파생 칩 코드 (derive_category)
+    # KTO subtype 라벨(lcls_systm_codes.lcls_systm3_nm, 예: "사적지", "찻집") — Task 16부터
+    # 카드 category는 coarse 칩 코드가 아니라 이 subtype 라벨이다. 미매칭이면 None.
+    category: str | None = None
     # KTO overview(verbatim) — spot_details에만 존재하고 상세 조회 시 lazy 캐시되므로
     # 대부분 None이다. 카드 설명 줄은 있을 때만 노출(요약·가공 금지, 클라가 시각 truncate).
     overview: str | None = None
+    # 아래 두 필드는 SPT가 채우지 않고(이 함수는 None으로 둔다) 소비 모듈(MAP)이
+    # load_region_meta / load_congestion seam으로 머지한다.
+    region_name: str | None = None
+    sigungu_name: str | None = None
+    congestion: str | None = None  # "low"|"medium"|"high" — spot_concentration 버킷
 
 
 def category_predicate(cat: NearbyCategory) -> ColumnElement[bool]:
@@ -123,17 +129,15 @@ async def find_nearby_spots(
             Spot.content_id.label("content_id"),
             Spot.title.label("title"),
             Spot.first_image_url.label("first_image_url"),
-            Spot.first_image2_url.label("first_image2_url"),
             Spot.addr1.label("addr1"),
             Spot.mapx.label("mapx"),
             Spot.mapy.label("mapy"),
-            Spot.lcls_systm1.label("l1"),
-            Spot.lcls_systm2.label("l2"),
-            Spot.lcls_systm3.label("l3"),
+            LclsSystmCode.lcls_systm3_nm.label("category"),
             SpotDetail.overview.label("overview"),
             dist,
         )
         .outerjoin(SpotDetail, SpotDetail.content_id == Spot.content_id)
+        .outerjoin(LclsSystmCode, LclsSystmCode.lcls_systm3_cd == Spot.lcls_systm3)
         .where(
             Spot.show_flag == 1,
             Spot.first_image_url.isnot(None),
@@ -160,12 +164,11 @@ async def find_nearby_spots(
                 content_id=r.content_id,
                 title=r.title or "",
                 first_image_url=r.first_image_url,
-                first_image2_url=r.first_image2_url,
                 addr1=r.addr1,
                 mapx=float(r.mapx) if r.mapx is not None else None,
                 mapy=float(r.mapy) if r.mapy is not None else None,
                 dist=float(r.dist) if r.dist is not None else None,
-                category=derive_category(r.l1, r.l2, r.l3),
+                category=r.category,
                 overview=r.overview,
             )
         )

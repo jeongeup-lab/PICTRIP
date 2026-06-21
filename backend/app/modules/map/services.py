@@ -1,15 +1,14 @@
-"""MAP service layer — crowd(Redis) 머지 + region reverse geocode.
+"""MAP service layer — nearby enrichment + region reverse geocode.
 
 nearby 쿼리(bbox+haversine+카테고리)와 taxonomy는 SPT가 소유한다
-(`app.modules.spots.services.find_nearby_spots`). MAP은 그 행에 crowd 지표를 머지한다:
-Redis(`crowd:{contentId}`; crowd는 Redis-only, `crowd_metrics` 테이블 없음)에서 조회해
-카드에 붙이고, 없으면 `crowd = None`(graceful fallback, 에러 아님).
+(`app.modules.spots.services.find_nearby_spots`). MAP은 그 거리순 행에 congestion
+(spot_concentration 버킷)과 region 메타(regions/sigungus)를 SPT seam으로 머지한다 —
+둘 다 행이 없으면 None(graceful, 에러 아님). crowd(Redis) 머지는 Task 16에서 제거됐다.
 """
 
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from typing import Any
 
 from redis.asyncio import Redis
@@ -19,11 +18,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.kakao_local import kakao_local_get
 from app.core.logging import get_logger
 from app.modules.map.schemas import RegionLabel
-from app.modules.spots.services import NearbyCategory, find_nearby_spots
+from app.modules.spots.services import (
+    NearbyCategory,
+    NearbySpotRow,
+    find_nearby_spots,
+    load_congestion,
+    load_region_meta,
+)
 
 logger = get_logger(__name__)
 
-_CROWD_KEY = "crowd:{content_id}"
+_NEARBY_LIMIT = 30
 _REGION_CACHE_KEY = "region:{lat:.3f}:{lng:.3f}"
 _REGION_CACHE_TTL = 86_400  # 1 day
 _COORD2REGIONCODE_PATH = "/geo/coord2regioncode.json"
@@ -32,100 +37,34 @@ REGIONS_TREE_KEY = "regions:tree"
 _REGIONS_TREE_TTL = 86_400  # 24h — the tree is administrative + slow-moving.
 
 
-@dataclass
-class CrowdRow:
-    """Crowd metric for a single spot (rate 0..1, level easy|normal|crowded)."""
-
-    rate: float
-    level: str
-
-
-@dataclass
-class NearbySpotRow:
-    content_id: str
-    title: str
-    first_image_url: str | None
-    first_image2_url: str | None
-    addr1: str | None
-    mapx: float | None
-    mapy: float | None
-    dist: float | None
-    category: str | None = None  # SPT가 파생한 칩 코드
-    overview: str | None = None  # KTO overview(verbatim), 대부분 None — 카드 설명 줄
-    crowd: CrowdRow | None = None
-
-
-def merge_crowd(
-    spots: list[NearbySpotRow],
-    crowd_by_id: dict[str, CrowdRow],
-) -> list[NearbySpotRow]:
-    """Attach crowd metrics where a matching row exists; leave `crowd=None` else.
-
-    Pure function (no I/O) so it is unit-testable in isolation. The fallback when
-    a spot has no crowd entry is an explicit `None` — callers/clients branch on
-    presence, never on an error.
-    """
-    for spot in spots:
-        spot.crowd = crowd_by_id.get(spot.content_id)
-    return spots
-
-
-async def _load_crowd(redis: Redis, content_ids: list[str]) -> dict[str, CrowdRow]:
-    """Best-effort crowd lookup from Redis. Missing/corrupt rows are skipped.
-
-    Redis being unavailable must NOT fail the whole request — nearby spots are
-    still useful without crowd info — so errors degrade to an empty mapping.
-    """
-    if not content_ids:
-        return {}
-    try:
-        keys = [_CROWD_KEY.format(content_id=cid) for cid in content_ids]
-        raw_values = await redis.mget(keys)
-    except Exception as exc:  # crowd is non-critical; degrade gracefully
-        logger.warning("map.crowd.lookup_failed", error=str(exc))
-        return {}
-
-    out: dict[str, CrowdRow] = {}
-    for content_id, raw in zip(content_ids, raw_values, strict=True):
-        if not raw:
-            continue
-        try:
-            payload = json.loads(raw)
-            out[content_id] = CrowdRow(rate=float(payload["rate"]), level=str(payload["level"]))
-        except (ValueError, KeyError, TypeError):
-            logger.warning("map.crowd.bad_payload", content_id=content_id)
-            continue
-    return out
-
-
 async def nearby_spots(
     session: AsyncSession,
-    redis: Redis,
     *,
     lat: float,
     lng: float,
     radius: int,
     category: NearbyCategory | None,
 ) -> list[NearbySpotRow]:
-    """SPT의 거리순 nearby 행에 crowd(Redis)를 graceful 머지한다."""
-    spt_rows = await find_nearby_spots(session, lat=lat, lng=lng, radius=radius, category=category)
-    rows = [
-        NearbySpotRow(
-            content_id=s.content_id,
-            title=s.title,
-            first_image_url=s.first_image_url,
-            first_image2_url=s.first_image2_url,
-            addr1=s.addr1,
-            mapx=s.mapx,
-            mapy=s.mapy,
-            dist=s.dist,
-            category=s.category,
-            overview=s.overview,
-        )
-        for s in spt_rows
-    ]
-    crowd_by_id = await _load_crowd(redis, [r.content_id for r in rows])
-    return merge_crowd(rows, crowd_by_id)
+    """SPT의 거리순 nearby 행에 congestion + region 메타를 머지하고 30개로 자른다.
+
+    congestion(spot_concentration 버킷)과 region/sigungu 라벨은 SPT seam
+    (load_congestion / load_region_meta)에서 한 번에 조회해 머지한다 — 둘 다 행이 없으면
+    None으로 둔다(graceful, 에러 아님).
+    """
+    rows = await find_nearby_spots(session, lat=lat, lng=lng, radius=radius, category=category)
+    rows = rows[:_NEARBY_LIMIT]
+    if not rows:
+        return rows
+
+    content_ids = [r.content_id for r in rows]
+    congestion_by_id = await load_congestion(session, content_ids)
+    region_by_id = await load_region_meta(session, content_ids)
+    for row in rows:
+        row.congestion = congestion_by_id.get(row.content_id)
+        region_name, sigungu_name = region_by_id.get(row.content_id, (None, None))
+        row.region_name = region_name
+        row.sigungu_name = sigungu_name
+    return rows
 
 
 def _to_region_label(payload: dict[str, Any]) -> RegionLabel | None:
