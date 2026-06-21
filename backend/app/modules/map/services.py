@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from redis.asyncio import Redis
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.kakao_local import kakao_local_get
@@ -26,6 +27,9 @@ _CROWD_KEY = "crowd:{content_id}"
 _REGION_CACHE_KEY = "region:{lat:.3f}:{lng:.3f}"
 _REGION_CACHE_TTL = 86_400  # 1 day
 _COORD2REGIONCODE_PATH = "/geo/coord2regioncode.json"
+
+REGIONS_TREE_KEY = "regions:tree"
+_REGIONS_TREE_TTL = 86_400  # 24h — the tree is administrative + slow-moving.
 
 
 @dataclass
@@ -172,3 +176,95 @@ async def reverse_geocode(redis: Redis, *, lat: float, lng: float) -> RegionLabe
     except Exception as exc:  # cache write best-effort
         logger.warning("map.region.cache_set_failed", error=str(exc))
     return label
+
+
+# Centroids are runtime AVG of visible spot coordinates. mapx=lng, mapy=lat
+# (S07 ERD) — do not swap. The "{시도} 전체" centroid is the sido-scope AVG; a
+# sigungu with no spots COALESCEs to that sido centroid.
+_SIDO_CENTROID_SQL = text(
+    "SELECT ldong_regn_cd AS code, AVG(mapx) AS cx, AVG(mapy) AS cy "
+    "FROM spots WHERE show_flag = 1 AND ldong_regn_cd IS NOT NULL "
+    "GROUP BY ldong_regn_cd"
+)
+_SIGUNGU_CENTROID_SQL = text(
+    "SELECT ldong_signgu_cd AS code, AVG(mapx) AS cx, AVG(mapy) AS cy "
+    "FROM spots WHERE show_flag = 1 AND ldong_signgu_cd IS NOT NULL "
+    "GROUP BY ldong_signgu_cd"
+)
+
+
+async def regions_tree(session: AsyncSession, redis: Redis) -> list[dict[str, Any]]:
+    """17 sido + their sigungus, each with a runtime-AVG centroid, cached 24h.
+
+    Centroids are computed once over the whole spots table (two GROUP BY scans)
+    rather than per-row to keep the assembly O(regions + sigungus). A sigungu
+    with no visible spots falls back to its sido centroid; the cache stores the
+    fully assembled JSON so subsequent reads skip the DB entirely.
+    """
+    try:
+        cached = await redis.get(REGIONS_TREE_KEY)
+    except Exception as exc:  # cache is non-critical — degrade to a rebuild.
+        logger.warning("map.regions_tree.cache_get_failed", error=str(exc))
+        cached = None
+    if cached is not None:
+        try:
+            raw = cached.decode() if isinstance(cached, bytes) else cached
+            return list(json.loads(raw))
+        except (ValueError, TypeError) as exc:
+            logger.warning("map.regions_tree.cache_corrupt", error=str(exc))
+
+    regions = (
+        await session.execute(
+            text("SELECT ldong_regn_cd, ldong_regn_nm FROM regions ORDER BY ldong_regn_cd")
+        )
+    ).all()
+    sigungus = (
+        await session.execute(
+            text(
+                "SELECT ldong_signgu_cd, ldong_regn_cd, ldong_signgu_nm FROM sigungus "
+                "ORDER BY ldong_signgu_cd"
+            )
+        )
+    ).all()
+    sido_centroids = {
+        r.code: (float(r.cx), float(r.cy))
+        for r in (await session.execute(_SIDO_CENTROID_SQL)).all()
+        if r.cx is not None and r.cy is not None
+    }
+    sigungu_centroids = {
+        r.code: (float(r.cx), float(r.cy))
+        for r in (await session.execute(_SIGUNGU_CENTROID_SQL)).all()
+        if r.cx is not None and r.cy is not None
+    }
+
+    sigungus_by_regn: dict[str, list[Any]] = {}
+    for sg in sigungus:
+        sigungus_by_regn.setdefault(sg.ldong_regn_cd, []).append(sg)
+
+    tree: list[dict[str, Any]] = []
+    for region in regions:
+        sido_lng, sido_lat = sido_centroids.get(region.ldong_regn_cd, (0.0, 0.0))
+        sg_nodes: list[dict[str, Any]] = []
+        for sg in sigungus_by_regn.get(region.ldong_regn_cd, []):
+            lng, lat = sigungu_centroids.get(sg.ldong_signgu_cd, (sido_lng, sido_lat))
+            sg_nodes.append(
+                {
+                    "sigunguCode": sg.ldong_signgu_cd,
+                    "sigunguName": sg.ldong_signgu_nm,
+                    "centroid": {"lat": lat, "lng": lng},
+                }
+            )
+        tree.append(
+            {
+                "regionCode": region.ldong_regn_cd,
+                "regionName": region.ldong_regn_nm,
+                "centroid": {"lat": sido_lat, "lng": sido_lng},
+                "sigungus": sg_nodes,
+            }
+        )
+
+    try:
+        await redis.set(REGIONS_TREE_KEY, json.dumps(tree), ex=_REGIONS_TREE_TTL)
+    except Exception as exc:  # cache write best-effort
+        logger.warning("map.regions_tree.cache_set_failed", error=str(exc))
+    return tree

@@ -42,3 +42,21 @@ class RegionLabel(BaseModel):
     sigungu: str | None = None
     dong: str | None = None
     label: str
+
+
+class Centroid(BaseModel):
+    lat: float
+    lng: float
+
+
+class SigunguNode(BaseModel):
+    sigunguCode: str
+    sigunguName: str
+    centroid: Centroid
+
+
+class RegionNode(BaseModel):
+    regionCode: str
+    regionName: str
+    centroid: Centroid
+    sigungus: list[SigunguNode]
