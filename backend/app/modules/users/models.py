@@ -13,7 +13,6 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     String,
-    Text,
     UniqueConstraint,
     false,
     func,
@@ -85,7 +84,6 @@ class UserAuthProvider(Base):
     )
     provider: Mapped[str] = mapped_column(String(16), nullable=False)
     provider_user_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    refresh_token_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
     linked_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
