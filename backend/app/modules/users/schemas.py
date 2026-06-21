@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 
 class UserPublic(BaseModel):
@@ -41,3 +41,22 @@ class SavedSpotToggle(BaseModel):
 
     contentId: str
     saved: bool
+
+
+class ConsentIn(BaseModel):
+    """Consent submission body for PUT /users/me/consents."""
+
+    locationConsent: bool
+    photoConsent: bool = False
+    termsVersion: str
+
+
+class ConsentOut(BaseModel):
+    """Persisted consent state echoed back after an upsert."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    locationConsent: bool
+    photoConsent: bool
+    termsVersion: str
+    consentedAt: datetime

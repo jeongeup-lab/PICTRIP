@@ -103,9 +103,10 @@ class UserConsent(Base):
     )
     location_consent: Mapped[bool] = mapped_column(Boolean, server_default=false(), nullable=False)
     photo_consent: Mapped[bool] = mapped_column(Boolean, server_default=false(), nullable=False)
-    notification_consent: Mapped[bool] = mapped_column(
-        Boolean, server_default=false(), nullable=False
-    )
+    # NOTE: the `notification_consent` DB column still exists (dropped in M3 /
+    # Task 20). Its ORM mapping was removed here (expand/contract) so this image
+    # stops referencing it; it has a DB default (false) so INSERTs that omit it
+    # still succeed.
     terms_version: Mapped[str] = mapped_column(String(16), nullable=False)
     consented_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

@@ -13,7 +13,13 @@ from app.core.schemas import ok
 from app.modules.spots import services as spots_services
 from app.modules.spots.schemas import SpotCard
 from app.modules.users import services
-from app.modules.users.schemas import LogoutBody, OAuthLoginIn, RefreshBody, SavedSpotToggle
+from app.modules.users.schemas import (
+    ConsentIn,
+    LogoutBody,
+    OAuthLoginIn,
+    RefreshBody,
+    SavedSpotToggle,
+)
 
 router = APIRouter(tags=["USR · user/auth"])
 
@@ -74,6 +80,20 @@ async def delete_me(
 ) -> Response:
     await services.delete_user_account(session, redis, user_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put(
+    "/users/me/consents",
+    status_code=status.HTTP_200_OK,
+    summary="Upsert my consents (location/photo/terms)",
+)
+async def put_consents(
+    body: ConsentIn,
+    user_id: CurrentUserId,
+    session: DbSession,
+) -> dict[str, Any]:
+    consent = await services.put_consents(session, user_id, body)
+    return ok(consent.model_dump())
 
 
 # ---------- Saved spots / bookmarks (ADR-0011) ----------

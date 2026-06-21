@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from redis.asyncio import Redis
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,12 +18,7 @@ from app.core.auth import (
 from app.core.exceptions import AuthTokenInvalid
 from app.core.oidc import verify_oauth_id_token
 from app.modules.users.models import User, UserAuthProvider, UserConsent
-from app.modules.users.schemas import OAuthLoginIn, TokenPair, UserPublic
-
-# terms_version stamped on a consent row that is auto-created as a side effect
-# of reading/writing the notification toggle (the user has not gone through the
-# explicit consent flow yet). 16-char column limit.
-_AUTO_CONSENT_TERMS_VERSION = "unset"
+from app.modules.users.schemas import ConsentIn, ConsentOut, OAuthLoginIn, TokenPair, UserPublic
 
 
 async def _find_provider(
@@ -126,34 +122,46 @@ async def delete_user_account(session: AsyncSession, redis: Redis, user_id: int)
     # re-hydrate) plus the ≤15-min access-token expiry.
 
 
-async def _get_or_create_consent(session: AsyncSession, user_id: int) -> UserConsent:
-    """Return the user's consent row, creating a default (all-off) one if none
-    exists. `user_consents` is owned by USR; other modules read the notification
-    toggle through `get_notification_consent` / `set_notification_consent`."""
-    consent = await session.get(UserConsent, user_id)
-    if consent is not None:
-        return consent
-    consent = UserConsent(
-        user_id=user_id,
-        terms_version=_AUTO_CONSENT_TERMS_VERSION,
+async def put_consents(session: AsyncSession, user_id: int, body: ConsentIn) -> ConsentOut:
+    """Upsert the user's consent row (PK = user_id), stamping ``consented_at``.
+
+    Idempotent: a repeat PUT updates the same row in place via
+    ``INSERT … ON CONFLICT (user_id) DO UPDATE``. The dropped-from-ORM
+    ``notification_consent`` DB column is never referenced (it has a DB default),
+    so omitting it from the INSERT is safe (expand/contract — M3 / Task 20)."""
+    stmt = (
+        pg_insert(UserConsent)
+        .values(
+            user_id=user_id,
+            location_consent=body.locationConsent,
+            photo_consent=body.photoConsent,
+            terms_version=body.termsVersion,
+            consented_at=func.now(),
+        )
+        .on_conflict_do_update(
+            index_elements=[UserConsent.user_id],
+            set_={
+                "location_consent": body.locationConsent,
+                "photo_consent": body.photoConsent,
+                "terms_version": body.termsVersion,
+                "consented_at": func.now(),
+            },
+        )
+        .returning(
+            UserConsent.location_consent,
+            UserConsent.photo_consent,
+            UserConsent.terms_version,
+            UserConsent.consented_at,
+        )
     )
-    session.add(consent)
+    row = (await session.execute(stmt)).one()
     await session.commit()
-    return consent
-
-
-async def get_notification_consent(session: AsyncSession, user_id: int) -> bool:
-    """Current notification master toggle, creating a default row if none."""
-    consent = await _get_or_create_consent(session, user_id)
-    return consent.notification_consent
-
-
-async def set_notification_consent(session: AsyncSession, user_id: int, *, enabled: bool) -> bool:
-    """Persist the notification master toggle; returns the stored value."""
-    consent = await _get_or_create_consent(session, user_id)
-    consent.notification_consent = enabled
-    await session.commit()
-    return consent.notification_consent
+    return ConsentOut(
+        locationConsent=row.location_consent,
+        photoConsent=row.photo_consent,
+        termsVersion=row.terms_version,
+        consentedAt=row.consented_at,
+    )
 
 
 async def refresh_session(session: AsyncSession, redis: Redis, refresh_token: str) -> TokenPair:
