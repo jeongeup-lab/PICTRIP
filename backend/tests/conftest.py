@@ -62,8 +62,10 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 
 @pytest_asyncio.fixture
 async def redis_client_fake() -> AsyncGenerator[FakeRedis, None]:
-    """In-memory async Redis for unit tests. Single connection per test."""
-    client = FakeRedis(decode_responses=False)
+    """In-memory async Redis for unit tests. Single connection per test.
+
+    Mirrors the production pool's ``decode_responses=True`` (one unified pool)."""
+    client = FakeRedis(decode_responses=True)
     try:
         yield client
     finally:

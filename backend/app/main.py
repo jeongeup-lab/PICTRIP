@@ -21,7 +21,7 @@ from app.core.error_handlers import register_error_handlers
 from app.core.kto_client import KtoClient
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import TraceIdMiddleware
-from app.core.redis import close_redis, redis_lifespan
+from app.core.redis import redis_lifespan
 from app.core.schemas import ok
 from app.modules.images import router as images_router
 from app.modules.map import router as map_router
@@ -53,7 +53,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             yield
         finally:
             await app.state.kto.aclose()
-            await close_redis()
             logger.info("app.shutdown")
 
 
