@@ -1,0 +1,44 @@
+name: pr-check
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+# This is the enforcement gate. Make it a REQUIRED status check on `main`
+# (Settings → Rules/Branch protection) so PRs can't merge until it passes.
+jobs:
+  template:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || "";
+            const errors = [];
+
+            // 1) 필수 섹션 존재
+            const required = ["## 요약", "## 변경 단위", "## 핵심 결정", "## 검증"];
+            for (const h of required) {
+              if (!body.includes(h)) errors.push(`누락된 섹션: \`${h}\``);
+            }
+
+            // 2) 템플릿을 실제로 채웠는지 (주석 제거 후 내용 길이)
+            const stripped = body.replace(/<!--[\s\S]*?-->/g, "").trim();
+            if (stripped.length < 40) {
+              errors.push("설명이 비어 있습니다. 템플릿을 채워주세요.");
+            }
+
+            // 3) '변경 단위' 최소 1개 체크
+            if (!/- \[x\] (backend|mobile|web|pipeline|deploy|docs)/i.test(body)) {
+              errors.push("‘변경 단위’에서 최소 1개를 [x] 로 체크하세요.");
+            }
+
+            // 4) '검증' 최소 1개 체크
+            if (!/## 검증[\s\S]*?- \[x\]/i.test(body)) {
+              errors.push("‘검증’ 항목 중 최소 1개를 [x] 로 체크하세요 (해당 없음 포함).");
+            }
+
+            if (errors.length) {
+              core.setFailed("PR 템플릿 검증 실패:\n- " + errors.join("\n- "));
+            } else {
+              core.info("PR 템플릿 검증 통과");
+            }
