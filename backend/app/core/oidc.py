@@ -96,6 +96,15 @@ async def _verify_generic(
     expected_nonce: str | None,
     hash_nonce: bool,
 ) -> OidcClaims:
+    # An empty `audiences` list would make PyJWT SKIP `aud` validation entirely
+    # (jwt.decode(audience=None)), so any validly-signed token from ANY OAuth
+    # client of this provider would be accepted — a token-substitution /
+    # account-takeover hole. A provider with no configured audience is therefore
+    # treated as misconfigured/disabled and fails loudly rather than silently.
+    if not audiences:
+        log.error("oidc[%s]: no configured audience — provider misconfigured", provider)
+        raise OAuthProviderUnavailable()
+
     try:
         header = jwt.get_unverified_header(id_token)
     except jwt.InvalidTokenError as exc:
@@ -118,7 +127,7 @@ async def _verify_generic(
             id_token,
             key,
             algorithms=algorithms,
-            audience=audiences or None,
+            audience=audiences,  # never None — empty audiences rejected above
             leeway=300,  # ±5 min skew
         )
     except jwt.InvalidTokenError as exc:

@@ -1,4 +1,4 @@
-"""map — map/crowd domain (10 features). See feature spec §4.7."""
+"""map — map domain (nearby + region). See feature spec §4.7."""
 
 from app.modules.map.routes import router
 

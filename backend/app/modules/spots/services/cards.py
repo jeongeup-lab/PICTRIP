@@ -76,6 +76,31 @@ async def load_region_meta(
     return {r.content_id: (r.ldong_regn_nm, r.ldong_signgu_nm) for r in rows}
 
 
+async def cover_url(
+    session: AsyncSession,
+    cover_spot_id: str | None,
+    resolved: list[SpotCardRow],
+) -> str | None:
+    """coverUrl = cover spot's firstImageUrl, else first resolved spot's, else None.
+
+    Shared by the home feed (heroes) and curation detail. Lives here (both already
+    import from ``cards``) to avoid the feed→curations circular import that the
+    earlier per-module duplication worked around.
+    """
+    if cover_spot_id is not None:
+        img = (
+            await session.execute(
+                select(Spot.first_image_url).where(Spot.content_id == cover_spot_id)
+            )
+        ).scalar_one_or_none()
+        if img:
+            return img
+    for r in resolved:
+        if r.first_image_url:
+            return r.first_image_url
+    return None
+
+
 async def load_spot_cards_by_ids(
     session: AsyncSession,
     content_ids: list[str],

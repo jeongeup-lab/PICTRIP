@@ -11,12 +11,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from redis.asyncio import Redis
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.spots.models import Spot
 from app.modules.spots.services import curations as curation_svc
-from app.modules.spots.services.cards import load_congestion
+from app.modules.spots.services.cards import cover_url, load_congestion
 from app.modules.spots.services.rows import SpotCardRow
 
 _HERO_COUNT = 6
@@ -46,26 +44,6 @@ class HomeFeedRow:
     rails: list[RailRow]
 
 
-async def _cover_url(
-    session: AsyncSession,
-    cover_spot_id: str | None,
-    resolved: list[SpotCardRow],
-) -> str | None:
-    """coverUrl = cover spot's firstImageUrl, else first resolved spot's, else null."""
-    if cover_spot_id is not None:
-        img = (
-            await session.execute(
-                select(Spot.first_image_url).where(Spot.content_id == cover_spot_id)
-            )
-        ).scalar_one_or_none()
-        if img:
-            return img
-    for r in resolved:
-        if r.first_image_url:
-            return r.first_image_url
-    return None
-
-
 async def assemble_home_feed(session: AsyncSession, redis: Redis) -> HomeFeedRow:
     region_curations = await curation_svc.list_published_curations(session, "region")
     mood_curations = await curation_svc.list_published_curations(session, "mood")
@@ -79,7 +57,7 @@ async def assemble_home_feed(session: AsyncSession, redis: Redis) -> HomeFeedRow
                 slug=cur.slug,
                 title=cur.title,
                 subtitle=cur.subtitle,
-                cover_url=await _cover_url(session, cur.cover_spot_id, resolved),
+                cover_url=await cover_url(session, cur.cover_spot_id, resolved),
             )
         )
 

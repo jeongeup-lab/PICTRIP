@@ -1,21 +1,13 @@
-"""IMG routes — admin-only. Public IMG flow goes through TST /taste/photo-search."""
+"""IMG routes — admin-only. Public IMG flow goes through TST /taste/photo-search.
+
+No HTTP endpoints are currently exposed: the public image flow is served by TST
+(``/taste/photo-search``) and the admin embedding-status view is not yet built.
+The (empty) router is still mounted by ``app.main`` so the IMG seam stays wired
+for when admin endpoints land.
+"""
 
 from __future__ import annotations
 
-from typing import Any
-
-from fastapi import APIRouter, status
-
-from app.core.schemas import ok
+from fastapi import APIRouter
 
 router = APIRouter(tags=["IMG · image/matching (admin)"])
-
-
-@router.get(
-    "/admin/embeddings/status",
-    status_code=status.HTTP_200_OK,
-    summary="(WIP) embedding load status",
-)
-async def embeddings_status() -> dict[str, Any]:
-    # TODO: count(spot_embeddings) vs count(spots)
-    return ok({"placeholder": "IMG-001"})

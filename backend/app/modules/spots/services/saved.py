@@ -16,7 +16,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ResourceNotFound, ValidationFailed
-from app.modules.spots.models import Spot, UserSavedSpot
+from app.modules.spots.models import LclsSystmCode, Spot, UserSavedSpot
 from app.modules.spots.services.rows import SpotCardRow
 
 # Opaque keyset cursor for the saved-spots list. The keyset is
@@ -94,9 +94,11 @@ async def list_saved_spots(
             Spot.addr1,
             Spot.mapx,
             Spot.mapy,
+            LclsSystmCode.lcls_systm3_nm,
             UserSavedSpot.saved_at,
         )
         .join(UserSavedSpot, UserSavedSpot.content_id == Spot.content_id)
+        .outerjoin(LclsSystmCode, LclsSystmCode.lcls_systm3_cd == Spot.lcls_systm3)
         .where(UserSavedSpot.user_id == user_id, Spot.show_flag == 1)
     )
     if cursor is not None:
@@ -127,6 +129,7 @@ async def list_saved_spots(
             addr1=r.addr1,
             mapx=float(r.mapx) if r.mapx is not None else None,
             mapy=float(r.mapy) if r.mapy is not None else None,
+            lcls_systm3_nm=r.lcls_systm3_nm,
         )
         for r in page
     ]

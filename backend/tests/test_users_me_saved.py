@@ -176,3 +176,32 @@ async def test_saved_card_shape_is_canonical(
         "category",
         "congestion",
     } <= set(card)
+
+
+async def test_saved_card_category_is_subtype_label(
+    client: AsyncClient, override_db_and_seed: AsyncSession
+) -> None:
+    """FIX 4: saved-list card.category is the KTO subtype label (lcls_systm3_nm)
+    via the LclsSystmCode join — aligned with feed/curation/nearby cards."""
+    session = override_db_and_seed
+    uid = await _seed_user(session)
+    await session.execute(
+        text(
+            "INSERT INTO lcls_systm_codes (lcls_systm3_cd, lcls_systm3_nm) "
+            "VALUES ('CAT-SAVED-1', '사적지') ON CONFLICT (lcls_systm3_cd) DO NOTHING"
+        )
+    )
+    await session.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, lcls_systm3, show_flag) "
+            "VALUES ('CATSPOT-1', 12, 'cat-spot', 'CAT-SAVED-1', 1) "
+            "ON CONFLICT (content_id) DO NOTHING"
+        )
+    )
+    await session.commit()
+    await _insert_saved_row(session, user_id=uid, content_id="CATSPOT-1")
+
+    r = await client.get("/v1/users/me/saved", headers=_auth(uid))
+    assert r.status_code == 200
+    card = next(c for c in r.json()["data"] if c["contentId"] == "CATSPOT-1")
+    assert card["category"] == "사적지"

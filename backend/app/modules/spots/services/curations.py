@@ -29,7 +29,11 @@ from app.core.exceptions import ResourceNotFound
 from app.core.time import kst_now, seconds_until_kst_midnight
 from app.modules.images.models import SpotEmbedding
 from app.modules.spots.models import Curation, CurationSpot, Spot, SpotDetail, SpotMood
-from app.modules.spots.services.cards import load_congestion, load_spot_cards_by_ids
+from app.modules.spots.services.cards import (
+    cover_url,
+    load_congestion,
+    load_spot_cards_by_ids,
+)
 from app.modules.spots.services.rows import SpotCardRow
 
 # Size of the candidate pool before the deterministic pick, and how many to show.
@@ -206,26 +210,6 @@ async def resolve_curation_spots(
     return [by_id[cid] for cid in ids if cid in by_id]
 
 
-async def _cover_url(
-    session: AsyncSession,
-    cover_spot_id: str | None,
-    resolved: list[SpotCardRow],
-) -> str | None:
-    """coverUrl = cover spot's firstImageUrl, else first resolved spot's, else null."""
-    if cover_spot_id is not None:
-        img = (
-            await session.execute(
-                select(Spot.first_image_url).where(Spot.content_id == cover_spot_id)
-            )
-        ).scalar_one_or_none()
-        if img:
-            return img
-    for r in resolved:
-        if r.first_image_url:
-            return r.first_image_url
-    return None
-
-
 async def get_curation_detail(
     session: AsyncSession,
     redis: Redis,
@@ -261,6 +245,6 @@ async def get_curation_detail(
         title=cur.title,
         lead=cur.lead,
         intro=cur.intro,
-        cover_url=await _cover_url(session, cur.cover_spot_id, resolved),
+        cover_url=await cover_url(session, cur.cover_spot_id, resolved),
         spots=resolved,
     )

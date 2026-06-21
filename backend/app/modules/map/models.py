@@ -1,7 +1,8 @@
 """MAP ORM models.
 
-The MAP domain has no persistent tables: nearby spots come from the KTO
-locationBasedList2 API and live crowd data lives in Redis. The former
+The MAP domain has no persistent tables: nearby spots are sourced from the SPT
+``spots`` table (bbox+haversine) via the SPT seam, enriched with congestion
+(``spot_concentration`` buckets) and region metadata. The former
 `region_visitors` / `sigungu_visitors` DataLab tables were never read or written
 by any service and were dropped in migration 0010.
 

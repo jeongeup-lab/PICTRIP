@@ -13,7 +13,7 @@ from app.modules.map.schemas import NearbySpotCard, RegionLabel, RegionNode
 from app.modules.map.services import nearby_spots, regions_tree, reverse_geocode
 from app.modules.spots.services import NearbyCategory
 
-router = APIRouter(tags=["MAP · map/crowd"])
+router = APIRouter(tags=["MAP · map"])
 
 
 @router.get(
