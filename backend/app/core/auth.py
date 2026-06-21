@@ -11,7 +11,6 @@ revisit JWT lib choice.
 
 from __future__ import annotations
 
-import json
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -27,7 +26,6 @@ from app.core.exceptions import (
     AuthSessionRevoked,
     AuthTokenExpired,
     AuthTokenInvalid,
-    SessionStoreUnavailable,  # noqa: F401 — reserved for Task 10 (Redis error handling)
 )
 
 if TYPE_CHECKING:
@@ -72,13 +70,12 @@ def create_access_token(*, user_id: int, extra_claims: dict[str, Any] | None = N
     return jwt.encode(payload, key, algorithm=algo)
 
 
-def create_refresh_token(*, user_id: int, jti: str, sid: str) -> str:
+def create_refresh_token(*, user_id: int, jti: str) -> str:
     key, algo = _signing_key()
     now = datetime.now(tz=UTC)
     payload = {
         "sub": str(user_id),
         "jti": jti,
-        "sid": sid,
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(seconds=settings.JWT_REFRESH_TOKEN_TTL_SECONDS)).timestamp()),
         "type": "refresh",
@@ -116,152 +113,60 @@ async def get_current_user_id(
 CurrentUserId = Annotated[int, Depends(get_current_user_id)]
 
 
-async def issue_token_pair(
-    redis: Redis,
-    *,
-    user_id: int,
-    user: UserPublic | None = None,
-    sid: str | None = None,
-) -> TokenPair:
-    """Mint a new access/refresh pair and write the Redis session family."""
+def mint_token_pair(*, user_id: int, user: UserPublic | None = None) -> TokenPair:
+    """Issue a fresh access+refresh pair. Zero Redis writes (denylist model)."""
     from app.modules.users.schemas import TokenPair, UserPublic
 
-    sid = sid or str(uuid.uuid4())
-    jti = str(uuid.uuid4())
-    refresh_ttl = settings.JWT_REFRESH_TOKEN_TTL_SECONDS
-    access_ttl = settings.JWT_ACCESS_TOKEN_TTL_SECONDS
-
     access = create_access_token(user_id=user_id)
-    refresh = create_refresh_token(user_id=user_id, jti=jti, sid=sid)
-
-    now = int(time.time())
-    exp_unix = now + refresh_ttl
-    payload = json.dumps({"uid": user_id, "sid": sid, "exp": exp_unix})
-
-    pipe = redis.pipeline()
-    pipe.set(f"rt:active:{jti}", payload, ex=refresh_ttl)
-    pipe.sadd(f"sess:{sid}", jti)
-    pipe.expire(f"sess:{sid}", refresh_ttl)
-    pipe.zremrangebyscore(f"user:sessions:{user_id}", 0, now)
-    pipe.zadd(f"user:sessions:{user_id}", {sid: exp_unix})
-    await pipe.execute()
-
+    refresh = create_refresh_token(user_id=user_id, jti=str(uuid.uuid4()))
     return TokenPair(
         accessToken=access,
         refreshToken=refresh,
-        expiresIn=access_ttl,
+        expiresIn=settings.JWT_ACCESS_TOKEN_TTL_SECONDS,
         user=user or UserPublic(id=user_id, isOnboarded=False),
     )
 
 
-# GRACE is checked before DENY so that concurrent retries within the 5 s window
-# get the cached pair rather than hitting the family-revoke path.
-# After the grace TTL expires, only the deny marker remains → REUSE fires.
-ROTATE_LUA = """
-local stored = redis.call('GETDEL', KEYS[1])
-if stored == false then
-  local g = redis.call('GET', KEYS[3])
-  if g then return {'GRACE', g} end
-  if redis.call('EXISTS', KEYS[2]) == 1 then return {'REUSE'} end
-  return {'NOTFOUND'}
-end
-redis.call('SET', KEYS[2], 1, 'EX', ARGV[1])
-redis.call('SET', KEYS[5], ARGV[4], 'EX', ARGV[1])
-redis.call('SADD', KEYS[4], ARGV[3])
-redis.call('EXPIRE', KEYS[4], ARGV[1])
-redis.call('SET', KEYS[3], ARGV[5], 'EX', ARGV[2])
-return {'OK', stored}
-"""
-
-
-async def rotate_refresh(redis: Redis, refresh_token: str) -> TokenPair:
-    """Rotate one refresh token. Raises AuthTokenInvalid / AuthSessionRevoked / AuthTokenExpired.
-
-    REUSE detection currently raises AuthTokenInvalid — Task 9 will wire family-revoke
-    and raise AuthSessionRevoked instead.
-    """
+async def refresh_tokens(redis: Redis, refresh_token: str) -> TokenPair:
+    """Sliding refresh, no rotation. Verify sig+exp, check the denylist (fail-open),
+    re-mint a new access + a refresh with the SAME jti and a fresh 30d exp."""
     from app.modules.users.schemas import TokenPair, UserPublic
 
     payload = decode_token(refresh_token)
     if payload.get("type") != "refresh":
         raise AuthTokenInvalid()
+    jti = payload.get("jti")
+    if not jti:
+        raise AuthTokenInvalid()
+    try:
+        denied = await redis.exists(f"denyjti:{jti}")
+    except Exception:  # Redis blip → fail-open (S08: avoid rotation's fail-closed)
+        denied = 0
+    if denied:
+        raise AuthSessionRevoked()
+
     uid = int(payload["sub"])
-    old_jti = payload["jti"]
-    sid = payload["sid"]
-
-    new_jti = str(uuid.uuid4())
-    refresh_ttl = settings.JWT_REFRESH_TOKEN_TTL_SECONDS
-    access_ttl = settings.JWT_ACCESS_TOKEN_TTL_SECONDS
-    grace_ttl = settings.AUTH_REFRESH_GRACE_SECONDS
-
-    now = int(time.time())
-    exp_unix = now + refresh_ttl
-    new_active_payload = json.dumps({"uid": uid, "sid": sid, "exp": exp_unix})
-
-    new_access = create_access_token(user_id=uid)
-    new_refresh = create_refresh_token(user_id=uid, jti=new_jti, sid=sid)
-    new_pair = TokenPair(
-        accessToken=new_access,
-        refreshToken=new_refresh,
-        expiresIn=access_ttl,
+    access = create_access_token(user_id=uid)
+    refresh = create_refresh_token(user_id=uid, jti=jti)  # same jti, new exp
+    return TokenPair(
+        accessToken=access,
+        refreshToken=refresh,
+        expiresIn=settings.JWT_ACCESS_TOKEN_TTL_SECONDS,
         user=UserPublic(id=uid, isOnboarded=False),
     )
-    new_pair_json = new_pair.model_dump_json()
-
-    raw_result: Any = await redis.eval(  # type: ignore[misc]
-        ROTATE_LUA,
-        5,
-        f"rt:active:{old_jti}",
-        f"rt:deny:{old_jti}",
-        f"rt:grace:{old_jti}",
-        f"sess:{sid}",
-        f"rt:active:{new_jti}",
-        str(refresh_ttl),
-        str(grace_ttl),
-        new_jti,
-        new_active_payload,
-        new_pair_json,
-    )
-    result: list[Any] = raw_result
-
-    tag: Any = result[0]
-    if isinstance(tag, bytes):
-        tag = tag.decode()
-
-    if tag == "OK":
-        return new_pair
-    if tag == "GRACE":
-        cached = result[1]
-        if isinstance(cached, bytes):
-            cached = cached.decode()
-        return TokenPair.model_validate_json(cached)
-    if tag == "REUSE":
-        await _revoke_family(redis, uid=uid, sid=sid)
-        raise AuthSessionRevoked()
-    # NOTFOUND
-    raise AuthTokenInvalid()
 
 
-async def _revoke_family(redis: Redis, *, uid: int, sid: str) -> None:
-    """Delete every refresh tied to a sid + drop the sid from the user index."""
-    members = await redis.smembers(f"sess:{sid}")  # type: ignore[misc]
-    keys_to_del = [f"rt:active:{m.decode() if isinstance(m, bytes) else m}" for m in members]
-    keys_to_del.append(f"sess:{sid}")
-    pipe = redis.pipeline()
-    if keys_to_del:
-        pipe.delete(*keys_to_del)
-    pipe.zrem(f"user:sessions:{uid}", sid)
-    await pipe.execute()
-
-
-async def revoke_session(redis: Redis, *, uid: int, sid: str) -> None:
-    """Public entry point for the logout path; same effect as _revoke_family."""
-    await _revoke_family(redis, uid=uid, sid=sid)
-
-
-async def revoke_all_user_sessions(redis: Redis, *, uid: int) -> None:
-    """Wipe every active session for a user (e.g. account compromise response)."""
-    sids = await redis.zrange(f"user:sessions:{uid}", 0, -1)
-    decoded = [s.decode() if isinstance(s, bytes) else s for s in sids]
-    for sid in decoded:
-        await _revoke_family(redis, uid=uid, sid=sid)
+async def deny_refresh(redis: Redis, refresh_token: str | None) -> None:
+    """Logout/withdraw: add the refresh jti to the denylist for its remaining TTL.
+    Idempotent; missing/malformed/expired tokens are silent no-ops."""
+    if not refresh_token:
+        return
+    try:
+        payload = decode_token(refresh_token)
+    except (AuthTokenInvalid, AuthTokenExpired):
+        return
+    jti = payload.get("jti")
+    if payload.get("type") != "refresh" or not jti:
+        return
+    ttl = max(1, int(payload["exp"]) - int(time.time()))
+    await redis.set(f"denyjti:{jti}", "1", ex=ttl)

@@ -10,7 +10,7 @@ from fakeredis.aioredis import FakeRedis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import AuthTokenInvalid
+from app.core.exceptions import AuthSessionRevoked, AuthTokenInvalid
 from app.core.kakao_oidc import KakaoClaims
 from app.modules.users.models import User, UserAuthProvider
 from app.modules.users.schemas import KakaoCallbackIn
@@ -142,7 +142,10 @@ async def test_refresh_session_returns_new_pair(
             db_session, redis_client_fake, KakaoCallbackIn(idToken="x")
         )
     new_pair = await refresh_session(db_session, redis_client_fake, pair.refreshToken)
-    assert new_pair.refreshToken != pair.refreshToken
+    # Sliding refresh, no rotation: the new refresh carries the SAME jti.
+    old_jti = jwt.decode(pair.refreshToken, options={"verify_signature": False})["jti"]
+    new_jti = jwt.decode(new_pair.refreshToken, options={"verify_signature": False})["jti"]
+    assert new_jti == old_jti
     # Refresh must return the full profile, not a minimal id-only UserPublic.
     assert new_pair.user.id == pair.user.id
 
@@ -162,8 +165,11 @@ async def test_logout_session_valid_refresh_revokes(
             db_session, redis_client_fake, KakaoCallbackIn(idToken="x")
         )
     await logout_session(redis_client_fake, pair.refreshToken)
-    sid = jwt.decode(pair.refreshToken, options={"verify_signature": False})["sid"]
-    assert await redis_client_fake.exists(f"sess:{sid}") == 0
+    # Denylist model: logout adds denyjti:{jti}; a subsequent refresh is rejected.
+    jti = jwt.decode(pair.refreshToken, options={"verify_signature": False})["jti"]
+    assert await redis_client_fake.exists(f"denyjti:{jti}") == 1
+    with pytest.raises(AuthSessionRevoked):
+        await refresh_session(db_session, redis_client_fake, pair.refreshToken)
 
 
 @pytest.mark.asyncio

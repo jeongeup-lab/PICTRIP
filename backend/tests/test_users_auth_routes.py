@@ -121,12 +121,15 @@ async def test_oauth_kakao_bad_token_returns_401(client):
     assert resp.json()["error"]["code"] == "OAUTH_ID_TOKEN_INVALID"
 
 
-async def test_refresh_rotates(client, patched_verify):
+async def test_refresh_returns_valid_pair_without_rotation(client, patched_verify):
     login = (await client.post("/v1/auth/oauth/kakao", json={"idToken": "x"})).json()
     refresh = login["data"]["refreshToken"]
     resp = await client.post("/v1/auth/refresh", json={"refreshToken": refresh})
     assert resp.status_code == 200
-    assert resp.json()["data"]["refreshToken"] != refresh
+    assert resp.json()["data"]["refreshToken"]
+    # Denylist model: refresh does NOT rotate, so the original token still works.
+    again = await client.post("/v1/auth/refresh", json={"refreshToken": refresh})
+    assert again.status_code == 200
 
 
 async def test_refresh_malformed_returns_401(client):

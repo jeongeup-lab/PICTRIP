@@ -10,13 +10,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import (
-    decode_token,
-    issue_token_pair,
-    revoke_all_user_sessions,
-    revoke_session,
-    rotate_refresh,
+    deny_refresh,
+    mint_token_pair,
+    refresh_tokens,
 )
-from app.core.exceptions import AuthTokenExpired, AuthTokenInvalid
+from app.core.exceptions import AuthTokenInvalid
 from app.core.kakao_oidc import verify_id_token
 from app.modules.users.models import User, UserAuthProvider, UserConsent
 from app.modules.users.schemas import KakaoCallbackIn, TokenPair, UserPublic
@@ -81,7 +79,7 @@ async def authenticate_with_kakao(
         isOnboarded=False,
         createdAt=user.created_at,
     )
-    return await issue_token_pair(redis, user_id=user.id, user=user_public)
+    return mint_token_pair(user_id=user.id, user=user_public)
 
 
 async def get_user_public(session: AsyncSession, user_id: int) -> UserPublic:
@@ -122,9 +120,9 @@ async def delete_user_account(session: AsyncSession, redis: Redis, user_id: int)
         # Unlink OAuth identities so the provider account can start fresh.
         await session.execute(delete(UserAuthProvider).where(UserAuthProvider.user_id == user_id))
         await session.commit()
-    # Revoke after the DB is the source of truth; get_user_public already rejects
-    # a deleted user, so even a surviving access token can't read the profile.
-    await revoke_all_user_sessions(redis, uid=user_id)
+    # Denylist model: no session table to revoke. Account safety rests on
+    # `deleted_at` (get_user_public rejects a deleted user, so a refresh can't
+    # re-hydrate) plus the ≤15-min access-token expiry.
 
 
 async def _get_or_create_consent(session: AsyncSession, user_id: int) -> UserConsent:
@@ -158,28 +156,15 @@ async def set_notification_consent(session: AsyncSession, user_id: int, *, enabl
 
 
 async def refresh_session(session: AsyncSession, redis: Redis, refresh_token: str) -> TokenPair:
-    # `rotate_refresh` is a core token primitive and only knows the user id, so
+    # `refresh_tokens` is a core token primitive and only knows the user id, so
     # the pair it returns carries a minimal `UserPublic(id=…)`. Re-hydrate the
     # full profile from the DB so a refresh doesn't wipe name/email/profileImage
     # in the mobile store — refresh must return the same shape as login.
-    pair = await rotate_refresh(redis, refresh_token)
+    pair = await refresh_tokens(redis, refresh_token)
     pair.user = await get_user_public(session, pair.user.id)
     return pair
 
 
 async def logout_session(redis: Redis, refresh_token: str | None) -> None:
     """Idempotent: missing/malformed/expired tokens are silently no-ops."""
-    if not refresh_token:
-        return
-    try:
-        payload = decode_token(refresh_token)
-    except (AuthTokenInvalid, AuthTokenExpired):
-        return
-    if payload.get("type") != "refresh":
-        return
-    try:
-        uid = int(payload["sub"])
-        sid = payload["sid"]
-    except (KeyError, ValueError, TypeError):
-        return
-    await revoke_session(redis, uid=uid, sid=sid)
+    await deny_refresh(redis, refresh_token)
