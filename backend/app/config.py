@@ -122,6 +122,14 @@ class Settings(BaseSettings):
     CLIP_MODEL_NAME: str = "openai/clip-vit-base-patch32"
     CLIP_DEVICE: Literal["cpu", "cuda", "mps"] = "cpu"
 
+    # --- Photo search (TST) ---
+    # Calibrated cosine-similarity floor for photo-search matches (S07 §10).
+    # Matches below this are dropped — *unless* the whole set is below it, in
+    # which case a top-N soft floor still surfaces the best ones (a sparse
+    # result must not be empty). Cap the returned matches at PHOTO_SEARCH_MAX.
+    PHOTO_SEARCH_SIMILARITY_FLOOR: float = 0.60
+    PHOTO_SEARCH_MAX: int = 30
+
     # --- Admin console (A01) ---
     # Used by the separate admin plan; required to be set before /admin is wired,
     # otherwise /admin/* returns 503.

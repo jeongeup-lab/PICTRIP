@@ -2,7 +2,8 @@
 
 The CPU-bound torch inference in `embed_image` would otherwise stall the whole
 async worker. We assert the embed runs on a *worker* thread, not the event-loop
-thread. `find_neighbors_by_vector` is stubbed so no DB session is required.
+thread. `find_neighbor_ids_by_vector_direct` is stubbed so no DB session is
+required.
 """
 
 from __future__ import annotations
@@ -32,11 +33,12 @@ async def test_photo_search_offloads_clip_to_a_worker_thread(
     async def _fake_neighbors(_session: object, _embedding: list[float], *, limit: int) -> list:
         return []
 
-    monkeypatch.setattr(taste_services, "find_neighbors_by_vector", _fake_neighbors)
+    monkeypatch.setattr(taste_services, "find_neighbor_ids_by_vector_direct", _fake_neighbors)
 
-    result = await taste_services.photo_search(None, b"fake-bytes", limit=5)  # type: ignore[arg-type]
+    result = await taste_services.photo_search(None, b"fake-bytes")  # type: ignore[arg-type]
 
-    assert result == []
+    assert result.matches == []
+    assert result.query_had_location is False
     assert "thread" in captured, "embed_image was never called"
     assert captured["thread"] is not main_thread, (
         "CLIP embed ran on the event-loop thread — it must be offloaded via asyncio.to_thread"

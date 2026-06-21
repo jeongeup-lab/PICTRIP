@@ -2,17 +2,28 @@
 
 from __future__ import annotations
 
-from typing import Any
+from pydantic import BaseModel
 
-from pydantic import BaseModel, Field
-
-
-class DetectedMood(BaseModel):
-    code: str
-    confidence: float = Field(ge=0.0, le=1.0)
+from app.modules.spots.schemas import SpotCard
 
 
-class PhotoSearchResult(BaseModel):
-    sessionId: str
-    detectedMoods: list[DetectedMood]
-    topSpots: list[dict[str, Any]]
+class PhotoMatch(SpotCard):
+    """A photo-search match: a canonical SpotCard enriched with the CLIP
+    similarity (1 - cosine distance) and optional location/region metadata.
+
+    ``distance`` (metres from the query point) is present only when the request
+    carried ``lat``/``lng``. ``regionName``/``sigunguName`` are filled when the
+    spot has resolvable legal-dong codes; ``congestion`` is bucketed from
+    spot_concentration when a row exists. All optional fields stay null/absent
+    when their source is missing (omit-friendly).
+    """
+
+    similarity: float
+    distance: float | None = None
+    regionName: str | None = None
+    sigunguName: str | None = None
+
+
+class PhotoSearchResponse(BaseModel):
+    matches: list[PhotoMatch] = []
+    queryHadLocation: bool = False

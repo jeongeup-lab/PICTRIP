@@ -1,13 +1,14 @@
-"""Integration tests for POST /v1/taste/photo-search.
+"""Integration tests for POST /v1/taste/photo-search (rewritten — Task 15).
 
-Flow: multipart image -> CLIP embed (in-memory) -> pgvector top-N nearest
-spots over spot_embeddings.embedding (halfvec(512)) -> SimilarNeighbor list.
+Flow: multipart image + optional lat/lng -> CLIP embed (in-memory, bytes
+discarded) -> HNSW-direct top-N over spot_embeddings.embedding (halfvec(512))
+-> calibrated similarity floor (with a top-N soft floor) -> enriched matches
+(SpotCard + similarity + optional distance/region meta/congestion).
 
-The CLIP embed call is mocked at the boundary (app.core.embedding.embedder
-.embed_image) so the test is deterministic and does not require a model
-download. Everything below the mock — the service, IMG.find_neighbors_by_vector,
-the pgvector query and the SPT serialization — runs for real against the
-migrated test DB.
+The CLIP embed is stubbed at the boundary (ClipEmbedder.embed_image) so the
+test is deterministic and needs no model download. Everything below the stub —
+the service, the pgvector query, card hydration, congestion + region enrichment
+— runs for real against the migrated test DB.
 """
 
 from __future__ import annotations
@@ -77,22 +78,27 @@ async def override_db_and_seed() -> AsyncIterator[AsyncSession]:
 
 
 async def _seed_spot_with_embedding(
-    session: AsyncSession, content_id: str, vec: list[float]
+    session: AsyncSession,
+    content_id: str,
+    vec: list[float],
+    *,
+    mapx: float = 127.0,
+    mapy: float = 37.0,
 ) -> None:
     await session.execute(
         text(
             "INSERT INTO spots (content_id, content_type_id, title, first_image_url, "
             "addr1, mapx, mapy, show_flag) "
-            "VALUES (:cid, 12, :t, 'http://kto/p.jpg', 'addr1', 127.0, 37.0, 1) "
+            "VALUES (:cid, 12, :t, 'http://kto/p.jpg', 'addr1', :mapx, :mapy, 1) "
             "ON CONFLICT (content_id) DO NOTHING"
         ),
-        {"cid": content_id, "t": f"title-{content_id}"},
+        {"cid": content_id, "t": f"title-{content_id}", "mapx": mapx, "mapy": mapy},
     )
     literal = "[" + ",".join(f"{v:.6f}" for v in vec) + "]"
     await session.execute(
         text(
             "INSERT INTO spot_embeddings (content_id, embedding) "
-            "VALUES (:cid, (:emb)::halfvec(512)) ON CONFLICT (content_id) DO NOTHING"
+            "VALUES (:cid, CAST(:emb AS halfvec(512))) ON CONFLICT (content_id) DO NOTHING"
         ),
         {"cid": content_id, "emb": literal},
     )
@@ -114,15 +120,13 @@ def fixed_embedding(monkeypatch: pytest.MonkeyPatch) -> list[float]:
     return vec
 
 
-@pytest.mark.asyncio
-async def test_photo_search_returns_similar_spots(
+async def test_photo_search_no_location_returns_matches(
     client: AsyncClient,
     override_db_and_seed: AsyncSession,
     fixed_embedding: list[float],
 ) -> None:
-    # Seed a near-duplicate (same vector) and a far one.
+    # An exact match (similarity ~1.0) clears any floor.
     await _seed_spot_with_embedding(override_db_and_seed, "ps_near", list(fixed_embedding))
-    await _seed_spot_with_embedding(override_db_and_seed, "ps_far", _unit_vec(7))
 
     resp = await client.post(
         "/v1/taste/photo-search",
@@ -134,41 +138,73 @@ async def test_photo_search_returns_similar_spots(
     assert body["error"] is None
     assert "meta" in body
     data = body["data"]
-    assert isinstance(data, list)
-    cids = [item["contentId"] for item in data]
+    assert data["queryHadLocation"] is False
+    matches = data["matches"]
+    assert isinstance(matches, list)
+    cids = [m["contentId"] for m in matches]
     assert "ps_near" in cids
-    # Near-duplicate ranks ahead of the far spot (ascending cosine distance).
-    if "ps_far" in cids:
-        assert cids.index("ps_near") < cids.index("ps_far")
-    # Item shape matches the SPT similar-spots contract (SimilarNeighbor).
-    near = next(item for item in data if item["contentId"] == "ps_near")
-    assert {"contentId", "title", "firstImageUrl", "addr1", "mapx", "mapy", "distance"} <= set(near)
-    assert near["distance"] < 0.001
-    # Ordered by ascending distance.
-    distances = [item["distance"] for item in data]
-    assert distances == sorted(distances)
+    near = next(m for m in matches if m["contentId"] == "ps_near")
+    # Card shape + similarity; distance absent without lat/lng.
+    assert {"contentId", "title", "firstImageUrl", "similarity"} <= set(near)
+    assert near["similarity"] > 0.99
+    assert near.get("distance") is None
+    # Sorted by similarity desc.
+    sims = [m["similarity"] for m in matches]
+    assert sims == sorted(sims, reverse=True)
 
 
-@pytest.mark.asyncio
-async def test_photo_search_empty_when_no_neighbors(
+async def test_photo_search_with_location_includes_distance(
+    client: AsyncClient,
+    override_db_and_seed: AsyncSession,
+    fixed_embedding: list[float],
+) -> None:
+    await _seed_spot_with_embedding(
+        override_db_and_seed, "ps_near", list(fixed_embedding), mapx=127.0, mapy=37.0
+    )
+
+    resp = await client.post(
+        "/v1/taste/photo-search",
+        params={"lat": 37.0, "lng": 127.0},
+        files={"image": ("photo.png", _png_bytes(), "image/png")},
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    data = body["data"]
+    assert data["queryHadLocation"] is True
+    near = next(m for m in data["matches"] if m["contentId"] == "ps_near")
+    assert "distance" in near
+    assert isinstance(near["distance"], int | float)
+    # Query point == spot coords → near-zero distance.
+    assert near["distance"] < 50.0
+
+
+async def test_photo_search_soft_floor_returns_best_when_all_below_floor(
     client: AsyncClient,
     override_db_and_seed: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Embed to a vector; even with ambient embeddings present a tiny limit still
-    # returns a list. The contract guarantee we assert: a 200 with a list body,
-    # never an error, regardless of neighbor count.
+    # Stub embed to a vector unrelated to seeded embeddings → all neighbors are
+    # far (similarity < floor). The top-N soft floor still surfaces the best ones
+    # rather than returning an empty list.
     from app.core.embedding import ClipEmbedder
 
-    monkeypatch.setattr(ClipEmbedder, "embed_image", lambda _self, _b: _unit_vec(55), raising=True)
+    monkeypatch.setattr(ClipEmbedder, "embed_image", lambda _self, _b: _unit_vec(31), raising=True)
+    await _seed_spot_with_embedding(override_db_and_seed, "ps_a", _unit_vec(7))
+    await _seed_spot_with_embedding(override_db_and_seed, "ps_b", _unit_vec(8))
 
     resp = await client.post(
-        "/v1/taste/photo-search?limit=1",
+        "/v1/taste/photo-search",
         files={"image": ("photo.png", _png_bytes(), "image/png")},
     )
 
     assert resp.status_code == 200
     body = resp.json()
     assert body["error"] is None
-    assert isinstance(body["data"], list)
-    assert len(body["data"]) <= 1
+    matches = body["data"]["matches"]
+    assert isinstance(matches, list)
+    # Soft floor: non-empty even though everything is below the calibrated floor.
+    assert len(matches) >= 1
+    # Still capped + sorted.
+    sims = [m["similarity"] for m in matches]
+    assert sims == sorted(sims, reverse=True)

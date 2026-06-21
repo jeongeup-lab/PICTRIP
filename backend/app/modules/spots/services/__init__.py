@@ -12,6 +12,7 @@ from app.modules.spots.services.cards import (
     bucket_congestion,
     load_active_spot_cards_by_ids,
     load_congestion,
+    load_region_meta,
     load_spot_cards_by_ids,
 )
 from app.modules.spots.services.detail import load_spot_detail
@@ -46,6 +47,7 @@ __all__ = [
     "list_saved_spots",
     "load_active_spot_cards_by_ids",
     "load_congestion",
+    "load_region_meta",
     "load_spot_cards_by_ids",
     "load_spot_detail",
     "save_spot",

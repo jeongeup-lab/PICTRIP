@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.spots.models import LclsSystmCode, Spot, SpotConcentration
+from app.modules.spots.models import LclsSystmCode, Region, Sigungu, Spot, SpotConcentration
 from app.modules.spots.services.nearby import derive_category
 from app.modules.spots.services.rows import SpotCardRow
 
@@ -47,6 +47,33 @@ async def load_congestion(
         )
     ).all()
     return {cid: bucket_congestion(float(rate)) for cid, rate in rows}
+
+
+async def load_region_meta(
+    session: AsyncSession,
+    content_ids: list[str],
+) -> dict[str, tuple[str | None, str | None]]:
+    """Resolve ``{content_id: (region_name, sigungu_name)}`` for a batch of ids.
+
+    Shared enrichment seam (e.g. TST photo-search) — joins ``spots`` to
+    ``regions``/``sigungus`` by legal-dong code in one query. Ids with no
+    region/sigungu code (or no matching row) map to ``(None, None)`` /
+    a half-filled tuple; missing ids are simply absent.
+    """
+    if not content_ids:
+        return {}
+    stmt = (
+        select(
+            Spot.content_id,
+            Region.ldong_regn_nm,
+            Sigungu.ldong_signgu_nm,
+        )
+        .outerjoin(Region, Region.ldong_regn_cd == Spot.ldong_regn_cd)
+        .outerjoin(Sigungu, Sigungu.ldong_signgu_cd == Spot.ldong_signgu_cd)
+        .where(Spot.content_id.in_(content_ids))
+    )
+    rows = (await session.execute(stmt)).all()
+    return {r.content_id: (r.ldong_regn_nm, r.ldong_signgu_nm) for r in rows}
 
 
 async def load_spot_cards_by_ids(
