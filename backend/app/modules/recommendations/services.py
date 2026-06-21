@@ -9,9 +9,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,11 +18,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import ResourceNotFound
 from app.core.logging import get_logger
 from app.core.redis import redis_cache
+from app.core.time import KST as _KST
+from app.core.time import seconds_until_kst_midnight as _seconds_until_kst_midnight
 from app.modules.spots.services import SpotCardRow, pick_active_spot_by_seed
 
 logger = get_logger(__name__)
 
-_KST = ZoneInfo("Asia/Seoul")
 _CACHE_KEY = "rec:today_inspo:{date}"
 
 
@@ -35,13 +35,6 @@ def _seed_for_date(date_iso: str) -> int:
     """Stable integer seed from an ISO date. Hashing avoids adjacent days
     landing on adjacent offsets."""
     return int(hashlib.sha256(date_iso.encode()).hexdigest(), 16)
-
-
-def _seconds_until_kst_midnight(now: datetime) -> int:
-    """TTL so the cached card expires exactly at the next KST midnight."""
-    tomorrow = (now + timedelta(days=1)).date()
-    midnight = datetime.combine(tomorrow, datetime.min.time(), tzinfo=_KST)
-    return max(1, int((midnight - now).total_seconds()))
 
 
 def _card_to_dict(card: SpotCardRow) -> dict[str, Any]:
