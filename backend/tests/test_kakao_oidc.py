@@ -134,3 +134,18 @@ async def test_verify_id_token_unknown_kid_with_fresh_jwks(
     token = make_kakao_id_token(sub="12345", key=priv, kid="unknown-kid")
     with pytest.raises(OAuthIdTokenInvalid):
         await verify_id_token(token)
+
+
+@pytest.mark.asyncio
+async def test_kakao_rejected_when_no_audience_configured(
+    mock_kakao_jwks, kakao_signing_key, monkeypatch
+):
+    # With NO Kakao audience configured, `valid_audiences` is empty. A validly
+    # signed id_token from ANY Kakao app must be REJECTED (OAuthProviderUnavailable),
+    # never accepted via PyJWT's audience=None aud-validation skip (account takeover).
+    monkeypatch.setattr("app.config.settings.KAKAO_REST_API_KEY", "")
+    monkeypatch.setattr("app.config.settings.KAKAO_NATIVE_APP_KEY", "")
+    priv, _ = kakao_signing_key
+    token = make_kakao_id_token(sub="12345", key=priv)
+    with pytest.raises(OAuthProviderUnavailable):
+        await verify_id_token(token)

@@ -128,13 +128,23 @@ async def verify_id_token(token: str, *, expected_nonce: str | None = None) -> K
     # `aud` can be either the REST API key (web/server flow) or the Native App
     # Key (mobile SDK flow) depending on which key the client used at OAuth init.
     valid_audiences = [a for a in (settings.KAKAO_REST_API_KEY, settings.KAKAO_NATIVE_APP_KEY) if a]
+
+    # An empty `valid_audiences` list would make PyJWT SKIP `aud` validation
+    # entirely (jwt.decode(audience=None)), so any validly-signed id_token from
+    # ANY Kakao app would be accepted — a token-substitution / account-takeover
+    # hole. With no configured audience Kakao is treated as misconfigured/disabled
+    # and fails loudly rather than silently.
+    if not valid_audiences:
+        log.error("verify_id_token: no configured Kakao audience — provider misconfigured")
+        raise OAuthProviderUnavailable()
+
     pem = _jwk_to_pem(matching)
     try:
         payload = jwt.decode(
             token,
             pem,
             algorithms=["RS256"],
-            audience=valid_audiences or None,
+            audience=valid_audiences,  # never None — empty audiences rejected above
             issuer=settings.KAKAO_OIDC_ISSUER,
             leeway=300,  # spec §1.2 allows ±5 min skew
         )
