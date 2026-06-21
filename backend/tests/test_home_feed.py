@@ -224,6 +224,19 @@ async def test_handpicked_spots_take_precedence(db_session, seed_feed) -> None:
     assert [r.content_id for r in rows] == ["sp-M0-3", "sp-M0-1"]
 
 
+async def test_handpicked_spots_capped_at_eight(db_session, seed_feed) -> None:
+    redis = FakeRedis(decode_responses=True)
+    # mood curation 201 gets 9 handpicks; only the first 8 by position must show.
+    for pos in range(9):
+        await _seed_spot(db_session, f"hp-{pos}", region_cd="R0", mood_id=11)
+        await _add_handpick(db_session, 201, f"hp-{pos}", pos)
+    await db_session.flush()
+
+    cur = await curation_svc.load_curation(db_session, 201)
+    rows = await curation_svc.resolve_curation_spots(db_session, redis, cur)
+    assert [r.content_id for r in rows] == [f"hp-{pos}" for pos in range(8)]
+
+
 async def test_pool_is_deterministic_for_same_date(db_session, seed_feed) -> None:
     redis = FakeRedis(decode_responses=True)
     cur = await curation_svc.load_curation(db_session, 100)  # region R0, no handpicks

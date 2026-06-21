@@ -166,8 +166,8 @@ async def resolve_curation_spots(
 ) -> list[SpotCardRow]:
     """Resolve a curation's display spots (handpicked, else quality-gate pool).
 
-    Returns ordered ``SpotCardRow``s (max 8 for the pool path; handpicks are
-    returned in full ``position`` order). The resolved content_id list is cached
+    Returns ordered ``SpotCardRow``s (max 8 for both paths; handpicks are the
+    first ``_SHOW`` by ``position``). The resolved content_id list is cached
     daily in ``curation:{id}:spots``.
     """
     cache_key = f"curation:{curation.id}:spots"
@@ -177,7 +177,7 @@ async def resolve_curation_spots(
     else:
         handpicked = await _handpicked_ids(session, curation.id)
         if handpicked:
-            ids = handpicked
+            ids = handpicked[:_SHOW]
         else:
             pool = await _pool_ids(session, curation)
             ids = _seed_pick(curation.id, pool)
