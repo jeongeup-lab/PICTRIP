@@ -16,7 +16,7 @@ class UserPublic(BaseModel):
     createdAt: datetime | None = None
 
 
-class KakaoCallbackIn(BaseModel):
+class OAuthLoginIn(BaseModel):
     idToken: str
     nonce: str | None = None
 

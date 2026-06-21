@@ -28,26 +28,25 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.config import settings
-from app.core.kakao_oidc import KakaoClaims
+from app.core.oidc import OidcClaims
 from app.main import app
 
 
 @pytest.fixture
 def patched_verify():
-    """Replace verify_id_token with a fixed KakaoClaims for happy-path tests.
+    """Replace verify_oauth_id_token with fixed OidcClaims for happy-path tests.
 
     A unique ``sub`` is generated per test invocation so each test creates a
     distinct user row and tests never collide on the UNIQUE constraint.
     """
-    claims = KakaoClaims(
+    claims = OidcClaims(
         sub=f"kakao-rt-{uuid.uuid4().hex}",
         email=f"t-{uuid.uuid4().hex[:8]}@e.st",
-        nickname="T",
+        name="T",
         picture=None,
-        nonce=None,
     )
     with patch(
-        "app.modules.users.services.verify_id_token",
+        "app.modules.users.services.verify_oauth_id_token",
         AsyncMock(return_value=claims),
     ):
         yield claims
@@ -113,7 +112,7 @@ async def test_oauth_kakao_bad_token_returns_401(client):
     from app.core.exceptions import OAuthIdTokenInvalid
 
     with patch(
-        "app.modules.users.services.verify_id_token",
+        "app.modules.users.services.verify_oauth_id_token",
         AsyncMock(side_effect=OAuthIdTokenInvalid()),
     ):
         resp = await client.post("/v1/auth/oauth/kakao", json={"idToken": "x"})

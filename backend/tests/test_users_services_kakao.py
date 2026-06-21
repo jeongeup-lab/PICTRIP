@@ -11,11 +11,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AuthSessionRevoked, AuthTokenInvalid
-from app.core.kakao_oidc import KakaoClaims
+from app.core.oidc import OidcClaims
 from app.modules.users.models import User, UserAuthProvider
-from app.modules.users.schemas import KakaoCallbackIn
+from app.modules.users.schemas import OAuthLoginIn
 from app.modules.users.services import (
-    authenticate_with_kakao,
+    authenticate_with_oauth,
     get_user_public,
     logout_session,
     refresh_session,
@@ -23,37 +23,29 @@ from app.modules.users.services import (
 
 
 @pytest.mark.asyncio
-async def test_authenticate_with_kakao_new_signup_creates_user(
-    db_session: AsyncSession, redis_client_fake: FakeRedis
-) -> None:
-    fake_claims = KakaoClaims(
-        sub="kakao-user-1", email=None, nickname="Hong", picture=None, nonce=None
-    )
+async def test_authenticate_with_oauth_new_signup_creates_user(db_session: AsyncSession) -> None:
+    fake_claims = OidcClaims(sub="kakao-user-1", email=None, name="Hong", picture=None)
     with patch(
-        "app.modules.users.services.verify_id_token",
+        "app.modules.users.services.verify_oauth_id_token",
         AsyncMock(return_value=fake_claims),
     ):
-        pair = await authenticate_with_kakao(
-            db_session, redis_client_fake, KakaoCallbackIn(idToken="x")
-        )
+        pair = await authenticate_with_oauth(db_session, "kakao", OAuthLoginIn(idToken="x"))
     assert pair.user.name == "Hong"
     rows = (await db_session.scalars(select(User))).all()
     assert len(rows) == 1
 
 
 @pytest.mark.asyncio
-async def test_authenticate_with_kakao_returning_user_reuses_row(
-    db_session: AsyncSession, redis_client_fake: FakeRedis
+async def test_authenticate_with_oauth_returning_user_reuses_row(
+    db_session: AsyncSession,
 ) -> None:
-    fake_claims = KakaoClaims(
-        sub="kakao-user-2", email=None, nickname=None, picture=None, nonce=None
-    )
+    fake_claims = OidcClaims(sub="kakao-user-2", email=None, name=None, picture=None)
     with patch(
-        "app.modules.users.services.verify_id_token",
+        "app.modules.users.services.verify_oauth_id_token",
         AsyncMock(return_value=fake_claims),
     ):
-        await authenticate_with_kakao(db_session, redis_client_fake, KakaoCallbackIn(idToken="x"))
-        await authenticate_with_kakao(db_session, redis_client_fake, KakaoCallbackIn(idToken="x"))
+        await authenticate_with_oauth(db_session, "kakao", OAuthLoginIn(idToken="x"))
+        await authenticate_with_oauth(db_session, "kakao", OAuthLoginIn(idToken="x"))
     users = (await db_session.scalars(select(User))).all()
     providers = (await db_session.scalars(select(UserAuthProvider))).all()
     assert len(users) == 1
@@ -61,8 +53,26 @@ async def test_authenticate_with_kakao_returning_user_reuses_row(
 
 
 @pytest.mark.asyncio
-async def test_authenticate_with_kakao_savepoint_rollback_on_race(
-    db_session: AsyncSession, redis_client_fake: FakeRedis
+async def test_authenticate_with_oauth_distinct_providers_same_sub_are_separate(
+    db_session: AsyncSession,
+) -> None:
+    # Identity key is provider + sub: the same sub on kakao vs google → two users.
+    fake_claims = OidcClaims(sub="shared-sub", email=None, name=None, picture=None)
+    with patch(
+        "app.modules.users.services.verify_oauth_id_token",
+        AsyncMock(return_value=fake_claims),
+    ):
+        await authenticate_with_oauth(db_session, "kakao", OAuthLoginIn(idToken="x"))
+        await authenticate_with_oauth(db_session, "google", OAuthLoginIn(idToken="x"))
+    users = (await db_session.scalars(select(User))).all()
+    providers = (await db_session.scalars(select(UserAuthProvider))).all()
+    assert len(users) == 2
+    assert {p.provider for p in providers} == {"kakao", "google"}
+
+
+@pytest.mark.asyncio
+async def test_authenticate_with_oauth_savepoint_rollback_on_race(
+    db_session: AsyncSession,
 ) -> None:
     """Force the IntegrityError path: the pre-check is mocked to miss the first
     time (simulating concurrent race where the other transaction hasn't committed
@@ -83,9 +93,7 @@ async def test_authenticate_with_kakao_savepoint_rollback_on_race(
     )
     await db_session.flush()
 
-    fake_claims = KakaoClaims(
-        sub="kakao-race-1", email=None, nickname=None, picture=None, nonce=None
-    )
+    fake_claims = OidcClaims(sub="kakao-race-1", email=None, name=None, picture=None)
 
     from app.modules.users import services as users_services
 
@@ -102,14 +110,12 @@ async def test_authenticate_with_kakao_savepoint_rollback_on_race(
 
     with (
         patch(
-            "app.modules.users.services.verify_id_token",
+            "app.modules.users.services.verify_oauth_id_token",
             AsyncMock(return_value=fake_claims),
         ),
         patch("app.modules.users.services._find_provider", side_effect=lying_find),
     ):
-        pair = await authenticate_with_kakao(
-            db_session, redis_client_fake, KakaoCallbackIn(idToken="x")
-        )
+        pair = await authenticate_with_oauth(db_session, "kakao", OAuthLoginIn(idToken="x"))
 
     # The reselect after savepoint rollback returned the WINNING user.
     assert pair.user.id == winner.id
@@ -131,16 +137,12 @@ async def test_authenticate_with_kakao_savepoint_rollback_on_race(
 async def test_refresh_session_returns_new_pair(
     db_session: AsyncSession, redis_client_fake: FakeRedis
 ) -> None:
-    fake_claims = KakaoClaims(
-        sub="kakao-user-r", email=None, nickname=None, picture=None, nonce=None
-    )
+    fake_claims = OidcClaims(sub="kakao-user-r", email=None, name=None, picture=None)
     with patch(
-        "app.modules.users.services.verify_id_token",
+        "app.modules.users.services.verify_oauth_id_token",
         AsyncMock(return_value=fake_claims),
     ):
-        pair = await authenticate_with_kakao(
-            db_session, redis_client_fake, KakaoCallbackIn(idToken="x")
-        )
+        pair = await authenticate_with_oauth(db_session, "kakao", OAuthLoginIn(idToken="x"))
     new_pair = await refresh_session(db_session, redis_client_fake, pair.refreshToken)
     # Sliding refresh, no rotation: the new refresh carries the SAME jti.
     old_jti = jwt.decode(pair.refreshToken, options={"verify_signature": False})["jti"]
@@ -154,16 +156,12 @@ async def test_refresh_session_returns_new_pair(
 async def test_logout_session_valid_refresh_revokes(
     db_session: AsyncSession, redis_client_fake: FakeRedis
 ) -> None:
-    fake_claims = KakaoClaims(
-        sub="kakao-user-l1", email=None, nickname=None, picture=None, nonce=None
-    )
+    fake_claims = OidcClaims(sub="kakao-user-l1", email=None, name=None, picture=None)
     with patch(
-        "app.modules.users.services.verify_id_token",
+        "app.modules.users.services.verify_oauth_id_token",
         AsyncMock(return_value=fake_claims),
     ):
-        pair = await authenticate_with_kakao(
-            db_session, redis_client_fake, KakaoCallbackIn(idToken="x")
-        )
+        pair = await authenticate_with_oauth(db_session, "kakao", OAuthLoginIn(idToken="x"))
     await logout_session(redis_client_fake, pair.refreshToken)
     # Denylist model: logout adds denyjti:{jti}; a subsequent refresh is rejected.
     jti = jwt.decode(pair.refreshToken, options={"verify_signature": False})["jti"]

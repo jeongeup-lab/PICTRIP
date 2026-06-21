@@ -13,22 +13,22 @@ from app.core.schemas import ok
 from app.modules.spots import services as spots_services
 from app.modules.spots.schemas import SpotCard
 from app.modules.users import services
-from app.modules.users.schemas import KakaoCallbackIn, LogoutBody, RefreshBody, SavedSpotToggle
+from app.modules.users.schemas import LogoutBody, OAuthLoginIn, RefreshBody, SavedSpotToggle
 
 router = APIRouter(tags=["USR · user/auth"])
 
 
 @router.post(
-    "/auth/oauth/kakao",
+    "/auth/oauth/{provider}",
     status_code=status.HTTP_200_OK,
-    summary="Kakao OIDC id_token → internal token pair",
+    summary="OIDC id_token → internal token pair (provider ∈ kakao/google/apple)",
 )
-async def oauth_kakao(
-    body: KakaoCallbackIn,
+async def oauth_login(
+    provider: str,
+    body: OAuthLoginIn,
     session: DbSession,
-    redis: RedisDep,
 ) -> dict[str, Any]:
-    pair = await services.authenticate_with_kakao(session, redis, body)
+    pair = await services.authenticate_with_oauth(session, provider, body)
     return ok(pair.model_dump())
 
 

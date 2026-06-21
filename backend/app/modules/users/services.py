@@ -15,9 +15,9 @@ from app.core.auth import (
     refresh_tokens,
 )
 from app.core.exceptions import AuthTokenInvalid
-from app.core.kakao_oidc import verify_id_token
+from app.core.oidc import verify_oauth_id_token
 from app.modules.users.models import User, UserAuthProvider, UserConsent
-from app.modules.users.schemas import KakaoCallbackIn, TokenPair, UserPublic
+from app.modules.users.schemas import OAuthLoginIn, TokenPair, UserPublic
 
 # terms_version stamped on a consent row that is auto-created as a side effect
 # of reading/writing the notification toggle (the user has not gone through the
@@ -36,12 +36,14 @@ async def _find_provider(
     )
 
 
-async def authenticate_with_kakao(
-    session: AsyncSession, redis: Redis, body: KakaoCallbackIn
+async def authenticate_with_oauth(
+    session: AsyncSession, provider: str, body: OAuthLoginIn
 ) -> TokenPair:
-    claims = await verify_id_token(body.idToken, expected_nonce=body.nonce)
+    """Verify a provider OIDC id_token, upsert the user + provider link, mint a
+    token pair. Identity key = provider + sub (S09 §3.1). Zero Redis writes."""
+    claims = await verify_oauth_id_token(provider, body.idToken, expected_nonce=body.nonce)
 
-    existing = await _find_provider(session, provider="kakao", provider_user_id=claims.sub)
+    existing = await _find_provider(session, provider=provider, provider_user_id=claims.sub)
     if existing is not None:
         user = await session.get(User, existing.user_id)
         assert user is not None
@@ -50,7 +52,7 @@ async def authenticate_with_kakao(
             async with session.begin_nested():
                 user = User(
                     email=claims.email,
-                    name=claims.nickname,
+                    name=claims.name,
                     profile_image_url=claims.picture,
                 )
                 session.add(user)
@@ -58,13 +60,13 @@ async def authenticate_with_kakao(
                 session.add(
                     UserAuthProvider(
                         user_id=user.id,
-                        provider="kakao",
+                        provider=provider,
                         provider_user_id=claims.sub,
                     )
                 )
                 await session.flush()
         except IntegrityError:
-            existing = await _find_provider(session, provider="kakao", provider_user_id=claims.sub)
+            existing = await _find_provider(session, provider=provider, provider_user_id=claims.sub)
             assert existing is not None, "savepoint rollback but provider not found"
             user = await session.get(User, existing.user_id)
             assert user is not None
@@ -102,11 +104,10 @@ async def delete_user_account(session: AsyncSession, redis: Redis, user_id: int)
     Soft-delete (``deleted_at``) keeps the row for referential integrity, but PII
     is scrubbed and OAuth links are removed so the account is genuinely gone, not
     merely deactivated: re-logging-in with the same Kakao/Google/Apple identity
-    creates a *new* account (the provider link no longer maps to this user). All
-    sessions are revoked. Idempotent — a second call (or a deleted user) is a
-    no-op beyond re-revoking sessions. Personal child rows fall away on the
-    eventual hard delete via ``ondelete=CASCADE``; the soft-deleted row carries no
-    personal data in the meantime.
+    creates a *new* account (the provider link no longer maps to this user).
+    Idempotent — a second call (or a deleted user) is a no-op. Personal child rows
+    fall away on the eventual hard delete via ``ondelete=CASCADE``; the
+    soft-deleted row carries no personal data in the meantime.
     """
     user = await session.get(User, user_id)
     if user is not None and user.deleted_at is None:

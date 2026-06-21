@@ -89,6 +89,19 @@ class Settings(BaseSettings):
     KAKAO_JWKS_CACHE_TTL_SECONDS: int = 3600
     KAKAO_JWKS_STALE_ON_ERROR_TTL_SECONDS: int = 86400
 
+    # --- Google / Apple OIDC (S09 §3.1) ---
+    # id_token verification accepts these as `aud`. Google: iOS/Android/web
+    # client_ids; Apple: the app bundle id. (Apple id_tokens are RS256-signed —
+    # the ES256 key is only for the client_secret we send to Apple.)
+    GOOGLE_CLIENT_IDS: list[str] = Field(default_factory=list)
+    GOOGLE_JWKS_URL: str = "https://www.googleapis.com/oauth2/v3/certs"
+    GOOGLE_OIDC_ISSUERS: list[str] = Field(
+        default_factory=lambda: ["accounts.google.com", "https://accounts.google.com"]
+    )
+    APPLE_BUNDLE_ID: str | None = None
+    APPLE_OIDC_ISSUER: str = "https://appleid.apple.com"
+    APPLE_JWKS_URL: str = "https://appleid.apple.com/auth/keys"
+
     # --- Refresh rotation ---
     AUTH_REFRESH_GRACE_SECONDS: int = 5
 
