@@ -7,6 +7,7 @@ importing from ``app.modules.spots.services``.
 
 from __future__ import annotations
 
+from app.modules.spots.services import curations, feed
 from app.modules.spots.services.cards import (
     bucket_congestion,
     load_active_spot_cards_by_ids,
@@ -38,7 +39,9 @@ __all__ = [
     "SpotImageRow",
     "bucket_congestion",
     "category_predicate",
+    "curations",
     "derive_category",
+    "feed",
     "find_nearby_spots",
     "list_saved_spots",
     "load_active_spot_cards_by_ids",
