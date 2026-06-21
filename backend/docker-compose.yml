@@ -1,24 +1,61 @@
-# Local dev compose. Production runtime compose lives in deploy/api-host/.
+# Local dev stack. Production uses ECS Fargate (see infrastructure/ when added).
+
 services:
-  api:
-    build: .
-    ports: ["8000:8000"]
-    env_file: .env
-    depends_on: [db, redis]
-  db:
+  postgres:
     image: pgvector/pgvector:pg16
+    container_name: pictrip-postgres
     environment:
-      POSTGRES_DB: pictrip
-      POSTGRES_PASSWORD: postgres
-    ports: ["5432:5432"]
-    volumes: ["pgdata:/var/lib/postgresql/data"]
+      POSTGRES_USER: ${POSTGRES_USER:-pictrip}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pictrip_dev_only}
+      POSTGRES_DB: ${POSTGRES_DB:-pictrip}
+      TZ: Asia/Seoul
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pictrip} -d ${POSTGRES_DB:-pictrip}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   redis:
     image: redis:7-alpine
-    command: >-
-      redis-server --appendonly yes --appendfsync everysec
-      --save 60 1 --maxmemory 256mb --maxmemory-policy noeviction
-    ports: ["6379:6379"]
-    volumes: ["redisdata:/data"]
+    container_name: pictrip-redis
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pictrip-api
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    volumes:
+      - ./app:/app/app
+      - ./alembic:/app/alembic
+
 volumes:
-  pgdata:
-  redisdata:
+  pg_data:
+  redis_data:
