@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, field_validator
 
 from app.core.kto_images import https_kto_image
@@ -33,10 +35,16 @@ class SpotCard(BaseModel):
     addr1: str | None = None
     mapx: float | None = None
     mapy: float | None = None
-    # Coarse chip code (food/cafe/attraction/leisure/shopping). Only the home
-    # routes (by-region/batch) populate it; all other consumers serialize null
-    # (backward compat — SimilarNeighbor/SimilarQuery inherit it as null too).
+    # Canonical subtype label = lcls_systm_codes.lcls_systm3_nm (e.g. "사적지",
+    # "찻집"). Endpoints map it from SpotCardRow.lcls_systm3_nm. Legacy home
+    # routes (by-region/batch) still populate it with the coarse chip code
+    # instead; all other consumers serialize null (backward compat —
+    # SimilarNeighbor/SimilarQuery inherit it as null too).
     category: str | None = None
+    # Optional crowd-level bucket from spot_concentration (Task 9). Defaults None
+    # and is omit-friendly — endpoints enrich it via load_congestion() only where
+    # the screen shows it; everywhere else it stays null.
+    congestion: Literal["low", "medium", "high"] | None = None
 
     @field_validator("firstImageUrl")
     @classmethod

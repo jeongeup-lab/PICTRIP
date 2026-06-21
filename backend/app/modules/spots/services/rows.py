@@ -14,6 +14,13 @@ class SpotCardRow:
     mapx: float | None
     mapy: float | None
     category: str | None = None  # derive_category chip code, NOT lcls_systm3_nm
+    # KTO subtype label (lcls_systm_codes.lcls_systm3_nm, e.g. "사적지", "찻집").
+    # The canonical card's `category` is sourced from this (Task 9); the coarse
+    # `category` chip code above is the legacy nearby/home value.
+    lcls_systm3_nm: str | None = None
+    # Optional congestion bucket ("low"|"medium"|"high") from spot_concentration,
+    # attached by the consuming endpoint via load_congestion() — None when no row.
+    congestion: str | None = None
 
 
 @dataclass

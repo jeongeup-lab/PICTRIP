@@ -8,7 +8,9 @@ importing from ``app.modules.spots.services``.
 from __future__ import annotations
 
 from app.modules.spots.services.cards import (
+    bucket_congestion,
     load_active_spot_cards_by_ids,
+    load_congestion,
     load_spot_cards_by_ids,
 )
 from app.modules.spots.services.detail import load_spot_detail
@@ -34,11 +36,13 @@ __all__ = [
     "SpotCardRow",
     "SpotDetailRow",
     "SpotImageRow",
+    "bucket_congestion",
     "category_predicate",
     "derive_category",
     "find_nearby_spots",
     "list_saved_spots",
     "load_active_spot_cards_by_ids",
+    "load_congestion",
     "load_spot_cards_by_ids",
     "load_spot_detail",
     "save_spot",

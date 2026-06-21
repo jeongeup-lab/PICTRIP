@@ -5,9 +5,48 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.spots.models import Spot
+from app.modules.spots.models import LclsSystmCode, Spot, SpotConcentration
 from app.modules.spots.services.nearby import derive_category
 from app.modules.spots.services.rows import SpotCardRow
+
+
+def bucket_congestion(rate: float | None) -> str | None:
+    """Bucket a KTO 집중률 (0-100) into the card's congestion label.
+
+    Boundaries are inclusive at the seams: ``rate < 34 -> "low"``,
+    ``34 <= rate <= 66 -> "medium"``, ``rate > 66 -> "high"``, ``None -> None``.
+    """
+    if rate is None:
+        return None
+    if rate < 34:
+        return "low"
+    if rate <= 66:
+        return "medium"
+    return "high"
+
+
+async def load_congestion(
+    session: AsyncSession,
+    content_ids: list[str],
+) -> dict[str, str | None]:
+    """Bucket the preserved ``spot_concentration`` rate for each content_id.
+
+    Returns ``{content_id: "low"|"medium"|"high"}`` keyed only by ids that have a
+    row; misses are absent so the caller defaults them to ``None`` (omit-friendly,
+    matching the canonical card's optional ``congestion``). Shared enrichment seam
+    for Tasks 10-17.
+    """
+    if not content_ids:
+        return {}
+    rows = (
+        await session.execute(
+            select(
+                SpotConcentration.content_id,
+                SpotConcentration.concentration_rate,
+            ).where(SpotConcentration.content_id.in_(content_ids))
+        )
+    ).all()
+    return {cid: bucket_congestion(float(rate)) for cid, rate in rows}
 
 
 async def load_spot_cards_by_ids(
@@ -40,17 +79,22 @@ async def load_active_spot_cards_by_ids(
     """
     if not content_ids:
         return {}
-    stmt = select(
-        Spot.content_id,
-        Spot.title,
-        Spot.first_image_url,
-        Spot.addr1,
-        Spot.mapx,
-        Spot.mapy,
-        Spot.lcls_systm1,
-        Spot.lcls_systm2,
-        Spot.lcls_systm3,
-    ).where(Spot.content_id.in_(content_ids), Spot.show_flag == 1)
+    stmt = (
+        select(
+            Spot.content_id,
+            Spot.title,
+            Spot.first_image_url,
+            Spot.addr1,
+            Spot.mapx,
+            Spot.mapy,
+            Spot.lcls_systm1,
+            Spot.lcls_systm2,
+            Spot.lcls_systm3,
+            LclsSystmCode.lcls_systm3_nm,
+        )
+        .outerjoin(LclsSystmCode, LclsSystmCode.lcls_systm3_cd == Spot.lcls_systm3)
+        .where(Spot.content_id.in_(content_ids), Spot.show_flag == 1)
+    )
     rows = (await session.execute(stmt)).all()
     return {
         r.content_id: SpotCardRow(
@@ -61,20 +105,26 @@ async def load_active_spot_cards_by_ids(
             mapx=float(r.mapx) if r.mapx is not None else None,
             mapy=float(r.mapy) if r.mapy is not None else None,
             category=derive_category(r.lcls_systm1, r.lcls_systm2, r.lcls_systm3),
+            lcls_systm3_nm=r.lcls_systm3_nm,
         )
         for r in rows
     }
 
 
 async def _load_spot_card(session: AsyncSession, content_id: str) -> SpotCardRow | None:
-    stmt = select(
-        Spot.content_id,
-        Spot.title,
-        Spot.first_image_url,
-        Spot.addr1,
-        Spot.mapx,
-        Spot.mapy,
-    ).where(Spot.content_id == content_id)
+    stmt = (
+        select(
+            Spot.content_id,
+            Spot.title,
+            Spot.first_image_url,
+            Spot.addr1,
+            Spot.mapx,
+            Spot.mapy,
+            LclsSystmCode.lcls_systm3_nm,
+        )
+        .outerjoin(LclsSystmCode, LclsSystmCode.lcls_systm3_cd == Spot.lcls_systm3)
+        .where(Spot.content_id == content_id)
+    )
     row = (await session.execute(stmt)).first()
     if row is None:
         return None
@@ -85,20 +135,26 @@ async def _load_spot_card(session: AsyncSession, content_id: str) -> SpotCardRow
         addr1=row.addr1,
         mapx=float(row.mapx) if row.mapx is not None else None,
         mapy=float(row.mapy) if row.mapy is not None else None,
+        lcls_systm3_nm=row.lcls_systm3_nm,
     )
 
 
 async def _load_spot_cards(session: AsyncSession, content_ids: list[str]) -> list[SpotCardRow]:
     if not content_ids:
         return []
-    stmt = select(
-        Spot.content_id,
-        Spot.title,
-        Spot.first_image_url,
-        Spot.addr1,
-        Spot.mapx,
-        Spot.mapy,
-    ).where(Spot.content_id.in_(content_ids))
+    stmt = (
+        select(
+            Spot.content_id,
+            Spot.title,
+            Spot.first_image_url,
+            Spot.addr1,
+            Spot.mapx,
+            Spot.mapy,
+            LclsSystmCode.lcls_systm3_nm,
+        )
+        .outerjoin(LclsSystmCode, LclsSystmCode.lcls_systm3_cd == Spot.lcls_systm3)
+        .where(Spot.content_id.in_(content_ids))
+    )
     rows = (await session.execute(stmt)).all()
     return [
         SpotCardRow(
@@ -108,6 +164,7 @@ async def _load_spot_cards(session: AsyncSession, content_ids: list[str]) -> lis
             addr1=r.addr1,
             mapx=float(r.mapx) if r.mapx is not None else None,
             mapy=float(r.mapy) if r.mapy is not None else None,
+            lcls_systm3_nm=r.lcls_systm3_nm,
         )
         for r in rows
     ]
