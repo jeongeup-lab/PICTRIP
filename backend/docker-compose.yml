@@ -22,7 +22,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: pictrip-redis
-    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction", "--loglevel", "warning"]
     ports:
       - "6379:6379"
     volumes:

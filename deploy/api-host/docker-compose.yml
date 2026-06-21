@@ -11,8 +11,8 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     command: >-
-      redis-server --appendonly yes --appendfsync everysec
-      --save 60 1 --maxmemory 256mb --maxmemory-policy noeviction
+      redis-server --save 60 1 --appendonly yes --appendfsync everysec
+      --maxmemory 256mb --maxmemory-policy noeviction --loglevel warning
     volumes: ["redisdata:/data"]
   cloudflared:
     image: cloudflare/cloudflared:latest
