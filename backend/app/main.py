@@ -1,7 +1,7 @@
 """FastAPI application entrypoint.
 
 Wires lifespan (DB pool warm-up, Sentry init, KTO client), middleware (trace-id,
-CORS, trusted hosts), error handlers, and all 8 domain routers under /v1.
+CORS, trusted hosts), error handlers, and all 6 domain routers under /v1.
 """
 
 from __future__ import annotations
@@ -23,10 +23,8 @@ from app.core.logging import configure_logging, get_logger
 from app.core.middleware import TraceIdMiddleware
 from app.core.redis import close_redis, redis_lifespan
 from app.core.schemas import ok
-from app.modules.courses import router as courses_router
 from app.modules.images import router as images_router
 from app.modules.map import router as map_router
-from app.modules.recommendations import router as recommendations_router
 from app.modules.spots import router as spots_router
 from app.modules.system import router as system_router
 from app.modules.taste import router as taste_router
@@ -99,8 +97,6 @@ def create_app() -> FastAPI:
     app.include_router(taste_router, prefix=prefix)
     app.include_router(spots_router, prefix=prefix)
     app.include_router(images_router, prefix=prefix)
-    app.include_router(recommendations_router, prefix=prefix)
-    app.include_router(courses_router, prefix=prefix)
     app.include_router(map_router, prefix=prefix)
     app.include_router(system_router, prefix=prefix)
 

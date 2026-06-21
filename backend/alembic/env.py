@@ -20,10 +20,8 @@ from app.core.db import Base
 # --- Import all models so Base.metadata is complete ---
 # Side-effect imports: F401 is suppressed for the whole alembic/* tree via ruff
 # per-file-ignores; no explicit noqa is needed (it would trigger RUF100).
-from app.modules.courses import models as _courses_models
 from app.modules.images import models as _images_models
 from app.modules.map import models as _map_models
-from app.modules.recommendations import models as _recommendations_models
 from app.modules.spots import models as _spots_models
 from app.modules.system import models as _system_models
 from app.modules.taste import models as _taste_models

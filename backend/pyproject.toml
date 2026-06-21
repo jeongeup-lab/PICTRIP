@@ -132,8 +132,6 @@ source_modules = [
     "app.modules.taste.routes",
     "app.modules.spots.routes",
     "app.modules.images.routes",
-    "app.modules.recommendations.routes",
-    "app.modules.courses.routes",
     "app.modules.map.routes",
     "app.modules.system.routes",
 ]
@@ -156,8 +154,6 @@ source_modules = [
     "app.modules.taste.routes",
     "app.modules.spots.routes",
     "app.modules.images.routes",
-    "app.modules.recommendations.routes",
-    "app.modules.courses.routes",
     "app.modules.map.routes",
     "app.modules.system.routes",
 ]
@@ -166,8 +162,6 @@ forbidden_modules = [
     "app.modules.taste.models",
     "app.modules.spots.models",
     "app.modules.images.models",
-    "app.modules.recommendations.models",
-    "app.modules.courses.models",
     "app.modules.map.models",
     "app.modules.system.models",
 ]
@@ -183,8 +177,6 @@ source_modules = [
     "app.modules.taste.schemas",
     "app.modules.spots.schemas",
     "app.modules.images.schemas",
-    "app.modules.recommendations.schemas",
-    "app.modules.courses.schemas",
     "app.modules.map.schemas",
     "app.modules.system.schemas",
 ]
@@ -205,8 +197,6 @@ source_modules = [
     "app.modules.taste.services",
     "app.modules.spots.services",
     "app.modules.images.services",
-    "app.modules.recommendations.services",
-    "app.modules.courses.services",
     "app.modules.map.services",
     "app.modules.system.services",
 ]
@@ -215,8 +205,6 @@ forbidden_modules = [
     "app.modules.taste.models",
     "app.modules.spots.models",
     "app.modules.images.models",
-    "app.modules.recommendations.models",
-    "app.modules.courses.models",
     "app.modules.map.models",
     "app.modules.system.models",
 ]
@@ -225,8 +213,6 @@ ignore_imports = [
     "app.modules.taste.services -> app.modules.taste.models",
     "app.modules.spots.services -> app.modules.spots.models",
     "app.modules.images.services -> app.modules.images.models",
-    "app.modules.recommendations.services -> app.modules.recommendations.models",
-    "app.modules.courses.services -> app.modules.courses.models",
     "app.modules.map.services -> app.modules.map.models",
     "app.modules.system.services -> app.modules.system.models",
     # spots services는 focused submodule로 분리돼 있다(rows/cards/.../nearby).
@@ -235,10 +221,6 @@ ignore_imports = [
     # 잡히지 않게 한다. spots 내부의 직접 spots.models import는 의도된 것(#22).
     "app.modules.spots.services -> app.modules.spots.services.*",
     "app.modules.spots.services.* -> app.modules.spots.models",
-    # courses services도 package로 분리됨(draft/rows/storage) — 동일하게 자기 models
-    # 직접 import를 허용한다(같은 모듈 내부는 cross-module 위반이 아님).
-    "app.modules.courses.services -> app.modules.courses.services.*",
-    "app.modules.courses.services.* -> app.modules.courses.models",
 ]
 # Most services are still placeholders that don't import their own models yet.
 # Allow these ignores to be inactive until the services get implemented.

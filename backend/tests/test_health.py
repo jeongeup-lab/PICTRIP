@@ -25,7 +25,7 @@ async def test_meta_version(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_openapi_schema_includes_all_8_domains(client: AsyncClient) -> None:
+async def test_openapi_schema_includes_all_6_domains(client: AsyncClient) -> None:
     resp = await client.get("/v1/openapi.json")
     assert resp.status_code == 200
     tags_in_schema = {
@@ -39,12 +39,13 @@ async def test_openapi_schema_includes_all_8_domains(client: AsyncClient) -> Non
         "TST · mood analysis",
         "SPT · spots",
         "IMG · image/matching (admin)",
-        "REC · recommendation",
-        "CRS · course",
         "MAP · map/crowd",
         "SYS · system/meta",
     }
     assert expected.issubset(tags_in_schema)
+    # courses/recommendations removed in the refactor (6-module surface).
+    assert "REC · recommendation" not in tags_in_schema
+    assert "CRS · course" not in tags_in_schema
 
 
 @pytest.mark.asyncio
