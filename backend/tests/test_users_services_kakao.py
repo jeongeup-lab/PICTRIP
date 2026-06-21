@@ -30,7 +30,7 @@ async def test_authenticate_with_oauth_new_signup_creates_user(db_session: Async
         AsyncMock(return_value=fake_claims),
     ):
         pair = await authenticate_with_oauth(db_session, "kakao", OAuthLoginIn(idToken="x"))
-    assert pair.user.name == "Hong"
+    assert pair.user.displayName == "Hong"
     rows = (await db_session.scalars(select(User))).all()
     assert len(rows) == 1
 

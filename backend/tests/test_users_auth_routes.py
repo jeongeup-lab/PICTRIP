@@ -162,7 +162,10 @@ async def test_users_me_returns_profile(client, patched_verify):
     access = login["data"]["accessToken"]
     resp = await client.get("/v1/users/me", headers={"Authorization": f"Bearer {access}"})
     assert resp.status_code == 200
-    assert resp.json()["data"]["name"] == "T"
+    body = resp.json()["data"]
+    assert body["displayName"] == "T"
+    assert "avatarUrl" in body
+    assert "name" not in body and "profileImageUrl" not in body
 
 
 async def test_users_me_without_header_returns_401(client):

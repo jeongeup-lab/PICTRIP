@@ -9,7 +9,7 @@ from fastapi import APIRouter, Query, Response, status
 from app.core.auth import CurrentUserId
 from app.core.db import DbSession
 from app.core.redis import RedisDep
-from app.core.schemas import ok
+from app.core.schemas import PaginationMeta, ok
 from app.modules.spots import services as spots_services
 from app.modules.spots.schemas import SpotCard
 from app.modules.users import services
@@ -107,21 +107,32 @@ async def put_consents(
 async def list_saved(
     user_id: CurrentUserId,
     session: DbSession,
-    limit: int = Query(default=100, ge=1, le=200),
+    limit: int = Query(default=24, ge=1, le=60),
+    cursor: str | None = Query(default=None),
 ) -> dict[str, Any]:
-    rows = await spots_services.list_saved_spots(session, user_id=user_id, limit=limit)
+    rows, next_cursor, has_more = await spots_services.list_saved_spots(
+        session, user_id=user_id, limit=limit, cursor=cursor
+    )
+    cards = [
+        SpotCard(
+            contentId=r.content_id,
+            title=r.title,
+            firstImageUrl=r.first_image_url,
+            addr1=r.addr1,
+            mapx=r.mapx,
+            mapy=r.mapy,
+            category=r.category,
+            congestion=r.congestion,
+        )
+        for r in rows
+    ]
     return ok(
-        [
-            SpotCard(
-                contentId=r.content_id,
-                title=r.title,
-                firstImageUrl=r.first_image_url,
-                addr1=r.addr1,
-                mapx=r.mapx,
-                mapy=r.mapy,
-            )
-            for r in rows
-        ]
+        [c.model_dump() for c in cards],
+        pagination=PaginationMeta(
+            nextCursor=next_cursor,
+            hasMore=has_more,
+            count=len(cards),
+        ),
     )
 
 

@@ -71,9 +71,9 @@ async def authenticate_with_oauth(
 
     user_public = UserPublic(
         id=user.id,
+        displayName=user.name,
         email=user.email,
-        name=user.name,
-        profileImageUrl=user.profile_image_url,
+        avatarUrl=user.profile_image_url,
         isOnboarded=False,
         createdAt=user.created_at,
     )
@@ -86,9 +86,9 @@ async def get_user_public(session: AsyncSession, user_id: int) -> UserPublic:
         raise AuthTokenInvalid()
     return UserPublic(
         id=user.id,
+        displayName=user.name,
         email=user.email,
-        name=user.name,
-        profileImageUrl=user.profile_image_url,
+        avatarUrl=user.profile_image_url,
         isOnboarded=False,
         createdAt=user.created_at,
     )

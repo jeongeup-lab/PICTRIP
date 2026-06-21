@@ -9,9 +9,9 @@ from pydantic import BaseModel, ConfigDict, EmailStr
 
 class UserPublic(BaseModel):
     id: int
+    displayName: str | None = None
     email: EmailStr | None = None
-    name: str | None = None
-    profileImageUrl: str | None = None
+    avatarUrl: str | None = None
     isOnboarded: bool = False
     createdAt: datetime | None = None
 

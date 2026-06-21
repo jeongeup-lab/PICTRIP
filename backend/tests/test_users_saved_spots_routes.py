@@ -215,6 +215,77 @@ async def test_list_returns_saved_spot_cards(
 
 
 @pytest.mark.asyncio
+async def test_list_returns_pagination_meta(
+    client: AsyncClient, override_db_and_seed: AsyncSession
+) -> None:
+    uid = await _seed_user(override_db_and_seed)
+    await _seed_spot(override_db_and_seed, "PAG-A")
+    await client.post("/v1/users/me/saved/PAG-A", headers=_auth(uid))
+
+    resp = await client.get("/v1/users/me/saved", headers=_auth(uid))
+    assert resp.status_code == 200
+    pag = resp.json()["meta"]["pagination"]
+    assert pag["count"] == 1
+    assert pag["hasMore"] is False
+    assert pag["nextCursor"] is None
+
+
+@pytest.mark.asyncio
+async def test_list_paginates_with_cursor(
+    client: AsyncClient, override_db_and_seed: AsyncSession
+) -> None:
+    uid = await _seed_user(override_db_and_seed)
+    # Seed 30 saved spots so a limit=24 page has a next cursor.
+    for i in range(30):
+        cid = f"CUR-{i:03d}"
+        await _seed_spot(override_db_and_seed, cid)
+        await _insert_saved_row(override_db_and_seed, user_id=uid, content_id=cid)
+
+    r1 = await client.get("/v1/users/me/saved?limit=24", headers=_auth(uid))
+    assert r1.status_code == 200
+    body1 = r1.json()
+    meta1 = body1["meta"]["pagination"]
+    assert meta1["count"] == 24
+    assert meta1["hasMore"] is True
+    assert meta1["nextCursor"]
+    page1_ids = [c["contentId"] for c in body1["data"]]
+
+    r2 = await client.get(
+        f"/v1/users/me/saved?limit=24&cursor={meta1['nextCursor']}", headers=_auth(uid)
+    )
+    assert r2.status_code == 200
+    body2 = r2.json()
+    meta2 = body2["meta"]["pagination"]
+    assert meta2["count"] == 6
+    assert meta2["hasMore"] is False
+    assert meta2["nextCursor"] is None
+    page2_ids = [c["contentId"] for c in body2["data"]]
+
+    # No overlap, full coverage.
+    assert set(page1_ids).isdisjoint(page2_ids)
+    assert len(set(page1_ids) | set(page2_ids)) == 30
+
+
+@pytest.mark.asyncio
+async def test_list_invalid_cursor_returns_422(
+    client: AsyncClient, override_db_and_seed: AsyncSession
+) -> None:
+    uid = await _seed_user(override_db_and_seed)
+    resp = await client.get("/v1/users/me/saved?cursor=not-a-real-cursor", headers=_auth(uid))
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "VALIDATION_FAILED"
+
+
+@pytest.mark.asyncio
+async def test_list_limit_out_of_range_returns_422(
+    client: AsyncClient, override_db_and_seed: AsyncSession
+) -> None:
+    uid = await _seed_user(override_db_and_seed)
+    resp = await client.get("/v1/users/me/saved?limit=61", headers=_auth(uid))
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_list_is_user_scoped(client: AsyncClient, override_db_and_seed: AsyncSession) -> None:
     owner = await _seed_user(override_db_and_seed)
     other = await _seed_user(override_db_and_seed)
