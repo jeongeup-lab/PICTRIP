@@ -1,0 +1,23 @@
+# CT112 runtime compose (api + redis + cloudflared). Image tag from .deploy.env.
+services:
+  api:
+    image: ${IMAGE}:${IMAGE_TAG}
+    restart: unless-stopped
+    ports: ["8000:8000"]
+    volumes:
+      - /opt/pictrip-api/.env:/app/.env:ro   # immutable secrets
+    depends_on: [redis]
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: >-
+      redis-server --appendonly yes --appendfsync everysec
+      --save 60 1 --maxmemory 256mb --maxmemory-policy noeviction
+    volumes: ["redisdata:/data"]
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel run
+    # token/credentials via env or mounted config (pictrip-tunnel)
+volumes:
+  redisdata:

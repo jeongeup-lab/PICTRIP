@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PicTrip · 사진 결과</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<style>
+  :root {
+    --bg: #FFFFFF; --inset: #F7F7F8; --ink: #171719; --sec: #5A5C63; --ter: #9396A0;
+    --line: rgba(112,115,124,0.18); --fill: rgba(112,115,124,0.07);
+    --scrim: rgba(16,14,18,0.50); --scrim-strong: rgba(16,14,18,0.66);
+    --p: 'Pretendard', -apple-system, system-ui, sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  body { font-family: var(--p); background: #e4e5e8; display: flex; justify-content: center; padding: 40px 16px; color: var(--ink); }
+  .phone { width: 402px; height: 874px; background: var(--bg); border-radius: 46px; box-shadow: 0 30px 80px rgba(16,14,18,0.28); overflow: hidden; position: relative; display: flex; flex-direction: column; }
+  .scroll { flex: 1; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
+  .scroll::-webkit-scrollbar { display: none; }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  .rise { animation: rise 0.6s cubic-bezier(0.22,1,0.36,1) both; }
+
+  /* 히어로 (내 사진) */
+  .hero { position: relative; height: 312px; background: var(--inset); }
+  .hero img { width: 100%; height: 100%; object-fit: cover; }
+  .hero .g { position: absolute; inset: 0; background: linear-gradient(to bottom, var(--scrim) 0 16%, transparent 40%, var(--scrim-strong)); }
+  .statusbar { position: absolute; top: 0; left: 0; right: 0; height: 54px; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 28px 8px; font-size: 15px; font-weight: 600; color: #fff; z-index: 3; }
+  .statusbar .icons { display: flex; gap: 6px; align-items: center; }
+  .nav { position: absolute; top: 54px; left: 0; right: 0; height: 46px; display: flex; align-items: center; padding: 0 10px; z-index: 3; }
+  .nbtn { width: 40px; height: 40px; border-radius: 20px; background: rgba(23,23,25,0.32); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; color: #fff; }
+  .ttl { position: absolute; left: 22px; bottom: 22px; color: #fff; z-index: 2; }
+  .ttl .k { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; opacity: 0.82; }
+  .ttl .t { font-size: 27px; font-weight: 800; letter-spacing: -0.5px; margin-top: 5px; }
+
+  /* 정렬 */
+  .sortwrap { padding: 18px 20px 8px; }
+  .pills { display: flex; gap: 7px; }
+  .pill { padding: 8px 15px; border-radius: 999px; font-size: 13px; font-weight: 700; }
+  .pill.on { background: var(--ink); color: #fff; }
+  .pill.off { background: var(--fill); color: var(--sec); }
+
+  /* 카드 리스트 */
+  .list { display: flex; flex-direction: column; gap: 14px; padding: 8px 20px 32px; }
+  .card { position: relative; height: 188px; border-radius: 20px; overflow: hidden; background: var(--inset); }
+  .card img { width: 100%; height: 100%; object-fit: cover; }
+  .bar { position: absolute; left: 12px; right: 12px; bottom: 12px; height: 66px; border-radius: 15px; background: rgba(20,18,22,0.42); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.14); display: flex; align-items: center; padding: 0 16px; gap: 14px; }
+  .bar .tx { flex: 1; min-width: 0; color: #fff; }
+  .bar .tx .nm { font-size: 17px; font-weight: 700; letter-spacing: -0.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar .tx .mt { font-size: 12.5px; opacity: 0.86; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .gauge { width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: conic-gradient(#fff var(--v), rgba(255,255,255,0.25) 0); }
+  .gauge .hole { width: 37px; height: 37px; border-radius: 50%; background: rgba(20,18,22,0.30); backdrop-filter: blur(2px); display: flex; align-items: center; justify-content: center; line-height: 1; }
+  .gauge .n { color: #fff; font-size: 13.5px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+  .gauge .pctsign { color: rgba(255,255,255,0.7); font-size: 8px; font-weight: 700; line-height: 1; margin-left: 0.5px; }
+</style>
+</head>
+<body>
+  <div class="phone">
+    <div class="scroll">
+      <div class="hero">
+        <img src="https://picsum.photos/id/1015/784/624" alt="" />
+        <div class="g"></div>
+        <div class="statusbar"><span>9:41</span><span class="icons">
+          <svg width="18" height="12" viewBox="0 0 18 12" fill="#fff"><rect x="0" y="3" width="2.5" height="6" rx="1"/><rect x="4" y="1.5" width="2.5" height="7.5" rx="1"/><rect x="8" y="0" width="2.5" height="9" rx="1"/></svg>
+          <svg width="24" height="12" viewBox="0 0 24 12" fill="none" stroke="#fff" stroke-width="1.2"><rect x="1" y="1.5" width="19" height="9" rx="2.5"/><rect x="2.5" y="3" width="14" height="6" rx="1" fill="#fff"/><rect x="21" y="4" width="2" height="4" rx="1" fill="#fff"/></svg>
+        </span></div>
+        <div class="nav">
+          <div class="nbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+        </div>
+        <div class="ttl"><div class="k">내 사진과 닮은</div><div class="t">비슷한 장소 24곳</div></div>
+      </div>
+
+      <div class="sortwrap"><div class="pills"><div class="pill on">유사도순</div><div class="pill off">거리순</div></div></div>
+
+      <div class="list">
+        <div class="card rise" style="animation-delay:.05s"><img src="https://picsum.photos/id/1036/740/376" alt="" /><div class="bar"><div class="tx"><div class="nm">곽지해수욕장</div><div class="mt">해변 · 제주 제주시 · 3.4km</div></div><div class="gauge" style="--v:96%"><div class="hole"><span class="n">96</span><span class="pctsign">%</span></div></div></div></div>
+        <div class="card rise" style="animation-delay:.13s"><img src="https://picsum.photos/id/1018/740/376" alt="" /><div class="bar"><div class="tx"><div class="nm">함덕해수욕장</div><div class="mt">해변 · 제주 제주시 · 18km</div></div><div class="gauge" style="--v:93%"><div class="hole"><span class="n">93</span><span class="pctsign">%</span></div></div></div></div>
+        <div class="card rise" style="animation-delay:.21s"><img src="https://picsum.photos/id/1019/740/376" alt="" /><div class="bar"><div class="tx"><div class="nm">월정리해변</div><div class="mt">해변 · 제주 제주시 · 22km</div></div><div class="gauge" style="--v:91%"><div class="hole"><span class="n">91</span><span class="pctsign">%</span></div></div></div></div>
+        <div class="card rise" style="animation-delay:.29s"><img src="https://picsum.photos/id/1039/740/376" alt="" /><div class="bar"><div class="tx"><div class="nm">김녕성세기해변</div><div class="mt">해변 · 제주 제주시 · 25km</div></div><div class="gauge" style="--v:90%"><div class="hole"><span class="n">90</span><span class="pctsign">%</span></div></div></div></div>
+        <div class="card rise" style="animation-delay:.37s"><img src="https://picsum.photos/id/1043/740/376" alt="" /><div class="bar"><div class="tx"><div class="nm">이호테우해변</div><div class="mt">해변 · 제주 제주시 · 6.1km</div></div><div class="gauge" style="--v:88%"><div class="hole"><span class="n">88</span><span class="pctsign">%</span></div></div></div></div>
+        <div class="card rise" style="animation-delay:.45s"><img src="https://picsum.photos/id/1074/740/376" alt="" /><div class="bar"><div class="tx"><div class="nm">협재해수욕장</div><div class="mt">해변 · 제주 제주시 · 1.2km</div></div><div class="gauge" style="--v:85%"><div class="hole"><span class="n">85</span><span class="pctsign">%</span></div></div></div></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

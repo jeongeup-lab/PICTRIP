@@ -1,0 +1,7 @@
+[Unit]
+Description=Prune dangling docker images and builder cache
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker image prune -af
+ExecStart=/usr/bin/docker builder prune -af

@@ -1,0 +1,24 @@
+# Prometheus scrape config (CT113). Targets on the LAN.
+global:
+  scrape_interval: 30s
+
+rule_files:
+  - /etc/prometheus/alert-rules/*.yml
+
+scrape_configs:
+  - job_name: api            # FastAPI /metrics (RED)
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["CT112:8000"]
+  - job_name: node           # host CPU/RAM/DISK — node_exporter on pve host
+    static_configs:
+      - targets: ["PVE_HOST:9100"]
+  - job_name: cadvisor       # CT112 containers
+    static_configs:
+      - targets: ["CT112:8080"]
+  - job_name: postgres       # CT110
+    static_configs:
+      - targets: ["CT110:9187"]
+  - job_name: redis          # CT112
+    static_configs:
+      - targets: ["CT112:9121"]

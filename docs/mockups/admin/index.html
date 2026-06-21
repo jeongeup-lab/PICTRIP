@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PicTrip Admin · 수집 현황</title>
+<link rel="stylesheet" href="assets/admin.css" />
+</head>
+<body>
+<div class="shell">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sb-brand">
+      <div class="logo">P</div>
+      <div class="name">PicTrip<small>관광지 수집 관리</small></div>
+    </div>
+    <div class="sb-group">spots 일일 수집</div>
+    <a class="nav-item active" href="index.html">
+      <svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      수집 현황
+    </a>
+    <a class="nav-item" href="history.html">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="3.5" cy="6" r="1.2"/><circle cx="3.5" cy="12" r="1.2"/><circle cx="3.5" cy="18" r="1.2"/></svg>
+      수집 이력
+      <span class="badge run">1</span>
+    </a>
+    <div class="sb-group">서비스</div>
+    <a class="nav-item" href="health.html">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M3 12h4l2 7 4-14 2 7h6"/></svg>
+      서비스 헬스
+      <span class="badge bad">!</span>
+    </a>
+    <div class="sb-foot"><span class="dot live"></span> admin · 로그인됨</div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb"><b>수집 현황</b></div>
+      <div class="spacer"></div>
+      <div class="env-pill"><span class="dot ok"></span> <b>prod</b> · api.pictrip.org</div>
+      <div class="clock" id="clock">--:--:--</div>
+    </div>
+
+    <div class="content">
+      <div class="page-head">
+        <h1>관광지(spots) 수집 현황</h1>
+        <p>KTO 데이터 소스별 마지막 수집 결과입니다. 우측 버튼으로 다시 수집할 수 있습니다.</p>
+      </div>
+
+      <!-- column header -->
+      <div class="src" style="background:transparent;border:0;box-shadow:none;padding:0 0 2px">
+        <div class="cell name" style="padding-top:0;padding-bottom:8px"><div class="lbl">데이터 소스</div></div>
+        <div class="cell" style="padding-top:0;padding-bottom:8px"><div class="lbl">실행 시간</div></div>
+        <div class="cell" style="padding-top:0;padding-bottom:8px"><div class="lbl">API 호출</div></div>
+        <div class="cell" style="padding-top:0;padding-bottom:8px"><div class="lbl">추가 / 수정 / 숨김</div></div>
+        <div class="cell" style="padding-top:0;padding-bottom:8px"><div class="lbl">소요</div></div>
+        <div class="cell act" style="padding-top:0;padding-bottom:8px"></div>
+      </div>
+
+      <!-- source row -->
+      <div class="src">
+        <div class="cell name">
+          <div class="title">국문 관광정보 서비스</div>
+          <div class="ep">areaBasedSyncList2 → spots</div>
+        </div>
+        <div class="cell">
+          <div class="v">06-18 04:12<br><small>2h 11m 전</small></div>
+        </div>
+        <div class="cell">
+          <div class="v">2,140</div>
+        </div>
+        <div class="cell">
+          <div class="v">184 / 1,902 / 12</div>
+        </div>
+        <div class="cell">
+          <div class="v">8m 41s</div>
+        </div>
+        <div class="cell act">
+          <span class="status ok">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
+            업데이트 완료
+          </span>
+          <button class="btn" data-job="sync-daily">다시 업데이트</button>
+        </div>
+      </div>
+
+      <p style="font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin-top:14px">
+        다음 자동 실행 · 내일 04:00 · 총 68,322 spots 수집됨
+      </p>
+
+    </div>
+  </div>
+</div>
+<script src="assets/admin.js"></script>
+</body>
+</html>

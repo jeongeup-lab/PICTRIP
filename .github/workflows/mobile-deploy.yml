@@ -1,0 +1,25 @@
+name: mobile-deploy
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+defaults:
+  run:
+    working-directory: mobile
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - run: npm run lint && npm run typecheck && npm run format:check && npm test
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - run: eas build --auto-submit --non-interactive

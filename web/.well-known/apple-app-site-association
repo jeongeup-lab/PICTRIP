@@ -1,0 +1,13 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["TEAMID.org.pictrip.app"],
+        "components": [
+          { "/": "/spots/*" },
+          { "/": "/curations/*" }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PicTrip · 마이 (상태)</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<style>
+  :root {
+    --bg: #FFFFFF; --inset: #F7F7F8; --ink: #171719; --sec: #5A5C63; --ter: #9396A0;
+    --line: rgba(112,115,124,0.18); --fill: rgba(112,115,124,0.08);
+    --p: 'Pretendard', -apple-system, system-ui, sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  body { font-family: var(--p); background: #e4e5e8; display: flex; flex-wrap: wrap; gap: 40px; justify-content: center; padding: 44px 24px; color: var(--ink); }
+  .variant { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .vlabel { font-size: 15px; font-weight: 800; }
+  .phone { width: 392px; height: 812px; background: var(--inset); border-radius: 46px; box-shadow: 0 24px 64px rgba(16,14,18,0.26); overflow: hidden; position: relative; display: flex; flex-direction: column; }
+  .statusbar { background: var(--bg); height: 50px; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 28px 7px; font-size: 14px; font-weight: 600; flex-shrink: 0; }
+  .statusbar .icons { display: flex; gap: 6px; align-items: center; }
+  .navbar { background: var(--bg); height: 50px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .navbar .title { font-size: 17px; font-weight: 700; }
+  .scroll { flex: 1; overflow-y: auto; scrollbar-width: none; }
+  .scroll::-webkit-scrollbar { display: none; }
+
+  .profile { display: flex; align-items: center; gap: 14px; padding: 20px; background: var(--bg); }
+  .avatar { width: 62px; height: 62px; border-radius: 31px; overflow: hidden; background: var(--fill); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .pname { font-size: 19px; font-weight: 700; letter-spacing: -0.19px; }
+  .pemail { color: var(--sec); font-size: 13.5px; margin-top: 3px; }
+
+  .sep { height: 9px; background: var(--inset); }
+
+  .secHead { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 11px; background: var(--bg); }
+  .secTitle { font-size: 18px; font-weight: 800; letter-spacing: -0.3px; }
+
+  /* 빈 스크랩 보드 */
+  .railEmpty { margin: 0 20px 18px; border: 1px solid var(--line); border-radius: 14px; padding: 30px 16px; display: flex; flex-direction: column; align-items: center; gap: 14px; background: var(--bg); }
+  .railEmptyText { color: var(--ter); font-size: 14px; font-weight: 500; }
+  .railEmptyBtn { display: flex; align-items: center; gap: 6px; height: 38px; padding: 0 18px; border-radius: 999px; background: var(--fill); color: var(--ink); font-size: 13.5px; font-weight: 700; }
+  /* 스크랩 섹션 흰 배경 유지를 위한 래퍼 */
+  .scrapWrap { background: var(--bg); padding-bottom: 2px; }
+
+  .group { background: var(--bg); }
+  .row { display: flex; align-items: center; gap: 13px; padding: 16px 20px; border-top: 1px solid var(--line); }
+  .row.first { border-top: 0; }
+  .rowIcon { width: 21px; display: flex; align-items: center; justify-content: center; color: var(--sec); }
+  .rowLabel { flex: 1; font-size: 15.5px; font-weight: 600; }
+  .rowValue { color: var(--ter); font-size: 14px; font-variant-numeric: tabular-nums; }
+  .rowChev { color: var(--ter); display: flex; }
+
+  /* 게스트 로그인 행 */
+  .loginRow { display: flex; align-items: center; gap: 14px; padding: 22px 20px; background: var(--bg); }
+  .loginAvatar { width: 54px; height: 54px; border-radius: 27px; background: var(--fill); display: flex; align-items: center; justify-content: center; color: var(--ink); flex-shrink: 0; }
+  .loginTitle { font-size: 18px; font-weight: 700; letter-spacing: -0.18px; }
+  .loginSub { color: var(--sec); font-size: 13px; margin-top: 3px; }
+  .loginChev { color: var(--ter); display: flex; margin-left: auto; }
+
+  .foot { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 24px 0 30px; }
+  .footLink { color: var(--sec); font-size: 13px; font-weight: 600; }
+  .footDiv { width: 1px; height: 12px; background: var(--line); }
+
+  .tabbar { height: 86px; padding: 12px 14px 0; background: #fff; border-top: 1px solid var(--line); display: flex; justify-content: space-around; flex-shrink: 0; }
+  .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+  .tab .tlabel { font-size: 12px; font-weight: 600; }
+  .tab.active, .tab.active .tlabel { color: var(--ink); }
+  .tab:not(.active), .tab:not(.active) .tlabel { color: var(--ter); }
+
+  /* 게스트 가운데 안내 */
+  .guestScroll { background: var(--bg); }
+  .guestHero { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 0 40px; gap: 0; }
+  .guestIcon { width: 84px; height: 84px; border-radius: 42px; background: var(--inset); display: flex; align-items: center; justify-content: center; color: var(--ter); margin-bottom: 22px; }
+  .guestTitle { font-size: 21px; font-weight: 800; letter-spacing: -0.4px; }
+  .guestSub { color: var(--sec); font-size: 14px; line-height: 22px; margin-top: 10px; }
+  .guestBtn { margin-top: 28px; height: 52px; width: 100%; border-radius: 14px; background: var(--ink); color: #fff; font-size: 16px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  .guestFoot { display: flex; justify-content: center; padding: 0 0 30px; }
+</style>
+</head>
+<body>
+
+  <!-- ════════ 빈 스크랩 (로그인) ════════ -->
+  <div class="variant">
+    <div class="vlabel">로그인 · 스크랩 없음</div>
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="3" width="2.5" height="6" rx="1"/><rect x="4" y="1.5" width="2.5" height="7.5" rx="1"/><rect x="8" y="0" width="2.5" height="9" rx="1"/></svg>
+        <svg width="24" height="12" viewBox="0 0 24 12" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="1" y="1.5" width="19" height="9" rx="2.5"/><rect x="2.5" y="3" width="14" height="6" rx="1" fill="currentColor"/><rect x="21" y="4" width="2" height="4" rx="1" fill="currentColor"/></svg>
+      </span></div>
+      <div class="navbar"><span class="title">마이</span></div>
+      <div class="scroll">
+        <div class="profile">
+          <div class="avatar"><img src="https://picsum.photos/id/1027/160/160" alt="" /></div>
+          <div><div class="pname">이신성</div><div class="pemail">sinseong@example.com</div></div>
+        </div>
+        <div class="sep"></div>
+        <div class="scrapWrap">
+          <div class="secHead"><div class="secTitle">스크랩</div></div>
+          <div class="railEmpty">
+            <div class="railEmptyText">아직 스크랩한 곳이 없어요</div>
+            <div class="railEmptyBtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 10v10a1 1 0 0 0 1 1h5v-6h6v6h5a1 1 0 0 0 1-1V10z"/></svg>둘러보러 가기</div>
+          </div>
+        </div>
+        <div class="sep"></div>
+        <div class="group">
+          <div class="row first">
+            <span class="rowIcon"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></span>
+            <span class="rowLabel">위치 권한</span>
+            <span class="rowChev"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+          </div>
+          <div class="row">
+            <span class="rowIcon"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="7.6" r="0.6" fill="currentColor"/></svg></span>
+            <span class="rowLabel">앱 버전</span>
+            <span class="rowValue">1.0.0</span>
+          </div>
+        </div>
+        <div class="sep"></div>
+        <div class="group">
+          <div class="row first">
+            <span class="rowIcon"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 17l5-5-5-5M20 12H9M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3"/></svg></span>
+            <span class="rowLabel">로그아웃</span>
+          </div>
+        </div>
+        <div class="foot"><span class="footLink">약관·정책</span><span class="footDiv"></span><span class="footLink">회원 탈퇴</span></div>
+      </div>
+      <div class="tabbar">
+        <div class="tab"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 10v10a1 1 0 0 0 1 1h5v-6h6v6h5a1 1 0 0 0 1-1V10z"/></svg><span class="tlabel">홈</span></div>
+        <div class="tab"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg><span class="tlabel">지도</span></div>
+        <div class="tab"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.5-2.2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg><span class="tlabel">사진</span></div>
+        <div class="tab active"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4"/><path d="M12 14c-4.4 0-7 3.1-7 7h14c0-3.9-2.6-7-7-7z"/></svg><span class="tlabel">마이</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════ 게스트 (비로그인) ════════ -->
+  <div class="variant">
+    <div class="vlabel">비로그인 (게스트)</div>
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="3" width="2.5" height="6" rx="1"/><rect x="4" y="1.5" width="2.5" height="7.5" rx="1"/><rect x="8" y="0" width="2.5" height="9" rx="1"/></svg>
+        <svg width="24" height="12" viewBox="0 0 24 12" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="1" y="1.5" width="19" height="9" rx="2.5"/><rect x="2.5" y="3" width="14" height="6" rx="1" fill="currentColor"/><rect x="21" y="4" width="2" height="4" rx="1" fill="currentColor"/></svg>
+      </span></div>
+      <div class="navbar"><span class="title">마이</span></div>
+      <div class="scroll">
+        <div class="loginRow">
+          <div class="loginAvatar"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M5 21c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg></div>
+          <div>
+            <div class="loginTitle">로그인하기</div>
+            <div class="loginSub">나만의 여행지를 스크랩해 보세요</div>
+          </div>
+          <span class="loginChev"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+        </div>
+        <div class="sep"></div>
+        <div class="scrapWrap">
+          <div class="secHead"><div class="secTitle">스크랩</div></div>
+          <div class="railEmpty">
+            <div class="railEmptyText">로그인하고 마음에 든 곳을 스크랩하세요</div>
+            <div class="railEmptyBtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>로그인하기</div>
+          </div>
+        </div>
+        <div class="sep"></div>
+        <div class="group">
+          <div class="row first">
+            <span class="rowIcon"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></span>
+            <span class="rowLabel">위치 권한</span>
+            <span class="rowChev"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+          </div>
+          <div class="row">
+            <span class="rowIcon"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="7.6" r="0.6" fill="currentColor"/></svg></span>
+            <span class="rowLabel">앱 버전</span>
+            <span class="rowValue">1.0.0</span>
+          </div>
+        </div>
+        <div class="foot"><span class="footLink">약관·정책</span></div>
+      </div>
+      <div class="tabbar">
+        <div class="tab"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 10v10a1 1 0 0 0 1 1h5v-6h6v6h5a1 1 0 0 0 1-1V10z"/></svg><span class="tlabel">홈</span></div>
+        <div class="tab"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg><span class="tlabel">지도</span></div>
+        <div class="tab"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.5-2.2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg><span class="tlabel">사진</span></div>
+        <div class="tab active"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4"/><path d="M12 14c-4.4 0-7 3.1-7 7h14c0-3.9-2.6-7-7-7z"/></svg><span class="tlabel">마이</span></div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

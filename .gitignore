@@ -1,0 +1,32 @@
+# --- secrets / env ---
+.env
+.env.*
+!.env.example
+*.local
+
+# --- python (backend, pipeline) ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# --- node (mobile) ---
+node_modules/
+.expo/
+*.tsbuildinfo
+coverage/
+
+# --- os / editor ---
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# --- deploy ---
+deploy/api-host/.deploy.env

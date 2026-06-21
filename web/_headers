@@ -1,0 +1,5 @@
+# .well-known association files must be application/json with NO redirect
+/.well-known/apple-app-site-association
+  Content-Type: application/json
+/.well-known/assetlinks.json
+  Content-Type: application/json

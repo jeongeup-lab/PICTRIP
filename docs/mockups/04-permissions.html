@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PicTrip · 위치 권한</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<style>
+  :root {
+    --bg: #FFFFFF; --inset: #F7F7F8; --ink: #171719; --sec: #5A5C63; --ter: #9396A0;
+    --line: rgba(112,115,124,0.18); --fill: rgba(112,115,124,0.08);
+    --p: 'Pretendard', -apple-system, system-ui, sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  body { font-family: var(--p); background: #e4e5e8; display: flex; flex-wrap: wrap; gap: 40px; justify-content: center; padding: 44px 24px; color: var(--ink); }
+  .variant { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .vlabel { font-size: 15px; font-weight: 800; }
+  .phone { width: 392px; height: 812px; background: var(--bg); border-radius: 46px; box-shadow: 0 24px 64px rgba(16,14,18,0.26); overflow: hidden; position: relative; display: flex; flex-direction: column; }
+  .statusbar { height: 52px; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 28px 7px; font-size: 14px; font-weight: 600; flex-shrink: 0; }
+  .statusbar .icons { display: flex; gap: 6px; align-items: center; }
+
+  .wrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 40px; text-align: center; }
+  .iconCircle { width: 92px; height: 92px; border-radius: 28px; background: var(--inset); display: flex; align-items: center; justify-content: center; margin-bottom: 26px; color: var(--ink); }
+  .iconCircle.muted { color: var(--ter); }
+  .title { font-size: 22px; font-weight: 700; letter-spacing: -0.4px; line-height: 30px; margin-bottom: 12px; }
+  .body { color: var(--sec); font-size: 14.5px; line-height: 23px; }
+
+  .cta { padding: 0 24px 26px; display: flex; flex-direction: column; gap: 10px; }
+  .btn { height: 54px; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 16px; font-weight: 700; }
+  .btn.primary { background: var(--ink); color: #fff; }
+  .btn.secondary { background: var(--inset); color: var(--ink); }
+</style>
+</head>
+<body>
+
+  <!-- ════ 요청(priming) ════ -->
+  <div class="variant">
+    <div class="vlabel">① 위치 권한 요청</div>
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="3" width="2.5" height="6" rx="1"/><rect x="4" y="1.5" width="2.5" height="7.5" rx="1"/><rect x="8" y="0" width="2.5" height="9" rx="1"/></svg>
+        <svg width="24" height="12" viewBox="0 0 24 12" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="1" y="1.5" width="19" height="9" rx="2.5"/><rect x="2.5" y="3" width="14" height="6" rx="1" fill="currentColor"/><rect x="21" y="4" width="2" height="4" rx="1" fill="currentColor"/></svg>
+      </span></div>
+      <div class="wrap">
+        <div class="iconCircle">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+        </div>
+        <div class="title">내 주변 여행지를<br />보여드릴게요</div>
+        <div class="body">가까운 여행지부터 보여드려요. 위치는 추천에만 쓰고 저장하지 않아요.</div>
+      </div>
+      <div class="cta">
+        <div class="btn primary"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>위치 허용하기</div>
+        <div class="btn secondary">나중에 할게요</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ 거부됨(denied) ════ -->
+  <div class="variant">
+    <div class="vlabel">② 위치 꺼짐(거부됨)</div>
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span class="icons">
+        <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="3" width="2.5" height="6" rx="1"/><rect x="4" y="1.5" width="2.5" height="7.5" rx="1"/><rect x="8" y="0" width="2.5" height="9" rx="1"/></svg>
+        <svg width="24" height="12" viewBox="0 0 24 12" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="1" y="1.5" width="19" height="9" rx="2.5"/><rect x="2.5" y="3" width="14" height="6" rx="1" fill="currentColor"/><rect x="21" y="4" width="2" height="4" rx="1" fill="currentColor"/></svg>
+      </span></div>
+      <div class="wrap">
+        <div class="iconCircle muted">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M19 12h3M12 19v3"/><path d="M2 12h3"/><path d="M3 3l18 18"/></svg>
+        </div>
+        <div class="title">위치가 꺼져 있어요</div>
+        <div class="body">설정에서 위치를 켜면 내 주변 여행지를 추천해 드려요.</div>
+      </div>
+      <div class="cta">
+        <div class="btn primary">설정 열기</div>
+        <div class="btn secondary">둘러보기</div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

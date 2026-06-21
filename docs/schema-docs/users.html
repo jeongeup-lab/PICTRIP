@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>유저 · 인증 · 저장 도메인 · PicTrip DB Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="atlas.css" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead__inner">
+    <div class="masthead__brand">PicTrip<span class="mk"> · </span>DB Atlas</div>
+    <nav class="nav">
+      <a href="index.html">개요</a>
+      <a href="spots.html">관광 데이터</a>
+      <a href="curations.html">큐레이션</a>
+      <a href="users.html" aria-current="page">유저 · 인증</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="hero">
+    <p class="hero__kicker">Plate III · 유저 · 인증 · 저장</p>
+    <h1>유저 · 인증</h1>
+    <p class="hero__lede">
+      OIDC(kakao·google·apple) 매핑, 동의, 스크랩. <em>세션 테이블 없이</em> Redis jti로 폐기 처리.
+    </p>
+    <div class="hero__meta">
+      <span>테이블 <b>4</b></span>
+      <span>토큰 <b>access=메모리 · refresh=secure-store</b></span>
+      <span>탈퇴 <b>CASCADE</b></span>
+    </div>
+  </section>
+
+  <hr class="rule2" />
+
+  <section class="section">
+    <div class="section__head">
+      <span class="section__no">§ III.1</span>
+      <h2>ER 다이어그램</h2>
+      <span class="aside">적용 후 — 드롭 컬럼 제외</span>
+    </div>
+    <div class="legend">
+      <span><span class="b b--pk">PK</span> 기본키</span>
+      <span><span class="b b--fk">FK</span> 외래키</span>
+      <span><span class="b b--uk">UK</span> 유니크</span>
+      <span><span class="b b--vec">halfvec</span> taste 벡터</span>
+      <span><span class="b b--ck">CASCADE</span> 탈퇴 전파</span>
+    </div>
+    <div class="erd-frame">
+      <pre class="mermaid">
+erDiagram
+    users ||--o{ user_auth_providers : "oidc (CASCADE)"
+    users ||--o| user_consents : "consent (CASCADE)"
+    users ||--o{ user_saved_spots : "scrap (CASCADE)"
+    spots ||--o{ user_saved_spots : "scrap (CASCADE)"
+
+    users {
+        bigint id PK
+        varchar email UK
+        varchar name "→displayName"
+        varchar profile_image_url "→avatarUrl"
+        halfvec taste_vector
+        timestamptz deleted_at
+    }
+    user_auth_providers {
+        bigint id PK
+        bigint user_id FK
+        varchar provider
+        varchar provider_user_id
+        timestamptz linked_at
+    }
+    user_consents {
+        bigint user_id PK
+        boolean location_consent
+        boolean photo_consent
+        varchar terms_version
+    }
+    user_saved_spots {
+        bigint user_id PK
+        varchar content_id PK
+        timestamptz saved_at
+    }
+    spots {
+        varchar content_id PK
+    }
+      </pre>
+    </div>
+    <p class="erd-cap">모든 자식 ON DELETE CASCADE · 탈퇴 시 일괄 삭제</p>
+  </section>
+
+  <section class="section">
+    <div class="section__head">
+      <span class="section__no">§ III.2</span>
+      <h2>테이블 상세</h2>
+      <span class="aside">4 tables</span>
+    </div>
+
+    <div class="toc">
+      <a href="#t-users">users</a>
+      <a href="#t-user_auth_providers">user_auth_providers</a>
+      <a href="#t-user_consents">user_consents</a>
+      <a href="#t-user_saved_spots">user_saved_spots</a>
+    </div>
+
+    <!-- ───── users ───── -->
+    <article class="tplate" id="t-users">
+      <div class="tplate__head">
+        <div class="tplate__title">
+          <span class="tplate__folio">III-a</span>
+          <h3>users</h3>
+          <span class="tag tag--reuse">재사용</span>
+        </div>
+        <span class="rows">계정</span>
+        <p class="tplate__desc">
+          계정 마스터. 아바타는 <strong>기존 <code>profile_image_url</code> 재사용</strong>(→ <code>avatarUrl</code>). 표시이름 <code>name</code>(→ <code>displayName</code>). <code>deleted_at</code> 소프트 삭제.
+        </p>
+      </div>
+      <div class="cols">
+        <div class="cols__head"><span>컬럼</span><span>타입</span><span class="h-cons">제약</span><span class="h-note">설명</span></div>
+        <div class="col"><span class="col__name is-pk">id</span><span class="col__type">bigint</span><span class="col__cons"><span class="b b--pk">PK</span></span><span class="col__note">autoincrement</span></div>
+        <div class="col"><span class="col__name">email</span><span class="col__type">varchar(255)</span><span class="col__cons"><span class="b b--uk">UK*</span></span><span class="col__note">활성 행 부분 유니크. OAuth 이메일</span></div>
+        <div class="col"><span class="col__name">name</span><span class="col__type">varchar(50)</span><span class="col__cons"></span><span class="col__note">표시 이름 → API <code>displayName</code></span></div>
+        <div class="col"><span class="col__name">bio</span><span class="col__type">varchar(255)</span><span class="col__cons"></span><span class="col__note">소개 (선택)</span></div>
+        <div class="col"><span class="col__name">location_label</span><span class="col__type">varchar(100)</span><span class="col__cons"></span><span class="col__note">위치 라벨 (선택)</span></div>
+        <div class="col"><span class="col__name">profile_image_url</span><span class="col__type">varchar(500)</span><span class="col__cons"><span class="b b--keep">avatar 재사용</span></span><span class="col__note">→ API <code>avatarUrl</code>. URL 참조만 (업로드 금지)</span></div>
+        <div class="col"><span class="col__name">taste_vector</span><span class="col__type">halfvec(512)</span><span class="col__cons"><span class="b b--vec">halfvec</span></span><span class="col__note">취향 벡터. ivfflat halfvec_cosine_ops</span></div>
+        <div class="col"><span class="col__name">created_at</span><span class="col__type">timestamptz</span><span class="col__cons"><span class="b b--def">DEFAULT now()</span></span><span class="col__note">생성 시각</span></div>
+        <div class="col"><span class="col__name">deleted_at</span><span class="col__type">timestamptz</span><span class="col__cons"></span><span class="col__note">소프트 삭제 시각 (NULL = 활성)</span></div>
+      </div>
+      <div class="tplate__foot">
+        <div class="meta">
+          <h4>인덱스</h4>
+          <ul>
+            <li><span class="m">idx_users_email_active</span> — UNIQUE(email) <span class="wh">WHERE deleted_at IS NULL</span></li>
+            <li><span class="m">idx_users_taste_vector</span> — ivfflat (halfvec_cosine_ops)</li>
+          </ul>
+        </div>
+        <div class="meta">
+          <h4>참조됨</h4>
+          <p>user_auth_providers · user_consents · user_saved_spots (모두 CASCADE)</p>
+        </div>
+      </div>
+    </article>
+
+    <!-- ───── user_auth_providers ───── -->
+    <article class="tplate" id="t-user_auth_providers">
+      <div class="tplate__head">
+        <div class="tplate__title">
+          <span class="tplate__folio">III-b</span>
+          <h3>user_auth_providers</h3>
+          <span class="tag tag--reuse">변경 (컬럼 드롭)</span>
+        </div>
+        <span class="rows">OIDC 매핑</span>
+        <p class="tplate__desc">
+          OIDC 제공자 ↔ 유저 upsert 매핑. <code>refresh_token_enc</code> <strong>드롭</strong> (refresh는 서버 미저장).
+        </p>
+      </div>
+      <div class="cols">
+        <div class="cols__head"><span>컬럼</span><span>타입</span><span class="h-cons">제약</span><span class="h-note">설명</span></div>
+        <div class="col"><span class="col__name is-pk">id</span><span class="col__type">bigint</span><span class="col__cons"><span class="b b--pk">PK</span></span><span class="col__note">autoincrement</span></div>
+        <div class="col"><span class="col__name">user_id</span><span class="col__type">bigint</span><span class="col__cons"><span class="b b--fk">FK</span></span><span class="col__note">→ users.id · ON DELETE CASCADE</span></div>
+        <div class="col"><span class="col__name">provider</span><span class="col__type">varchar(16)</span><span class="col__cons"><span class="b b--nn">NOT NULL</span><span class="b b--ck">CHECK</span></span><span class="col__note">kakao · google · apple (email은 레거시)</span></div>
+        <div class="col"><span class="col__name">provider_user_id</span><span class="col__type">varchar(255)</span><span class="col__cons"><span class="b b--nn">NOT NULL</span></span><span class="col__note">OIDC subject (sub)</span></div>
+        <div class="col"><span class="col__name">linked_at</span><span class="col__type">timestamptz</span><span class="col__cons"><span class="b b--def">DEFAULT now()</span></span><span class="col__note">연결 시각</span></div>
+      </div>
+      <div class="tplate__foot">
+        <div class="meta">
+          <h4>인덱스 · 키</h4>
+          <ul>
+            <li><span class="m">UNIQUE</span> (provider, provider_user_id)</li>
+            <li><span class="m">idx_auth_providers_user</span> — (user_id)</li>
+          </ul>
+        </div>
+        <div class="meta">
+          <h4>드롭된 컬럼</h4>
+          <p><span class="m" style="text-decoration:line-through;color:var(--ink-soft)">refresh_token_enc</span> — Redis jti 전용 결정과 모순되는 죽은 컬럼</p>
+        </div>
+      </div>
+    </article>
+
+    <!-- ───── user_consents ───── -->
+    <article class="tplate" id="t-user_consents">
+      <div class="tplate__head">
+        <div class="tplate__title">
+          <span class="tplate__folio">III-c</span>
+          <h3>user_consents</h3>
+          <span class="tag tag--reuse">변경 (컬럼 드롭)</span>
+        </div>
+        <span class="rows">동의 스냅샷</span>
+        <p class="tplate__desc">
+          동의 스냅샷. 버전은 <code>terms_version</code>. <code>notification_consent</code> <strong>드롭</strong>.
+        </p>
+      </div>
+      <div class="cols">
+        <div class="cols__head"><span>컬럼</span><span>타입</span><span class="h-cons">제약</span><span class="h-note">설명</span></div>
+        <div class="col"><span class="col__name is-pk">user_id</span><span class="col__type">bigint</span><span class="col__cons"><span class="b b--pk">PK</span><span class="b b--fk">FK</span></span><span class="col__note">→ users.id · ON DELETE CASCADE</span></div>
+        <div class="col"><span class="col__name">location_consent</span><span class="col__type">boolean</span><span class="col__cons"><span class="b b--def">DEFAULT false</span></span><span class="col__note">위치 동의 (거리칩 활성 조건)</span></div>
+        <div class="col"><span class="col__name">photo_consent</span><span class="col__type">boolean</span><span class="col__cons"><span class="b b--def">DEFAULT false</span></span><span class="col__note">사진 동의</span></div>
+        <div class="col"><span class="col__name">terms_version</span><span class="col__type">varchar(16)</span><span class="col__cons"><span class="b b--nn">NOT NULL</span></span><span class="col__note">동의한 약관 버전 (예: v1.0)</span></div>
+        <div class="col"><span class="col__name">consented_at</span><span class="col__type">timestamptz</span><span class="col__cons"><span class="b b--def">DEFAULT now()</span></span><span class="col__note">동의 시각</span></div>
+      </div>
+      <div class="tplate__foot">
+        <div class="meta">
+          <h4>외래 키</h4>
+          <p>user_id → users.id <span class="wh">CASCADE</span> (PK = FK, 1:1)</p>
+        </div>
+        <div class="meta">
+          <h4>드롭된 컬럼</h4>
+          <p><span class="m" style="text-decoration:line-through;color:var(--ink-soft)">notification_consent</span> — 알림 비목표</p>
+        </div>
+      </div>
+    </article>
+
+    <!-- ───── user_saved_spots ───── -->
+    <article class="tplate" id="t-user_saved_spots">
+      <div class="tplate__head">
+        <div class="tplate__title">
+          <span class="tplate__folio">III-d</span>
+          <h3>user_saved_spots</h3>
+          <span class="tag tag--reuse">재사용</span>
+        </div>
+        <span class="rows">스크랩</span>
+        <p class="tplate__desc">
+          스크랩. users ↔ spots. 카드는 <code>contentId</code>로 직렬화.
+        </p>
+      </div>
+      <div class="cols">
+        <div class="cols__head"><span>컬럼</span><span>타입</span><span class="h-cons">제약</span><span class="h-note">설명</span></div>
+        <div class="col"><span class="col__name is-pk">user_id</span><span class="col__type">bigint</span><span class="col__cons"><span class="b b--pk">PK</span><span class="b b--fk">FK</span></span><span class="col__note">→ users.id · ON DELETE CASCADE</span></div>
+        <div class="col"><span class="col__name is-pk">content_id</span><span class="col__type">varchar(32)</span><span class="col__cons"><span class="b b--pk">PK</span><span class="b b--fk">FK</span></span><span class="col__note">→ spots.content_id · ON DELETE CASCADE</span></div>
+        <div class="col"><span class="col__name">saved_at</span><span class="col__type">timestamptz</span><span class="col__cons"><span class="b b--def">DEFAULT now()</span></span><span class="col__note">저장 시각</span></div>
+      </div>
+      <div class="tplate__foot">
+        <div class="meta">
+          <h4>인덱스</h4>
+          <ul><li><span class="m">idx_user_saved_spots_user</span> — (user_id, saved_at DESC)</li></ul>
+        </div>
+        <div class="meta">
+          <h4>키</h4>
+          <p>PK (user_id, content_id) — 중복 저장 방지</p>
+        </div>
+      </div>
+    </article>
+  </section>
+
+</main>
+
+<footer class="colophon">
+  <div class="colophon__inner">
+    <span>PicTrip · 데이터베이스 아틀라스</span>
+    <span>Plate III · 유저 · 인증 · 저장</span>
+    <span>출처 <a href="../specs/screens/S01-onboarding-auth.md">S1</a> · <a href="../specs/screens/S06-profile-legal.md">S6</a> · <a href="../specs/platform/S07-db.md">S7</a></span>
+  </div>
+</footer>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true, theme: 'base',
+    themeVariables: { background:'#ffffff', primaryColor:'#ffffff', primaryTextColor:'#16181d', primaryBorderColor:'#0f766e', lineColor:'#9aa0aa', secondaryColor:'#f5f6f8', tertiaryColor:'#fafbfc', fontFamily:'JetBrains Mono, ui-monospace, monospace', fontSize:'13px' },
+    er: { diagramPadding:18, layoutDirection:'TB', minEntityWidth:124, minEntityHeight:40, entityPadding:14, useMaxWidth:true }
+  });
+</script>
+
+</body>
+</html>

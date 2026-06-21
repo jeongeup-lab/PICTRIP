@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PicTrip Admin · 홈 큐레이션 편집기</title>
+<link rel="stylesheet" href="assets/admin.css" />
+<link rel="stylesheet" href="assets/curation.css" />
+</head>
+<body class="cu-page">
+<div class="shell">
+
+  <!-- SECTION: sidebar | status: locked -->
+  <aside class="sidebar">
+    <div class="sb-brand">
+      <div class="logo">P</div>
+      <div class="name">PicTrip<small>관광지 수집 관리</small></div>
+    </div>
+    <div class="sb-group">spots 일일 수집</div>
+    <a class="nav-item" href="index.html">
+      <svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      수집 현황
+    </a>
+    <a class="nav-item" href="history.html">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="3.5" cy="6" r="1.2"/><circle cx="3.5" cy="12" r="1.2"/><circle cx="3.5" cy="18" r="1.2"/></svg>
+      수집 이력
+      <span class="badge run">1</span>
+    </a>
+    <div class="sb-group">콘텐츠</div>
+    <a class="nav-item active" href="curation.html">
+      <svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="11" height="6" rx="1.5"/><path d="M18 17h3"/></svg>
+      홈 큐레이션
+    </a>
+    <div class="sb-group">서비스</div>
+    <a class="nav-item" href="health.html">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M3 12h4l2 7 4-14 2 7h6"/></svg>
+      서비스 헬스
+      <span class="badge bad">!</span>
+    </a>
+    <div class="sb-foot"><span class="dot live"></span> admin · 로그인됨</div>
+  </aside>
+  <!-- END SECTION: sidebar -->
+
+  <div class="main">
+    <!-- SECTION: top-nav | status: locked -->
+    <div class="topbar">
+      <div class="crumb"><span>콘텐츠</span><span class="sep">/</span><b>홈 큐레이션</b></div>
+      <div class="spacer"></div>
+      <div class="env-pill"><span class="dot ok"></span> <b>prod</b> · /home/feed</div>
+      <div class="clock" id="clock">--:--:--</div>
+    </div>
+    <!-- END SECTION: top-nav -->
+
+    <div class="content">
+      <!-- SECTION: page-head | status: editable -->
+      <div class="page-head-row">
+        <div class="page-head">
+          <h1>홈 큐레이션 편집기</h1>
+          <p>아래 미리보기는 앱 홈에 나갈 편성입니다. 카드를 누르면 하단에서 편집하고, 발행하면 반영됩니다.</p>
+        </div>
+        <div class="savebar">
+          <span class="legend">
+            <span class="lg-item"><span class="dot ok"></span>발행</span>
+            <span class="lg-item"><span class="dot warn"></span>초안</span>
+          </span>
+          <span class="saved" data-saved>마지막 발행 · 06-20 18:40</span>
+          <button class="btn ghost lg" type="button">
+            <svg class="bi" viewBox="0 0 24 24"><path d="M9 14l-4-4 4-4"/><path d="M5 10h9a5 5 0 0 1 0 10h-2"/></svg>
+            되돌리기
+          </button>
+          <button class="btn lg" type="button">
+            <svg class="bi" viewBox="0 0 24 24"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+            전체 발행
+          </button>
+        </div>
+      </div>
+      <!-- END SECTION: page-head -->
+
+      <!-- SECTION: feed-preview | status: editable -->
+      <div class="card pv-wrap" data-selectable>
+        <div class="card-h">
+          <h2>편성 미리보기</h2>
+          <span class="hcount">히어로 <b>6</b> · 레일 <b>3</b></span>
+          <span class="sub">발행 시 반영</span>
+        </div>
+        <div class="card-b">
+          <p class="elabel">히어로 캐러셀 <span class="elabel-sub">앱 홈 상단 · 좌우 스와이프</span><span class="count">지역 6</span></p>
+          <div class="pv-heroes">
+            <div class="pv-hero active" data-item>
+              <div class="img"><div class="scrim"></div><span class="pubdot on" title="발행"></span><div class="ttl">제주, 매일 가도&#10;새로운 섬</div></div>
+              <div class="ft"><span class="slot-no">1</span><span class="rg">제주</span></div>
+            </div>
+            <div class="pv-hero" data-item>
+              <div class="img"><div class="scrim"></div><span class="pubdot on" title="발행"></span><div class="ttl">바다 끝에서&#10;부산</div></div>
+              <div class="ft"><span class="slot-no">2</span><span class="rg">부산</span></div>
+            </div>
+            <div class="pv-hero" data-item>
+              <div class="img"><div class="scrim"></div><span class="pubdot on" title="발행"></span><div class="ttl">동해 보러&#10;강릉</div></div>
+              <div class="ft"><span class="slot-no">3</span><span class="rg">강릉</span></div>
+            </div>
+            <div class="pv-hero is-draft" data-item>
+              <div class="img"><div class="scrim"></div><span class="draft">초안</span><span class="pubdot off" title="초안"></span><div class="ttl">느리게 걷는&#10;전주</div></div>
+              <div class="ft"><span class="slot-no">4</span><span class="rg">전주</span></div>
+            </div>
+            <div class="pv-hero" data-item>
+              <div class="img"><div class="scrim"></div><span class="pubdot on" title="발행"></span><div class="ttl">천년을 걷는&#10;경주</div></div>
+              <div class="ft"><span class="slot-no">5</span><span class="rg">경주</span></div>
+            </div>
+            <div class="pv-hero" data-item>
+              <div class="img"><div class="scrim"></div><span class="pubdot on" title="발행"></span><div class="ttl">밤바다의&#10;여수</div></div>
+              <div class="ft"><span class="slot-no">6</span><span class="rg">여수</span></div>
+            </div>
+          </div>
+          <div class="pv-ind" role="presentation"><i class="on"></i><i></i><i></i><i></i><i></i><i></i></div>
+
+          <p class="elabel" style="margin-top:24px">무드 레일 <span class="elabel-sub">취향 기반 가로 스크롤</span><span class="count">3</span></p>
+          <div class="pv-rails">
+            <div class="pv-rail" data-item>
+              <div class="rh"><span class="nm">노을이 예쁜 바닷가</span><span class="pubdot on" title="발행"></span></div>
+              <div class="cards">
+                <div class="c"><div class="sq"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/></svg></div><div class="nm2">월정리해변</div></div>
+                <div class="c"><div class="sq"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/></svg></div><div class="nm2">송정해변</div></div>
+                <div class="c"><div class="sq"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/></svg></div><div class="nm2">함덕해변</div></div>
+                <div class="more">+5</div>
+              </div>
+            </div>
+            <div class="pv-rail" data-item>
+              <div class="rh"><span class="nm">조용한 산속 사찰</span><span class="pubdot on" title="발행"></span></div>
+              <div class="cards">
+                <div class="c"><div class="sq"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/></svg></div><div class="nm2">불국사</div></div>
+                <div class="c"><div class="sq"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/></svg></div><div class="nm2">해인사</div></div>
+                <div class="c"><div class="sq"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/></svg></div><div class="nm2">통도사</div></div>
+                <div class="more auto">자동</div>
+              </div>
+            </div>
+            <div class="pv-rail is-draft" data-item>
+              <div class="rh"><span class="nm">감성 가득 카페거리</span><span class="pubdot off" title="초안"></span></div>
+              <div class="cards">
+                <div class="c"><div class="sq"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/></svg></div><div class="nm2">오설록</div></div>
+                <div class="c"><div class="sq"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/></svg></div><div class="nm2">감천문화마을</div></div>
+                <div class="more two">2개</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- END SECTION: feed-preview -->
+
+      <!-- SECTION: editor | status: editable -->
+      <div class="card editor-card" data-editor>
+        <div class="card-h">
+          <h2>편집 · 제주</h2>
+          <span class="tbadge region">지역 히어로 · 슬롯 1</span>
+          <div class="savebar" style="margin-left:auto">
+            <span class="dirty" data-dirty style="display:none"><span class="dot warn"></span> 저장 안 됨</span>
+            <span class="saved" data-saved>저장됨 · 2분 전</span>
+            <span class="pub on" data-cu="제주" role="switch" aria-checked="true" tabindex="0"><span class="sw"></span><span class="lbl">발행</span></span>
+          </div>
+        </div>
+        <div class="card-b">
+          <div class="b-edit">
+
+            <!-- col 1: copy -->
+            <div class="ecol">
+              <p class="elabel">카피</p>
+              <div class="field">
+                <label>제목 <span class="hint">줄바꿈 보존</span></label>
+                <textarea class="ta title" rows="2" data-count="cc-title">제주, 매일 가도
+새로운 섬</textarea>
+                <div class="charcount" id="cc-title"></div>
+              </div>
+              <div class="field">
+                <label>부제</label>
+                <input class="inp" value="제주에서 가장 사진 잘 받는 곳 →" />
+              </div>
+              <div class="field">
+                <label>리드문</label>
+                <input class="inp" value="섬은 하루도 같은 얼굴이 없다." />
+              </div>
+              <div class="field">
+                <label>소개</label>
+                <textarea class="ta" rows="4" data-count="cc-intro">바람이 바뀌면 바다 색도 바뀐다. 오름에 오르면 능선이 겹겹이 이어지고, 해안 도로를 따라가면 매번 다른 풍경이 펼쳐진다.</textarea>
+                <div class="charcount" id="cc-intro"></div>
+              </div>
+            </div>
+
+            <!-- col 2: cover + meta -->
+            <div class="ecol">
+              <p class="elabel">표지 · 편성</p>
+              <div class="field">
+                <label>표지 스팟</label>
+                <div class="pspot">
+                  <span class="thumb cover" style="width:54px;height:54px"></span>
+                  <span class="meta"><span class="nm">성산일출봉</span><span class="sub">제주 · 자연</span></span>
+                  <button class="btn ghost sm" type="button" data-open-picker>변경</button>
+                </div>
+              </div>
+              <!-- SECTION: cover-notice | status: locked -->
+              <div class="urlnote">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16" r=".6" fill="currentColor" stroke="none"/></svg>
+                <span><b>KTO URL 참조만 표시</b> · 다운로드·저장 없음<br>tong.visitkorea.or.kr/…/126508_image2.jpg</span>
+              </div>
+              <!-- END SECTION: cover-notice -->
+              <div class="field" style="margin-top:16px">
+                <label>노출 순서</label>
+                <div class="orderfield">
+                  <button class="iconbtn sm" type="button" aria-label="앞으로"><svg viewBox="0 0 24 24"><path d="M18 15l-6-6-6 6"/></svg></button>
+                  <input class="inp" value="1" inputmode="numeric" />
+                  <button class="iconbtn sm" type="button" aria-label="뒤로"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+                  <span class="ofnote">/ 6 지역 중</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- col 3: handpick spots -->
+            <!-- SECTION: handpick-spots | status: editable -->
+            <div class="ecol">
+              <p class="elabel">손픽 스팟 <span class="count">4 / 8</span></p>
+              <div class="softnote">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16" r=".6" fill="currentColor" stroke="none"/></svg>
+                <span>비우면 <b>품질 랭킹</b>으로 자동 채움</span>
+              </div>
+              <div class="picklist" data-sortable>
+                <div class="pspot draggable">
+                  <span class="handle" aria-label="순서 이동"><svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></svg></span>
+                  <span class="slot-no">1</span>
+                  <span class="thumb" style="width:38px;height:38px"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/></svg></span>
+                  <span class="meta"><span class="nm">성산일출봉</span><span class="sub">제주 · 자연</span></span>
+                  <button class="rm" type="button" aria-label="제거"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+                </div>
+                <div class="pspot draggable">
+                  <span class="handle" aria-label="순서 이동"><svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></svg></span>
+                  <span class="slot-no">2</span>
+                  <span class="thumb" style="width:38px;height:38px"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/></svg></span>
+                  <span class="meta"><span class="nm">우도</span><span class="sub">제주 · 섬</span></span>
+                  <button class="rm" type="button" aria-label="제거"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+                </div>
+                <div class="pspot draggable">
+                  <span class="handle" aria-label="순서 이동"><svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></svg></span>
+                  <span class="slot-no">3</span>
+                  <span class="thumb" style="width:38px;height:38px"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/></svg></span>
+                  <span class="meta"><span class="nm">협재해수욕장</span><span class="sub">제주 · 해변</span></span>
+                  <button class="rm" type="button" aria-label="제거"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+                </div>
+                <div class="pspot draggable">
+                  <span class="handle" aria-label="순서 이동"><svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></svg></span>
+                  <span class="slot-no">4</span>
+                  <span class="thumb" style="width:38px;height:38px"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/></svg></span>
+                  <span class="meta"><span class="nm">한라산</span><span class="sub">제주 · 산</span></span>
+                  <button class="rm" type="button" aria-label="제거"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+                </div>
+              </div>
+              <button class="btn ghost sm addspot" type="button" data-open-picker>
+                <svg class="bi" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                스팟 추가
+              </button>
+            </div>
+            <!-- END SECTION: handpick-spots -->
+
+          </div>
+        </div>
+        <div class="editor-foot">
+          <button class="btn ghost sm" type="button">
+            <svg class="bi" viewBox="0 0 24 24"><path d="M3 7v6a2 2 0 0 0 2 2h11l4 4V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2z"/></svg>
+            초안으로
+          </button>
+          <div class="spacer" style="flex:1"></div>
+          <button class="btn ghost" type="button" data-save>임시저장</button>
+          <button class="btn" type="button">
+            <svg class="bi" viewBox="0 0 24 24"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+            저장 후 발행
+          </button>
+        </div>
+      </div>
+      <!-- END SECTION: editor -->
+
+    </div>
+  </div>
+</div>
+
+<!-- SECTION: picker-modal | status: editable -->
+<div class="modal-bg" id="pickermodal">
+  <div class="modal picker">
+    <div class="mh">
+      <div class="mh-titles"><h3>스팟 추가</h3><span class="mh-sub">손픽 스팟에 넣을 관광지를 검색해 추가합니다</span></div>
+      <span class="x" role="button" aria-label="닫기">×</span>
+    </div>
+    <div class="mb">
+      <div class="picker-top">
+        <div class="search">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+          <input class="inp" placeholder="스팟 이름 또는 지역으로 검색…" value="제주" />
+        </div>
+        <div class="filters">
+          <span class="fchip on">전체</span><span class="fchip">제주</span><span class="fchip">부산</span><span class="fchip">강원</span><span class="fchip">자연</span><span class="fchip">해변</span><span class="fchip">카페</span>
+        </div>
+      </div>
+      <div class="results">
+        <div class="rspot"><span class="thumb"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/></svg></span><span class="meta"><span class="nm">섭지코지</span><span class="sub">제주 · 자연 · contentId 127653</span></span><button class="btn ghost add" type="button">추가</button></div>
+        <div class="rspot"><span class="thumb"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/></svg></span><span class="meta"><span class="nm">월정리해변</span><span class="sub">제주 · 해변 · contentId 130836</span></span><button class="btn ghost add" type="button">추가</button></div>
+        <div class="rspot"><span class="thumb"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/></svg></span><span class="meta"><span class="nm">오설록 티뮤지엄</span><span class="sub">제주 · 카페 · contentId 129507</span></span><button class="btn ghost add" type="button">추가</button></div>
+        <div class="rspot added"><span class="thumb"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/></svg></span><span class="meta"><span class="nm">성산일출봉</span><span class="sub">제주 · 자연 · contentId 126508</span></span><button class="btn ghost add" type="button"><svg class="bi chk" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>추가됨</button></div>
+        <div class="rspot"><span class="thumb"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/></svg></span><span class="meta"><span class="nm">사려니숲길</span><span class="sub">제주 · 자연 · contentId 125452</span></span><button class="btn ghost add" type="button">추가</button></div>
+      </div>
+    </div>
+    <div class="mf">
+      <span class="mf-note"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16" r=".6" fill="currentColor" stroke="none"/></svg> KTO 이미지 URL만 참조 · 다운로드 없음</span>
+      <div class="spacer" style="flex:1"></div>
+      <button class="btn ghost x" type="button">닫기</button>
+    </div>
+  </div>
+</div>
+<!-- END SECTION: picker-modal -->
+
+<script src="assets/admin.js"></script>
+<script src="assets/curation.js"></script>
+</body>
+</html>

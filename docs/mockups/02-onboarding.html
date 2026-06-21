@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PicTrip · 온보딩 (사진 기능)</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<style>
+  :root {
+    --bg:#FFFFFF; --inset:#F7F7F8; --ink:#171719; --sec:#5A5C63; --ter:#9396A0;
+    --line:rgba(112,115,124,0.18); --fill:rgba(112,115,124,0.08); --skeleton:#ECEDEF;
+    --scrim:rgba(16,14,18,0.5); --scrim2:rgba(16,14,18,0.66);
+    --p:'Pretendard',system-ui,sans-serif;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-font-smoothing:antialiased; }
+  body { font-family:var(--p); background:#e4e5e8; display:flex; justify-content:center; padding:40px 16px; color:var(--ink); }
+  .phone { width:402px; height:874px; background:var(--inset); border-radius:46px; box-shadow:0 30px 80px rgba(16,14,18,0.28); overflow:hidden; position:relative; display:flex; flex-direction:column; }
+  .statusbar { height:54px; display:flex; align-items:flex-end; justify-content:space-between; padding:0 28px 8px; font-size:15px; font-weight:600; flex-shrink:0; z-index:8; }
+  .statusbar .icons { display:flex; gap:6px; align-items:center; }
+  .skip { position:absolute; top:60px; right:20px; z-index:9; font-size:14px; font-weight:600; color:var(--ter); }
+
+  .track { flex:1; display:flex; overflow-x:auto; scroll-snap-type:x mandatory; scrollbar-width:none; }
+  .track::-webkit-scrollbar { display:none; }
+  .slide { flex:0 0 100%; width:402px; scroll-snap-align:start; display:flex; flex-direction:column; align-items:center; padding:18px 0 0; }
+  .eyebrow { font-size:12px; font-weight:800; letter-spacing:1.5px; color:var(--ter); }
+  .cap { text-align:center; padding:22px 36px 0; }
+  .cap .h2 { font-size:23px; font-weight:800; letter-spacing:-0.5px; line-height:30px; }
+  .cap .sub { font-size:14px; line-height:22px; color:var(--sec); margin-top:9px; }
+
+  /* 미니 디바이스 (실제 화면을 scale로 축소) */
+  .device { width:236px; height:498px; border-radius:34px; overflow:hidden; position:relative; background:#fff; box-shadow:0 18px 40px rgba(16,14,18,0.20); border:1px solid rgba(16,14,18,0.06); margin-top:12px; }
+  .scaled { width:392px; height:828px; transform:scale(0.602); transform-origin:top left; position:absolute; top:0; left:0; }
+
+  .foot { flex-shrink:0; padding:14px 24px 26px; display:flex; flex-direction:column; gap:16px; background:var(--inset); }
+  .dots { display:flex; gap:7px; justify-content:center; }
+  .dots i { width:7px; height:7px; border-radius:50%; background:var(--line); transition:all .25s; }
+  .dots i.on { width:22px; border-radius:4px; background:var(--ink); }
+  .btn { height:54px; border-radius:13px; display:flex; align-items:center; justify-content:center; gap:8px; font-size:16px; font-weight:700; background:var(--ink); color:#fff; }
+
+  /* ===== 실제 화면 공통(scaled 내부, 392 기준) ===== */
+  .scaled .sbar { height:44px; display:flex; align-items:flex-end; justify-content:space-between; padding:0 26px 6px; font-size:15px; font-weight:600; }
+  .scaled .sbar .ic { display:flex; gap:6px; align-items:center; }
+
+  /* 사진 선택 */
+  .scr-select { height:100%; display:flex; flex-direction:column; padding:0 24px 22px; background:#fff; }
+  .scr-select .ttl { font-size:25px; font-weight:700; letter-spacing:-0.55px; line-height:32px; margin-top:6px; }
+  .scr-select .pv { flex:1; margin:22px 0 16px; border-radius:20px; overflow:hidden; position:relative; background:var(--inset); }
+  .scr-select .pv img { width:100%; height:100%; object-fit:cover; }
+  .scr-select .rm { position:absolute; top:12px; right:12px; width:34px; height:34px; border-radius:17px; background:rgba(23,23,25,0.34); display:flex; align-items:center; justify-content:center; color:#fff; }
+  .scr-select .acts { display:flex; gap:11px; margin-bottom:11px; }
+  .scr-select .b { flex:1; height:54px; border-radius:12px; background:var(--inset); display:flex; align-items:center; justify-content:center; gap:8px; font-size:15px; font-weight:700; }
+  .scr-select .cta { height:56px; border-radius:12px; background:var(--ink); color:#fff; display:flex; align-items:center; justify-content:center; gap:8px; font-size:16px; font-weight:700; }
+
+  /* 분석중 */
+  .scr-an { height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 44px; background:#fff; }
+  .scr-an .th { width:92px; height:92px; border-radius:20px; overflow:hidden; box-shadow:0 10px 24px rgba(23,23,25,0.12); margin-bottom:26px; }
+  .scr-an .th img { width:100%; height:100%; object-fit:cover; }
+  .scr-an .t { font-size:20px; font-weight:700; letter-spacing:-0.36px; margin-bottom:6px; }
+  .scr-an .s { font-size:13px; color:var(--sec); margin-bottom:30px; }
+  .scr-an .bar { width:100%; height:4px; border-radius:2px; background:var(--skeleton); overflow:hidden; position:relative; }
+  .scr-an .bar i { position:absolute; left:18%; width:42%; height:100%; border-radius:2px; background:var(--ink); }
+
+  /* 결과 */
+  .scr-res { height:100%; background:#fff; display:flex; flex-direction:column; }
+  .scr-res .hero { height:300px; position:relative; }
+  .scr-res .hero img { width:100%; height:100%; object-fit:cover; }
+  .scr-res .hero .g { position:absolute; inset:0; background:linear-gradient(to bottom,var(--scrim) 0 16%,transparent 42%,var(--scrim2)); }
+  .scr-res .hero .ttl { position:absolute; left:22px; bottom:20px; color:#fff; }
+  .scr-res .hero .k { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; opacity:.82; }
+  .scr-res .hero .t { font-size:27px; font-weight:800; letter-spacing:-0.5px; margin-top:5px; }
+  .scr-res .pills { display:flex; gap:7px; padding:16px 20px 8px; }
+  .scr-res .pill { padding:8px 15px; border-radius:999px; font-size:13px; font-weight:700; }
+  .scr-res .pill.on { background:var(--ink); color:#fff; }
+  .scr-res .pill.off { background:var(--fill); color:var(--sec); }
+  .scr-res .card { margin:6px 20px 0; height:168px; border-radius:20px; overflow:hidden; position:relative; }
+  .scr-res .card img { width:100%; height:100%; object-fit:cover; }
+  .scr-res .bar2 { position:absolute; left:12px; right:12px; bottom:12px; height:60px; border-radius:15px; background:rgba(20,18,22,0.42); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,0.14); display:flex; align-items:center; padding:0 16px; gap:14px; }
+  .scr-res .bar2 .tx { flex:1; color:#fff; }
+  .scr-res .bar2 .nm { font-size:17px; font-weight:700; }
+  .scr-res .bar2 .mt { font-size:12.5px; opacity:.86; margin-top:2px; }
+  .scr-res .gg { width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:conic-gradient(#fff var(--v),rgba(255,255,255,0.25) 0); }
+  .scr-res .gg .h { width:35px; height:35px; border-radius:50%; background:rgba(20,18,22,0.30); display:flex; align-items:center; justify-content:center; color:#fff; font-size:13px; font-weight:800; }
+</style>
+</head>
+<body>
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span class="icons">
+      <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="3" width="2.5" height="6" rx="1"/><rect x="4" y="1.5" width="2.5" height="7.5" rx="1"/><rect x="8" y="0" width="2.5" height="9" rx="1"/></svg>
+      <svg width="24" height="12" viewBox="0 0 24 12" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="1" y="1.5" width="19" height="9" rx="2.5"/><rect x="2.5" y="3" width="14" height="6" rx="1" fill="currentColor"/><rect x="21" y="4" width="2" height="4" rx="1" fill="currentColor"/></svg>
+    </span></div>
+    <div class="skip">건너뛰기</div>
+
+    <div class="track" data-dots="dots">
+      <!-- STEP 1 · 사진 선택 -->
+      <div class="slide">
+        <div class="eyebrow">STEP 1</div>
+        <div class="device"><div class="scaled">
+          <div class="scr-select">
+            <div class="sbar"><span>9:41</span><span class="ic"><svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="3" width="2.5" height="6" rx="1"/><rect x="4" y="1.5" width="2.5" height="7.5" rx="1"/><rect x="8" y="0" width="2.5" height="9" rx="1"/></svg></span></div>
+            <div class="ttl">사진 속 분위기로<br />여행지를 찾아요</div>
+            <div class="pv"><img src="https://picsum.photos/id/1015/520/700" alt="" /><div class="rm"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></div></div>
+            <div class="acts">
+              <div class="b"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.5-2.2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>촬영</div>
+              <div class="b"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.8"/><path d="M21 15l-5-5L5 21"/></svg>갤러리</div>
+            </div>
+            <div class="cta"><svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 4.9L18.7 8 13.8 9.8 12 14.7 10.2 9.8 5.3 8l4.9-1.1z"/></svg>분석하기</div>
+          </div>
+        </div></div>
+        <div class="cap"><div class="h2">마음에 든 사진을 골라요</div><div class="sub">여행 사진이든 인터넷에서 본 풍경이든, 한 장이면 충분해요</div></div>
+      </div>
+
+      <!-- STEP 2 · 분석중 -->
+      <div class="slide">
+        <div class="eyebrow">STEP 2</div>
+        <div class="device"><div class="scaled">
+          <div class="scr-an">
+            <div class="th"><img src="https://picsum.photos/id/1015/200/200" alt="" /></div>
+            <div class="t">사진을 분석하고 있어요</div>
+            <div class="s">잠시만 기다려 주세요</div>
+            <div class="bar"><i></i></div>
+          </div>
+        </div></div>
+        <div class="cap"><div class="h2">AI가 분위기를 읽어요</div><div class="sub">사진의 색감과 분위기를 분석해 닮은 곳을 찾아요</div></div>
+      </div>
+
+      <!-- STEP 3 · 결과 -->
+      <div class="slide">
+        <div class="eyebrow">STEP 3</div>
+        <div class="device"><div class="scaled">
+          <div class="scr-res">
+            <div class="hero"><img src="https://picsum.photos/id/1015/784/600" alt="" /><div class="g"></div>
+              <div class="sbar" style="position:absolute;top:0;left:0;right:0;color:#fff;"><span>9:41</span><span class="ic"><svg width="18" height="12" viewBox="0 0 18 12" fill="#fff"><rect x="0" y="3" width="2.5" height="6" rx="1"/><rect x="4" y="1.5" width="2.5" height="7.5" rx="1"/><rect x="8" y="0" width="2.5" height="9" rx="1"/></svg></span></div>
+              <div class="ttl"><div class="k">내 사진과 닮은</div><div class="t">비슷한 장소 24곳</div></div>
+            </div>
+            <div class="pills"><div class="pill on">유사도순</div><div class="pill off">거리순</div></div>
+            <div class="card"><img src="https://picsum.photos/id/1036/740/340" alt="" /><div class="bar2"><div class="tx"><div class="nm">곽지해수욕장</div><div class="mt">해변 · 3.4km</div></div><div class="gg" style="--v:96%"><div class="h">96</div></div></div></div>
+            <div class="card"><img src="https://picsum.photos/id/1018/740/340" alt="" /><div class="bar2"><div class="tx"><div class="nm">함덕해수욕장</div><div class="mt">해변 · 18km</div></div><div class="gg" style="--v:93%"><div class="h">93</div></div></div></div>
+          </div>
+        </div></div>
+        <div class="cap"><div class="h2">닮은 여행지를 추천받아요</div><div class="sub">분위기가 비슷한 곳을 유사도 순으로 보여드려요</div></div>
+      </div>
+    </div>
+
+    <div class="foot">
+      <div class="dots" id="dots"><i class="on"></i><i></i><i></i></div>
+      <div class="btn"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.5-2.2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>사진으로 시작하기</div>
+    </div>
+  </div>
+
+  <script>
+    var track = document.querySelector('.track');
+    var dots = document.getElementById('dots').children;
+    track.addEventListener('scroll', function () {
+      var i = Math.round(track.scrollLeft / track.clientWidth);
+      for (var k = 0; k < dots.length; k++) dots[k].classList.toggle('on', k === i);
+    });
+  </script>
+</body>
+</html>

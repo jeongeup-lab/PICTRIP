@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "PicTrip",
+    "slug": "pictrip",
+    "scheme": "pictrip",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "bundleIdentifier": "org.pictrip.app",
+      "associatedDomains": ["applinks:pictrip.org"]
+    },
+    "android": {
+      "package": "org.pictrip.app",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [{ "scheme": "https", "host": "pictrip.org" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    },
+    "plugins": ["expo-router", "expo-secure-store", "expo-location"]
+  }
+}

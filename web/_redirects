@@ -1,0 +1,2 @@
+# www -> apex (must NOT touch /.well-known/*)
+https://www.pictrip.org/* https://pictrip.org/:splat 301

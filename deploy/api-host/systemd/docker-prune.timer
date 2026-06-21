@@ -1,0 +1,9 @@
+[Unit]
+Description=Weekly docker image/builder prune (prevent disk-full deploy failures)
+
+[Timer]
+OnCalendar=Mon 05:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

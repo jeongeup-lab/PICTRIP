@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>관광 데이터 도메인 · PicTrip DB Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="atlas.css" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead__inner">
+    <div class="masthead__brand">PicTrip<span class="mk"> · </span>DB Atlas</div>
+    <nav class="nav">
+      <a href="index.html">개요</a>
+      <a href="spots.html" aria-current="page">관광 데이터</a>
+      <a href="curations.html">큐레이션</a>
+      <a href="users.html">유저 · 인증</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="hero">
+    <p class="hero__kicker">Plate I · 관광 데이터</p>
+    <h1>관광 <em>데이터</em></h1>
+    <p class="hero__lede">
+      KTO 스팟 ~68,000건과 상세·이미지·임베딩·무드·지역·분류 테이블. <em>이미지는 URL만 저장</em>.
+    </p>
+    <div class="hero__meta">
+      <span>테이블 <b>9</b></span>
+      <span>spots <b>~68K</b> · 임베딩 <b>~64%</b></span>
+      <span>변경 없음 · 전부 재사용</span>
+    </div>
+  </section>
+
+  <hr class="rule2" />
+
+  <section class="section">
+    <div class="section__head">
+      <span class="section__no">§ I.1</span>
+      <h2>ER 다이어그램</h2>
+      <span class="aside">spots 중심 방사 구조</span>
+    </div>
+    <div class="legend">
+      <span><span class="b b--pk">PK</span> 기본키</span>
+      <span><span class="b b--fk">FK</span> 외래키</span>
+      <span><span class="b b--uk">UK</span> 유니크</span>
+      <span><span class="b b--vec">halfvec</span> CLIP 임베딩</span>
+    </div>
+    <div class="erd-frame">
+      <pre class="mermaid">
+erDiagram
+    regions ||--o{ sigungus : "has"
+    regions ||--o{ spots : "regn"
+    sigungus ||--o{ spots : "signgu"
+    lcls_systm_codes ||--o{ spots : "lcls3"
+    spots ||--o| spot_details : "detail"
+    spots ||--o{ spot_images : "gallery"
+    spots ||--o| spot_embeddings : "CLIP"
+    spots ||--o{ spot_moods : "tags"
+    moods ||--o{ spot_moods : "tags"
+
+    spots {
+        varchar content_id PK
+        smallint content_type_id
+        varchar title
+        numeric mapx
+        numeric mapy
+        varchar ldong_regn_cd FK
+        varchar ldong_signgu_cd FK
+        varchar lcls_systm3 FK
+        varchar first_image_url
+        smallint show_flag
+    }
+    spot_details {
+        varchar content_id PK
+        text overview
+        jsonb intro_data
+        jsonb info_data
+        varchar homepage
+        varchar tel
+    }
+    spot_images {
+        bigint id PK
+        varchar content_id FK
+        varchar origin_image_url
+        smallint sort_order
+    }
+    spot_embeddings {
+        varchar content_id PK
+        halfvec embedding
+        varchar image_url
+    }
+    spot_moods {
+        varchar content_id PK
+        smallint mood_id PK
+        float confidence
+        varchar source
+    }
+    moods {
+        smallint id PK
+        varchar code UK
+        varchar name
+    }
+    regions {
+        varchar ldong_regn_cd PK
+        varchar ldong_regn_nm
+    }
+    sigungus {
+        varchar ldong_signgu_cd PK
+        varchar ldong_regn_cd FK
+        varchar ldong_signgu_nm
+    }
+    lcls_systm_codes {
+        varchar lcls_systm3_cd PK
+        varchar lcls_systm3_nm
+    }
+      </pre>
+    </div>
+    <p class="erd-cap">sigungus는 좌표 없음 · centroid는 spots 평균</p>
+  </section>
+
+  <section class="section">
+    <div class="section__head">
+      <span class="section__no">§ I.2</span>
+      <h2>테이블 상세</h2>
+      <span class="aside">9 tables</span>
+    </div>
+
+    <div class="toc">
+      <a href="#t-spots">spots</a>
+      <a href="#t-spot_details">spot_details</a>
+      <a href="#t-spot_images">spot_images</a>
+      <a href="#t-spot_embeddings">spot_embeddings</a>
+      <a href="#t-spot_moods">spot_moods</a>
+      <a href="#t-moods">moods</a>
+      <a href="#t-regions">regions</a>
+      <a href="#t-sigungus">sigungus</a>
+      <a href="#t-lcls_systm_codes">lcls_systm_codes</a>
+    </div>
+
+    <!-- ───── spots ───── -->
+    <article class="tplate" id="t-spots">
+      <div class="tplate__head">
+        <div class="tplate__title">
+          <span class="tplate__folio">I-a</span>
+          <h3>spots</h3>
+          <span class="tag tag--reuse">재사용 · 마스터</span>
+        </div>
+        <span class="rows rows--live">~68,000 행</span>
+        <p class="tplate__desc">
+          KTO 스팟 마스터. 카드 <code>{ contentId, title, firstImageUrl, category }</code>의 출처.
+          <code>category</code>는 <code>lcls_systm3</code> 조인. 사용자 노출은 <code>show_flag=1</code>만.
+        </p>
+      </div>
+      <div class="cols">
+        <div class="cols__head"><span>컬럼</span><span>타입</span><span class="h-cons">제약</span><span class="h-note">설명</span></div>
+        <div class="col"><span class="col__name is-pk">content_id</span><span class="col__type">varchar(32)</span><span class="col__cons"><span class="b b--pk">PK</span></span><span class="col__note">KTO contentId · 카드 <code>contentId</code></span></div>
+        <div class="col"><span class="col__name">content_type_id</span><span class="col__type">smallint</span><span class="col__cons"></span><span class="col__note">KTO 타입 (12=관광지 …) · coarse 버킷 파생</span></div>
+        <div class="col"><span class="col__name">title</span><span class="col__type">varchar(255)</span><span class="col__cons"></span><span class="col__note">스팟명 · 카드 <code>title</code> · trgm 검색</span></div>
+        <div class="col"><span class="col__name">addr1</span><span class="col__type">varchar(255)</span><span class="col__cons"></span><span class="col__note">기본 주소 · trgm 검색</span></div>
+        <div class="col"><span class="col__name">addr2</span><span class="col__type">varchar(255)</span><span class="col__cons"></span><span class="col__note">상세 주소</span></div>
+        <div class="col"><span class="col__name">zipcode</span><span class="col__type">varchar(16)</span><span class="col__cons"></span><span class="col__note">우편번호</span></div>
+        <div class="col"><span class="col__name">mapx</span><span class="col__type">numeric(11,8)</span><span class="col__cons"></span><span class="col__note">경도 (WGS84) · centroid AVG 입력</span></div>
+        <div class="col"><span class="col__name">mapy</span><span class="col__type">numeric(10,8)</span><span class="col__cons"></span><span class="col__note">위도 (WGS84)</span></div>
+        <div class="col"><span class="col__name">ldong_regn_cd</span><span class="col__type">varchar(8)</span><span class="col__cons"><span class="b b--fk">FK</span></span><span class="col__note">→ regions · 시도</span></div>
+        <div class="col"><span class="col__name">ldong_signgu_cd</span><span class="col__type">varchar(8)</span><span class="col__cons"><span class="b b--fk">FK</span></span><span class="col__note">→ sigungus · 시군구</span></div>
+        <div class="col"><span class="col__name">lcls_systm1</span><span class="col__type">varchar(16)</span><span class="col__cons"></span><span class="col__note">분류 L1 (비정규 denorm)</span></div>
+        <div class="col"><span class="col__name">lcls_systm2</span><span class="col__type">varchar(16)</span><span class="col__cons"></span><span class="col__note">분류 L2</span></div>
+        <div class="col"><span class="col__name">lcls_systm3</span><span class="col__type">varchar(16)</span><span class="col__cons"><span class="b b--fk">FK</span></span><span class="col__note">→ lcls_systm_codes · 카드 세분 <code>category</code></span></div>
+        <div class="col"><span class="col__name">cpyrht_div_cd</span><span class="col__type">varchar(8)</span><span class="col__cons"><span class="b b--ck">CHECK</span></span><span class="col__note">저작권 구분 (Type1 | Type3 | NULL)</span></div>
+        <div class="col"><span class="col__name">first_image_url</span><span class="col__type">varchar(500)</span><span class="col__cons"></span><span class="col__note">대표 이미지 · 카드 <code>firstImageUrl</code> · URL only</span></div>
+        <div class="col"><span class="col__name">first_image2_url</span><span class="col__type">varchar(500)</span><span class="col__cons"></span><span class="col__note">보조 이미지</span></div>
+        <div class="col"><span class="col__name">show_flag</span><span class="col__type">smallint</span><span class="col__cons"><span class="b b--def">DEFAULT 1</span><span class="b b--ck">CHECK</span></span><span class="col__note">0=비활성 / 1=활성 — 부분 인덱스 키</span></div>
+        <div class="col"><span class="col__name">modified_time</span><span class="col__type">timestamptz</span><span class="col__cons"></span><span class="col__note">KTO 최종 수정</span></div>
+        <div class="col"><span class="col__name">synced_at</span><span class="col__type">timestamptz</span><span class="col__cons"><span class="b b--def">DEFAULT now()</span></span><span class="col__note">동기화 시각</span></div>
+      </div>
+      <div class="tplate__foot">
+        <div class="meta">
+          <h4>인덱스 (부분 · WHERE show_flag=1)</h4>
+          <ul>
+            <li><span class="m">idx_spots_active_location</span> (mapx, mapy)</li>
+            <li><span class="m">idx_spots_active_region</span> (ldong_regn_cd, ldong_signgu_cd)</li>
+            <li><span class="m">idx_spots_active_lcls</span> (lcls_systm3)</li>
+            <li><span class="m">idx_spots_active_type</span> (content_type_id)</li>
+            <li><span class="m">idx_spots_title_trgm</span> · <span class="m">idx_spots_addr1_trgm</span> GIN</li>
+            <li><span class="m" style="color:var(--accent-ink)">idx_spots_image_pool</span> (ldong_regn_cd) WHERE … first_image_url IS NOT NULL <span class="wh">← 신규(S7)</span></li>
+          </ul>
+        </div>
+        <div class="meta">
+          <h4>제약</h4>
+          <ul>
+            <li><span class="m">ck_spot_show_flag</span> — show_flag IN (0,1)</li>
+            <li><span class="m">ck_spot_cpyrht_div_cd</span> — NULL or Type1/Type3</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+
+    <!-- ───── spot_details ───── -->
+    <article class="tplate" id="t-spot_details">
+      <div class="tplate__head">
+        <div class="tplate__title">
+          <span class="tplate__folio">I-b</span>
+          <h3>spot_details</h3>
+          <span class="tag tag--reuse">재사용</span>
+        </div>
+        <span class="rows">7일 lazy 캐시</span>
+        <p class="tplate__desc">
+          KTO 상세의 7일 캐시. <code>overview</code>는 <strong>verbatim</strong>. <code>intro_data</code>에 메뉴·이용시간. <code>info_data</code>는 미사용.
+        </p>
+      </div>
+      <div class="cols">
+        <div class="cols__head"><span>컬럼</span><span>타입</span><span class="h-cons">제약</span><span class="h-note">설명</span></div>
+        <div class="col"><span class="col__name is-pk">content_id</span><span class="col__type">varchar(32)</span><span class="col__cons"><span class="b b--pk">PK</span><span class="b b--fk">FK</span></span><span class="col__note">→ spots · ON DELETE CASCADE · 1:1</span></div>
+        <div class="col"><span class="col__name">content_type_id</span><span class="col__type">smallint</span><span class="col__cons"></span><span class="col__note">KTO 타입</span></div>
+        <div class="col"><span class="col__name">intro_data</span><span class="col__type">jsonb</span><span class="col__cons"></span><span class="col__note">detailIntro2 (usetime · firstmenu · treatmenu …)</span></div>
+        <div class="col"><span class="col__name">info_data</span><span class="col__type">jsonb</span><span class="col__cons"></span><span class="col__note">detailInfo2 — UI 미사용</span></div>
+        <div class="col"><span class="col__name">overview</span><span class="col__type">text</span><span class="col__cons"></span><span class="col__note">소개 (<strong>verbatim</strong> · null이면 섹션 숨김)</span></div>
+        <div class="col"><span class="col__name">homepage</span><span class="col__type">varchar(500)</span><span class="col__cons"></span><span class="col__note">홈페이지 (URL 파싱)</span></div>
+        <div class="col"><span class="col__name">tel</span><span class="col__type">varchar(50)</span><span class="col__cons"></span><span class="col__note">전화 (infocenter 폴백)</span></div>
+        <div class="col"><span class="col__name">cached_at</span><span class="col__type">timestamptz</span><span class="col__cons"><span class="b b--def">DEFAULT now()</span></span><span class="col__note">캐시 시각 (7일 TTL 판정)</span></div>
+      </div>
+      <div class="tplate__foot">
+        <div class="meta"><h4>인덱스</h4><ul><li><span class="m">idx_spot_details_cached</span> — (cached_at)</li></ul></div>
+        <div class="meta"><h4>외래 키</h4><p>content_id → spots.content_id <span class="wh">CASCADE</span></p></div>
+      </div>
+    </article>
+
+    <!-- ───── spot_images ───── -->
+    <article class="tplate" id="t-spot_images">
+      <div class="tplate__head">
+        <div class="tplate__title"><span class="tplate__folio">I-c</span><h3>spot_images</h3><span class="tag tag--reuse">재사용</span></div>
+        <span class="rows">URL only</span>
+        <p class="tplate__desc">갤러리 추가 이미지 (히어로 firstImage와 별도). KTO URL만.</p>
+      </div>
+      <div class="cols">
+        <div class="cols__head"><span>컬럼</span><span>타입</span><span class="h-cons">제약</span><span class="h-note">설명</span></div>
+        <div class="col"><span class="col__name is-pk">id</span><span class="col__type">bigint</span><span class="col__cons"><span class="b b--pk">PK</span></span><span class="col__note">autoincrement</span></div>
+        <div class="col"><span class="col__name">content_id</span><span class="col__type">varchar(32)</span><span class="col__cons"><span class="b b--fk">FK</span></span><span class="col__note">→ spots · ON DELETE CASCADE</span></div>
+        <div class="col"><span class="col__name">origin_image_url</span><span class="col__type">varchar(500)</span><span class="col__cons"></span><span class="col__note">원본 이미지</span></div>
+        <div class="col"><span class="col__name">small_image_url</span><span class="col__type">varchar(500)</span><span class="col__cons"></span><span class="col__note">썸네일</span></div>
+        <div class="col"><span class="col__name">cpyrht_div_cd</span><span class="col__type">varchar(8)</span><span class="col__cons"></span><span class="col__note">저작권 구분</span></div>
+        <div class="col"><span class="col__name">serial_num</span><span class="col__type">varchar(32)</span><span class="col__cons"></span><span class="col__note">KTO 일련번호</span></div>
+        <div class="col"><span class="col__name">sort_order</span><span class="col__type">smallint</span><span class="col__cons"><span class="b b--def">DEFAULT 0</span></span><span class="col__note">정렬 순서</span></div>
+      </div>
+      <div class="tplate__foot">
+        <div class="meta"><h4>키</h4><ul><li><span class="m">UNIQUE</span> (content_id, sort_order)</li></ul></div>
+        <div class="meta"><h4>외래 키</h4><p>content_id → spots.content_id <span class="wh">CASCADE</span></p></div>
+      </div>
+    </article>
+
+    <!-- ───── spot_embeddings ───── -->
+    <article class="tplate" id="t-spot_embeddings">
+      <div class="tplate__head">
+        <div class="tplate__title"><span class="tplate__folio">I-d</span><h3>spot_embeddings</h3><span class="tag tag--reuse">재사용 · 핵심 자산</span></div>
+        <span class="rows rows--live">~64% 커버리지</span>
+        <p class="tplate__desc">
+          CLIP 임베딩 (사진검색·유사도). <code>vector</code> 아닌 <strong>halfvec(512)</strong>, 쿼리는 <code>&lt;=&gt; $1::halfvec(512)</code> 캐스팅. HNSW는 JOIN 안에서 안 걸림.
+        </p>
+      </div>
+      <div class="cols">
+        <div class="cols__head"><span>컬럼</span><span>타입</span><span class="h-cons">제약</span><span class="h-note">설명</span></div>
+        <div class="col"><span class="col__name is-pk">content_id</span><span class="col__type">varchar(32)</span><span class="col__cons"><span class="b b--pk">PK</span><span class="b b--fk">FK</span></span><span class="col__note">→ spots · ON DELETE CASCADE · 1:1</span></div>
+        <div class="col"><span class="col__name">embedding</span><span class="col__type">halfvec(512)</span><span class="col__cons"><span class="b b--vec">halfvec</span></span><span class="col__note">CLIP 512차 반정밀 벡터</span></div>
+        <div class="col"><span class="col__name">image_url</span><span class="col__type">varchar(500)</span><span class="col__cons"></span><span class="col__note">임베딩 산출 소스 URL</span></div>
+        <div class="col"><span class="col__name">computed_at</span><span class="col__type">timestamptz</span><span class="col__cons"><span class="b b--def">DEFAULT now()</span></span><span class="col__note">계산 시각</span></div>
+      </div>
+      <div class="tplate__foot">
+        <div class="meta">
+          <h4>인덱스</h4>
+          <ul><li><span class="m">idx_spot_embeddings_hnsw</span> — hnsw (embedding halfvec_cosine_ops) m=16, ef_construction=128</li></ul>
+        </div>
+        <div class="meta">
+          <h4>런타임</h4>
+          <p><span class="m">hnsw.ef_search = 80</span> — asyncpg server_settings (per-session SET 금지)</p>
+        </div>
+      </div>
+    </article>
+
+    <!-- ───── spot_moods ───── -->
+    <article class="tplate" id="t-spot_moods">
+      <div class="tplate__head">
+        <div class="tplate__title"><span class="tplate__folio">I-e</span><h3>spot_moods</h3><span class="tag tag--reuse">재사용</span></div>
+        <span class="rows">M:N 태그</span>
+        <p class="tplate__desc">스팟 ↔ 무드 매핑. <code>confidence</code> 1.0=코드, 0~1=이미지.</p>
+      </div>
+      <div class="cols">
+        <div class="cols__head"><span>컬럼</span><span>타입</span><span class="h-cons">제약</span><span class="h-note">설명</span></div>
+        <div class="col"><span class="col__name is-pk">content_id</span><span class="col__type">varchar(32)</span><span class="col__cons"><span class="b b--pk">PK</span><span class="b b--fk">FK</span></span><span class="col__note">→ spots · ON DELETE CASCADE</span></div>
+        <div class="col"><span class="col__name is-pk">mood_id</span><span class="col__type">smallint</span><span class="col__cons"><span class="b b--pk">PK</span><span class="b b--fk">FK</span></span><span class="col__note">→ moods.id</span></div>
+        <div class="col"><span class="col__name">confidence</span><span class="col__type">float</span><span class="col__cons"><span class="b b--ck">CHECK 0–1</span></span><span class="col__note">매치 신뢰도</span></div>
+        <div class="col"><span class="col__name">source</span><span class="col__type">varchar(16)</span><span class="col__cons"><span class="b b--ck">CHECK</span></span><span class="col__note">code · image · manual</span></div>
+      </div>
+      <div class="tplate__foot">
+        <div class="meta"><h4>인덱스</h4><ul><li><span class="m">idx_spot_moods_mood</span> — (mood_id, confidence DESC)</li></ul></div>
+        <div class="meta"><h4>외래 키</h4><p>content_id → spots · mood_id → moods (모두 PK)</p></div>
+      </div>
+    </article>
+
+    <!-- ───── moods ───── -->
+    <article class="tplate" id="t-moods">
+      <div class="tplate__head">
+        <div class="tplate__title"><span class="tplate__folio">I-f</span><h3>moods</h3><span class="tag tag--reuse">재사용 · 시드 8</span></div>
+        <span class="rows">8 행</span>
+        <p class="tplate__desc">8개 기본 무드 (시드). <code>emoji</code>는 현 UI 미사용.</p>
+      </div>
+      <div class="cols">
+        <div class="cols__head"><span>컬럼</span><span>타입</span><span class="h-cons">제약</span><span class="h-note">설명</span></div>
+        <div class="col"><span class="col__name is-pk">id</span><span class="col__type">smallint</span><span class="col__cons"><span class="b b--pk">PK</span></span><span class="col__note">1–8</span></div>
+        <div class="col"><span class="col__name">code</span><span class="col__type">varchar(16)</span><span class="col__cons"><span class="b b--uk">UK</span></span><span class="col__note">sea · mountain · lake · island · hanok · night · market · street</span></div>
+        <div class="col"><span class="col__name">name</span><span class="col__type">varchar(32)</span><span class="col__cons"></span><span class="col__note">한글명 (바다 · 산·숲 …)</span></div>
+        <div class="col"><span class="col__name">emoji</span><span class="col__type">varchar(8)</span><span class="col__cons"></span><span class="col__note">레거시 — 무채색 UI 미사용</span></div>
+        <div class="col"><span class="col__name">sort_order</span><span class="col__type">smallint</span><span class="col__cons"></span><span class="col__note">정렬</span></div>
+      </div>
+      <div class="tplate__foot">
+        <div class="meta"><h4>참조됨</h4><p>spot_moods.mood_id · curations.mood_id</p></div>
+      </div>
+    </article>
+
+    <!-- ───── regions ───── -->
+    <article class="tplate" id="t-regions">
+      <div class="tplate__head">
+        <div class="tplate__title"><span class="tplate__folio">I-g</span><h3>regions</h3><span class="tag tag--reuse">재사용 · 17 시도</span></div>
+        <span class="rows">17 행</span>
+        <p class="tplate__desc">17개 시도. 지역 피커 1단·큐레이션 풀 스코프.</p>
+      </div>
+      <div class="cols">
+        <div class="cols__head"><span>컬럼</span><span>타입</span><span class="h-cons">제약</span><span class="h-note">설명</span></div>
+        <div class="col"><span class="col__name is-pk">ldong_regn_cd</span><span class="col__type">varchar(8)</span><span class="col__cons"><span class="b b--pk">PK</span></span><span class="col__note">KOSTAT 시도 코드 (11=서울 …)</span></div>
+        <div class="col"><span class="col__name">ldong_regn_nm</span><span class="col__type">varchar(50)</span><span class="col__cons"></span><span class="col__note">시도명 (서울특별시 …)</span></div>
+      </div>
+      <div class="tplate__foot">
+        <div class="meta"><h4>참조됨</h4><p>spots.ldong_regn_cd · sigungus.ldong_regn_cd · curations.region_cd</p></div>
+      </div>
+    </article>
+
+    <!-- ───── sigungus ───── -->
+    <article class="tplate" id="t-sigungus">
+      <div class="tplate__head">
+        <div class="tplate__title"><span class="tplate__folio">I-h</span><h3>sigungus</h3><span class="tag tag--reuse">재사용 · ~250</span></div>
+        <span class="rows">~250 행</span>
+        <p class="tplate__desc">
+          시군구. 지역 피커 2단. <strong>좌표 없음</strong> → centroid는 멤버 스팟 <code>AVG(mapx), AVG(mapy)</code>를 런타임 계산 (빈 곳은 시도 폴백).
+        </p>
+      </div>
+      <div class="cols">
+        <div class="cols__head"><span>컬럼</span><span>타입</span><span class="h-cons">제약</span><span class="h-note">설명</span></div>
+        <div class="col"><span class="col__name is-pk">ldong_signgu_cd</span><span class="col__type">varchar(8)</span><span class="col__cons"><span class="b b--pk">PK</span></span><span class="col__note">시군구 코드 (51150=강릉시 …)</span></div>
+        <div class="col"><span class="col__name">ldong_regn_cd</span><span class="col__type">varchar(8)</span><span class="col__cons"><span class="b b--fk">FK</span></span><span class="col__note">→ regions · 부모 시도</span></div>
+        <div class="col"><span class="col__name">ldong_signgu_nm</span><span class="col__type">varchar(50)</span><span class="col__cons"></span><span class="col__note">시군구명</span></div>
+      </div>
+      <div class="tplate__foot">
+        <div class="meta"><h4>인덱스</h4><ul><li>(ldong_regn_cd)</li></ul></div>
+        <div class="meta"><h4>centroid</h4><p>사전계산 컬럼 채택 안 함 — 런타임 AVG (S7 §8)</p></div>
+      </div>
+    </article>
+
+    <!-- ───── lcls_systm_codes ───── -->
+    <article class="tplate" id="t-lcls_systm_codes">
+      <div class="tplate__head">
+        <div class="tplate__title"><span class="tplate__folio">I-i</span><h3>lcls_systm_codes</h3><span class="tag tag--reuse">재사용</span></div>
+        <span class="rows">~245 행</span>
+        <p class="tplate__desc">KTO 분류 체계. 카드 세분 라벨 <code>lcls_systm3_nm</code>의 출처. 칩 필터의 coarse 버킷은 별개.</p>
+      </div>
+      <div class="cols">
+        <div class="cols__head"><span>컬럼</span><span>타입</span><span class="h-cons">제약</span><span class="h-note">설명</span></div>
+        <div class="col"><span class="col__name is-pk">lcls_systm3_cd</span><span class="col__type">varchar(16)</span><span class="col__cons"><span class="b b--pk">PK</span></span><span class="col__note">리프 분류 코드</span></div>
+        <div class="col"><span class="col__name">lcls_systm2_cd</span><span class="col__type">varchar(16)</span><span class="col__cons"></span><span class="col__note">중분류 코드</span></div>
+        <div class="col"><span class="col__name">lcls_systm1_cd</span><span class="col__type">varchar(16)</span><span class="col__cons"></span><span class="col__note">대분류 코드</span></div>
+        <div class="col"><span class="col__name">lcls_systm3_nm</span><span class="col__type">varchar(100)</span><span class="col__cons"><span class="b b--keep">card label</span></span><span class="col__note">리프명 — 카드 <code>category</code></span></div>
+        <div class="col"><span class="col__name">lcls_systm2_nm</span><span class="col__type">varchar(100)</span><span class="col__cons"></span><span class="col__note">중분류명</span></div>
+        <div class="col"><span class="col__name">lcls_systm1_nm</span><span class="col__type">varchar(100)</span><span class="col__cons"></span><span class="col__note">대분류명</span></div>
+      </div>
+      <div class="tplate__foot">
+        <div class="meta"><h4>참조됨</h4><p>spots.lcls_systm3 → lcls_systm3_cd (PK 룩업 · O(1))</p></div>
+      </div>
+    </article>
+
+  </section>
+
+</main>
+
+<footer class="colophon">
+  <div class="colophon__inner">
+    <span>PicTrip · 데이터베이스 아틀라스</span>
+    <span>Plate I · 관광 데이터</span>
+    <span>출처 <a href="../specs/screens/S03-spot-detail.md">S3</a> · <a href="../specs/screens/S05-map-region.md">S5</a> · <a href="../specs/platform/S07-db.md">S7</a></span>
+  </div>
+</footer>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true, theme: 'base',
+    themeVariables: { background:'#ffffff', primaryColor:'#ffffff', primaryTextColor:'#16181d', primaryBorderColor:'#0f766e', lineColor:'#9aa0aa', secondaryColor:'#f5f6f8', tertiaryColor:'#fafbfc', fontFamily:'JetBrains Mono, ui-monospace, monospace', fontSize:'13px' },
+    er: { diagramPadding:18, layoutDirection:'TB', minEntityWidth:124, minEntityHeight:40, entityPadding:14, useMaxWidth:true }
+  });
+</script>
+
+</body>
+</html>

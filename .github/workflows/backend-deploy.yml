@@ -1,0 +1,24 @@
+name: backend-deploy
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**", ".github/workflows/backend-deploy.yml"]
+  workflow_dispatch:
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      # TODO: test (fresh pictrip_test + alembic upgrade head smoke + pytest)
+      # TODO: docker build/push to GHCR (tags: short-SHA + main)
+      - run: echo "build + push backend image to GHCR — TODO"
+  deploy:
+    needs: build-and-push
+    runs-on: [self-hosted, ct112]
+    steps:
+      - uses: actions/checkout@v4
+      # deploy.sh: GHCR pull → alembic upgrade head → smoke → rollback on fail
+      - run: ./deploy/api-host/deploy.sh

@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PicTrip · 큐레이션 상세</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<style>
+  :root {
+    --bg: #FFFFFF;
+    --inset: #F7F7F8;
+    --ink: #171719;
+    --sec: #5A5C63;
+    --ter: #9396A0;
+    --line: rgba(112, 115, 124, 0.18);
+    --fill: rgba(112, 115, 124, 0.10);
+    --pretendard: 'Pretendard', -apple-system, system-ui, sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  body {
+    font-family: var(--pretendard);
+    background: #e6e7ea;
+    display: flex;
+    justify-content: center;
+    padding: 40px 16px;
+    color: var(--ink);
+  }
+
+  .phone {
+    width: 402px;
+    height: 874px;
+    background: var(--bg);
+    border-radius: 46px;
+    box-shadow: 0 30px 80px rgba(20, 18, 22, 0.28);
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .statusbar {
+    height: 54px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 0 28px 8px;
+    font-size: 15px;
+    font-weight: 600;
+    flex-shrink: 0;
+    background: var(--bg);
+    z-index: 5;
+  }
+  .statusbar .icons { display: flex; gap: 6px; align-items: center; }
+
+  .scroll { flex: 1; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
+  .scroll::-webkit-scrollbar { display: none; }
+
+  /* 네비: 뒤로 / 공유 */
+  .nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 14px 0;
+  }
+  .nav-btn {
+    width: 44px; height: 44px; border-radius: 22px;
+    background: var(--fill);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--sec);
+  }
+
+  /* 타이틀 (가운데) */
+  .title {
+    color: var(--ink);
+    font-size: 31px; font-weight: 800;
+    letter-spacing: -0.6px; line-height: 40px;
+    text-align: center;
+    padding: 14px 24px 0;
+    white-space: pre-line;
+  }
+
+  /* 커버 (세로 4:5) */
+  .cover {
+    aspect-ratio: 4 / 5;
+    margin: 24px 20px 0;
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--inset);
+  }
+  .cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  /* 리드문 + 본문 */
+  .lead {
+    color: var(--ink);
+    font-size: 19px; font-weight: 700;
+    letter-spacing: -0.3px;
+    text-align: center;
+    margin: 30px 24px 0;
+  }
+  .intro {
+    color: var(--sec);
+    font-size: 16px; line-height: 30px;
+    text-align: center;
+    margin: 16px 24px 0;
+  }
+
+  /* 더보기 셰브론 */
+  .chevron {
+    display: flex; justify-content: center;
+    color: var(--ter);
+    margin-top: 26px;
+  }
+
+  /* 그리드 2열 */
+  .grid {
+    display: flex; flex-wrap: wrap;
+    justify-content: space-between;
+    row-gap: 24px;
+    padding: 28px 20px 0;
+  }
+  .gcard { width: 48.5%; }
+  .gcard .img {
+    width: 100%; aspect-ratio: 1;
+    border-radius: 16px; overflow: hidden;
+    background: var(--inset);
+  }
+  .gcard .img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .gcard .nm {
+    color: var(--ink);
+    font-size: 17px; font-weight: 700;
+    letter-spacing: -0.2px;
+    margin: 11px 2px 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .gcard .cat {
+    color: var(--ter);
+    font-size: 14px; font-weight: 500;
+    margin: 3px 2px 0;
+  }
+</style>
+</head>
+<body>
+  <div class="phone">
+    <div class="statusbar">
+      <span>9:41</span>
+      <span class="icons">
+        <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="3" width="2.5" height="6" rx="1"/><rect x="4" y="1.5" width="2.5" height="7.5" rx="1"/><rect x="8" y="0" width="2.5" height="9" rx="1"/></svg>
+        <svg width="24" height="12" viewBox="0 0 24 12" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="1" y="1.5" width="19" height="9" rx="2.5"/><rect x="2.5" y="3" width="14" height="6" rx="1" fill="currentColor"/><rect x="21" y="4" width="2" height="4" rx="1" fill="currentColor"/></svg>
+      </span>
+    </div>
+
+    <div class="scroll">
+      <!-- 뒤로 / 공유 -->
+      <div class="nav">
+        <div class="nav-btn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        </div>
+        <div class="nav-btn">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.3 10.7l7.4-4.4M8.3 13.3l7.4 4.4"/></svg>
+        </div>
+      </div>
+
+      <!-- 타이틀 -->
+      <div class="title">제주, 매일 가도&#10;새로운 섬</div>
+
+      <!-- 커버 -->
+      <div class="cover"><img src="https://picsum.photos/seed/jeju-coast/724/905" alt="" /></div>
+
+      <!-- 리드 + 본문 -->
+      <div class="lead">바다도 골목도, 전부 제주</div>
+      <div class="intro">오름과 해변, 골목 카페까지<br />카메라를 어디에 둬도 그림이 되는<br />제주의 대표 스폿을 모았어요.</div>
+
+      <!-- 더보기 셰브론 -->
+      <div class="chevron">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+
+      <!-- 그리드 -->
+      <div class="grid">
+        <div class="gcard"><div class="img"><img src="https://picsum.photos/seed/jeju-beach/360/360" alt="" /></div><div class="nm">협재해수욕장</div><div class="cat">해변</div></div>
+        <div class="gcard"><div class="img"><img src="https://picsum.photos/seed/jeju-seongsan/360/360" alt="" /></div><div class="nm">성산일출봉</div><div class="cat">자연</div></div>
+        <div class="gcard"><div class="img"><img src="https://picsum.photos/seed/jeju-camellia/360/360" alt="" /></div><div class="nm">카멜리아힐</div><div class="cat">식물원</div></div>
+        <div class="gcard"><div class="img"><img src="https://picsum.photos/seed/jeju-udo/360/360" alt="" /></div><div class="nm">우도</div><div class="cat">섬</div></div>
+        <div class="gcard"><div class="img"><img src="https://picsum.photos/seed/jeju-falls/360/360" alt="" /></div><div class="nm">천지연폭포</div><div class="cat">자연</div></div>
+        <div class="gcard"><div class="img"><img src="https://picsum.photos/seed/jeju-woljeong/360/360" alt="" /></div><div class="nm">월정리해변</div><div class="cat">해변</div></div>
+        <div class="gcard"><div class="img"><img src="https://picsum.photos/seed/jeju-halla/360/360" alt="" /></div><div class="nm">한라산</div><div class="cat">산</div></div>
+        <div class="gcard"><div class="img"><img src="https://picsum.photos/seed/jeju-osulloc/360/360" alt="" /></div><div class="nm">오설록 티뮤지엄</div><div class="cat">카페</div></div>
+      </div>
+
+      <div style="height: 40px;"></div>
+    </div>
+  </div>
+</body>
+</html>

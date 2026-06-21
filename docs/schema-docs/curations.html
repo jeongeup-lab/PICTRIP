@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>큐레이션 도메인 · PicTrip DB Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="atlas.css" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead__inner">
+    <div class="masthead__brand">PicTrip<span class="mk"> · </span>DB Atlas</div>
+    <nav class="nav">
+      <a href="index.html">개요</a>
+      <a href="spots.html">관광 데이터</a>
+      <a href="curations.html" aria-current="page">큐레이션</a>
+      <a href="users.html">유저 · 인증</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="hero">
+    <p class="hero__kicker">Plate II · 신규 · 1급 엔티티</p>
+    <h1>큐레이션</h1>
+    <p class="hero__lede">
+      홈 히어로·무드 레일을 <em>서버가 편성</em>. 카피·표지·스팟 순서를 DB에 적재해 앱 재배포 없이 교체.
+    </p>
+    <div class="hero__meta">
+      <span>신규 테이블 <b>2</b></span>
+      <span>type <b>region · mood · editorial</b></span>
+      <span>표지·이미지는 <b>spots KTO URL 참조</b></span>
+    </div>
+  </section>
+
+  <hr class="rule2" />
+
+  <section class="section">
+    <div class="section__head">
+      <span class="section__no">§ II.1</span>
+      <h2>ER 다이어그램</h2>
+      <span class="aside">spots / regions / moods 위에 얹음</span>
+    </div>
+    <div class="legend">
+      <span><span class="b b--pk">PK</span> 기본키</span>
+      <span><span class="b b--fk">FK</span> 외래키</span>
+      <span><span class="b b--uk">UK</span> 유니크</span>
+      <span><span class="b b--ck">CASCADE</span> 탈퇴/삭제 전파</span>
+    </div>
+    <div class="erd-frame">
+      <pre class="mermaid">
+erDiagram
+    curations ||--o{ curation_spots : "handpick (CASCADE)"
+    spots ||--o{ curation_spots : "in (CASCADE)"
+    spots ||--o{ curations : "cover (SET NULL)"
+    regions ||--o{ curations : "region pool"
+    moods ||--o{ curations : "mood pool"
+
+    curations {
+        bigint id PK
+        varchar type "region|mood|editorial"
+        varchar slug UK
+        text title "verbatim newlines"
+        text subtitle "detail omits"
+        text lead
+        text intro
+        varchar cover_spot_id FK
+        varchar region_cd FK
+        smallint mood_id FK
+        boolean is_published
+        int position
+    }
+    curation_spots {
+        bigint curation_id PK
+        varchar content_id PK
+        int position
+    }
+    spots {
+        varchar content_id PK
+        varchar first_image_url
+        varchar ldong_regn_cd FK
+    }
+    regions {
+        varchar ldong_regn_cd PK
+    }
+    moods {
+        smallint id PK
+    }
+      </pre>
+    </div>
+    <p class="erd-cap">손픽 + 풀 스코프 (region_cd / mood_id)</p>
+  </section>
+
+  <section class="section">
+    <div class="section__head">
+      <span class="section__no">§ II.2</span>
+      <h2>테이블 상세</h2>
+      <span class="aside">2 tables</span>
+    </div>
+
+    <div class="toc">
+      <a href="#t-curations">curations <span class="new">NEW</span></a>
+      <a href="#t-curation_spots">curation_spots <span class="new">NEW</span></a>
+    </div>
+
+    <!-- ───── curations ───── -->
+    <article class="tplate tplate--new" id="t-curations">
+      <div class="tplate__head">
+        <div class="tplate__title">
+          <span class="tplate__folio">II-a</span>
+          <h3>curations</h3>
+          <span class="tag tag--new">NEW</span>
+        </div>
+        <span class="rows">편성 데이터</span>
+        <p class="tplate__desc">
+          큐레이션 1급 엔티티. <code>type</code>으로 region·mood·editorial을 한 구조에. <code>title</code>은 줄바꿈 <strong>verbatim</strong>. 표지는 <code>cover_spot_id</code>로 해석.
+        </p>
+      </div>
+      <div class="cols">
+        <div class="cols__head"><span>컬럼</span><span>타입</span><span class="h-cons">제약</span><span class="h-note">설명</span></div>
+        <div class="col"><span class="col__name is-pk">id</span><span class="col__type">bigint</span><span class="col__cons"><span class="b b--pk">PK</span></span><span class="col__note">identity. 딥링크는 slug가 담당 → uuid 불필요</span></div>
+        <div class="col"><span class="col__name">type</span><span class="col__type">varchar(16)</span><span class="col__cons"><span class="b b--nn">NOT NULL</span><span class="b b--ck">CHECK</span></span><span class="col__note">region · mood · editorial</span></div>
+        <div class="col"><span class="col__name">slug</span><span class="col__type">varchar(80)</span><span class="col__cons"><span class="b b--uk">UK</span><span class="b b--nn">NOT NULL</span></span><span class="col__note">안정 식별 · 딥링크 <code>/curations/{slug}</code></span></div>
+        <div class="col"><span class="col__name">title</span><span class="col__type">text</span><span class="col__cons"><span class="b b--nn">NOT NULL</span></span><span class="col__note">줄바꿈 verbatim, pre-line</span></div>
+        <div class="col"><span class="col__name">subtitle</span><span class="col__type">text</span><span class="col__cons"></span><span class="col__note">히어로 sub / 레일 subhead. <b>상세(06) 응답 생략</b></span></div>
+        <div class="col"><span class="col__name">lead</span><span class="col__type">text</span><span class="col__cons"></span><span class="col__note">상세 리드문 (region만)</span></div>
+        <div class="col"><span class="col__name">intro</span><span class="col__type">text</span><span class="col__cons"></span><span class="col__note">상세 본문 단락 (region만)</span></div>
+        <div class="col"><span class="col__name">cover_spot_id</span><span class="col__type">varchar(32)</span><span class="col__cons"><span class="b b--fk">FK</span></span><span class="col__note">→ spots · ON DELETE SET NULL. null이면 curation_spots[0] 폴백</span></div>
+        <div class="col"><span class="col__name">region_cd</span><span class="col__type">varchar(8)</span><span class="col__cons"><span class="b b--fk">FK</span></span><span class="col__note">→ regions.ldong_regn_cd · type=region 랜덤 풀 스코프</span></div>
+        <div class="col"><span class="col__name">mood_id</span><span class="col__type">smallint</span><span class="col__cons"><span class="b b--fk">FK</span></span><span class="col__note">→ moods.id · type=mood 랜덤 풀 스코프</span></div>
+        <div class="col"><span class="col__name">is_published</span><span class="col__type">boolean</span><span class="col__cons"><span class="b b--nn">NOT NULL</span><span class="b b--def">DEFAULT false</span></span><span class="col__note">미published는 피드 제외 · 404</span></div>
+        <div class="col"><span class="col__name">position</span><span class="col__type">integer</span><span class="col__cons"><span class="b b--nn">NOT NULL</span><span class="b b--def">DEFAULT 0</span></span><span class="col__note">홈 슬롯 정렬 (type별)</span></div>
+        <div class="col"><span class="col__name">created_at</span><span class="col__type">timestamptz</span><span class="col__cons"><span class="b b--def">DEFAULT now()</span></span><span class="col__note">생성 시각</span></div>
+        <div class="col"><span class="col__name">updated_at</span><span class="col__type">timestamptz</span><span class="col__cons"><span class="b b--def">now() · onupdate</span></span><span class="col__note">수정 시각</span></div>
+      </div>
+      <div class="tplate__foot">
+        <div class="meta">
+          <h4>인덱스</h4>
+          <ul>
+            <li><span class="m">idx_curations_feed</span> — (type, is_published, position)</li>
+            <li><span class="m">slug</span> <span class="wh">UNIQUE</span></li>
+          </ul>
+        </div>
+        <div class="meta">
+          <h4>제약 (수동 검토)</h4>
+          <ul>
+            <li><span class="m">ck_curation_type</span> — type IN (region, mood, editorial)</li>
+            <li>FK <span class="m">cover_spot_id</span> → spots <span class="wh">SET NULL</span></li>
+          </ul>
+        </div>
+        <div class="meta">
+          <h4>타입별 적용</h4>
+          <p>region = title·subtitle·lead·intro·cover·spots / mood = title·subtitle·spots(레일) / editorial = 예약(미사용)</p>
+        </div>
+      </div>
+    </article>
+
+    <!-- ───── curation_spots ───── -->
+    <article class="tplate tplate--new" id="t-curation_spots">
+      <div class="tplate__head">
+        <div class="tplate__title">
+          <span class="tplate__folio">II-b</span>
+          <h3>curation_spots</h3>
+          <span class="tag tag--new">NEW</span>
+        </div>
+        <span class="rows">손픽 · 순서</span>
+        <p class="tplate__desc">
+          손픽 스팟과 순서. 키는 <code>content_id</code> (canonical <code>contentId</code>와 일치). 비면 테마 랜덤으로 채움.
+        </p>
+      </div>
+      <div class="cols">
+        <div class="cols__head"><span>컬럼</span><span>타입</span><span class="h-cons">제약</span><span class="h-note">설명</span></div>
+        <div class="col"><span class="col__name is-pk">curation_id</span><span class="col__type">bigint</span><span class="col__cons"><span class="b b--pk">PK</span><span class="b b--fk">FK</span></span><span class="col__note">→ curations.id · ON DELETE CASCADE</span></div>
+        <div class="col"><span class="col__name is-pk">content_id</span><span class="col__type">varchar(32)</span><span class="col__cons"><span class="b b--pk">PK</span><span class="b b--fk">FK</span></span><span class="col__note">→ spots.content_id · ON DELETE CASCADE</span></div>
+        <div class="col"><span class="col__name">position</span><span class="col__type">integer</span><span class="col__cons"><span class="b b--nn">NOT NULL</span></span><span class="col__note">손픽 순서 (그리드/레일)</span></div>
+      </div>
+      <div class="tplate__foot">
+        <div class="meta">
+          <h4>인덱스</h4>
+          <ul><li><span class="m">idx_curation_spots_order</span> — (curation_id, position)</li></ul>
+        </div>
+        <div class="meta">
+          <h4>외래 키</h4>
+          <ul>
+            <li>curation_id → curations.id <span class="wh">CASCADE</span></li>
+            <li>content_id → spots.content_id <span class="wh">CASCADE</span></li>
+          </ul>
+        </div>
+        <div class="meta">
+          <h4>키</h4>
+          <p>PK (curation_id, content_id) — 한 큐레이션에 같은 스팟 1회.</p>
+        </div>
+      </div>
+    </article>
+  </section>
+
+</main>
+
+<footer class="colophon">
+  <div class="colophon__inner">
+    <span>PicTrip · 데이터베이스 아틀라스</span>
+    <span>Plate II · 큐레이션</span>
+    <span>출처 <a href="../specs/screens/S02-home-curation.md">S2</a> · <a href="../specs/platform/S07-db.md">S7</a></span>
+  </div>
+</footer>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true, theme: 'base',
+    themeVariables: { background:'#ffffff', primaryColor:'#ffffff', primaryTextColor:'#16181d', primaryBorderColor:'#0f766e', lineColor:'#9aa0aa', secondaryColor:'#f5f6f8', tertiaryColor:'#fafbfc', fontFamily:'JetBrains Mono, ui-monospace, monospace', fontSize:'13px' },
+    er: { diagramPadding:18, layoutDirection:'TB', minEntityWidth:124, minEntityHeight:40, entityPadding:14, useMaxWidth:true }
+  });
+</script>
+
+</body>
+</html>

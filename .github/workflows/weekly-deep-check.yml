@@ -1,0 +1,13 @@
+name: weekly-deep-check
+on:
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+jobs:
+  deep-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # TODO: weekly maintenance — dependency audit, slow tests, drift checks
+      # (e.g. admin static vs docs/mockups/admin, api-types vs core/schemas)
+      - run: echo "weekly deep check — TODO"

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PicTrip · 화면 목업</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<style>
+  :root { --ink:#171719; --sec:#5A5C63; --ter:#9396A0; --line:rgba(112,115,124,0.18); --p:'Pretendard',system-ui,sans-serif; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-font-smoothing:antialiased; }
+  body { font-family:var(--p); background:#eceef0; color:var(--ink); padding:48px 32px 80px; }
+  header { max-width:1200px; margin:0 auto 14px; }
+  h1 { font-size:26px; font-weight:800; letter-spacing:-0.5px; }
+  .meta { color:var(--sec); font-size:13.5px; margin-top:8px; line-height:1.6; }
+  .grid { max-width:1200px; margin:32px auto 0; display:grid; grid-template-columns:repeat(auto-fill, minmax(232px,1fr)); gap:30px; }
+  .card { text-decoration:none; color:inherit; display:flex; flex-direction:column; gap:12px; }
+  .thumb { width:100%; aspect-ratio:220/402; border-radius:20px; overflow:hidden; position:relative; background:#e4e5e8; box-shadow:0 12px 30px rgba(16,14,18,0.14); transition:transform .18s ease, box-shadow .18s ease; }
+  .card:hover .thumb { transform:translateY(-4px); box-shadow:0 20px 44px rgba(16,14,18,0.22); }
+  .thumb iframe { width:520px; height:950px; border:0; transform:scale(0.446); transform-origin:top left; pointer-events:none; }
+  .cap { display:flex; align-items:baseline; gap:8px; padding:0 2px; }
+  .num { font-size:12px; font-weight:800; color:var(--ter); font-variant-numeric:tabular-nums; }
+  .ttl { font-size:14.5px; font-weight:700; letter-spacing:-0.2px; }
+  .sub { font-size:12px; color:var(--ter); margin-top:-4px; padding:0 2px; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>PicTrip UI</h1>
+  </header>
+
+  <div class="grid" id="grid"></div>
+
+  <script>
+    var screens = [
+      ['01','스플래시','01-splash.html'],
+      ['02','온보딩 · 사진 기능 투어','02-onboarding.html'],
+      ['03','로그인','03-login.html'],
+      ['04','위치 권한','04-permissions.html'],
+      ['05','홈 피드','05-home.html'],
+      ['06','큐레이션 상세','06-curation.html'],
+      ['07','스팟 상세','07-spot.html'],
+      ['08','사진 선택','08-photo-select.html'],
+      ['09','분석중','09-analyzing.html'],
+      ['10','사진 결과','10-result.html'],
+      ['11','지도 · 내 주변','11-map.html'],
+      ['12','지역 선택','12-region-picker.html'],
+      ['13','스크랩','13-saved.html'],
+      ['14','마이','14-profile.html'],
+      ['15','마이 · 빈/게스트','15-profile-states.html'],
+      ['16','약관·정책','16-legal.html'],
+    ];
+    var grid = document.getElementById('grid');
+    screens.forEach(function (s) {
+      var a = document.createElement('a');
+      a.className = 'card'; a.href = s[2]; a.target = '_blank'; a.rel = 'noopener';
+      a.innerHTML =
+        '<div class="thumb"><iframe loading="lazy" scrolling="no" src="' + s[2] + '"></iframe></div>' +
+        '<div class="cap"><span class="num">' + s[0] + '</span><span class="ttl">' + s[1] + '</span></div>';
+      grid.appendChild(a);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PicTrip · 데이터베이스 아틀라스</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="atlas.css" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead__inner">
+    <div class="masthead__brand">PicTrip<span class="mk"> · </span>DB Atlas</div>
+    <nav class="nav">
+      <a href="index.html" aria-current="page">개요</a>
+      <a href="spots.html">관광 데이터</a>
+      <a href="curations.html">큐레이션</a>
+      <a href="users.html">유저 · 인증</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="hero">
+    <p class="hero__kicker">Schema · S7 확정 · 2026-06-20</p>
+    <h1>데이터베이스<br><em>아틀라스</em></h1>
+    <p class="hero__lede">
+      PicTrip의 PostgreSQL 스키마. 6개 모듈, 16개 테이블.
+    </p>
+    <div class="hero__meta">
+      <span>PostgreSQL + <b>pgvector</b> (halfvec)</span>
+    </div>
+  </section>
+
+  <hr class="rule2" />
+
+  <section class="figures">
+    <div class="figure reveal"><div class="figure__n">15<span class="u">tables</span></div><div class="figure__l">전체 테이블</div></div>
+    <div class="figure reveal"><div class="figure__n">2<span class="u">new</span></div><div class="figure__l">신규 (큐레이션)</div></div>
+    <div class="figure reveal"><div class="figure__n">~68<span class="u">K</span></div><div class="figure__l">관광 스팟</div></div>
+    <div class="figure reveal"><div class="figure__n">~64<span class="u">%</span></div><div class="figure__l">CLIP 임베딩 커버리지</div></div>
+  </section>
+
+  <section class="section">
+    <div class="section__head">
+      <span class="section__no">§ 1</span>
+      <h2>도메인</h2>
+      <span class="aside">backend modules · users · taste · spots · images · map · system</span>
+    </div>
+
+    <div class="plates">
+      <a class="plate-link" href="spots.html">
+        <div class="plate-link__folio">Plate I</div>
+        <h3>관광 데이터</h3>
+        <div class="tbls">9 tables · ~68K + ~64% 임베딩</div>
+        <p>KTO 스팟 마스터와 상세·이미지·임베딩·무드·지역·분류.</p>
+      </a>
+      <a class="plate-link" href="curations.html">
+        <div class="plate-link__folio">Plate II · 신규</div>
+        <h3>큐레이션</h3>
+        <div class="tbls">2 tables · 신규 1급 엔티티</div>
+        <p>홈 히어로·무드 레일 편성. 손픽 + 테마 랜덤 채움.</p>
+      </a>
+      <a class="plate-link" href="users.html">
+        <div class="plate-link__folio">Plate III</div>
+        <h3>유저 · 인증 · 저장</h3>
+        <div class="tbls">4 tables · OIDC · 스크랩</div>
+        <p>OIDC 매핑, 동의, 스크랩. 세션 테이블 없음 (Redis jti).</p>
+      </a>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section__head">
+      <span class="section__no">§ 2</span>
+      <h2>전체 ER 다이어그램</h2>
+      <span class="aside">적용 후 상태 · 드롭 테이블 제외</span>
+    </div>
+
+    <div class="legend">
+      <span><span class="b b--pk">PK</span> 기본키</span>
+      <span><span class="b b--fk">FK</span> 외래키</span>
+      <span><span class="b b--uk">UK</span> 유니크</span>
+      <span><span class="b b--vec">halfvec</span> CLIP / taste 벡터</span>
+      <span><span class="tag tag--new">NEW</span> 신규 테이블</span>
+    </div>
+
+    <div class="erd-frame">
+      <pre class="mermaid">
+erDiagram
+    regions ||--o{ sigungus : "has"
+    regions ||--o{ spots : "regn"
+    sigungus ||--o{ spots : "signgu"
+    lcls_systm_codes ||--o{ spots : "lcls3"
+    spots ||--o| spot_details : "detail"
+    spots ||--o{ spot_images : "gallery"
+    spots ||--o| spot_embeddings : "CLIP"
+    spots ||--o{ spot_moods : "tags"
+    moods ||--o{ spot_moods : "tags"
+
+    curations ||--o{ curation_spots : "handpick"
+    spots ||--o{ curation_spots : "in"
+    spots ||--o{ curations : "cover"
+    regions ||--o{ curations : "region pool"
+    moods ||--o{ curations : "mood pool"
+
+    users ||--o{ user_auth_providers : "oidc"
+    users ||--o| user_consents : "consent"
+    users ||--o{ user_saved_spots : "scrap"
+    spots ||--o{ user_saved_spots : "scrap"
+
+    spots {
+        varchar content_id PK
+        varchar title
+        numeric mapx
+        numeric mapy
+        varchar lcls_systm3 FK
+        varchar first_image_url
+        smallint show_flag
+    }
+    spot_details {
+        varchar content_id PK
+        text overview
+        jsonb intro_data
+        varchar homepage
+    }
+    spot_embeddings {
+        varchar content_id PK
+        halfvec embedding
+    }
+    spot_moods {
+        varchar content_id PK
+        smallint mood_id PK
+        float confidence
+    }
+    moods {
+        smallint id PK
+        varchar code UK
+    }
+    regions {
+        varchar ldong_regn_cd PK
+        varchar ldong_regn_nm
+    }
+    sigungus {
+        varchar ldong_signgu_cd PK
+        varchar ldong_regn_cd FK
+    }
+    lcls_systm_codes {
+        varchar lcls_systm3_cd PK
+        varchar lcls_systm3_nm
+    }
+    curations {
+        bigint id PK
+        varchar type
+        varchar slug UK
+        varchar cover_spot_id FK
+        varchar region_cd FK
+        smallint mood_id FK
+    }
+    curation_spots {
+        bigint curation_id PK
+        varchar content_id PK
+        int position
+    }
+    users {
+        bigint id PK
+        varchar email UK
+        varchar name
+        varchar profile_image_url
+        halfvec taste_vector
+    }
+    user_auth_providers {
+        bigint id PK
+        bigint user_id FK
+        varchar provider
+        varchar provider_user_id
+    }
+    user_consents {
+        bigint user_id PK
+        boolean location_consent
+        varchar terms_version
+    }
+    user_saved_spots {
+        bigint user_id PK
+        varchar content_id PK
+    }
+    spot_images {
+        bigint id PK
+        varchar content_id FK
+        varchar origin_image_url
+    }
+      </pre>
+    </div>
+    <p class="erd-cap">전체 스키마 · spots 중심</p>
+  </section>
+
+</main>
+
+<footer class="colophon">
+  <div class="colophon__inner">
+    <span>PicTrip · 데이터베이스 아틀라스</span>
+    <span>출처 <a href="../specs/platform/S07-db.md">docs/specs/platform/S07-db.md</a></span>
+    <span>2026 KTO 데이터 활용 공모전</span>
+  </div>
+</footer>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      background: '#ffffff',
+      primaryColor: '#ffffff',
+      primaryTextColor: '#16181d',
+      primaryBorderColor: '#0f766e',
+      lineColor: '#9aa0aa',
+      secondaryColor: '#f5f6f8',
+      tertiaryColor: '#fafbfc',
+      fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+      fontSize: '13px'
+    },
+    er: { diagramPadding: 18, layoutDirection: 'TB', minEntityWidth: 124, minEntityHeight: 40, entityPadding: 14, useMaxWidth: true }
+  });
+</script>
+
+</body>
+</html>

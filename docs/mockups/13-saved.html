@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PicTrip · 스크랩</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<style>
+  :root {
+    --bg: #FFFFFF; --inset: #F7F7F8; --ink: #171719; --sec: #5A5C63; --ter: #9396A0;
+    --line: rgba(112,115,124,0.18); --scrim: rgba(20,18,22,0.55); --control: rgba(23,23,25,0.32);
+    --p: 'Pretendard', -apple-system, system-ui, sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  body { font-family: var(--p); background: #e4e5e8; display: flex; justify-content: center; padding: 40px 16px; color: var(--ink); }
+  .phone { width: 402px; height: 874px; background: var(--bg); border-radius: 46px; box-shadow: 0 30px 80px rgba(16,14,18,0.28); overflow: hidden; position: relative; display: flex; flex-direction: column; }
+
+  .statusbar { height: 54px; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 28px 8px; font-size: 15px; font-weight: 600; flex-shrink: 0; }
+  .statusbar .icons { display: flex; gap: 6px; align-items: center; }
+  .navbar { height: 50px; display: flex; align-items: center; padding: 0 8px; flex-shrink: 0; border-bottom: 1px solid var(--line); position: relative; }
+  .navbar .nbtn { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; color: var(--ink); }
+  .navbar .title { position: absolute; left: 0; right: 0; text-align: center; font-size: 17px; font-weight: 700; pointer-events: none; }
+
+  .scroll { flex: 1; overflow-y: auto; scrollbar-width: none; }
+  .scroll::-webkit-scrollbar { display: none; }
+
+  .grid { display: flex; flex-wrap: wrap; justify-content: space-between; row-gap: 12px; padding: 14px 20px 32px; }
+  .card { width: 48.5%; height: 150px; border-radius: 14px; overflow: hidden; position: relative; background: var(--inset); }
+  .card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .card .ov { position: absolute; inset: 0; background: linear-gradient(to bottom, transparent 50%, var(--scrim)); }
+  .heart { position: absolute; top: 9px; right: 9px; width: 34px; height: 34px; border-radius: 17px; background: var(--control); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; color: #fff; }
+  .name { position: absolute; left: 12px; right: 12px; bottom: 11px; color: #fff; font-size: 14px; font-weight: 600; letter-spacing: -0.14px; }
+</style>
+</head>
+<body>
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span class="icons">
+      <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="3" width="2.5" height="6" rx="1"/><rect x="4" y="1.5" width="2.5" height="7.5" rx="1"/><rect x="8" y="0" width="2.5" height="9" rx="1"/></svg>
+      <svg width="24" height="12" viewBox="0 0 24 12" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="1" y="1.5" width="19" height="9" rx="2.5"/><rect x="2.5" y="3" width="14" height="6" rx="1" fill="currentColor"/><rect x="21" y="4" width="2" height="4" rx="1" fill="currentColor"/></svg>
+    </span></div>
+    <div class="navbar">
+      <div class="nbtn"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+      <div class="title">스크랩</div>
+    </div>
+
+    <div class="scroll">
+      <div class="grid">
+        <div class="card"><img src="https://picsum.photos/id/1074/360/300" alt="" /><div class="ov"></div><div class="heart"><svg width="19" height="19" viewBox="0 0 24 24" fill="#fff"><path d="M12 21s-7-4.5-9.3-9C1 8.5 2.8 5 6.2 5c2 0 3.3 1.2 3.8 2 .5-.8 1.8-2 3.8-2 3.4 0 5.2 3.5 3.5 7-2.3 4.5-9.3 9-9.3 9z"/></svg></div><div class="name">협재해수욕장</div></div>
+        <div class="card"><img src="https://picsum.photos/id/1036/360/300" alt="" /><div class="ov"></div><div class="heart"><svg width="19" height="19" viewBox="0 0 24 24" fill="#fff"><path d="M12 21s-7-4.5-9.3-9C1 8.5 2.8 5 6.2 5c2 0 3.3 1.2 3.8 2 .5-.8 1.8-2 3.8-2 3.4 0 5.2 3.5 3.5 7-2.3 4.5-9.3 9-9.3 9z"/></svg></div><div class="name">성산일출봉</div></div>
+        <div class="card"><img src="https://picsum.photos/id/1018/360/300" alt="" /><div class="ov"></div><div class="heart"><svg width="19" height="19" viewBox="0 0 24 24" fill="#fff"><path d="M12 21s-7-4.5-9.3-9C1 8.5 2.8 5 6.2 5c2 0 3.3 1.2 3.8 2 .5-.8 1.8-2 3.8-2 3.4 0 5.2 3.5 3.5 7-2.3 4.5-9.3 9-9.3 9z"/></svg></div><div class="name">광안리해수욕장</div></div>
+        <div class="card"><img src="https://picsum.photos/id/1043/360/300" alt="" /><div class="ov"></div><div class="heart"><svg width="19" height="19" viewBox="0 0 24 24" fill="#fff"><path d="M12 21s-7-4.5-9.3-9C1 8.5 2.8 5 6.2 5c2 0 3.3 1.2 3.8 2 .5-.8 1.8-2 3.8-2 3.4 0 5.2 3.5 3.5 7-2.3 4.5-9.3 9-9.3 9z"/></svg></div><div class="name">전주한옥마을</div></div>
+        <div class="card"><img src="https://picsum.photos/id/1039/360/300" alt="" /><div class="ov"></div><div class="heart"><svg width="19" height="19" viewBox="0 0 24 24" fill="#fff"><path d="M12 21s-7-4.5-9.3-9C1 8.5 2.8 5 6.2 5c2 0 3.3 1.2 3.8 2 .5-.8 1.8-2 3.8-2 3.4 0 5.2 3.5 3.5 7-2.3 4.5-9.3 9-9.3 9z"/></svg></div><div class="name">카멜리아힐</div></div>
+        <div class="card"><img src="https://picsum.photos/id/1019/360/300" alt="" /><div class="ov"></div><div class="heart"><svg width="19" height="19" viewBox="0 0 24 24" fill="#fff"><path d="M12 21s-7-4.5-9.3-9C1 8.5 2.8 5 6.2 5c2 0 3.3 1.2 3.8 2 .5-.8 1.8-2 3.8-2 3.4 0 5.2 3.5 3.5 7-2.3 4.5-9.3 9-9.3 9z"/></svg></div><div class="name">감천문화마을</div></div>
+        <div class="card"><img src="https://picsum.photos/id/1015/360/300" alt="" /><div class="ov"></div><div class="heart"><svg width="19" height="19" viewBox="0 0 24 24" fill="#fff"><path d="M12 21s-7-4.5-9.3-9C1 8.5 2.8 5 6.2 5c2 0 3.3 1.2 3.8 2 .5-.8 1.8-2 3.8-2 3.4 0 5.2 3.5 3.5 7-2.3 4.5-9.3 9-9.3 9z"/></svg></div><div class="name">남산서울타워</div></div>
+        <div class="card"><img src="https://picsum.photos/id/1062/360/300" alt="" /><div class="ov"></div><div class="heart"><svg width="19" height="19" viewBox="0 0 24 24" fill="#fff"><path d="M12 21s-7-4.5-9.3-9C1 8.5 2.8 5 6.2 5c2 0 3.3 1.2 3.8 2 .5-.8 1.8-2 3.8-2 3.4 0 5.2 3.5 3.5 7-2.3 4.5-9.3 9-9.3 9z"/></svg></div><div class="name">월정리해변</div></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
