@@ -1,0 +1,40 @@
+name: claude-review
+
+# 팀원이 올린 PR만 Claude가 자동 리뷰 (본인 PR은 스킵).
+# 인증 = Pro/Max 구독 토큰(CLAUDE_CODE_OAUTH_TOKEN). 구독 사용량 한도에서 차감됨.
+#  1) 터미널: `claude setup-token` → 토큰 발급
+#  2) `gh secret set CLAUDE_CODE_OAUTH_TOKEN -R jeongeup-lab/PICTRIP`
+# 입력 이름이 액션 버전과 안 맞으면 `/install-github-app`로 워크플로 재생성.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  review:
+    # 본인(레포 소유자) PR이면 스킵 → 팀원 PR에서만 동작
+    if: github.event.pull_request.user.login != 'seeeeeeong'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            이 PR의 diff를 리뷰해줘. CLAUDE.md의 규칙·아키텍처 경계를 기준으로:
+            - 정확성 버그, 명백한 로직 오류
+            - 모듈 경계 위반 (routes에서 DB/모델 import, cross-module models 직접 접근)
+            - 모노레포 불변규칙: sync_runs는 pipeline 소유(backend alembic 금지),
+              backend/pipeline 별도 프로젝트, admin static은 docs/mockups/admin 복사
+            - JSend 엔벨로프·AppError 코드 분기 누락, KTO 컴플라이언스(이미지 다운로드/
+              overview 수정/업로드 이미지 영속화 금지)
+            확실한 문제만 인라인 코멘트로. 사소한 스타일은 생략. 한국어로.
+          claude_args: "--max-turns 15"
