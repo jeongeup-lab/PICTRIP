@@ -30,13 +30,6 @@ class SimilarResultRow:
 
 
 @dataclass
-class MoodTagRow:
-    code: str
-    name: str
-    emoji: str
-
-
-@dataclass
 class SpotImageRow:
     origin_image_url: str
     small_image_url: str | None
@@ -71,8 +64,10 @@ class SpotDetailRow:
     region_name: str | None
     sigungu_name: str | None
     detail_status: str
-    moods: list[MoodTagRow]
     images: list[SpotImageRow]
+    # crowd-level bucket ("low"|"medium"|"high") from spot_concentration (Task 9);
+    # None when the spot has no 집중률 row.
+    congestion: str | None = None
     category: str | None = None  # lcls_systm3_nm (e.g. "사적지", "찻집")
     intro: SpotIntroRow | None = None
 

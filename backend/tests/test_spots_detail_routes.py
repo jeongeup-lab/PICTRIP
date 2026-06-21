@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 
 import pytest
 import pytest_asyncio
+from fakeredis.aioredis import FakeRedis
 from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -13,6 +14,7 @@ from sqlalchemy.pool import NullPool
 
 from app.config import settings
 from app.core.kto_client import get_kto
+from app.core.redis import get_redis
 from app.main import app
 
 
@@ -75,6 +77,14 @@ def override_kto() -> AsyncIterator[None]:
     app.dependency_overrides.pop(get_kto, None)
 
 
+@pytest.fixture(autouse=True)
+def override_redis() -> AsyncIterator[None]:
+    fake = FakeRedis(decode_responses=True)
+    app.dependency_overrides[get_redis] = lambda: fake
+    yield
+    app.dependency_overrides.pop(get_redis, None)
+
+
 async def _insert_spot(session: AsyncSession, content_id: str) -> None:
     await session.execute(
         text(
@@ -103,7 +113,10 @@ async def test_detail_returns_envelope(
     assert data["overview"] == "상세 설명"
     assert data["detailStatus"] == "fresh"
     assert data["images"][0]["originImageUrl"] == "http://kto/1.jpg"
-    assert {"contentId", "title", "addr1", "regionName", "moods", "images"} <= set(data)
+    assert "moods" not in data
+    assert "detailStatus" in data
+    assert "congestion" in data
+    assert {"contentId", "title", "addr1", "regionName", "images"} <= set(data)
 
 
 @pytest.mark.asyncio

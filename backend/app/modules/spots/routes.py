@@ -15,7 +15,6 @@ from app.modules.spots.schemas import (
     HomeFeedResponse,
     HomeHero,
     HomeRail,
-    MoodTag,
     SpotCard,
     SpotDetailResponse,
     SpotImageOut,
@@ -99,8 +98,10 @@ async def get_curation(slug: str, session: DbSession, redis: RedisDep) -> dict[s
     status_code=status.HTTP_200_OK,
     summary="Spot detail (overview/images lazy KTO fetch + 7-day cache)",
 )
-async def get_spot(content_id: str, session: DbSession, kto: KtoDep) -> dict[str, Any]:
-    row = await load_spot_detail(session, kto, content_id)
+async def get_spot(
+    content_id: str, session: DbSession, kto: KtoDep, redis: RedisDep
+) -> dict[str, Any]:
+    row = await load_spot_detail(session, kto, redis, content_id)
     payload = SpotDetailResponse(
         contentId=row.content_id,
         title=row.title,
@@ -115,7 +116,7 @@ async def get_spot(content_id: str, session: DbSession, kto: KtoDep) -> dict[str
         regionName=row.region_name,
         sigunguName=row.sigungu_name,
         detailStatus=row.detail_status,
-        moods=[MoodTag(code=m.code, name=m.name, emoji=m.emoji) for m in row.moods],
+        congestion=row.congestion,
         images=[
             SpotImageOut(originImageUrl=i.origin_image_url, smallImageUrl=i.small_image_url)
             for i in row.images

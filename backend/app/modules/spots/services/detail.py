@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from redis.asyncio import Redis
 from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,16 +15,14 @@ from app.core.kto_client import KtoClient, KtoService
 from app.core.text import clean_scalar, verbatim
 from app.modules.spots.models import (
     LclsSystmCode,
-    Mood,
     Region,
     Sigungu,
     Spot,
     SpotDetail,
     SpotImage,
-    SpotMood,
 )
+from app.modules.spots.services.cards import load_congestion
 from app.modules.spots.services.rows import (
-    MoodTagRow,
     SpotDetailRow,
     SpotImageRow,
     SpotIntroRow,
@@ -81,7 +80,7 @@ def _assemble_detail(
     spot: Any,
     region_name: str | None,
     sigungu_name: str | None,
-    moods: list[MoodTagRow],
+    congestion: str | None,
     *,
     overview: str | None,
     homepage: str | None,
@@ -105,7 +104,7 @@ def _assemble_detail(
         region_name=region_name,
         sigungu_name=sigungu_name,
         detail_status=status,
-        moods=moods,
+        congestion=congestion,
         images=images,
         category=category,
         intro=intro,
@@ -167,6 +166,7 @@ async def _persist_detail(
 async def load_spot_detail(
     session: AsyncSession,
     kto: KtoClient,
+    redis: Redis,
     content_id: str,
 ) -> SpotDetailRow:
     """Spot detail with lazy KTO enrichment (ADR-0007).
@@ -176,7 +176,12 @@ async def load_spot_detail(
     OUTSIDE any transaction and upserts the 7-day cache. On KTO failure serves a
     stale row if present, else a partial payload — never raises to a 502. Raises
     ResourceNotFound (404) if the spot is absent or show_flag = 0.
+
+    ``redis`` is the unified pool (Task 8), injected via RedisDep so the 7-day
+    detail cache can move off Postgres without touching the route contract; the
+    current cache of record stays the ``spot_details`` table.
     """
+    _ = redis
     spot = (
         await session.execute(
             select(
@@ -222,15 +227,7 @@ async def load_spot_detail(
         else None
     )
 
-    mood_rows = (
-        await session.execute(
-            select(Mood.code, Mood.name, Mood.emoji)
-            .join(SpotMood, SpotMood.mood_id == Mood.id)
-            .where(SpotMood.content_id == content_id)
-            .order_by(SpotMood.confidence.desc())
-        )
-    ).all()
-    moods = [MoodTagRow(code=m.code, name=m.name, emoji=m.emoji) for m in mood_rows]
+    congestion = (await load_congestion(session, [content_id])).get(content_id)
 
     detail = (
         await session.execute(
@@ -254,7 +251,7 @@ async def load_spot_detail(
             spot,
             region_name,
             sigungu_name,
-            moods,
+            congestion,
             overview=detail.overview,
             homepage=detail.homepage,
             tel=detail.tel,
@@ -281,7 +278,7 @@ async def load_spot_detail(
                 spot,
                 region_name,
                 sigungu_name,
-                moods,
+                congestion,
                 overview=detail.overview,
                 homepage=detail.homepage,
                 tel=detail.tel,
@@ -294,7 +291,7 @@ async def load_spot_detail(
             spot,
             region_name,
             sigungu_name,
-            moods,
+            congestion,
             overview=None,
             homepage=None,
             tel=None,
@@ -325,7 +322,7 @@ async def load_spot_detail(
         spot,
         region_name,
         sigungu_name,
-        moods,
+        congestion,
         overview=overview,
         homepage=homepage,
         tel=tel,

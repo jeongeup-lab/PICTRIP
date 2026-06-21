@@ -24,7 +24,6 @@ from app.modules.spots.services.nearby import (
     find_nearby_spots,
 )
 from app.modules.spots.services.rows import (
-    MoodTagRow,
     SpotCardRow,
     SpotDetailRow,
     SpotImageRow,
@@ -32,7 +31,6 @@ from app.modules.spots.services.rows import (
 from app.modules.spots.services.saved import list_saved_spots, save_spot, unsave_spot
 
 __all__ = [
-    "MoodTagRow",
     "NearbyCategory",
     "NearbySpotRow",
     "SpotCardRow",

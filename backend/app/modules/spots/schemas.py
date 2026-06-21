@@ -156,12 +156,6 @@ class CurationDetailResponse(BaseModel):
         return https_kto_image(v)
 
 
-class MoodTag(BaseModel):
-    code: str
-    name: str
-    emoji: str
-
-
 class SpotImageOut(BaseModel):
     originImageUrl: str
     smallImageUrl: str | None = None
@@ -193,6 +187,5 @@ class SpotDetailResponse(SpotCard):
     sigunguName: str | None = None
     category: str | None = None  # lcls_systm3_nm 세분 라벨
     detailStatus: str
-    moods: list[MoodTag] = []
     images: list[SpotImageOut] = []
     intro: SpotIntro | None = None
