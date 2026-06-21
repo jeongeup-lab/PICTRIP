@@ -135,6 +135,27 @@ class HomeFeedResponse(BaseModel):
     rails: list[HomeRail] = []
 
 
+class CurationDetailResponse(BaseModel):
+    """Region/curation detail (S09 §5.2). ``subtitle`` is intentionally omitted;
+    the detail screen shows ``title``/``lead``/``intro`` only. ``coverUrl`` reuses
+    the feed's fallback ordering (cover spot's image, else first resolved spot's),
+    already https-upgraded. ``spots`` are ≤8 congestion-enriched SpotCards."""
+
+    id: int
+    type: str
+    slug: str
+    title: str
+    lead: str | None = None
+    intro: str | None = None
+    coverUrl: str | None = None
+    spots: list[SpotCard] = []
+
+    @field_validator("coverUrl")
+    @classmethod
+    def _upgrade_cover(cls, v: str | None) -> str | None:
+        return https_kto_image(v)
+
+
 class MoodTag(BaseModel):
     code: str
     name: str

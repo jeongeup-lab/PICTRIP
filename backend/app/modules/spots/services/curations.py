@@ -25,10 +25,11 @@ from redis.asyncio import Redis
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import ResourceNotFound
 from app.core.time import kst_now, seconds_until_kst_midnight
 from app.modules.images.models import SpotEmbedding
 from app.modules.spots.models import Curation, CurationSpot, Spot, SpotDetail, SpotMood
-from app.modules.spots.services.cards import load_spot_cards_by_ids
+from app.modules.spots.services.cards import load_congestion, load_spot_cards_by_ids
 from app.modules.spots.services.rows import SpotCardRow
 
 # Size of the candidate pool before the deterministic pick, and how many to show.
@@ -50,6 +51,27 @@ class CurationRow:
     mood_id: int | None
     cover_spot_id: str | None
     position: int
+    lead: str | None = None
+    intro: str | None = None
+
+
+@dataclass
+class CurationDetailRow:
+    """Curation detail projection (S09 §5.2) — header fields + resolved spots.
+
+    ``subtitle`` is intentionally absent: the detail screen omits it. ``cover_url``
+    reuses the feed's fallback ordering (cover spot's image, else first resolved
+    spot's, else None).
+    """
+
+    id: int
+    type: str
+    slug: str
+    title: str
+    lead: str | None
+    intro: str | None
+    cover_url: str | None
+    spots: list[SpotCardRow]
 
 
 def _jitter(curation_id: int) -> int:
@@ -75,6 +97,10 @@ def _seed_pick(curation_id: int, ordered_ids: list[str]) -> list[str]:
 
 async def load_curation(session: AsyncSession, curation_id: int) -> CurationRow:
     row = (await session.execute(select(Curation).where(Curation.id == curation_id))).scalar_one()
+    return _to_row(row)
+
+
+def _to_row(row: Curation) -> CurationRow:
     return CurationRow(
         id=row.id,
         type=row.type,
@@ -85,6 +111,8 @@ async def load_curation(session: AsyncSession, curation_id: int) -> CurationRow:
         mood_id=row.mood_id,
         cover_spot_id=row.cover_spot_id,
         position=row.position,
+        lead=row.lead,
+        intro=row.intro,
     )
 
 
@@ -97,20 +125,7 @@ async def list_published_curations(session: AsyncSession, type_: str) -> list[Cu
             .order_by(Curation.position)
         )
     ).scalars()
-    return [
-        CurationRow(
-            id=r.id,
-            type=r.type,
-            slug=r.slug,
-            title=r.title,
-            subtitle=r.subtitle,
-            region_cd=r.region_cd,
-            mood_id=r.mood_id,
-            cover_spot_id=r.cover_spot_id,
-            position=r.position,
-        )
-        for r in rows
-    ]
+    return [_to_row(r) for r in rows]
 
 
 async def _handpicked_ids(session: AsyncSession, curation_id: int) -> list[str]:
@@ -189,3 +204,63 @@ async def resolve_curation_spots(
     by_id = await load_spot_cards_by_ids(session, ids)
     # Preserve the resolved order; drop ids that no longer hydrate.
     return [by_id[cid] for cid in ids if cid in by_id]
+
+
+async def _cover_url(
+    session: AsyncSession,
+    cover_spot_id: str | None,
+    resolved: list[SpotCardRow],
+) -> str | None:
+    """coverUrl = cover spot's firstImageUrl, else first resolved spot's, else null."""
+    if cover_spot_id is not None:
+        img = (
+            await session.execute(
+                select(Spot.first_image_url).where(Spot.content_id == cover_spot_id)
+            )
+        ).scalar_one_or_none()
+        if img:
+            return img
+    for r in resolved:
+        if r.first_image_url:
+            return r.first_image_url
+    return None
+
+
+async def get_curation_detail(
+    session: AsyncSession,
+    redis: Redis,
+    slug: str,
+) -> CurationDetailRow:
+    """Resolve a published curation by ``slug`` to its detail projection.
+
+    Raises ``ResourceNotFound`` when the slug is unknown or the curation is not
+    published. Spots reuse ``resolve_curation_spots`` (handpicked or pool, ≤8),
+    congestion-enriched per card; coverUrl reuses the feed's fallback ordering.
+    """
+    row = (
+        await session.execute(
+            select(Curation).where(
+                Curation.slug == slug,
+                Curation.is_published.is_(True),
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise ResourceNotFound()
+
+    cur = _to_row(row)
+    resolved = await resolve_curation_spots(session, redis, cur)
+    congestion = await load_congestion(session, [r.content_id for r in resolved])
+    for r in resolved:
+        r.congestion = congestion.get(r.content_id)
+
+    return CurationDetailRow(
+        id=cur.id,
+        type=cur.type,
+        slug=cur.slug,
+        title=cur.title,
+        lead=cur.lead,
+        intro=cur.intro,
+        cover_url=await _cover_url(session, cur.cover_spot_id, resolved),
+        spots=resolved,
+    )
