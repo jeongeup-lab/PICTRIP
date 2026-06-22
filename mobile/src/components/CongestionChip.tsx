@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet } from "react-native";
 import type { Congestion } from "@/lib/api-types";
-import { colors } from "@/constants/theme";
+import { colors, radii } from "@/constants/theme";
 
 const LABELS: Record<"low" | "medium" | "high", string> = {
   low: "여유",
@@ -21,7 +21,7 @@ const styles = StyleSheet.create({
   chip: {
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     backgroundColor: colors.fill,
     alignSelf: "flex-start",
   },

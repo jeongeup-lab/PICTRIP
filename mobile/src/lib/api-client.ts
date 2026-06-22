@@ -12,6 +12,32 @@ import { useAuthStore } from "@/features/auth/stores/auth-store";
 
 type RetriableConfig = InternalAxiosRequestConfig & { _retried?: boolean };
 
+/** Response-rejected handler, extracted so the 401→refresh→retry branching is
+   unit-testable without a live server. `retry` re-issues the request and
+   defaults to `api.request`; runtime behavior is identical to inlining it. */
+export async function handleResponseError(
+  error: AxiosError<Envelope<unknown>>,
+  retry: (config: RetriableConfig) => Promise<unknown> = (config) => api.request(config),
+): Promise<unknown> {
+  if (!error.response) {
+    throw new AppError("NETWORK_ERROR", "네트워크에 연결할 수 없습니다.", 0);
+  }
+  const appError = envelopeToError(error.response.data, error.response.status);
+  const config = error.config as RetriableConfig | undefined;
+
+  if (appError.code === "AUTH_TOKEN_EXPIRED" && config && !config._retried) {
+    config._retried = true;
+    try {
+      const newToken = await useAuthStore.getState().refresh();
+      config.headers.set("Authorization", `Bearer ${newToken}`);
+      return retry(config);
+    } catch {
+      throw appError;
+    }
+  }
+  throw appError;
+}
+
 /** Authed client — injects Bearer from auth-store, unwraps JSend, throws AppError.
    On 401 AUTH_TOKEN_EXPIRED it refreshes once and retries the original request. */
 export const api = axiosCreate({
@@ -36,23 +62,5 @@ api.interceptors.response.use(
   ((response: AxiosResponse<Envelope<unknown>>): unknown => unwrapData(response.data)) as (
     r: AxiosResponse,
   ) => AxiosResponse,
-  async (error: AxiosError<Envelope<unknown>>) => {
-    if (!error.response) {
-      throw new AppError("NETWORK_ERROR", "네트워크에 연결할 수 없습니다.", 0);
-    }
-    const appError = envelopeToError(error.response.data, error.response.status);
-    const config = error.config as RetriableConfig | undefined;
-
-    if (appError.code === "AUTH_TOKEN_EXPIRED" && config && !config._retried) {
-      config._retried = true;
-      try {
-        const newToken = await useAuthStore.getState().refresh();
-        config.headers.set("Authorization", `Bearer ${newToken}`);
-        return api.request(config);
-      } catch {
-        throw appError;
-      }
-    }
-    throw appError;
-  },
+  (error: AxiosError<Envelope<unknown>>) => handleResponseError(error),
 );
