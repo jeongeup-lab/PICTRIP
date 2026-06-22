@@ -82,6 +82,19 @@ async def delete_me(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.get(
+    "/users/me/consents",
+    status_code=status.HTTP_200_OK,
+    summary="My current consent state (location/photo/terms)",
+)
+async def get_consents(
+    user_id: CurrentUserId,
+    session: DbSession,
+) -> dict[str, Any]:
+    state = await services.get_consents(session, user_id)
+    return ok(state.model_dump())
+
+
 @router.put(
     "/users/me/consents",
     status_code=status.HTTP_200_OK,
