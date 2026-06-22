@@ -28,4 +28,12 @@ describe("Icon", () => {
     });
     expect(r!.toJSON()).toBeTruthy();
   });
+
+  it("renders chevron-down", async () => {
+    let r: renderer.ReactTestRenderer;
+    await act(async () => {
+      r = renderer.create(<Icon name="chevron-down" />);
+    });
+    expect(r!.toJSON()).toBeTruthy();
+  });
 });

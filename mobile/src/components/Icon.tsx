@@ -5,6 +5,7 @@ import { colors } from "@/constants/theme";
 export type IconName =
   | "chevron-left"
   | "chevron-right"
+  | "chevron-down"
   | "share"
   | "heart"
   | "heart-fill"
@@ -34,6 +35,7 @@ interface IconProps {
 const PATHS: Record<IconName, { d?: string; fill?: boolean; extra?: "heart" }> = {
   "chevron-left": { d: "M15 5l-7 7 7 7" },
   "chevron-right": { d: "M9 5l7 7-7 7" },
+  "chevron-down": { d: "M6 9l6 6 6-6" },
   share: { d: "M12 3v12M12 3l-4 4M12 3l4 4M5 12v7h14v-7" },
   heart: { d: "M12 20s-7-4.5-7-9.5A3.5 3.5 0 0 1 12 7a3.5 3.5 0 0 1 7 3.5C19 15.5 12 20 12 20z" },
   "heart-fill": {
