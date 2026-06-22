@@ -1,1 +1,69 @@
-"""map routes — HTTP I/O only (no DB, no business logic)."""
+"""MAP routes. Endpoints mirror API spec §11."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import APIRouter, Query, status
+
+from app.core.db import DbSession
+from app.core.redis import RedisDep
+from app.core.schemas import ok
+from app.modules.map.schemas import NearbySpotCard, RegionLabel, RegionNode
+from app.modules.map.services import nearby_spots, regions_tree, reverse_geocode
+from app.modules.spots.services import NearbyCategory
+
+router = APIRouter(tags=["MAP · map"])
+
+
+@router.get(
+    "/map/nearby",
+    status_code=status.HTTP_200_OK,
+    summary="Location-based recommendation (spots DB: bbox+haversine + category + congestion)",
+)
+async def nearby(
+    session: DbSession,
+    lat: float = Query(..., ge=-90, le=90),
+    lng: float = Query(..., ge=-180, le=180),
+    radius: int = Query(default=3000, ge=1, le=20000),
+    category: NearbyCategory | None = Query(default=None),
+) -> dict[str, Any]:
+    rows = await nearby_spots(session, lat=lat, lng=lng, radius=radius, category=category)
+    return ok(
+        [
+            NearbySpotCard(
+                contentId=r.content_id,
+                title=r.title,
+                firstImageUrl=r.first_image_url,
+                addr1=r.addr1,
+                mapx=r.mapx,
+                mapy=r.mapy,
+                dist=r.dist,
+                category=r.category,
+                regionName=r.region_name,
+                sigunguName=r.sigungu_name,
+                overview=r.overview,
+                congestion=r.congestion,
+            )
+            for r in rows
+        ]
+    )
+
+
+@router.get("/map/region", summary="현위치 행정구역 라벨 (Kakao coord2regioncode)")
+async def region(
+    redis: RedisDep,
+    lat: float = Query(..., ge=-90, le=90),
+    lng: float = Query(..., ge=-180, le=180),
+) -> dict[str, Any]:
+    label: RegionLabel | None = await reverse_geocode(redis, lat=lat, lng=lng)
+    return ok(label)
+
+
+@router.get(
+    "/map/regions-tree",
+    summary="17 시도 + 시군구 트리 (런타임 AVG centroid, 24h 캐시)",
+)
+async def regions_tree_route(session: DbSession, redis: RedisDep) -> dict[str, Any]:
+    tree = await regions_tree(session, redis)
+    return ok([RegionNode.model_validate(node) for node in tree])

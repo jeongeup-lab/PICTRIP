@@ -1,39 +1,243 @@
 [project]
 name = "pictrip-backend"
 version = "0.1.0"
-description = "PicTrip backend — FastAPI modular monolith"
-requires-python = ">=3.12"
+description = "PicTrip backend - image-based Korea tourism recommendation service"
+requires-python = ">=3.12,<3.13"
+readme = "README.md"
+
 dependencies = [
-    "fastapi",
-    "uvicorn[standard]",
-    "sqlalchemy[asyncio]>=2.0",
-    "asyncpg",
-    "pgvector",
-    "alembic",
-    "pydantic-settings",
-    "redis",
-    "httpx",
-    "structlog",
-    "sentry-sdk[fastapi]",
+    # Web framework
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "python-multipart>=0.0.31",
+    # Settings & validation
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.6.0",
+    "email-validator>=2.2.0",
+    # Database
+    "sqlalchemy[asyncio]>=2.0.35",
+    "asyncpg>=0.30.0",
+    "alembic>=1.13.3",
+    "pgvector>=0.3.6",
+    # Cache
+    "redis>=5.1.1",
+    "passlib[bcrypt]>=1.7.4",
+    # HTTP client
+    "httpx>=0.27.2",
+    "tenacity>=9.0.0",
+    # ML / image
+    "transformers>=4.45.0",
+    "torch>=2.4.0",
+    "pillow>=10.4.0",
+    "numpy>=2.1.0",
+    # Crypto
+    "cryptography>=48.0.1",
+    # LLM
+    "anthropic>=0.39.0",
+    # Observability
+    "structlog>=24.4.0",
+    "sentry-sdk[fastapi]>=2.16.0",
+    "pyjwt[crypto]>=2.13.0",
 ]
 
 [dependency-groups]
-dev = ["ruff", "mypy", "pytest", "pytest-asyncio"]
+dev = [
+    "pytest>=8.3.3",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=5.0.0",
+    "httpx>=0.27.2",
+    "ruff>=0.7.0",
+    "mypy>=1.13.0",
+    "types-passlib>=1.7.7",
+    "import-linter>=2.11",
+    "fakeredis>=2.26",
+    "pytest-httpx>=0.32",
+    "time-machine>=2.16",
+    "testcontainers[redis]>=4.8",
+    "lupa>=2.8",
+]
 
-[tool.ruff]
-line-length = 100
-target-version = "py312"
+[tool.uv]
+package = false
 
-[tool.mypy]
-python_version = "3.12"
-strict = true
+# Pin torch to the CPU-only wheels. The default PyPI torch is a CUDA build
+# (`+cuXXX`) that bundles ~2.7GB of NVIDIA runtime libraries which can never run
+# on our deploy host (Intel N100 iGPU, no NVIDIA GPU) — CLIP runs on CPU
+# (CLIP_DEVICE=cpu). The CPU index drops the nvidia/* libs and shrinks the image.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.hatch.build.targets.wheel]
-packages = ["app"]
+# ---------- Ruff ----------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific
+    "ASYNC",
+]
+ignore = [
+    "E501",  # line length handled by formatter
+    "B008",  # FastAPI uses Depends() in defaults
+    "UP046", # PEP 695 generics — Pydantic v2 convention is still Generic[T]
+]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/*" = ["E", "F", "I"]
+"tests/*" = ["B"]
+
+# ---------- mypy ----------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+exclude = ["alembic/versions"]
+
+[[tool.mypy.overrides]]
+module = ["transformers.*", "torch.*", "pgvector.*"]
+ignore_missing_imports = true
+
+# ---------- import-linter ----------
+# Enforces the modular-monolith rules from ADR-0002 / backend/CLAUDE.md.
+# Run locally: uv run lint-imports
+[tool.importlinter]
+root_package = "app"
+include_external_packages = true
+
+# Routes are HTTP-only — no ORM imports anywhere in the request path.
+[[tool.importlinter.contracts]]
+name = "Routes do not import SQLAlchemy"
+type = "forbidden"
+source_modules = [
+    "app.modules.users.routes",
+    "app.modules.taste.routes",
+    "app.modules.spots.routes",
+    "app.modules.images.routes",
+    "app.modules.map.routes",
+    "app.modules.system.routes",
+]
+forbidden_modules = [
+    "sqlalchemy",
+    "asyncpg",
+    "pgvector",
+]
+# Only flag direct imports. Routes use the DbSession alias from app.core.db,
+# and routes -> services -> sqlalchemy is fine because services are the
+# documented seam for ORM access.
+allow_indirect_imports = true
+
+# Routes never import any module's models directly. Go through services + schemas.
+[[tool.importlinter.contracts]]
+name = "Routes do not import any module's models"
+type = "forbidden"
+source_modules = [
+    "app.modules.users.routes",
+    "app.modules.taste.routes",
+    "app.modules.spots.routes",
+    "app.modules.images.routes",
+    "app.modules.map.routes",
+    "app.modules.system.routes",
+]
+forbidden_modules = [
+    "app.modules.users.models",
+    "app.modules.taste.models",
+    "app.modules.spots.models",
+    "app.modules.images.models",
+    "app.modules.map.models",
+    "app.modules.system.models",
+]
+# Routes -> services -> models is fine (services is the documented seam).
+allow_indirect_imports = true
+
+# Schemas are Pydantic DTOs only — no ORM types.
+[[tool.importlinter.contracts]]
+name = "Schemas do not import SQLAlchemy"
+type = "forbidden"
+source_modules = [
+    "app.modules.users.schemas",
+    "app.modules.taste.schemas",
+    "app.modules.spots.schemas",
+    "app.modules.images.schemas",
+    "app.modules.map.schemas",
+    "app.modules.system.schemas",
+]
+forbidden_modules = [
+    "sqlalchemy",
+    "asyncpg",
+    "pgvector",
+]
+
+# Cross-module isolation: routes/services may not reach into another module's
+# models. Use the other module's schemas (DTOs) instead. A module's own services
+# importing its own models is allowed (see ignore_imports below).
+[[tool.importlinter.contracts]]
+name = "Modules don't cross-import each other's models"
+type = "forbidden"
+source_modules = [
+    "app.modules.users.services",
+    "app.modules.taste.services",
+    "app.modules.spots.services",
+    "app.modules.images.services",
+    "app.modules.map.services",
+    "app.modules.system.services",
+]
+forbidden_modules = [
+    "app.modules.users.models",
+    "app.modules.taste.models",
+    "app.modules.spots.models",
+    "app.modules.images.models",
+    "app.modules.map.models",
+    "app.modules.system.models",
+]
+ignore_imports = [
+    "app.modules.users.services -> app.modules.users.models",
+    "app.modules.taste.services -> app.modules.taste.models",
+    "app.modules.spots.services -> app.modules.spots.models",
+    "app.modules.images.services -> app.modules.images.models",
+    "app.modules.map.services -> app.modules.map.models",
+    "app.modules.system.services -> app.modules.system.models",
+    # spots services는 focused submodule로 분리돼 있다(rows/cards/.../nearby).
+    # services 패키지 → submodule → spots.models 체인을 끊어, map.services가
+    # 허용된 seam(map.services -> spots.services)으로만 spots를 읽는 것이 위반으로
+    # 잡히지 않게 한다. spots 내부의 직접 spots.models import는 의도된 것(#22).
+    "app.modules.spots.services -> app.modules.spots.services.*",
+    "app.modules.spots.services.* -> app.modules.spots.models",
+]
+# Most services are still placeholders that don't import their own models yet.
+# Allow these ignores to be inactive until the services get implemented.
+unmatched_ignore_imports_alerting = "none"
+
+# ---------- pytest ----------
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+]
+markers = [
+    "integration: requires Postgres/Redis",
+    "slow: long-running tests",
+    "real_redis: requires a running Redis (testcontainers); skipped if Docker unavailable",
+]
