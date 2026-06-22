@@ -11,9 +11,12 @@ jobs:
     services:
       postgres:
         image: pgvector/pgvector:pg16
+        # User/DB/password must match app config defaults (app/config.py) so the
+        # default connection URL resolves; pytest only overrides POSTGRES_DB.
         env:
           POSTGRES_DB: pictrip_test
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: pictrip
+          POSTGRES_PASSWORD: pictrip_dev_only
         ports: ["5432:5432"]
         options: >-
           --health-cmd pg_isready --health-interval 10s
@@ -25,6 +28,9 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy app
+      - run: uv run alembic upgrade head
+        env:
+          POSTGRES_DB: pictrip_test
       - run: uv run pytest
         env:
           POSTGRES_DB: pictrip_test
