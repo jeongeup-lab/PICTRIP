@@ -92,11 +92,11 @@ export function LoginCard({ variant, onSuccess, onCancel }: Props) {
         <Text style={styles.termsLink} onPress={() => router.push("/legal/terms")}>
           이용약관
         </Text>{" "}
-        및{"\n"}
+        및{" "}
         <Text style={styles.termsLink} onPress={() => router.push("/legal/privacy")}>
           개인정보처리방침
         </Text>
-        에 동의하는 것으로 간주돼요.
+        에{"\n"}동의하는 것으로 간주돼요.
       </Text>
     </View>
   );
