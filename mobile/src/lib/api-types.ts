@@ -1,14 +1,23 @@
 /**
- * Mirrors backend/app/core/schemas.py — keep in sync (JSend envelope).
+ * Mirrors backend JSend envelope + module schemas. Keep field names in sync
+ * (camelCase). Source: backend/app/modules/<code>/schemas.py
  */
 
 export interface ResponseMeta {
   traceId: string;
+  requestedAt?: string;
+  pagination?: {
+    nextCursor: string | null;
+    hasMore: boolean;
+    count: number;
+  };
 }
 
 export interface ErrorPayload {
   code: string;
   message: string;
+  details?: { field: string; issue: string }[];
+  traceId?: string;
 }
 
 export interface Envelope<T> {
@@ -17,10 +26,104 @@ export interface Envelope<T> {
   meta: ResponseMeta;
 }
 
-// Canonical card core — { contentId, title, firstImageUrl, category }
+export type Congestion = "low" | "medium" | "high" | null;
+
+// Canonical card — extended across endpoints.
 export interface SpotCard {
   contentId: string;
   title: string;
   firstImageUrl: string | null;
-  category: string;
+  addr1?: string | null;
+  mapx?: number | null;
+  mapy?: number | null;
+  category: string | null;
+  congestion?: Congestion;
+}
+
+export interface HeroTile {
+  id: number;
+  slug: string;
+  title: string; // keeps \n — render multi-line
+  subtitle: string | null;
+  coverUrl: string | null;
+}
+
+export interface MoodRailDto {
+  id: number;
+  title: string;
+  subtitle: string | null;
+  spots: SpotCard[];
+}
+
+export interface HomeFeed {
+  heroes: HeroTile[];
+  rails: MoodRailDto[];
+}
+
+export interface CurationDetail {
+  id: number;
+  type: string;
+  slug: string;
+  title: string;
+  lead: string | null;
+  intro: string | null;
+  coverUrl: string | null;
+  spots: SpotCard[];
+}
+
+export interface SpotImage {
+  originImageUrl: string;
+  smallImageUrl: string | null;
+}
+
+export interface SpotIntro {
+  usetime: string | null;
+  restdate: string | null;
+  parking: string | null;
+  infocenter: string | null;
+  firstmenu: string | null;
+  treatmenu: string | null;
+}
+
+export interface SpotDetail {
+  contentId: string;
+  title: string;
+  firstImageUrl: string | null;
+  addr1: string | null;
+  addr2: string | null;
+  mapx: number | null;
+  mapy: number | null;
+  overview: string | null;
+  homepage: string | null;
+  tel: string | null;
+  category: string | null;
+  regionName: string | null;
+  sigunguName: string | null;
+  detailStatus: string;
+  congestion: Congestion;
+  images: SpotImage[];
+  intro: SpotIntro | null;
+}
+
+export interface NearbySpot extends SpotCard {
+  dist: number | null;
+  regionName: string | null;
+  sigunguName: string | null;
+  overview: string | null;
+}
+
+export interface User {
+  id: number;
+  displayName: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+  isOnboarded: boolean;
+  createdAt: string | null;
+}
+
+export interface TokenPair {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+  user: User;
 }
