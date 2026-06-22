@@ -23,7 +23,7 @@ export function LegalWebView({ url }: { url: string }) {
   };
 
   const onShouldStart = (req: WebViewNavigation): boolean => {
-    if (req.url.startsWith(LEGAL_BASE_URL)) return true;
+    if (req.url.startsWith(`${LEGAL_BASE_URL}/`)) return true;
     void WebBrowser.openBrowserAsync(req.url);
     return false;
   };
