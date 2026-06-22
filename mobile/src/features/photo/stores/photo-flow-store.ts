@@ -56,7 +56,7 @@ export const usePhotoFlowStore = create<PhotoFlowState>((set, get) => ({
 
   abort: () => {
     get().controller?.abort();
-    set({ status: "idle", controller: null });
+    set({ status: "idle", result: null, errorCode: null, controller: null });
   },
 
   reset: () =>

@@ -42,9 +42,15 @@ describe("photo-flow-store", () => {
 
   it("abort sets status idle and clears the controller", async () => {
     usePhotoFlowStore.getState().setAsset(asset);
+    usePhotoFlowStore.setState({
+      result: { matches: [], queryHadLocation: false },
+      errorCode: "IMAGE_INVALID",
+    });
     usePhotoFlowStore.getState().abort();
     expect(usePhotoFlowStore.getState().status).toBe("idle");
     expect(usePhotoFlowStore.getState().controller).toBeNull();
+    expect(usePhotoFlowStore.getState().result).toBeNull();
+    expect(usePhotoFlowStore.getState().errorCode).toBeNull();
   });
 
   it("reset releases asset and result", async () => {
