@@ -1,4 +1,4 @@
-import { create as axiosCreate, AxiosError } from "axios";
+import { create as axiosCreate, AxiosError, AxiosResponse } from "axios";
 import { API_BASE } from "@/constants/env";
 import type { Envelope } from "@/lib/api-types";
 import { unwrapData, envelopeToError } from "@/lib/jsend";
@@ -12,9 +12,14 @@ export const bareClient = axiosCreate({
 });
 
 /* The interceptor intentionally returns unwrapped data (not AxiosResponse).
-   Callers cast the result at call-site (e.g. `as unknown as TokenPair`). */
-(bareClient.interceptors.response as any).use(
-  (response: { data: Envelope<unknown> }) => unwrapData(response.data),
+   Callers cast the result at call-site (e.g. `as unknown as TokenPair`).
+   axios types the fulfilled handler's return as AxiosResponse, so the handler
+   is cast (function-level only — no `as any`, no cast on the interceptor
+   manager); runtime returns the unwrapped envelope data unchanged. */
+bareClient.interceptors.response.use(
+  ((response: AxiosResponse<Envelope<unknown>>): unknown => unwrapData(response.data)) as (
+    r: AxiosResponse,
+  ) => AxiosResponse,
   (error: AxiosError<Envelope<unknown>>) => {
     if (error.response) {
       throw envelopeToError(error.response.data, error.response.status);

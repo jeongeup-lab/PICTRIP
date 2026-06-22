@@ -42,6 +42,7 @@ describe("auth-store", () => {
     const token = await useAuthStore.getState().refresh();
     expect(token).toBe("acc2");
     expect(useAuthStore.getState().accessToken).toBe("acc2");
+    expect(storage.setRefreshToken).toHaveBeenCalledWith("ref2");
   });
 
   it("refresh clears the session and throws when no refresh token", async () => {
@@ -50,9 +51,18 @@ describe("auth-store", () => {
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
   });
 
-  it("hydrate swallows refresh failure (quiet guest demotion)", async () => {
+  it("hydrate returns early when no refresh token (no refresh attempt)", async () => {
     (storage.getRefreshToken as jest.Mock).mockResolvedValue(null);
     await expect(useAuthStore.getState().hydrate()).resolves.toBeUndefined();
+    expect(bareClient.post).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+  });
+
+  it("hydrate swallows a failing refresh and clears the session", async () => {
+    (storage.getRefreshToken as jest.Mock).mockResolvedValue("ref");
+    (bareClient.post as jest.Mock).mockRejectedValue(new Error("boom"));
+    await expect(useAuthStore.getState().hydrate()).resolves.toBeUndefined();
+    expect(bareClient.post).toHaveBeenCalled();
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
   });
 });
