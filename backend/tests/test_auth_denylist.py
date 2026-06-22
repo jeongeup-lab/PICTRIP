@@ -47,3 +47,13 @@ async def test_deny_refresh_is_idempotent_and_ignores_bad_tokens(redis_client_fa
     await deny_refresh(redis_client_fake, None)
     await deny_refresh(redis_client_fake, "not.a.jwt")
     assert await redis_client_fake.dbsize() == 0
+
+
+async def test_deny_refresh_swallows_redis_write_failure(monkeypatch, redis_client_fake):
+    pair = mint_token_pair(user_id=42)
+
+    async def boom(*a, **k):
+        raise ConnectionError("redis down")
+
+    monkeypatch.setattr(redis_client_fake, "set", boom)
+    await deny_refresh(redis_client_fake, pair.refreshToken)  # does not raise

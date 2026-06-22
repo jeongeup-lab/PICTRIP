@@ -191,7 +191,8 @@ async def resolve_curation_spots(
     """
     cache_key = f"curation:{curation.id}:spots"
     cached = await redis.get(cache_key)
-    if cached:
+    # None = miss; "" = cached-empty (don't re-resolve empty curations every request)
+    if cached is not None:
         ids = cached.split(",") if cached else []
     else:
         handpicked = await _handpicked_ids(session, curation.id)

@@ -23,13 +23,23 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.create_index(
-        "idx_spots_image_pool",
-        "spots",
-        ["ldong_regn_cd"],
-        postgresql_where=sa.text("show_flag = 1 AND first_image_url IS NOT NULL"),
-    )
+    # CONCURRENTLY (needs autocommit) so the build doesn't lock live `spots` during sync
+    with op.get_context().autocommit_block():
+        op.create_index(
+            "idx_spots_image_pool",
+            "spots",
+            ["ldong_regn_cd"],
+            postgresql_where=sa.text("show_flag = 1 AND first_image_url IS NOT NULL"),
+            postgresql_concurrently=True,
+            if_not_exists=True,
+        )
 
 
 def downgrade() -> None:
-    op.drop_index("idx_spots_image_pool", table_name="spots")
+    with op.get_context().autocommit_block():
+        op.drop_index(
+            "idx_spots_image_pool",
+            table_name="spots",
+            postgresql_concurrently=True,
+            if_exists=True,
+        )
