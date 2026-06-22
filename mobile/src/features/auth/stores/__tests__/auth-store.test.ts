@@ -1,9 +1,22 @@
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { bareClient } from "@/lib/bare-client";
 import * as storage from "@/lib/storage";
+import { getIdToken } from "@/features/auth/usecases/oauth-providers";
+import { recordConsentSnapshot } from "@/features/auth/usecases/record-consent";
+import { oauthLogin, logoutRequest, deleteAccountRequest } from "@/features/auth/api";
+import { AppError } from "@/lib/app-error";
 
 jest.mock("@/lib/bare-client", () => ({ bareClient: { post: jest.fn() } }));
 jest.mock("@/lib/storage");
+jest.mock("@/features/auth/usecases/oauth-providers", () => ({ getIdToken: jest.fn() }));
+jest.mock("@/features/auth/usecases/record-consent", () => ({
+  recordConsentSnapshot: jest.fn(),
+}));
+jest.mock("@/features/auth/api", () => ({
+  oauthLogin: jest.fn(),
+  logoutRequest: jest.fn(),
+  deleteAccountRequest: jest.fn(),
+}));
 
 const pair = {
   accessToken: "acc",
@@ -64,5 +77,59 @@ describe("auth-store", () => {
     await expect(useAuthStore.getState().hydrate()).resolves.toBeUndefined();
     expect(bareClient.post).toHaveBeenCalled();
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
+  });
+});
+
+describe("auth-store P3 actions", () => {
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    (recordConsentSnapshot as jest.Mock).mockResolvedValue(undefined);
+    await useAuthStore.getState().clear();
+  });
+
+  it("loginWithOAuth success sets the session and records consent", async () => {
+    (getIdToken as jest.Mock).mockResolvedValue({ idToken: "t", nonce: "n" });
+    (oauthLogin as jest.Mock).mockResolvedValue(pair);
+    const res = await useAuthStore.getState().loginWithOAuth("kakao");
+    expect(res).toBe("success");
+    expect(oauthLogin).toHaveBeenCalledWith("kakao", "t", "n");
+    expect(useAuthStore.getState().isAuthenticated).toBe(true);
+    expect(useAuthStore.getState().user?.id).toBe(1);
+    expect(recordConsentSnapshot).toHaveBeenCalled();
+  });
+
+  it("loginWithOAuth returns 'canceled' without calling the backend", async () => {
+    (getIdToken as jest.Mock).mockResolvedValue("canceled");
+    expect(await useAuthStore.getState().loginWithOAuth("apple")).toBe("canceled");
+    expect(oauthLogin).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+  });
+
+  it("loginWithOAuth propagates AppError from the backend", async () => {
+    (getIdToken as jest.Mock).mockResolvedValue({ idToken: "t" });
+    (oauthLogin as jest.Mock).mockRejectedValue(new AppError("OAUTH_ID_TOKEN_INVALID", "x", 401));
+    await expect(useAuthStore.getState().loginWithOAuth("google")).rejects.toBeInstanceOf(AppError);
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+  });
+
+  it("logout clears the session even if the request fails", async () => {
+    await useAuthStore.getState().setSession(pair as never);
+    (logoutRequest as jest.Mock).mockRejectedValue(new Error("net"));
+    await useAuthStore.getState().logout();
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+  });
+
+  it("deleteAccount clears the session on success", async () => {
+    await useAuthStore.getState().setSession(pair as never);
+    (deleteAccountRequest as jest.Mock).mockResolvedValue(undefined);
+    await useAuthStore.getState().deleteAccount();
+    expect(deleteAccountRequest).toHaveBeenCalled();
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+  });
+
+  it("devLogin sets a fake in-memory session", () => {
+    useAuthStore.getState().devLogin();
+    expect(useAuthStore.getState().isAuthenticated).toBe(true);
+    expect(useAuthStore.getState().accessToken).toBeTruthy();
   });
 });
