@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { ScrollView, View, Text, Pressable, useWindowDimensions, StyleSheet } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSpot } from "@/features/spots/queries";
+import { useAuthGate } from "@/features/auth/hooks/use-auth-gate";
+import { useIsSaved, useSaveMutation, useUnsaveMutation } from "@/features/saved/queries";
 import { Icon } from "@/components/Icon";
 import { RemoteImage } from "@/components/RemoteImage";
 import { CongestionChip } from "@/components/CongestionChip";
@@ -15,6 +18,21 @@ export default function SpotScreen() {
   const { contentId } = useLocalSearchParams<{ contentId: string }>();
   const { data, isLoading } = useSpot(contentId);
   const { width } = useWindowDimensions();
+  const requireAuth = useAuthGate();
+  const persisted = useIsSaved(contentId);
+  const [optimistic, setOptimistic] = useState<boolean | null>(null);
+  const saved = optimistic ?? persisted;
+  const saveMut = useSaveMutation();
+  const unsaveMut = useUnsaveMutation();
+
+  const onToggleSave = async () => {
+    if (!(await requireAuth("save"))) return;
+    const next = !saved;
+    setOptimistic(next);
+    const rollback = () => setOptimistic(!next);
+    if (next) saveMut.mutate(contentId, { onError: rollback });
+    else unsaveMut.mutate(contentId, { onError: rollback });
+  };
 
   return (
     <View style={styles.root}>
@@ -58,9 +76,8 @@ export default function SpotScreen() {
       <Pressable style={[styles.navBtn, styles.back]} onPress={() => router.back()} hitSlop={8}>
         <Icon name="chevron-left" size={22} color={colors.onImage} />
       </Pressable>
-      {/* Save is inert until P3 (auth + POST /users/me/saved). */}
-      <Pressable style={[styles.navBtn, styles.save]} hitSlop={8} onPress={() => {}}>
-        <Icon name="heart" size={20} color={colors.onImage} />
+      <Pressable style={[styles.navBtn, styles.save]} hitSlop={8} onPress={onToggleSave}>
+        <Icon name={saved ? "heart-fill" : "heart"} size={20} color={colors.onImage} />
       </Pressable>
     </View>
   );
