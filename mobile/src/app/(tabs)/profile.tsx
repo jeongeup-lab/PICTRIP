@@ -77,7 +77,9 @@ export default function ProfileTab() {
         <SettingsRows onLogout={isAuthenticated ? () => void logout() : undefined} />
 
         <View style={styles.foot}>
-          <Text style={styles.footLink}>약관·정책</Text>
+          <Pressable onPress={() => router.push("/legal")}>
+            <Text style={styles.footLink}>약관·정책</Text>
+          </Pressable>
           {isAuthenticated ? (
             <>
               <View style={styles.footDiv} />

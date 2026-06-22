@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
+import { router } from "expo-router";
 import { SocialButton } from "@/features/auth/components/SocialButton";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import type { Provider } from "@/features/auth/usecases/oauth-providers";
@@ -87,7 +88,15 @@ export function LoginCard({ variant, onSuccess, onCancel }: Props) {
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <Text style={styles.terms}>
-        계속 진행하면 이용약관 및 개인정보처리방침에{"\n"}동의하는 것으로 간주돼요.
+        계속 진행하면{" "}
+        <Text style={styles.termsLink} onPress={() => router.push("/legal/terms")}>
+          이용약관
+        </Text>{" "}
+        및{"\n"}
+        <Text style={styles.termsLink} onPress={() => router.push("/legal/privacy")}>
+          개인정보처리방침
+        </Text>
+        에 동의하는 것으로 간주돼요.
       </Text>
     </View>
   );
@@ -125,4 +134,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.lg,
   },
+  termsLink: { color: colors.sec, fontWeight: "700", textDecorationLine: "underline" },
 });
