@@ -17,6 +17,7 @@ export default function RootLayout() {
           <Stack.Screen name="photo" options={{ presentation: "modal" }} />
           <Stack.Screen name="auth/login" options={{ presentation: "fullScreenModal" }} />
           <Stack.Screen name="saved" />
+          <Stack.Screen name="consent" />
           <Stack.Screen name="legal/index" />
           <Stack.Screen name="legal/[slug]" />
         </Stack>

@@ -22,6 +22,7 @@ export type IconName =
   | "sparkle"
   | "log-in"
   | "log-out"
+  | "shield-check"
   | "info";
 
 interface IconProps {
@@ -57,6 +58,7 @@ const PATHS: Record<IconName, { d?: string; fill?: boolean; extra?: "heart" }> =
   sparkle: { d: "M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" },
   "log-in": { d: "M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" },
   "log-out": { d: "M15 17l5-5-5-5M20 12H9M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3" },
+  "shield-check": { d: "M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3zM9 12l2 2 4-4" },
   info: { d: "M12 11v5M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z" },
 };
 
