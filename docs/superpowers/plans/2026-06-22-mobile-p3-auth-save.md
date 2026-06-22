@@ -966,7 +966,6 @@ import Svg, { Circle, Path, Rect } from "react-native-svg";
 import { SocialButton } from "@/features/auth/components/SocialButton";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import type { Provider } from "@/features/auth/usecases/oauth-providers";
-import { AppError } from "@/lib/app-error";
 import { colors, spacing } from "@/constants/theme";
 
 interface Props {
@@ -1007,8 +1006,9 @@ export function LoginCard({ variant, onSuccess, onCancel }: Props) {
       const res = await loginWithOAuth(provider);
       if (res === "success") onSuccess();
       else onCancel?.(); // canceled = silent (S01)
-    } catch (e) {
-      setError(e instanceof AppError ? "잠시 후 다시 시도해 주세요." : "잠시 후 다시 시도해 주세요.");
+    } catch {
+      // provider/backend failure — inline error, buttons re-enabled (S01 §3).
+      setError("잠시 후 다시 시도해 주세요.");
     } finally {
       setPending(null);
     }
@@ -1224,11 +1224,10 @@ import { AuthPromptSheet } from "@/features/auth/components/AuthPromptSheet";
           <Stack.Screen name="spots/[contentId]" />
           <Stack.Screen name="photo" options={{ presentation: "modal" }} />
           <Stack.Screen name="auth/login" options={{ presentation: "fullScreenModal" }} />
-          <Stack.Screen name="saved" />
         </Stack>
         <AuthPromptSheet />
 ```
-(The `saved` screen is created in Task 12; registering it now is harmless — Expo Router only renders it when navigated to. If lint complains about an unused route before Task 12, proceed; the route file lands in Task 12 of the same branch.)
+(The `saved` route uses the default card push — no `<Stack.Screen>` entry is needed for presentation. Its registration, matching the existing `spots/[contentId]` convention, is added in Task 12 where the route file is created.)
 
 - [ ] **Step 4: Verify and commit**
 
@@ -1524,7 +1523,7 @@ export function SavedCard({ spot, onPress, onUnsave }: Props) {
 const styles = StyleSheet.create({
   card: { width: "48.5%", height: 150, borderRadius: radii.md, overflow: "hidden", backgroundColor: colors.inset },
   img: { width: "100%", height: "100%" },
-  ov: { position: "absolute", inset: 0, backgroundColor: "transparent" },
+  ov: { position: "absolute", left: 0, right: 0, bottom: 0, height: "55%", backgroundColor: colors.scrim },
   heart: {
     position: "absolute",
     top: 9,
@@ -1661,6 +1660,7 @@ git commit -m "feat(mobile): saved components (grid card, rail, empty board)"
 
 **Files:**
 - Create: `mobile/src/app/saved.tsx`
+- Modify: `mobile/src/app/_layout.tsx` (register the route)
 
 > Not unit-tested; gate = lint + typecheck + format + suite green + manual smoke.
 
@@ -1739,16 +1739,23 @@ const styles = StyleSheet.create({
 });
 ```
 
-> Verify `Skeleton` accepts a `radius` prop; if not, drop it (the loading blocks just won't be rounded). Check `mobile/src/components/Skeleton.tsx` before implementing.
+(`Skeleton` accepts `radius?: number` and `width?: number | \`${number}%\``, confirmed — `width="48.5%"` and `radius={14}` are valid.)
 
-- [ ] **Step 2: Verify and commit**
+- [ ] **Step 2: Register the route in the root layout**
+
+In `mobile/src/app/_layout.tsx`, add a `Stack.Screen` for `saved` after the `auth/login` entry (matches the existing `spots/[contentId]` convention; default card push, no options):
+```tsx
+          <Stack.Screen name="saved" />
+```
+
+- [ ] **Step 3: Verify and commit**
 
 ```bash
 npm run lint && npm run typecheck && npm run format:check && npm test
 ```
 Expected: all green.
 ```bash
-git add mobile/src/app/saved.tsx
+git add mobile/src/app/saved.tsx mobile/src/app/_layout.tsx
 git commit -m "feat(mobile): 13 saved grid screen"
 ```
 
