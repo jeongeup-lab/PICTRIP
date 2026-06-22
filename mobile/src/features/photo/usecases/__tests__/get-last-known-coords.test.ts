@@ -1,10 +1,10 @@
+import * as Location from "expo-location";
+import { getLastKnownCoords } from "@/features/photo/usecases/get-last-known-coords";
+
 jest.mock("expo-location", () => ({
   getForegroundPermissionsAsync: jest.fn(),
   getLastKnownPositionAsync: jest.fn(),
 }));
-
-import * as Location from "expo-location";
-import { getLastKnownCoords } from "@/features/photo/usecases/get-last-known-coords";
 
 describe("getLastKnownCoords", () => {
   beforeEach(() => jest.clearAllMocks());
