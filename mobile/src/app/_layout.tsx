@@ -2,6 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Stack } from "expo-router";
 import { queryClient } from "@/lib/query-client";
+import { AuthPromptSheet } from "@/features/auth/components/AuthPromptSheet";
 
 export default function RootLayout() {
   return (
@@ -14,7 +15,9 @@ export default function RootLayout() {
           <Stack.Screen name="curations/[slug]" />
           <Stack.Screen name="spots/[contentId]" />
           <Stack.Screen name="photo" options={{ presentation: "modal" }} />
+          <Stack.Screen name="auth/login" options={{ presentation: "fullScreenModal" }} />
         </Stack>
+        <AuthPromptSheet />
       </SafeAreaProvider>
     </QueryClientProvider>
   );
