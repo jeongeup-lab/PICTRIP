@@ -1,32 +1,42 @@
-import * as Location from "expo-location";
-import { api } from "@/lib/api-client";
 import { recordConsentSnapshot } from "@/features/auth/usecases/record-consent";
+import { getConsents, putConsents } from "@/features/consent/api";
 
-jest.mock("expo-location", () => ({ getForegroundPermissionsAsync: jest.fn() }));
-jest.mock("@/lib/api-client", () => ({ api: { put: jest.fn() } }));
+jest.mock("expo-location", () => ({
+  getForegroundPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+}));
+jest.mock("@/features/consent/api", () => ({
+  getConsents: jest.fn(),
+  putConsents: jest.fn(),
+}));
 jest.mock("@/constants/legal", () => ({ TERMS_VERSION: "2026-06-22" }));
+
+const mockGet = getConsents as jest.MockedFunction<typeof getConsents>;
+const mockPut = putConsents as jest.MockedFunction<typeof putConsents>;
 
 describe("recordConsentSnapshot", () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it("PUTs locationConsent=true when permission granted", async () => {
-    (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ granted: true });
-    (api.put as jest.Mock).mockResolvedValue({});
-    await recordConsentSnapshot();
-    expect(api.put).toHaveBeenCalledWith("/users/me/consents", {
+  it("preserves existing photoConsent and records OS location + current terms", async () => {
+    mockGet.mockResolvedValue({
+      locationConsent: false,
+      photoConsent: true,
+      termsVersion: "2026-01-01",
+      consentedAt: "2026-01-01T00:00:00Z",
+    });
+    mockPut.mockResolvedValue({
       locationConsent: true,
-      photoConsent: false,
+      photoConsent: true,
+      termsVersion: "2026-06-22",
+      consentedAt: "2026-06-22T00:00:00Z",
+    });
+
+    await recordConsentSnapshot();
+
+    expect(mockGet).toHaveBeenCalled();
+    expect(mockPut).toHaveBeenCalledWith({
+      locationConsent: true,
+      photoConsent: true,
       termsVersion: "2026-06-22",
     });
-  });
-
-  it("PUTs locationConsent=false when not granted", async () => {
-    (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ granted: false });
-    (api.put as jest.Mock).mockResolvedValue({});
-    await recordConsentSnapshot();
-    expect(api.put).toHaveBeenCalledWith(
-      "/users/me/consents",
-      expect.objectContaining({ locationConsent: false }),
-    );
   });
 });
