@@ -44,6 +44,13 @@ export default function MapTab() {
     if (started.current) return;
     started.current = true;
     (async () => {
+      // map-store survives tab switches; if a center is already set, this is a
+      // re-entry — mark ready without re-running the permission/GPS branch (no
+      // GPS re-fetch, no primer flash, no stale-center flash).
+      if (s.center != null) {
+        setPerm("ready");
+        return;
+      }
       const status = await getPermissionStatus();
       if (status === "granted") {
         const c = (await getCurrentCoords()) ?? SEOUL_CITY_HALL;

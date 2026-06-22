@@ -30,8 +30,12 @@ export function KakaoWebMap({
   const ref = useRef<WebView<object>>(null);
   const ready = useRef(false);
 
-  const send = (cmd: object) =>
-    ref.current?.injectJavaScript(`window.handle({data:'${JSON.stringify(cmd)}'});true;`);
+  const send = (cmd: object) => {
+    // Escape backslash first, then single quote: JSON.stringify leaves `'`
+    // unescaped, which would break out of the single-quoted JS string literal.
+    const json = JSON.stringify(cmd).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+    ref.current?.injectJavaScript(`window.handle({data:'${json}'});true;`);
+  };
 
   useEffect(() => {
     if (ready.current && center) send({ cmd: "setCenter", lat: center.lat, lng: center.lng });
