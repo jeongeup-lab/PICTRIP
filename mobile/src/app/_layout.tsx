@@ -13,6 +13,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="curations/[slug]" />
           <Stack.Screen name="spots/[contentId]" />
+          <Stack.Screen name="photo" options={{ presentation: "modal" }} />
         </Stack>
       </SafeAreaProvider>
     </QueryClientProvider>

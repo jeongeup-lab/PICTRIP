@@ -17,6 +17,7 @@
     "@tanstack/react-query": "*",
     "axios": "*",
     "expo": "~56.0.0",
+    "expo-image-picker": "~56.0.18",
     "expo-location": "*",
     "expo-router": "*",
     "expo-secure-store": "*",

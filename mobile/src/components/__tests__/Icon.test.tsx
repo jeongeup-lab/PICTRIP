@@ -12,4 +12,12 @@ describe("Icon", () => {
     const tree = r!.toJSON();
     expect(tree).toBeTruthy();
   });
+
+  it.each(["image", "sparkle"] as const)("renders %s", async (name) => {
+    let r: renderer.ReactTestRenderer;
+    await act(async () => {
+      r = renderer.create(<Icon name={name} />);
+    });
+    expect(r!.toJSON()).toBeTruthy();
+  });
 });

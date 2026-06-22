@@ -16,7 +16,9 @@ export type IconName =
   | "close"
   | "search"
   | "recenter"
-  | "sort";
+  | "sort"
+  | "image"
+  | "sparkle";
 
 interface IconProps {
   name: IconName;
@@ -46,6 +48,8 @@ const PATHS: Record<IconName, { d?: string; fill?: boolean; extra?: "heart" }> =
   search: { d: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4" },
   recenter: { d: "M12 3v3M12 18v3M3 12h3M18 12h3" },
   sort: { d: "M4 7h16M7 12h10M10 17h4" },
+  image: { d: "M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6" },
+  sparkle: { d: "M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" },
 };
 
 export function Icon({ name, size = 22, color = colors.ink, strokeWidth = 1.9 }: IconProps) {
