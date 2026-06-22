@@ -6,6 +6,7 @@ import { AppError } from "@/lib/app-error";
 import { getIdToken, type Provider } from "@/features/auth/usecases/oauth-providers";
 import { recordConsentSnapshot } from "@/features/auth/usecases/record-consent";
 import { oauthLogin, logoutRequest, deleteAccountRequest } from "@/features/auth/api";
+import { queryClient } from "@/lib/query-client";
 
 interface AuthState {
   accessToken: string | null;
@@ -52,6 +53,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   clear: async () => {
     await clearRefreshToken();
     set({ accessToken: null, user: null, isAuthenticated: false });
+    // Evict the previous user's saved/scrap list so a different user (or guest)
+    // never sees stale cached data. Key inlined (not imported from
+    // saved/queries) to avoid the auth-store ↔ saved/queries import cycle —
+    // MUST stay in sync with savedKeys.list (["saved"]).
+    queryClient.removeQueries({ queryKey: ["saved"] });
   },
 
   hydrate: async () => {

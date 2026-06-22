@@ -23,6 +23,15 @@ export function useIsSaved(contentId: string): boolean {
   return containsId(data, contentId);
 }
 
+/**
+ * Save uses invalidate-on-success (not a full optimistic cache write) by design,
+ * asymmetric with useUnsaveMutation below. A save never removes a visible row:
+ * the saved grid simply refetches on its next mount, and the spot-detail heart
+ * already reflects the save via its own local optimistic state — so there is no
+ * in-place item to mutate/roll back. Unsave, by contrast, deletes a row that is
+ * currently rendered in the grid, so it does a full optimistic mutation +
+ * rollback to avoid a flash of the stale item.
+ */
 export function useSaveMutation() {
   const qc = useQueryClient();
   return useMutation({
