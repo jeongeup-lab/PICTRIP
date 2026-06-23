@@ -124,6 +124,31 @@ export interface NearbySpot extends SpotCard {
   overview: string | null;
 }
 
+export interface RegionLabel {
+  sido: string | null;
+  sigungu: string | null;
+  dong: string | null;
+  label: string;
+}
+
+export interface Centroid {
+  lat: number;
+  lng: number;
+}
+
+export interface SigunguNode {
+  sigunguCode: string;
+  sigunguName: string;
+  centroid: Centroid;
+}
+
+export interface RegionNode {
+  regionCode: string;
+  regionName: string;
+  centroid: Centroid;
+  sigungus: SigunguNode[];
+}
+
 export interface User {
   id: number;
   displayName: string | null;
