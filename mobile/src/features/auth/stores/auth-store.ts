@@ -3,6 +3,10 @@ import { bareClient } from "@/lib/bare-client";
 import type { TokenPair, User } from "@/lib/api-types";
 import { getRefreshToken, setRefreshToken, clearRefreshToken } from "@/lib/storage";
 import { AppError } from "@/lib/app-error";
+import { getIdToken, type Provider } from "@/features/auth/usecases/oauth-providers";
+import { recordConsentSnapshot } from "@/features/auth/usecases/record-consent";
+import { oauthLogin, logoutRequest, deleteAccountRequest } from "@/features/auth/api";
+import { queryClient } from "@/lib/query-client";
 
 interface AuthState {
   accessToken: string | null;
@@ -12,6 +16,10 @@ interface AuthState {
   refresh: () => Promise<string>;
   clear: () => Promise<void>;
   hydrate: () => Promise<void>;
+  loginWithOAuth: (provider: Provider) => Promise<"success" | "canceled">;
+  logout: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
+  devLogin: () => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -45,6 +53,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   clear: async () => {
     await clearRefreshToken();
     set({ accessToken: null, user: null, isAuthenticated: false });
+    // Evict the previous user's saved/scrap list so a different user (or guest)
+    // never sees stale cached data. Key inlined (not imported from
+    // saved/queries) to avoid the auth-store ↔ saved/queries import cycle —
+    // MUST stay in sync with savedKeys.list (["saved"]).
+    queryClient.removeQueries({ queryKey: ["saved"] });
   },
 
   hydrate: async () => {
@@ -55,5 +68,43 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch {
       // quiet guest demotion — no toast, no retry (S1)
     }
+  },
+
+  loginWithOAuth: async (provider) => {
+    const outcome = await getIdToken(provider);
+    if (outcome === "canceled") return "canceled";
+    const pair = await oauthLogin(provider, outcome.idToken, outcome.nonce);
+    await get().setSession(pair);
+    // Consent is best-effort — never block login on it (S01 §3).
+    void recordConsentSnapshot().catch(() => undefined);
+    return "success";
+  },
+
+  logout: async () => {
+    const refreshToken = await getRefreshToken();
+    try {
+      await logoutRequest(refreshToken);
+    } catch {
+      // Logout is local-authoritative; server denylist is best-effort.
+    }
+    await get().clear();
+  },
+
+  deleteAccount: async () => {
+    await deleteAccountRequest();
+    await get().clear();
+  },
+
+  devLogin: () => {
+    const user: User = {
+      id: 0,
+      displayName: "개발자",
+      email: "dev@pictrip.local",
+      avatarUrl: null,
+      isOnboarded: true,
+      createdAt: null,
+    };
+    // __DEV__ smoke only — no backend call, no refresh persisted.
+    set({ accessToken: "dev-access-token", user, isAuthenticated: true });
   },
 }));

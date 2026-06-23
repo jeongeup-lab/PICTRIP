@@ -35,6 +35,13 @@ export async function handleResponseError(
       throw appError;
     }
   }
+  // spec §7 — quiet guest demotion on an invalid/revoked session: drop the
+  // local session so the UI reactively falls back to guest, then surface the
+  // error. (AUTH_TOKEN_EXPIRED is handled above via refresh; GUEST_FORBIDDEN
+  // has no session to clear.) clear() is fire-and-forget — we throw next.
+  if (appError.code === "AUTH_TOKEN_INVALID" || appError.code === "AUTH_SESSION_REVOKED") {
+    void useAuthStore.getState().clear();
+  }
   throw appError;
 }
 

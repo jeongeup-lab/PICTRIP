@@ -4,8 +4,9 @@ import { AppError } from "@/lib/app-error";
 import { handleResponseError } from "@/lib/api-client";
 
 const refresh = jest.fn();
+const clear = jest.fn();
 // `mock`-prefixed so the hoisted jest.mock factory may reference it.
-const mockGetState = jest.fn(() => ({ accessToken: "old", refresh }));
+const mockGetState = jest.fn(() => ({ accessToken: "old", refresh, clear }));
 
 // jest.mock is hoisted above the imports by babel-plugin-jest-hoist.
 jest.mock("@/features/auth/stores/auth-store", () => ({
@@ -47,7 +48,7 @@ function networkError(): AxiosError<Envelope<unknown>> {
 describe("handleResponseError (401 refresh-retry interceptor)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockGetState.mockReturnValue({ accessToken: "old", refresh });
+    mockGetState.mockReturnValue({ accessToken: "old", refresh, clear });
   });
 
   it("refreshes once and retries with the new bearer on AUTH_TOKEN_EXPIRED", async () => {
@@ -108,5 +109,35 @@ describe("handleResponseError (401 refresh-retry interceptor)", () => {
 
     expect(refresh).not.toHaveBeenCalled();
     expect(retry).not.toHaveBeenCalled();
+  });
+
+  // spec §7 — quiet guest demotion on invalid/revoked session.
+  it("clears the local session and rejects on AUTH_SESSION_REVOKED", async () => {
+    const retry = jest.fn();
+    const config = makeConfig();
+    const promise = handleResponseError(makeError(401, "AUTH_SESSION_REVOKED", config), retry);
+    await expect(promise).rejects.toMatchObject({ code: "AUTH_SESSION_REVOKED" });
+
+    expect(clear).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(retry).not.toHaveBeenCalled();
+  });
+
+  it("clears the local session and rejects on AUTH_TOKEN_INVALID", async () => {
+    const retry = jest.fn();
+    const config = makeConfig();
+    const promise = handleResponseError(makeError(401, "AUTH_TOKEN_INVALID", config), retry);
+    await expect(promise).rejects.toMatchObject({ code: "AUTH_TOKEN_INVALID" });
+
+    expect(clear).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT clear directly on AUTH_TOKEN_EXPIRED (refresh path owns demotion)", async () => {
+    refresh.mockResolvedValue("new");
+    const retry = jest.fn().mockResolvedValue("RETRY_RESULT");
+    const config = makeConfig();
+    await handleResponseError(makeError(401, "AUTH_TOKEN_EXPIRED", config), retry);
+
+    expect(clear).not.toHaveBeenCalled();
   });
 });
