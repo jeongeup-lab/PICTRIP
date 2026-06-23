@@ -159,3 +159,46 @@ async def test_put_consents_without_auth_returns_401(client: AsyncClient) -> Non
     )
     assert resp.status_code == 401
     assert resp.json()["error"]["code"] == "AUTH_TOKEN_INVALID"
+
+
+async def test_get_consents_returns_defaults_when_no_row(
+    client: AsyncClient, override_db_and_seed: AsyncSession
+) -> None:
+    uid = await _seed_user(override_db_and_seed)
+
+    resp = await client.get("/v1/users/me/consents", headers=_auth(uid))
+
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data == {
+        "locationConsent": False,
+        "photoConsent": False,
+        "termsVersion": None,
+        "consentedAt": None,
+    }
+
+
+async def test_get_consents_echoes_persisted_row(
+    client: AsyncClient, override_db_and_seed: AsyncSession
+) -> None:
+    uid = await _seed_user(override_db_and_seed)
+    await client.put(
+        "/v1/users/me/consents",
+        headers=_auth(uid),
+        json={"locationConsent": True, "photoConsent": True, "termsVersion": "v9.0"},
+    )
+
+    resp = await client.get("/v1/users/me/consents", headers=_auth(uid))
+
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["locationConsent"] is True
+    assert data["photoConsent"] is True
+    assert data["termsVersion"] == "v9.0"
+    assert data["consentedAt"] is not None
+
+
+async def test_get_consents_without_auth_returns_401(client: AsyncClient) -> None:
+    resp = await client.get("/v1/users/me/consents")
+    assert resp.status_code == 401
+    assert resp.json()["error"]["code"] == "AUTH_TOKEN_INVALID"

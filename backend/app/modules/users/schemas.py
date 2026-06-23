@@ -60,3 +60,12 @@ class ConsentOut(BaseModel):
     photoConsent: bool
     termsVersion: str
     consentedAt: datetime
+
+
+class ConsentState(BaseModel):
+    """Current consent state for GET /users/me/consents (defaults when no row)."""
+
+    locationConsent: bool = False
+    photoConsent: bool = False
+    termsVersion: str | None = None
+    consentedAt: datetime | None = None

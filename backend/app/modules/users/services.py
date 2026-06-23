@@ -18,7 +18,14 @@ from app.core.auth import (
 from app.core.exceptions import AuthTokenInvalid
 from app.core.oidc import verify_oauth_id_token
 from app.modules.users.models import User, UserAuthProvider, UserConsent
-from app.modules.users.schemas import ConsentIn, ConsentOut, OAuthLoginIn, TokenPair, UserPublic
+from app.modules.users.schemas import (
+    ConsentIn,
+    ConsentOut,
+    ConsentState,
+    OAuthLoginIn,
+    TokenPair,
+    UserPublic,
+)
 
 
 async def _find_provider(
@@ -157,6 +164,19 @@ async def put_consents(session: AsyncSession, user_id: int, body: ConsentIn) -> 
     row = (await session.execute(stmt)).one()
     await session.commit()
     return ConsentOut(
+        locationConsent=row.location_consent,
+        photoConsent=row.photo_consent,
+        termsVersion=row.terms_version,
+        consentedAt=row.consented_at,
+    )
+
+
+async def get_consents(session: AsyncSession, user_id: int) -> ConsentState:
+    """Read the user's consent row; return all-default state when none exists."""
+    row = await session.get(UserConsent, user_id)
+    if row is None:
+        return ConsentState()
+    return ConsentState(
         locationConsent=row.location_consent,
         photoConsent=row.photo_consent,
         termsVersion=row.terms_version,
