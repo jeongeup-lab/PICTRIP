@@ -2,10 +2,9 @@ import { useEffect, useState } from "react";
 import { Modal, View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icon";
-import { Skeleton } from "@/components/Skeleton";
-import { useRegionsTree } from "@/features/map/queries";
-import type { Centroid, RegionNode } from "@/lib/api-types";
-import { colors, spacing, radii } from "@/constants/theme";
+import { REGIONS } from "@/constants/regions";
+import type { Centroid } from "@/lib/api-types";
+import { colors, radii } from "@/constants/theme";
 
 interface Props {
   visible: boolean;
@@ -15,7 +14,6 @@ interface Props {
 
 export function RegionPicker({ visible, onClose, onApply }: Props) {
   const insets = useSafeAreaInsets();
-  const { data: tree, isLoading, isError, refetch } = useRegionsTree();
   const [sidoIdx, setSidoIdx] = useState(0);
   // selection: null = "{시도} 전체", else sigungu index
   const [sigunguIdx, setSigunguIdx] = useState<number | null>(null);
@@ -28,106 +26,99 @@ export function RegionPicker({ visible, onClose, onApply }: Props) {
     }
   }, [visible]);
 
-  const sido: RegionNode | undefined = tree?.[sidoIdx];
+  const sido = REGIONS[sidoIdx];
 
   const apply = () => {
-    if (!sido) return;
     if (sigunguIdx == null) onApply(sido.centroid, sido.regionName);
     else {
       const sg = sido.sigungus[sigunguIdx];
       onApply(sg.centroid, `${sido.regionName} ${sg.sigunguName}`);
     }
+    onClose();
   };
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.scrim} onPress={onClose}>
         <Pressable
-          style={[styles.sheet, { paddingBottom: insets.bottom + spacing.md }]}
+          style={[styles.sheet, { paddingBottom: insets.bottom }]}
           onPress={(e) => e.stopPropagation()}
         >
           <View style={styles.header}>
             <Pressable style={styles.x} onPress={onClose} hitSlop={8}>
-              <Icon name="close" size={22} />
+              <Icon name="close" size={24} color={colors.ter} />
             </Pressable>
             <Text style={styles.title}>지역 선택</Text>
           </View>
 
-          {isError ? (
-            <View style={styles.center}>
-              <Text style={styles.errText}>지역 목록을 불러오지 못했어요</Text>
-              <Pressable style={styles.retry} onPress={() => refetch()}>
-                <Text style={styles.retryText}>다시 시도</Text>
-              </Pressable>
-            </View>
-          ) : isLoading || !tree ? (
-            <View style={styles.panes}>
-              {[0, 1, 2, 3, 4].map((i) => (
-                <Skeleton key={i} height={44} style={{ marginBottom: 6 }} />
-              ))}
-            </View>
-          ) : (
-            <View style={styles.panes}>
-              <ScrollView style={styles.left} showsVerticalScrollIndicator={false}>
-                {tree.map((r, i) => (
+          <View style={styles.panes}>
+            <ScrollView style={styles.left} showsVerticalScrollIndicator={false}>
+              {REGIONS.map((r, i) => {
+                const active = i === sidoIdx;
+                return (
                   <Pressable
-                    key={r.regionCode}
-                    style={[styles.sidoRow, i === sidoIdx && styles.sidoActive]}
+                    key={r.regionName}
+                    style={styles.sidoRow}
                     onPress={() => {
                       setSidoIdx(i);
                       setSigunguIdx(null);
                     }}
                   >
-                    <Text style={[styles.sidoText, i === sidoIdx && styles.sidoTextActive]}>
+                    <Text style={[styles.sidoText, active && styles.sidoTextActive]}>
                       {r.regionName}
                     </Text>
+                    {active && <Icon name="chevron-right" size={17} color={colors.ink} />}
                   </Pressable>
-                ))}
-              </ScrollView>
-              <ScrollView style={styles.right} showsVerticalScrollIndicator={false}>
-                <Pressable style={styles.sgRow} onPress={() => setSigunguIdx(null)}>
-                  <Text style={[styles.sgText, sigunguIdx == null && styles.sgActive]}>
-                    {sido?.regionName} 전체
+                );
+              })}
+            </ScrollView>
+
+            <ScrollView style={styles.right} showsVerticalScrollIndicator={false}>
+              <Pressable style={styles.areaHead} onPress={() => setSigunguIdx(null)}>
+                <Text style={styles.areaHeadText}>{sido.regionName} 전체</Text>
+              </Pressable>
+              {sido.sigungus.map((sg, i) => (
+                <Pressable
+                  key={sg.sigunguName}
+                  style={styles.areaRow}
+                  onPress={() => setSigunguIdx(i)}
+                >
+                  <Text style={[styles.areaText, sigunguIdx === i && styles.areaActive]}>
+                    {sg.sigunguName}
                   </Text>
                 </Pressable>
-                {sido?.sigungus.map((sg, i) => (
-                  <Pressable
-                    key={sg.sigunguCode}
-                    style={styles.sgRow}
-                    onPress={() => setSigunguIdx(i)}
-                  >
-                    <Text style={[styles.sgText, sigunguIdx === i && styles.sgActive]}>
-                      {sg.sigunguName}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-          )}
+              ))}
+            </ScrollView>
+          </View>
 
-          <Pressable style={styles.cta} onPress={apply} disabled={!tree}>
-            <Text style={styles.ctaText}>검색</Text>
-          </Pressable>
+          <View style={styles.ctaWrap}>
+            <Pressable style={styles.cta} onPress={apply}>
+              <Text style={styles.ctaText}>검색</Text>
+            </Pressable>
+          </View>
         </Pressable>
       </Pressable>
     </Modal>
   );
 }
 
+const HAIR = "rgba(112,115,124,0.14)";
+
 const styles = StyleSheet.create({
   scrim: { flex: 1, justifyContent: "flex-end", backgroundColor: colors.scrim },
   sheet: {
     height: "62%",
     backgroundColor: colors.bg,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
+    borderTopLeftRadius: radii.xl + 2,
+    borderTopRightRadius: radii.xl + 2,
+    overflow: "hidden",
   },
   header: {
-    height: 52,
+    height: 62,
     alignItems: "center",
     justifyContent: "center",
     borderBottomWidth: 1,
-    borderBottomColor: colors.line,
+    borderBottomColor: HAIR,
   },
   x: {
     position: "absolute",
@@ -137,35 +128,45 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  title: { fontSize: 17, fontWeight: "700", color: colors.ink },
-  panes: { flex: 1, flexDirection: "row" },
-  left: { width: "34%", backgroundColor: colors.inset },
-  right: { flex: 1 },
-  sidoRow: { paddingVertical: 14, paddingHorizontal: spacing.md },
-  sidoActive: { backgroundColor: colors.bg },
-  sidoText: { fontSize: 14.5, color: colors.sec },
-  sidoTextActive: { color: colors.ink, fontWeight: "700" },
-  sgRow: { paddingVertical: 14, paddingHorizontal: spacing.lg },
-  sgText: { fontSize: 15, color: colors.sec },
-  sgActive: { color: colors.ink, fontWeight: "700" },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.md },
-  errText: { color: colors.sec, fontSize: 14 },
-  retry: {
-    paddingHorizontal: 18,
-    height: 38,
-    borderRadius: radii.pill,
-    backgroundColor: colors.fill,
-    alignItems: "center",
-    justifyContent: "center",
+  title: { fontSize: 18, fontWeight: "800", color: colors.ink },
+
+  panes: { flex: 1, flexDirection: "row", minHeight: 0 },
+
+  left: {
+    width: "33%",
+    backgroundColor: colors.inset,
+    borderRightWidth: 1,
+    borderRightColor: HAIR,
   },
-  retryText: { fontSize: 13.5, fontWeight: "700", color: colors.ink },
+  sidoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 19,
+    paddingHorizontal: 20,
+  },
+  sidoText: { fontSize: 17, fontWeight: "600", color: colors.ter },
+  sidoTextActive: { color: colors.ink, fontWeight: "800" },
+
+  right: { flex: 1, backgroundColor: colors.bg },
+  areaHead: { paddingVertical: 19, paddingHorizontal: 22 },
+  areaHeadText: { fontSize: 18, fontWeight: "800", color: colors.ink },
+  areaRow: {
+    paddingVertical: 18,
+    paddingHorizontal: 22,
+    borderTopWidth: 1,
+    borderTopColor: HAIR,
+  },
+  areaText: { fontSize: 16, fontWeight: "500", color: colors.ter },
+  areaActive: { color: colors.ink, fontWeight: "800" },
+
+  ctaWrap: { paddingHorizontal: 18, paddingTop: 12, paddingBottom: 14 },
   cta: {
-    height: 54,
-    margin: spacing.lg,
+    height: 56,
     borderRadius: radii.md,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: colors.ink,
   },
-  ctaText: { fontSize: 16, fontWeight: "700", color: colors.onImage },
+  ctaText: { fontSize: 17, fontWeight: "800", color: colors.onImage },
 });
