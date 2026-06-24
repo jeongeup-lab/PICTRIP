@@ -96,7 +96,7 @@ export function LocationSection({ spot }: { spot: SpotDetail }) {
       lat != null && lng != null
         ? `https://map.kakao.com/link/map/${q},${lat},${lng}`
         : `https://map.kakao.com/link/search/${q}`;
-    Linking.openURL(url);
+    Linking.openURL(url).catch(() => {});
   };
 
   return (
