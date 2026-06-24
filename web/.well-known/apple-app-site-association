@@ -2,7 +2,7 @@
   "applinks": {
     "details": [
       {
-        "appIDs": ["3U2U533484.org.pictrip.app"],
+        "appIDs": ["3U2U533484.com.jeongeup.pictrip"],
         "components": [
           { "/": "/spots/*" },
           { "/": "/curations/*" }
