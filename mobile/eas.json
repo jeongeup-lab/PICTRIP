@@ -1,14 +1,37 @@
 {
-  "cli": { "version": ">= 5.0.0" },
+  "cli": {
+    "version": ">= 20.0.0",
+    "appVersionSource": "remote"
+  },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal"
     },
-    "preview": { "distribution": "internal" },
-    "production": {}
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "node": "24.11.0",
+      "ios": { "resourceClass": "m-medium" },
+      "env": {
+        "EXPO_PUBLIC_API_BASE": "https://api.pictrip.org/v1",
+        "EXPO_PUBLIC_KAKAO_JS_KEY": "2ad43a02fcf0f1de84fc2d9ca90b2480"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "channel": "production",
+      "node": "24.11.0",
+      "ios": { "resourceClass": "m-medium" },
+      "env": {
+        "EXPO_PUBLIC_API_BASE": "https://api.pictrip.org/v1",
+        "EXPO_PUBLIC_KAKAO_JS_KEY": "2ad43a02fcf0f1de84fc2d9ca90b2480"
+      }
+    }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": { "ascAppId": "6778157312" }
+    }
   }
 }

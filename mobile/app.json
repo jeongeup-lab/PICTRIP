@@ -2,6 +2,7 @@
   "expo": {
     "name": "PicTrip",
     "slug": "pictrip",
+    "owner": "seeeeeeong",
     "scheme": "pictrip",
     "version": "0.3.0",
     "orientation": "portrait",
@@ -43,6 +44,11 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "b4beab09-95ca-45e7-8726-4b3dbcb520fa"
+      }
     }
   }
 }
