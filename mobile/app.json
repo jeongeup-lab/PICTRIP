@@ -8,7 +8,7 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "ios": {
-      "bundleIdentifier": "org.pictrip.app",
+      "bundleIdentifier": "com.jeongeup.pictrip",
       "associatedDomains": ["applinks:pictrip.org"],
       "usesAppleSignIn": true,
       "infoPlist": {
@@ -16,7 +16,7 @@
       }
     },
     "android": {
-      "package": "org.pictrip.app",
+      "package": "com.jeongeup.pictrip",
       "intentFilters": [
         {
           "action": "VIEW",
