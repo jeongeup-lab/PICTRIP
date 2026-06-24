@@ -10,7 +10,6 @@
     },
     "preview": {
       "distribution": "internal",
-      "channel": "preview",
       "node": "24.11.0",
       "ios": { "resourceClass": "m-medium" },
       "env": {
@@ -20,7 +19,6 @@
     },
     "production": {
       "autoIncrement": true,
-      "channel": "production",
       "node": "24.11.0",
       "ios": { "resourceClass": "m-medium" },
       "env": {
