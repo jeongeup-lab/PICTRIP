@@ -7,6 +7,10 @@
     "version": "0.3.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#000000",
+      "resizeMode": "contain"
+    },
     "ios": {
       "bundleIdentifier": "com.jeongeup.pictrip",
       "associatedDomains": ["applinks:pictrip.org"],

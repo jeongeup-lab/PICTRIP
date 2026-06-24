@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
-import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { Redirect } from "expo-router";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { getOnboardingSeen } from "@/lib/storage";
-import { colors } from "@/constants/theme";
+import { SplashScreen } from "@/components/SplashScreen";
 
 export default function BootGate() {
   const [target, setTarget] = useState<null | "/onboarding" | "/(tabs)">(null);
@@ -20,15 +19,7 @@ export default function BootGate() {
   }, []);
 
   if (!target) {
-    return (
-      <View style={styles.splash}>
-        <ActivityIndicator color={colors.ink} />
-      </View>
-    );
+    return <SplashScreen />;
   }
   return <Redirect href={target} />;
 }
-
-const styles = StyleSheet.create({
-  splash: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg },
-});
