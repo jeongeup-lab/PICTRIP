@@ -10,7 +10,10 @@
     "ios": {
       "bundleIdentifier": "org.pictrip.app",
       "associatedDomains": ["applinks:pictrip.org"],
-      "usesAppleSignIn": true
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "org.pictrip.app",
