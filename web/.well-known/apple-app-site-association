@@ -2,7 +2,7 @@
   "applinks": {
     "details": [
       {
-        "appIDs": ["TEAMID.org.pictrip.app"],
+        "appIDs": ["3U2U533484.org.pictrip.app"],
         "components": [
           { "/": "/spots/*" },
           { "/": "/curations/*" }
