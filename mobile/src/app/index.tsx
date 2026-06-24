@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { Redirect } from "expo-router";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { getOnboardingSeen } from "@/lib/storage";
-import { colors } from "@/constants/theme";
+import { SplashScreen } from "@/components/SplashScreen";
 
 export default function BootGate() {
   const [target, setTarget] = useState<null | "/onboarding" | "/(tabs)">(null);
+  const [minElapsed, setMinElapsed] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -19,16 +19,15 @@ export default function BootGate() {
     };
   }, []);
 
-  if (!target) {
-    return (
-      <View style={styles.splash}>
-        <ActivityIndicator color={colors.ink} />
-      </View>
-    );
+  // Keep the branded splash perceptibly visible on every cold start, even when
+  // the async boot work resolves in well under a frame.
+  useEffect(() => {
+    const t = setTimeout(() => setMinElapsed(true), 1200);
+    return () => clearTimeout(t);
+  }, []);
+
+  if (!target || !minElapsed) {
+    return <SplashScreen />;
   }
   return <Redirect href={target} />;
 }
-
-const styles = StyleSheet.create({
-  splash: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg },
-});

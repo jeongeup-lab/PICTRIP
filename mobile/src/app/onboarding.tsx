@@ -12,16 +12,35 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { setOnboardingSeen } from "@/lib/storage";
-import { PrimaryButton } from "@/components/PrimaryButton";
+import { Icon } from "@/components/Icon";
+import { MiniDevice } from "@/components/onboarding/MiniDevice";
+import { MiniSelectScreen } from "@/components/onboarding/MiniSelectScreen";
+import { MiniAnalyzeScreen } from "@/components/onboarding/MiniAnalyzeScreen";
+import { MiniResultScreen } from "@/components/onboarding/MiniResultScreen";
 import { colors, spacing } from "@/constants/theme";
 
 const SLIDES = [
   {
-    title: "사진으로 떠나는\n여행",
-    body: "마음에 든 장면을 올리면\n닮은 국내 여행지를 찾아드려요.",
+    key: "select",
+    eyebrow: "STEP 1",
+    h2: "마음에 든 사진을 골라요",
+    sub: "여행 사진이든 인터넷에서 본 풍경이든, 한 장이면 충분해요",
+    screen: <MiniSelectScreen />,
   },
-  { title: "지금 이 순간\n가까운 곳", body: "내 주변의 숨은 명소를\n혼잡도까지 한눈에." },
-  { title: "마음에 들면\n스크랩", body: "좋았던 장소를 저장하고\n언제든 다시 꺼내보세요." },
+  {
+    key: "analyze",
+    eyebrow: "STEP 2",
+    h2: "AI가 분위기를 읽어요",
+    sub: "사진의 색감과 분위기를 분석해 닮은 곳을 찾아요",
+    screen: <MiniAnalyzeScreen />,
+  },
+  {
+    key: "result",
+    eyebrow: "STEP 3",
+    h2: "닮은 여행지를 추천받아요",
+    sub: "분위기가 비슷한 곳을 유사도 순으로 보여드려요",
+    screen: <MiniResultScreen />,
+  },
 ];
 
 export default function Onboarding() {
@@ -33,15 +52,14 @@ export default function Onboarding() {
     setIndex(Math.round(e.nativeEvent.contentOffset.x / width));
   };
 
-  const finish = async (href: "/(tabs)" | "/onboarding-photo") => {
+  const finish = async () => {
     await setOnboardingSeen();
-    // P1: route to home. (Photo-first CTA wires to photo stack in P2.)
     router.replace("/(tabs)");
   };
 
   return (
-    <SafeAreaView style={styles.root}>
-      <Pressable style={styles.skip} onPress={() => finish("/(tabs)")} hitSlop={8}>
+    <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
+      <Pressable style={styles.skip} onPress={finish} hitSlop={8}>
         <Text style={styles.skipText}>건너뛰기</Text>
       </Pressable>
 
@@ -50,48 +68,89 @@ export default function Onboarding() {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={onScroll}
-        style={styles.pager}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        style={styles.track}
       >
         {SLIDES.map((s) => (
-          <View key={s.title} style={[styles.slide, { width }]}>
-            <Text style={styles.title}>{s.title}</Text>
-            <Text style={styles.body}>{s.body}</Text>
+          <View key={s.key} style={[styles.slide, { width }]}>
+            <Text style={styles.eyebrow}>{s.eyebrow}</Text>
+            <MiniDevice>{s.screen}</MiniDevice>
+            <View style={styles.cap}>
+              <Text style={styles.h2}>{s.h2}</Text>
+              <Text style={styles.sub}>{s.sub}</Text>
+            </View>
           </View>
         ))}
       </ScrollView>
 
-      <View style={styles.dots}>
-        {SLIDES.map((s, i) => (
-          <View
-            key={s.title}
-            style={[styles.dot, { backgroundColor: i === index ? colors.ink : colors.line }]}
-          />
-        ))}
-      </View>
-
-      <View style={styles.cta}>
-        <PrimaryButton label="사진으로 시작하기" onPress={() => finish("/(tabs)")} />
+      <View style={styles.foot}>
+        <View style={styles.dots}>
+          {SLIDES.map((s, i) => (
+            <View key={s.key} style={[styles.dot, i === index && styles.dotOn]} />
+          ))}
+        </View>
+        <Pressable style={styles.cta} onPress={finish}>
+          <Icon name="camera" size={19} color={colors.onImage} strokeWidth={1.8} />
+          <Text style={styles.ctaLabel}>사진으로 시작하기</Text>
+        </Pressable>
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
-  skip: { alignSelf: "flex-end", padding: spacing.lg },
-  skipText: { color: colors.ter, fontSize: 14, fontWeight: "600" },
-  pager: { flex: 1 },
-  slide: { flex: 1, justifyContent: "center", paddingHorizontal: spacing.xl, gap: spacing.md },
-  title: {
-    fontSize: 32,
-    fontWeight: "800",
-    letterSpacing: -0.6,
-    color: colors.ink,
-    lineHeight: 40,
+  root: { flex: 1, backgroundColor: colors.inset },
+  skip: {
+    position: "absolute",
+    top: spacing.lg,
+    right: spacing.lg,
+    zIndex: 9,
+    padding: spacing.xs,
   },
-  body: { fontSize: 16, color: colors.sec, lineHeight: 24 },
-  dots: { flexDirection: "row", justifyContent: "center", gap: 7, paddingVertical: spacing.lg },
-  dot: { width: 7, height: 7, borderRadius: 4 },
-  cta: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xl },
+  skipText: { color: colors.ter, fontSize: 14, fontWeight: "600" },
+  track: { flex: 1, backgroundColor: colors.bg },
+  slide: {
+    flex: 1,
+    alignItems: "center",
+    paddingTop: 18,
+    backgroundColor: colors.bg,
+  },
+  eyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 1.5, color: colors.ter },
+  cap: { alignItems: "center", paddingTop: 22, paddingHorizontal: 36 },
+  h2: {
+    fontSize: 23,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    lineHeight: 30,
+    color: colors.ink,
+    textAlign: "center",
+  },
+  sub: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: colors.sec,
+    marginTop: 9,
+    textAlign: "center",
+  },
+  foot: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+    paddingBottom: 26,
+    gap: 16,
+    backgroundColor: colors.inset,
+  },
+  dots: { flexDirection: "row", justifyContent: "center", gap: 7 },
+  dot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: colors.line },
+  dotOn: { width: 22, borderRadius: 4, backgroundColor: colors.ink },
+  cta: {
+    height: 54,
+    borderRadius: 13,
+    backgroundColor: colors.ink,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  ctaLabel: { fontSize: 16, fontWeight: "700", color: colors.onImage },
 });

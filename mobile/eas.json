@@ -14,7 +14,7 @@
       "ios": { "resourceClass": "m-medium" },
       "env": {
         "EXPO_PUBLIC_API_BASE": "https://api.pictrip.org/v1",
-        "EXPO_PUBLIC_KAKAO_JS_KEY": "2ad43a02fcf0f1de84fc2d9ca90b2480"
+        "EXPO_PUBLIC_KAKAO_JS_KEY": "415220ee8c806e742408cdeef1fbedc9"
       }
     },
     "production": {
@@ -23,7 +23,7 @@
       "ios": { "resourceClass": "m-medium" },
       "env": {
         "EXPO_PUBLIC_API_BASE": "https://api.pictrip.org/v1",
-        "EXPO_PUBLIC_KAKAO_JS_KEY": "2ad43a02fcf0f1de84fc2d9ca90b2480"
+        "EXPO_PUBLIC_KAKAO_JS_KEY": "415220ee8c806e742408cdeef1fbedc9"
       }
     }
   },
