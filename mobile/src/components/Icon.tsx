@@ -9,6 +9,11 @@ export type IconName =
   | "share"
   | "heart"
   | "heart-fill"
+  | "bookmark"
+  | "bookmark-fill"
+  | "clock"
+  | "phone"
+  | "globe"
   | "home"
   | "map-pin"
   | "camera"
@@ -37,12 +42,19 @@ const PATHS: Record<IconName, { d?: string; fill?: boolean; extra?: "heart" }> =
   "chevron-left": { d: "M15 5l-7 7 7 7" },
   "chevron-right": { d: "M9 5l7 7-7 7" },
   "chevron-down": { d: "M6 9l6 6 6-6" },
-  share: { d: "M12 3v12M12 3l-4 4M12 3l4 4M5 12v7h14v-7" },
+  share: { d: "M8.3 10.7l7.4-4.4M8.3 13.3l7.4 4.4" },
   heart: { d: "M12 20s-7-4.5-7-9.5A3.5 3.5 0 0 1 12 7a3.5 3.5 0 0 1 7 3.5C19 15.5 12 20 12 20z" },
   "heart-fill": {
     d: "M12 20s-7-4.5-7-9.5A3.5 3.5 0 0 1 12 7a3.5 3.5 0 0 1 7 3.5C19 15.5 12 20 12 20z",
     fill: true,
   },
+  bookmark: { d: "M6 4h12v17l-6-4-6 4z" },
+  "bookmark-fill": { d: "M6 4h12v17l-6-4-6 4z", fill: true },
+  clock: { d: "M12 7v5l3 2" },
+  phone: {
+    d: "M5 4h4l2 5-3 2a13 13 0 0 0 6 6l2-3 5 2v4a1 1 0 0 1-1 1A17 17 0 0 1 4 5a1 1 0 0 1 1-1z",
+  },
+  globe: { d: "M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" },
   home: { d: "M4 11l8-7 8 7M6 10v9h12v-9" },
   "map-pin": { d: "M12 21s7-6 7-11a7 7 0 1 0-14 0c0 5 7 11 7 11z" },
   camera: { d: "M4 8h3l2-2h6l2 2h3v11H4z" },
@@ -69,6 +81,16 @@ export function Icon({ name, size = 22, color = colors.ink, strokeWidth = 1.9 }:
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       {name === "person" && (
         <Circle cx={12} cy={8} r={3.2} stroke={color} strokeWidth={strokeWidth} />
+      )}
+      {(name === "clock" || name === "globe") && (
+        <Circle cx={12} cy={12} r={9} stroke={color} strokeWidth={strokeWidth} />
+      )}
+      {name === "share" && (
+        <>
+          <Circle cx={18} cy={5} r={2.6} stroke={color} strokeWidth={strokeWidth} />
+          <Circle cx={6} cy={12} r={2.6} stroke={color} strokeWidth={strokeWidth} />
+          <Circle cx={18} cy={19} r={2.6} stroke={color} strokeWidth={strokeWidth} />
+        </>
       )}
       <Path
         d={spec.d}
