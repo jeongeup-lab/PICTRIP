@@ -25,6 +25,7 @@
     "expo-location": "*",
     "expo-router": "*",
     "expo-secure-store": "*",
+    "expo-updates": "~56.0.19",
     "expo-web-browser": "~56.0.5",
     "react": "19.2.0",
     "react-native": "0.85.0",

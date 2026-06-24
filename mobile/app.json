@@ -29,6 +29,11 @@
           ],
           "category": ["BROWSABLE", "DEFAULT"]
         }
+      ],
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
@@ -52,6 +57,12 @@
       "eas": {
         "projectId": "b4beab09-95ca-45e7-8726-4b3dbcb520fa"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/b4beab09-95ca-45e7-8726-4b3dbcb520fa"
     }
   }
 }
