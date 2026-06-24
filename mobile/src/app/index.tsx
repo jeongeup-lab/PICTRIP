@@ -6,6 +6,7 @@ import { SplashScreen } from "@/components/SplashScreen";
 
 export default function BootGate() {
   const [target, setTarget] = useState<null | "/onboarding" | "/(tabs)">(null);
+  const [minElapsed, setMinElapsed] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -18,7 +19,14 @@ export default function BootGate() {
     };
   }, []);
 
-  if (!target) {
+  // Keep the branded splash perceptibly visible on every cold start, even when
+  // the async boot work resolves in well under a frame.
+  useEffect(() => {
+    const t = setTimeout(() => setMinElapsed(true), 1200);
+    return () => clearTimeout(t);
+  }, []);
+
+  if (!target || !minElapsed) {
     return <SplashScreen />;
   }
   return <Redirect href={target} />;
