@@ -1,9 +1,4 @@
-"""Task 9 — canonical-card serialization foundation.
-
-`bucket_congestion` (pure) + `load_congestion` (spot_concentration enrichment) +
-the `lcls_systm3_nm` subtype-category LEFT JOIN that hydrates `SpotCardRow`.
-Consumed by Tasks 10-17 so every list/detail card shares one shape.
-"""
+"""Canonical SpotCard serialization: bucket_congestion, load_congestion, subtype-category join."""
 
 from __future__ import annotations
 
@@ -19,9 +14,6 @@ from app.modules.spots.services.cards import (
 )
 
 
-# --------------------------------------------------------------------------- #
-# Unit: bucket_congestion (pure)
-# --------------------------------------------------------------------------- #
 def test_congestion_buckets() -> None:
     assert bucket_congestion(10) == "low"
     assert bucket_congestion(50) == "medium"
@@ -34,9 +26,6 @@ def test_congestion_buckets() -> None:
     assert bucket_congestion(66.1) == "high"
 
 
-# --------------------------------------------------------------------------- #
-# Schema: SpotCard canonical shape + congestion default
-# --------------------------------------------------------------------------- #
 def test_spotcard_congestion_defaults_none_and_omittable() -> None:
     card = SpotCard(contentId="c1", title="t", firstImageUrl=None)
     assert card.category is None
@@ -47,9 +36,6 @@ def test_spotcard_congestion_defaults_none_and_omittable() -> None:
     assert enriched.congestion == "medium"
 
 
-# --------------------------------------------------------------------------- #
-# Service helpers (DB-touching — db_session is rolled back)
-# --------------------------------------------------------------------------- #
 async def _seed_spot(
     session: AsyncSession,
     cid: str,

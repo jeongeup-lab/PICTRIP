@@ -46,8 +46,7 @@ async def _load_detail_images(session: AsyncSession, content_id: str) -> list[Sp
 
 
 def _extract_intro(content_type_id: int, intro_data: dict[str, Any] | None) -> SpotIntroRow | None:
-    """Map raw detailIntro2 keys -> SpotIntroRow by contentTypeId. Returns None
-    when there is no intro_data (e.g. detail never cached)."""
+    """Map detailIntro2 keys -> SpotIntroRow by contentTypeId; None if no intro_data."""
     if not intro_data:
         return None
     d = intro_data
@@ -59,7 +58,7 @@ def _extract_intro(content_type_id: int, intro_data: dict[str, Any] | None) -> S
                 return v
         return None
 
-    if content_type_id == 39:  # 음식점
+    if content_type_id == 39:  # restaurant
         return SpotIntroRow(
             usetime=g("opentimefood"),
             restdate=g("restdatefood"),
@@ -169,18 +168,10 @@ async def load_spot_detail(
     redis: Redis,
     content_id: str,
 ) -> SpotDetailRow:
-    """Spot detail with lazy KTO enrichment (ADR-0007).
-
-    Reads always-available fields + cache freshness, ends the read transaction
-    with commit(), then (if missing/stale) fetches detailCommon2 + detailImage2
-    OUTSIDE any transaction and upserts the 7-day cache. On KTO failure serves a
-    stale row if present, else a partial payload — never raises to a 502. Raises
-    ResourceNotFound (404) if the spot is absent or show_flag = 0.
-
-    ``redis`` is the unified pool (Task 8), injected via RedisDep so the 7-day
-    detail cache can move off Postgres without touching the route contract; the
-    current cache of record stays the ``spot_details`` table.
-    """
+    """Spot detail with lazy KTO enrichment (ADR-0007). Commits the read txn
+    before any HTTP, then fetches/upserts the 7-day cache outside a txn. On KTO
+    failure serves stale or partial — never 502. 404 if absent or show_flag=0.
+    redis is injected but unused (reserved for moving the cache off Postgres)."""
     _ = redis
     spot = (
         await session.execute(
@@ -242,8 +233,7 @@ async def load_spot_detail(
     ).first()
     existing_images = await _load_detail_images(session, content_id)
 
-    # End the read transaction before any HTTP. commit() (not rollback) keeps
-    # seeded rows under the savepoint-based test fixtures.
+    # End read txn before HTTP. commit() (not rollback) keeps rows under savepoint test fixtures.
     await session.commit()
 
     if detail is not None and (datetime.now(UTC) - detail.cached_at) < _DETAIL_TTL:

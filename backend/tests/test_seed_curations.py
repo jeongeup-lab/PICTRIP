@@ -1,9 +1,4 @@
-"""scripts/seed_curations.py — idempotent 6 region + 3 mood curations.
-
-The seeder's ``seed()`` core takes an injected session so the test can pass the
-rolled-back ``db_session`` fixture (no rows persist into ``pictrip_test``). A
-second run on the same session must insert nothing (ON CONFLICT (slug) DO NOTHING).
-"""
+"""scripts/seed_curations.py — idempotent 6 region + 3 mood curations."""
 
 from __future__ import annotations
 

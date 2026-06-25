@@ -13,12 +13,7 @@ from app.core.schemas import ErrorDetail, err
 
 logger = get_logger(__name__)
 
-# Starlette raises HTTPException for routing-level failures that never pass
-# through the AppError taxonomy (no matching route → 404, wrong method → 405,
-# …). Map those onto taxonomy codes so the mobile client only ever sees codes
-# it can branch on per the {data,error,meta} contract — `code="HTTP_ERROR"`
-# was not a member of the taxonomy. Unmapped statuses collapse to
-# INTERNAL_ERROR (5xx) or RESOURCE_NOT_FOUND (other 4xx).
+# Map Starlette routing-level HTTPException statuses onto taxonomy codes the mobile client can branch on.
 _HTTP_STATUS_TO_CODE = {
     401: "AUTH_TOKEN_INVALID",
     403: "PERMISSION_DENIED",

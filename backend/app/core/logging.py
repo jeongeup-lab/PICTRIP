@@ -1,8 +1,4 @@
-"""Structured JSON logging via structlog.
-
-Logs are emitted as JSON in non-local environments for ingestion by CloudWatch.
-Each log line carries the request `traceId` when set by middleware contextvars.
-"""
+"""Structured logging via structlog (JSON off-local); each line carries the request traceId."""
 
 from __future__ import annotations
 

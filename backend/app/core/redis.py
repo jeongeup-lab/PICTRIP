@@ -1,8 +1,4 @@
-"""Async Redis: one lifespan-managed pool exposed via get_redis / RedisDep.
-
-The denylist auth model + all application caches store text values, so the pool
-runs with ``decode_responses=True``. The old binary session payloads are gone.
-"""
+"""Async Redis: one lifespan-managed pool (get_redis / RedisDep). Text-only values, decode_responses=True."""
 
 from __future__ import annotations
 

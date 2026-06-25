@@ -1,8 +1,4 @@
-"""Generic Kakao Local REST helper.
-
-KAKAO_REST_API_KEY stays server-side. Domain modules own endpoint-specific
-payload parsing, caching, and graceful fallback semantics.
-"""
+"""Generic Kakao Local REST helper (server-side key; modules own parsing/caching/fallback)."""
 
 from __future__ import annotations
 

@@ -1,20 +1,7 @@
 """Integration tests for the saved-spot (bookmark) routes.
 
-Routes under test:
-  POST   /v1/users/me/saved/{contentId}   — save current user ↔ spot
-  DELETE /v1/users/me/saved/{contentId}   — unsave
-  GET    /v1/users/me/saved               — list saved spots as spot cards
-
-Module ownership: the routes live in USR (user-owned collection) but all
-``user_saved_spots`` + spot-card DB access goes through SPT services, since the
-``UserSavedSpot`` ORM model and the spot-card seam both live in SPT (no
-cross-module model imports — ADR-0002 / ADR-0011).
-
-Pattern mirrors tests/test_spt_discover_routes.py: a per-test override binds
-both the FastAPI ``get_db`` dependency and the seed session to a single
-connection wrapped in an outer transaction that is rolled back on teardown.
-Auth is exercised end-to-end by seeding a real user row and minting a real
-access token via ``create_access_token``.
+Routes live in USR but user_saved_spots + spot-card DB access goes through SPT
+services (no cross-module model imports — ADR-0002 / ADR-0011).
 """
 
 from __future__ import annotations

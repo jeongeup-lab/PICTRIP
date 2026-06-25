@@ -210,11 +210,17 @@ forbidden_modules = [
 ]
 ignore_imports = [
     "app.modules.users.services -> app.modules.users.models",
+    # USR seam: services calls the repository, which holds own-module ORM.
+    "app.modules.users.services -> app.modules.users.repositories",
+    "app.modules.users.repositories -> app.modules.users.models",
     "app.modules.taste.services -> app.modules.taste.models",
     "app.modules.spots.services -> app.modules.spots.models",
     "app.modules.images.services -> app.modules.images.models",
     "app.modules.map.services -> app.modules.map.models",
     "app.modules.system.services -> app.modules.system.models",
+    # IMG seam: services re-exports the repository, which holds own-module ORM.
+    "app.modules.images.services -> app.modules.images.repositories",
+    "app.modules.images.repositories -> app.modules.images.models",
     # spots services는 focused submodule로 분리돼 있다(rows/cards/.../nearby).
     # services 패키지 → submodule → spots.models 체인을 끊어, map.services가
     # 허용된 seam(map.services -> spots.services)으로만 spots를 읽는 것이 위반으로
@@ -225,6 +231,52 @@ ignore_imports = [
 # Most services are still placeholders that don't import their own models yet.
 # Allow these ignores to be inactive until the services get implemented.
 unmatched_ignore_imports_alerting = "none"
+
+# The contract above ignores spots.services.* -> *.models broadly (for the seam
+# chains), which blinded it to a submodule directly importing ANOTHER module's
+# models. This DIRECT-only contract (allow_indirect_imports = true) closes that:
+# a spots service submodule must not import users/taste/images/map/system models
+# directly. spots.models is excluded — own-module model imports are intended (#22).
+# The legitimate seam chain curations -> images.services -> images.models is
+# indirect, so it is not flagged.
+[[tool.importlinter.contracts]]
+name = "Spots service submodules don't directly import other modules' models"
+type = "forbidden"
+source_modules = [
+    "app.modules.spots.services.cards",
+    "app.modules.spots.services.curations",
+    "app.modules.spots.services.detail",
+    "app.modules.spots.services.feed",
+    "app.modules.spots.services.nearby",
+    "app.modules.spots.services.rows",
+    "app.modules.spots.services.saved",
+]
+forbidden_modules = [
+    "app.modules.users.models",
+    "app.modules.taste.models",
+    "app.modules.images.models",
+    "app.modules.map.models",
+    "app.modules.system.models",
+]
+allow_indirect_imports = true
+
+# Service layers (USR/IMG/MAP) own no queries — those live in repositories.
+# DIRECT-only so the intended seam services -> repositories -> sqlalchemy stays
+# allowed; only a service importing sqlalchemy itself is flagged.
+[[tool.importlinter.contracts]]
+name = "Service layers don't import SQLAlchemy (queries live in repositories)"
+type = "forbidden"
+source_modules = [
+    "app.modules.users.services",
+    "app.modules.images.services",
+    "app.modules.map.services",
+]
+forbidden_modules = [
+    "sqlalchemy",
+    "asyncpg",
+    "pgvector",
+]
+allow_indirect_imports = true
 
 # ---------- pytest ----------
 [tool.pytest.ini_options]
