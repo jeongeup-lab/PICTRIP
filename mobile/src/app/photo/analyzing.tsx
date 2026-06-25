@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
-import { Animated, View, Text, Pressable, Image, StyleSheet, Easing } from "react-native";
+import { useEffect, useState } from "react";
+import { Animated, View, Text, Pressable, Image, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { usePhotoFlowStore } from "@/features/photo/stores/photo-flow-store";
+import { useLoadingAnimation } from "@/features/photo/hooks/use-loading-animation";
+import { MIN_VISIBLE_MS } from "@/features/photo/constants/timing";
 import { colors, spacing, radii } from "@/constants/theme";
-
-const MIN_VISIBLE_MS = 600;
 
 export default function PhotoAnalyzingScreen() {
   const insets = useSafeAreaInsets();
@@ -16,20 +16,7 @@ export default function PhotoAnalyzingScreen() {
   const abort = usePhotoFlowStore((s) => s.abort);
 
   const [mountedAt] = useState(() => Date.now());
-  const anim = useMemo(() => new Animated.Value(0), []);
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.timing(anim, {
-        toValue: 1,
-        duration: 1300,
-        easing: Easing.inOut(Easing.ease),
-        useNativeDriver: true,
-      }),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [anim]);
+  const { translateX } = useLoadingAnimation();
 
   useEffect(() => {
     if (status !== "success") return;
@@ -45,11 +32,6 @@ export default function PhotoAnalyzingScreen() {
   };
 
   const isError = status === "error";
-
-  const translateX = useMemo(
-    () => anim.interpolate({ inputRange: [0, 1], outputRange: ["-42%", "100%"] }),
-    [anim],
-  );
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + spacing.sm }]}>
