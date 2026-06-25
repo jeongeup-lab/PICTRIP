@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -162,17 +163,44 @@ async def _persist_detail(
     await session.commit()
 
 
-async def load_spot_detail(
-    session: AsyncSession,
-    kto: KtoClient,
-    redis: Redis,
-    content_id: str,
-) -> SpotDetailRow:
-    """Spot detail with lazy KTO enrichment (ADR-0007). Commits the read txn
-    before any HTTP, then fetches/upserts the 7-day cache outside a txn. On KTO
-    failure serves stale or partial — never 502. 404 if absent or show_flag=0.
-    redis is injected but unused (reserved for moving the cache off Postgres)."""
-    _ = redis
+@dataclass(frozen=True)
+class _DetailContext:
+    """Spot base row + scalar meta + congestion — the fixed inputs to every
+    `_assemble_detail` call, so the orchestrator only varies the KTO-derived fields."""
+
+    spot: Any
+    region_name: str | None
+    sigungu_name: str | None
+    category: str | None
+    congestion: str | None
+
+    def assemble(
+        self,
+        *,
+        overview: str | None,
+        homepage: str | None,
+        tel: str | None,
+        images: list[SpotImageRow],
+        status: str,
+        intro: SpotIntroRow | None,
+    ) -> SpotDetailRow:
+        return _assemble_detail(
+            self.spot,
+            self.region_name,
+            self.sigungu_name,
+            self.congestion,
+            overview=overview,
+            homepage=homepage,
+            tel=tel,
+            images=images,
+            status=status,
+            category=self.category,
+            intro=intro,
+        )
+
+
+async def _load_spot_base(session: AsyncSession, content_id: str) -> Any:
+    """Load the visible Spot row; raise ResourceNotFound if absent or hidden."""
     spot = (
         await session.execute(
             select(
@@ -192,7 +220,14 @@ async def load_spot_detail(
     ).first()
     if spot is None:
         raise ResourceNotFound(f"Spot '{content_id}' not found.")
+    return spot
 
+
+async def _load_spot_meta(
+    session: AsyncSession, spot: Any
+) -> tuple[str | None, str | None, str | None]:
+    """Resolve (region_name, sigungu_name, category) scalars, skipping lookups
+    when the corresponding code is absent."""
     region_name = (
         await session.scalar(
             select(Region.ldong_regn_nm).where(Region.ldong_regn_cd == spot.ldong_regn_cd)
@@ -207,7 +242,6 @@ async def load_spot_detail(
         if spot.ldong_signgu_cd
         else None
     )
-
     category = (
         await session.scalar(
             select(LclsSystmCode.lcls_systm3_nm).where(
@@ -217,9 +251,13 @@ async def load_spot_detail(
         if spot.lcls_systm3
         else None
     )
+    return region_name, sigungu_name, category
 
-    congestion = (await load_congestion(session, [content_id])).get(content_id)
 
+async def _read_cached_detail(
+    session: AsyncSession, content_id: str
+) -> tuple[Any, list[SpotImageRow]]:
+    """Read the cached SpotDetail row (or None) plus its persisted images."""
     detail = (
         await session.execute(
             select(
@@ -232,64 +270,21 @@ async def load_spot_detail(
         )
     ).first()
     existing_images = await _load_detail_images(session, content_id)
+    return detail, existing_images
 
-    # End read txn before HTTP. commit() (not rollback) keeps rows under savepoint test fixtures.
-    await session.commit()
 
-    if detail is not None and (datetime.now(UTC) - detail.cached_at) < _DETAIL_TTL:
-        return _assemble_detail(
-            spot,
-            region_name,
-            sigungu_name,
-            congestion,
-            overview=detail.overview,
-            homepage=detail.homepage,
-            tel=detail.tel,
-            images=existing_images,
-            status="fresh",
-            category=category,
-            intro=_extract_intro(spot.content_type_id, detail.intro_data),
-        )
-
-    try:
-        common_items = await kto.call(KtoService.KOR, "detailCommon2", contentId=content_id)
-        image_items = await kto.call(
-            KtoService.KOR, "detailImage2", contentId=content_id, imageYN="Y"
-        )
-        intro_items = await kto.call(
-            KtoService.KOR,
-            "detailIntro2",
-            contentId=content_id,
-            contentTypeId=spot.content_type_id,
-        )
-    except KtoApiUnavailable:
-        if detail is not None:
-            return _assemble_detail(
-                spot,
-                region_name,
-                sigungu_name,
-                congestion,
-                overview=detail.overview,
-                homepage=detail.homepage,
-                tel=detail.tel,
-                images=existing_images,
-                status="stale",
-                category=category,
-                intro=_extract_intro(spot.content_type_id, detail.intro_data),
-            )
-        return _assemble_detail(
-            spot,
-            region_name,
-            sigungu_name,
-            congestion,
-            overview=None,
-            homepage=None,
-            tel=None,
-            images=[],
-            status="unavailable",
-            category=category,
-            intro=None,
-        )
+async def _fetch_kto_detail(
+    kto: KtoClient, content_id: str, content_type_id: int
+) -> tuple[str | None, str | None, str | None, list[tuple[str, str | None]], dict[str, Any]]:
+    """Fetch + parse the 3 KTO detail endpoints. Propagates KtoApiUnavailable."""
+    common_items = await kto.call(KtoService.KOR, "detailCommon2", contentId=content_id)
+    image_items = await kto.call(KtoService.KOR, "detailImage2", contentId=content_id, imageYN="Y")
+    intro_items = await kto.call(
+        KtoService.KOR,
+        "detailIntro2",
+        contentId=content_id,
+        contentTypeId=content_type_id,
+    )
 
     common = common_items[0] if common_items else {}
     overview = verbatim(common.get("overview"))
@@ -303,21 +298,72 @@ async def load_spot_detail(
         images.append((origin, clean_scalar(item.get("smallimageurl"))))
 
     intro_data: dict[str, Any] = intro_items[0] if intro_items else {}
+    return overview, homepage, tel, images, intro_data
+
+
+async def load_spot_detail(
+    session: AsyncSession,
+    kto: KtoClient,
+    redis: Redis,
+    content_id: str,
+) -> SpotDetailRow:
+    """Spot detail with lazy KTO enrichment (ADR-0007). Commits the read txn
+    before any HTTP, then fetches/upserts the 7-day cache outside a txn. On KTO
+    failure serves stale or partial — never 502. 404 if absent or show_flag=0.
+    redis is injected but unused (reserved for moving the cache off Postgres)."""
+    _ = redis
+    spot = await _load_spot_base(session, content_id)
+    region_name, sigungu_name, category = await _load_spot_meta(session, spot)
+    congestion = (await load_congestion(session, [content_id])).get(content_id)
+    ctx = _DetailContext(spot, region_name, sigungu_name, category, congestion)
+
+    detail, existing_images = await _read_cached_detail(session, content_id)
+
+    # End read txn before HTTP. commit() (not rollback) keeps rows under savepoint test fixtures.
+    await session.commit()
+
+    if detail is not None and (datetime.now(UTC) - detail.cached_at) < _DETAIL_TTL:
+        return ctx.assemble(
+            overview=detail.overview,
+            homepage=detail.homepage,
+            tel=detail.tel,
+            images=existing_images,
+            status="fresh",
+            intro=_extract_intro(spot.content_type_id, detail.intro_data),
+        )
+
+    try:
+        overview, homepage, tel, images, intro_data = await _fetch_kto_detail(
+            kto, content_id, spot.content_type_id
+        )
+    except KtoApiUnavailable:
+        if detail is not None:
+            return ctx.assemble(
+                overview=detail.overview,
+                homepage=detail.homepage,
+                tel=detail.tel,
+                images=existing_images,
+                status="stale",
+                intro=_extract_intro(spot.content_type_id, detail.intro_data),
+            )
+        return ctx.assemble(
+            overview=None,
+            homepage=None,
+            tel=None,
+            images=[],
+            status="unavailable",
+            intro=None,
+        )
 
     await _persist_detail(
         session, content_id, spot.content_type_id, overview, homepage, tel, images, intro_data
     )
 
-    return _assemble_detail(
-        spot,
-        region_name,
-        sigungu_name,
-        congestion,
+    return ctx.assemble(
         overview=overview,
         homepage=homepage,
         tel=tel,
         images=[SpotImageRow(origin_image_url=o, small_image_url=s) for o, s in images],
         status="fresh",
-        category=category,
         intro=_extract_intro(spot.content_type_id, intro_data),
     )
