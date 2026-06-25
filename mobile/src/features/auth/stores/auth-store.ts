@@ -5,7 +5,13 @@ import { getRefreshToken, setRefreshToken, clearRefreshToken } from "@/lib/stora
 import { AppError } from "@/lib/app-error";
 import { getIdToken, type Provider } from "@/features/auth/usecases/oauth-providers";
 import { recordConsentSnapshot } from "@/features/auth/usecases/record-consent";
-import { oauthLogin, logoutRequest, deleteAccountRequest } from "@/features/auth/api";
+import {
+  oauthLogin,
+  emailLogin,
+  emailSignup,
+  logoutRequest,
+  deleteAccountRequest,
+} from "@/features/auth/api";
 import { queryClient } from "@/lib/query-client";
 
 interface AuthState {
@@ -17,6 +23,8 @@ interface AuthState {
   clear: () => Promise<void>;
   hydrate: () => Promise<void>;
   loginWithOAuth: (provider: Provider) => Promise<"success" | "canceled">;
+  loginWithEmail: (email: string, password: string) => Promise<void>;
+  signupWithEmail: (email: string, password: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<void>;
   devLogin: () => void;
@@ -78,6 +86,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // Consent is best-effort — never block login on it (S01 §3).
     void recordConsentSnapshot().catch(() => undefined);
     return "success";
+  },
+
+  loginWithEmail: async (email, password) => {
+    const pair = await emailLogin(email, password);
+    await get().setSession(pair);
+    // Consent is best-effort — never block login on it (S01 §3).
+    void recordConsentSnapshot().catch(() => undefined);
+  },
+
+  signupWithEmail: async (email, password, name) => {
+    const pair = await emailSignup(email, password, name);
+    await get().setSession(pair);
+    // Consent is best-effort — never block signup on it (S01 §3).
+    void recordConsentSnapshot().catch(() => undefined);
   },
 
   logout: async () => {
