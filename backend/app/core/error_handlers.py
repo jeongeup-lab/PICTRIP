@@ -40,6 +40,9 @@ def register_error_handlers(app: FastAPI) -> None:
                 details=[ErrorDetail(**d) for d in exc.details],
                 trace_id=get_trace_id(),
             ),
+            # Forward any auth challenge etc. (e.g. WWW-Authenticate: Basic from
+            # AdminUnauthorized), mirroring the HTTPException handler below.
+            headers=exc.headers,
         )
 
     @app.exception_handler(RequestValidationError)
@@ -76,6 +79,9 @@ def register_error_handlers(app: FastAPI) -> None:
                 http_status=exc.status_code,
                 trace_id=get_trace_id(),
             ),
+            # Preserve auth challenges etc. (e.g. WWW-Authenticate: Basic from
+            # the admin Basic-auth gate) that the raiser attached to the exception.
+            headers=exc.headers,
         )
 
     @app.exception_handler(Exception)
