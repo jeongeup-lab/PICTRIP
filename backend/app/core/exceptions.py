@@ -155,3 +155,16 @@ class AdminHistoryNotFound(AppError):
 class AdminTriggerFailed(AppError):  # Phase 2
     code = "ADMIN_TRIGGER_FAILED"
     http_status = 502
+
+
+# --- admin curation editor (A01 §7 / ADM-012~016) ---
+class AdminCurationNotFound(AppError):
+    code = "ADMIN_CURATION_NOT_FOUND"
+    http_status = 404
+    message = "해당 큐레이션을 찾을 수 없습니다."
+
+
+class AdminValidationFailed(AppError):
+    code = "ADMIN_VALIDATION"
+    http_status = 422
+    message = "큐레이션 편집 요청이 유효하지 않습니다."

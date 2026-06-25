@@ -101,3 +101,98 @@ class Health(BaseModel):
     db: HealthDb
     tunnel: HealthTunnel
     users: HealthUsers
+
+
+# --- curation editor (A01 §7 / ADM-012~015) -----------------------------------
+# All field names are camelCase contract — the static curation.html reads
+# ``data.<field>`` directly. Scoped writes to curations/curation_spots only.
+
+
+class CurationListItem(BaseModel):
+    id: int
+    type: str
+    slug: str
+    title: str
+    subtitle: str | None
+    coverUrl: str | None
+    isPublished: bool
+    position: int
+
+
+class CurationList(BaseModel):
+    """GET /admin/api/curations — grouped by type, each ordered by position."""
+
+    heroes: list[CurationListItem]  # type='region'
+    rails: list[CurationListItem]  # type='mood'
+    editorial: list[CurationListItem]  # type='editorial'
+
+
+class CoverSpot(BaseModel):
+    contentId: str
+    name: str
+    imageUrl: str | None
+
+
+class Handpick(BaseModel):
+    contentId: str
+    name: str
+    category: str | None
+    imageUrl: str | None
+    position: int
+
+
+class CurationDetail(BaseModel):
+    """GET /admin/api/curations/{id} — copy + cover + handpicks."""
+
+    id: int
+    type: str
+    slug: str
+    title: str
+    subtitle: str | None
+    lead: str | None
+    intro: str | None
+    coverSpot: CoverSpot | None
+    regionCd: str | None
+    moodId: int | None
+    isPublished: bool
+    position: int
+    handpicks: list[Handpick]
+
+
+class CurationUpdate(BaseModel):
+    """PUT /admin/api/curations/{id} body — only copy/cover/publish/position.
+
+    type/slug/region_cd/mood_id are NOT editable here (the ck_curation_scope
+    invariant stays satisfied because type/scope are unchanged).
+    """
+
+    title: str
+    subtitle: str | None = None
+    lead: str | None = None
+    intro: str | None = None
+    coverSpotId: str | None = None
+    isPublished: bool
+    position: int
+
+
+class SpotsUpdate(BaseModel):
+    """PUT /admin/api/curations/{id}/spots body — replace handpicks (≤8)."""
+
+    spotIds: list[str]
+
+
+class HandpickList(BaseModel):
+    handpicks: list[Handpick]
+
+
+# --- admin spot picker (A01 §7 / ADM-015) -------------------------------------
+class SpotSearchItem(BaseModel):
+    contentId: str
+    name: str
+    regionCd: str | None
+    regionName: str | None
+    imageUrl: str | None
+
+
+class SpotSearchResult(BaseModel):
+    spots: list[SpotSearchItem]

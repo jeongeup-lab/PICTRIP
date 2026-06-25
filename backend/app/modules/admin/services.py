@@ -6,17 +6,30 @@ Transaction-free (read-only). Calls :mod:`repositories`, shapes rows into the
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import engine
-from app.core.exceptions import AdminHistoryNotFound
+from app.core.exceptions import (
+    AdminCurationNotFound,
+    AdminHistoryNotFound,
+    AdminValidationFailed,
+)
+from app.core.logging import get_logger
 from app.core.version import API_VERSION, uptime_seconds
 from app.modules.admin import repositories as repo
 from app.modules.admin.schemas import (
     CollectionSource,
     CollectionStatus,
+    CoverSpot,
+    CurationDetail,
+    CurationList,
+    CurationListItem,
+    CurationUpdate,
+    Handpick,
+    HandpickList,
     Health,
     HealthApi,
     HealthDb,
@@ -27,10 +40,20 @@ from app.modules.admin.schemas import (
     HistoryList,
     HistoryRun,
     LastRun,
+    SpotSearchItem,
+    SpotSearchResult,
+    SpotsUpdate,
 )
+from app.modules.spots.services.curations import invalidate_curation_cache
 
 _SOURCE_NAME = "국문 관광정보 서비스"
 _SOURCE_ENDPOINT = "areaBasedSyncList2"
+
+# Fixed admin actor (A04 single Basic user); no role/user table exists (out of scope).
+_ADMIN_ACTOR = "admin"
+_MAX_HANDPICKS = 8
+
+_logger = get_logger(__name__)
 
 
 async def get_collection_status(session: AsyncSession) -> CollectionStatus:
@@ -146,4 +169,205 @@ async def get_health(session: AsyncSession) -> Health:
         # Tunnel health check deferred (A01 §2.3) → honest nulls.
         tunnel=HealthTunnel(ok=None, detail=None),
         users=users,
+    )
+
+
+# --- curation editor (A01 §7 / ADM-012~016) -----------------------------------
+# This is the admin module's only write surface; transaction commit boundaries
+# live here (repos mutate the passed session, services commit). Every write
+# invalidates the on-publish cache and emits a structured audit line.
+
+
+async def list_curations(session: AsyncSession) -> CurationList:
+    rows = await repo.list_curations(session)
+    by_type: dict[str, list[CurationListItem]] = {"region": [], "mood": [], "editorial": []}
+    for r in rows:
+        item = CurationListItem(
+            id=r.id,
+            type=r.type,
+            slug=r.slug,
+            title=r.title,
+            subtitle=r.subtitle,
+            coverUrl=r.cover_url,
+            isPublished=r.is_published,
+            position=r.position,
+        )
+        by_type.setdefault(r.type, []).append(item)
+    # rows arrive ordered by (type, position); the per-group lists preserve it.
+    return CurationList(
+        heroes=by_type["region"],
+        rails=by_type["mood"],
+        editorial=by_type["editorial"],
+    )
+
+
+async def _build_detail(session: AsyncSession, curation) -> CurationDetail:  # type: ignore[no-untyped-def]
+    cover: CoverSpot | None = None
+    if curation.cover_spot_id is not None:
+        row = await repo.get_cover_spot(session, curation.cover_spot_id)
+        if row is not None:
+            cover = CoverSpot(
+                contentId=row.content_id, name=row.title, imageUrl=row.first_image_url
+            )
+    hp_rows = await repo.curation_handpicks(session, curation.id)
+    handpicks = [
+        Handpick(
+            contentId=h.content_id,
+            name=h.title,
+            category=h.category,
+            imageUrl=h.first_image_url,
+            position=h.position,
+        )
+        for h in hp_rows
+    ]
+    return CurationDetail(
+        id=curation.id,
+        type=curation.type,
+        slug=curation.slug,
+        title=curation.title,
+        subtitle=curation.subtitle,
+        lead=curation.lead,
+        intro=curation.intro,
+        coverSpot=cover,
+        regionCd=curation.region_cd,
+        moodId=curation.mood_id,
+        isPublished=curation.is_published,
+        position=curation.position,
+        handpicks=handpicks,
+    )
+
+
+async def get_curation_detail(session: AsyncSession, curation_id: int) -> CurationDetail:
+    curation = await repo.get_curation(session, curation_id)
+    if curation is None:
+        raise AdminCurationNotFound
+    return await _build_detail(session, curation)
+
+
+async def update_curation(
+    session: AsyncSession,
+    redis: Redis,
+    curation_id: int,
+    body: CurationUpdate,
+) -> CurationDetail:
+    curation = await repo.get_curation(session, curation_id)
+    if curation is None:
+        raise AdminCurationNotFound
+
+    details: list[dict[str, str]] = []
+    title = body.title  # newlines allowed; only reject blank-after-strip
+    if not title.strip():
+        details.append({"field": "title", "issue": "제목은 비워둘 수 없습니다."})
+    if body.position < 0:
+        details.append({"field": "position", "issue": "노출 순서는 0 이상이어야 합니다."})
+    if body.coverSpotId is not None and not await repo.spot_exposable_with_image(
+        session, body.coverSpotId
+    ):
+        # 표지 스팟은 존재 + 노출(show_flag=1) + 대표 이미지가 모두 있어야 함 (A01 §7).
+        details.append(
+            {
+                "field": "coverSpotId",
+                "issue": "표지 스팟이 없거나 노출 불가하거나 이미지가 없습니다.",
+            }
+        )
+    if details:
+        raise AdminValidationFailed(details=details)
+
+    await repo.update_curation_fields(
+        session,
+        curation,
+        title=title,
+        subtitle=body.subtitle,
+        lead=body.lead,
+        intro=body.intro,
+        cover_spot_id=body.coverSpotId,
+        is_published=body.isPublished,
+        position=body.position,
+    )
+    # Defensive: type/scope are not editable here, so ck_curation_scope still
+    # holds; the COMMIT would surface any DB-level CHECK violation regardless.
+    await session.commit()
+    await invalidate_curation_cache(redis, curation_id)  # ADM-016 on-publish DEL
+    _audit("curation.update", curation)
+    return await _build_detail(session, curation)
+
+
+async def set_curation_spots(
+    session: AsyncSession,
+    redis: Redis,
+    curation_id: int,
+    body: SpotsUpdate,
+) -> HandpickList:
+    curation = await repo.get_curation(session, curation_id)
+    if curation is None:
+        raise AdminCurationNotFound
+
+    spot_ids = body.spotIds
+    details: list[dict[str, str]] = []
+    if len(spot_ids) > _MAX_HANDPICKS:
+        details.append(
+            {"field": "spotIds", "issue": f"손픽 스팟은 최대 {_MAX_HANDPICKS}개까지 가능합니다."}
+        )
+    if len(set(spot_ids)) != len(spot_ids):
+        details.append({"field": "spotIds", "issue": "중복된 스팟이 있습니다."})
+    if spot_ids:
+        existing = await repo.existing_spot_ids(session, spot_ids)
+        missing = [cid for cid in spot_ids if cid not in existing]
+        if missing:
+            details.append(
+                {"field": "spotIds", "issue": f"존재하지 않는 스팟: {', '.join(missing)}"}
+            )
+    if details:
+        raise AdminValidationFailed(details=details)
+
+    await repo.replace_curation_spots(session, curation_id, spot_ids)
+    curation.updated_at = datetime.now(tz=UTC)
+    await session.commit()
+    await invalidate_curation_cache(redis, curation_id)  # ADM-016 on-publish DEL
+    _audit("curation.spots", curation, count=len(spot_ids))
+
+    hp_rows = await repo.curation_handpicks(session, curation_id)
+    return HandpickList(
+        handpicks=[
+            Handpick(
+                contentId=h.content_id,
+                name=h.title,
+                category=h.category,
+                imageUrl=h.first_image_url,
+                position=h.position,
+            )
+            for h in hp_rows
+        ]
+    )
+
+
+async def search_spots(
+    session: AsyncSession, q: str, region: str | None, limit: int
+) -> SpotSearchResult:
+    rows = await repo.admin_spot_search(session, q, region, limit)
+    return SpotSearchResult(
+        spots=[
+            SpotSearchItem(
+                contentId=r.content_id,
+                name=r.title,
+                regionCd=r.ldong_regn_cd,
+                regionName=r.region_name,
+                imageUrl=r.first_image_url,
+            )
+            for r in rows
+        ]
+    )
+
+
+def _audit(action: str, curation, **extra) -> None:  # type: ignore[no-untyped-def]
+    # ADM-016 audit: no audit table exists (creating one is scope creep). Emit a
+    # single structured log line per write via the app logger instead — actor +
+    # action + what changed. Ingested by the same JSON log pipeline (app.core.logging).
+    _logger.info(
+        action,
+        actor=_ADMIN_ACTOR,
+        curationId=curation.id,
+        slug=curation.slug,
+        isPublished=curation.is_published,
+        **extra,
     )
