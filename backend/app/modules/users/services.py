@@ -15,17 +15,44 @@ from app.core.auth import (
     mint_token_pair,
     refresh_tokens,
 )
-from app.core.exceptions import AuthTokenInvalid
+from app.core.exceptions import (
+    AuthTokenInvalid,
+    EmailAlreadyRegistered,
+    InvalidCredentials,
+)
 from app.core.oidc import verify_oauth_id_token
+from app.core.passwords import hash_password, verify_password
 from app.modules.users.models import User, UserAuthProvider, UserConsent
 from app.modules.users.schemas import (
     ConsentIn,
     ConsentOut,
     ConsentState,
+    EmailLoginIn,
+    EmailSignupIn,
     OAuthLoginIn,
     TokenPair,
     UserPublic,
 )
+
+# A precomputed bcrypt hash of a random value. ``login_with_email`` runs a verify
+# against this when the email is unknown so the missing-user and wrong-password
+# paths take ~the same time (reduces a timing oracle for email enumeration).
+_DUMMY_PASSWORD_HASH = hash_password("pictrip-dummy-not-a-real-password")
+
+
+def _user_public(user: User) -> UserPublic:
+    return UserPublic(
+        id=user.id,
+        displayName=user.name,
+        email=user.email,
+        avatarUrl=user.profile_image_url,
+        isOnboarded=False,
+        createdAt=user.created_at,
+    )
+
+
+def _normalize_email(email: str) -> str:
+    return email.strip().lower()
 
 
 async def _find_provider(
@@ -85,6 +112,66 @@ async def authenticate_with_oauth(
         createdAt=user.created_at,
     )
     return mint_token_pair(user_id=user.id, user=user_public)
+
+
+async def _find_active_user_by_email(session: AsyncSession, email: str) -> User | None:
+    return await session.scalar(  # type: ignore[no-any-return]
+        select(User).where(User.email == email, User.deleted_at.is_(None))
+    )
+
+
+async def signup_with_email(session: AsyncSession, body: EmailSignupIn) -> TokenPair:
+    """Create a new email/password account and mint a token pair.
+
+    Identity key is provider='email' + the normalized email. A pre-check rejects
+    a duplicate active email with 409; a concurrent race is caught via the
+    partial-unique index / provider UNIQUE constraint (IntegrityError → 409)."""
+    email = _normalize_email(body.email)
+
+    if await _find_active_user_by_email(session, email) is not None:
+        raise EmailAlreadyRegistered()
+
+    try:
+        async with session.begin_nested():
+            user = User(
+                email=email,
+                name=body.name,
+                password_hash=hash_password(body.password),
+            )
+            session.add(user)
+            await session.flush()
+            session.add(
+                UserAuthProvider(
+                    user_id=user.id,
+                    provider="email",
+                    provider_user_id=email,
+                )
+            )
+            await session.flush()
+    except IntegrityError as e:
+        raise EmailAlreadyRegistered() from e
+
+    await session.commit()
+    return mint_token_pair(user_id=user.id, user=_user_public(user))
+
+
+async def login_with_email(session: AsyncSession, body: EmailLoginIn) -> TokenPair:
+    """Verify an email/password credential and mint a token pair.
+
+    Unknown email, an account with no password set, or a bad password all raise
+    the same ``InvalidCredentials`` (401) so the response can't distinguish
+    them. A dummy verify on the missing-user path keeps timing roughly uniform."""
+    email = _normalize_email(body.email)
+    user = await _find_active_user_by_email(session, email)
+
+    if user is None or user.password_hash is None:
+        verify_password(body.password, _DUMMY_PASSWORD_HASH)  # equalize timing
+        raise InvalidCredentials()
+
+    if not verify_password(body.password, user.password_hash):
+        raise InvalidCredentials()
+
+    return mint_token_pair(user_id=user.id, user=_user_public(user))
 
 
 async def get_user_public(session: AsyncSession, user_id: int) -> UserPublic:

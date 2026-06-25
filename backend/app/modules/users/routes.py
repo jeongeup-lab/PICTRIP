@@ -15,6 +15,8 @@ from app.modules.spots.schemas import SpotCard
 from app.modules.users import services
 from app.modules.users.schemas import (
     ConsentIn,
+    EmailLoginIn,
+    EmailSignupIn,
     LogoutBody,
     OAuthLoginIn,
     RefreshBody,
@@ -35,6 +37,26 @@ async def oauth_login(
     session: DbSession,
 ) -> dict[str, Any]:
     pair = await services.authenticate_with_oauth(session, provider, body)
+    return ok(pair.model_dump())
+
+
+@router.post(
+    "/auth/email/signup",
+    status_code=status.HTTP_201_CREATED,
+    summary="Email/password signup → internal token pair",
+)
+async def email_signup(body: EmailSignupIn, session: DbSession) -> dict[str, Any]:
+    pair = await services.signup_with_email(session, body)
+    return ok(pair.model_dump())
+
+
+@router.post(
+    "/auth/email/login",
+    status_code=status.HTTP_200_OK,
+    summary="Email/password login → internal token pair",
+)
+async def email_login(body: EmailLoginIn, session: DbSession) -> dict[str, Any]:
+    pair = await services.login_with_email(session, body)
     return ok(pair.model_dump())
 
 
