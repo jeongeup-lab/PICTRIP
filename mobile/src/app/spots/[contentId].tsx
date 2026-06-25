@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ScrollView, View, Text, Pressable, Linking, Share, StyleSheet } from "react-native";
+import { ScrollView, View, Text, Pressable, Share, StyleSheet } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSpot } from "@/features/spots/queries";
 import { useAuthGate } from "@/features/auth/hooks/use-auth-gate";
@@ -9,6 +9,7 @@ import { RemoteImage } from "@/components/RemoteImage";
 import { Skeleton } from "@/components/Skeleton";
 import { IntroSection } from "@/features/spots/components/IntroSection";
 import { Gallery } from "@/features/spots/components/Gallery";
+import { PhotoViewer } from "@/features/spots/components/PhotoViewer";
 import { LocationSection } from "@/features/spots/components/LocationSection";
 import { VisitSection } from "@/features/spots/components/VisitSection";
 import { NearbyRail } from "@/features/spots/components/NearbyRail";
@@ -30,6 +31,14 @@ export default function SpotScreen() {
   const saved = optimistic ?? persisted;
   const saveMut = useSaveMutation();
   const unsaveMut = useUnsaveMutation();
+  const [galleryOpen, setGalleryOpen] = useState(false);
+
+  const galleryImages =
+    data && data.images.length > 0
+      ? data.images.map((img) => img.originImageUrl ?? img.smallImageUrl).filter(Boolean)
+      : data?.firstImageUrl
+        ? [data.firstImageUrl]
+        : [];
 
   const onToggleSave = async () => {
     if (!(await requireAuth("save"))) return;
@@ -46,8 +55,7 @@ export default function SpotScreen() {
   };
 
   const onViewAll = () => {
-    const uri = data?.images[0]?.originImageUrl ?? data?.firstImageUrl;
-    if (uri) void Linking.openURL(uri).catch(() => {});
+    if (galleryImages.length > 0) setGalleryOpen(true);
   };
 
   const subline = data
@@ -113,6 +121,11 @@ export default function SpotScreen() {
           </>
         )}
       </ScrollView>
+      <PhotoViewer
+        visible={galleryOpen}
+        images={galleryImages}
+        onClose={() => setGalleryOpen(false)}
+      />
     </View>
   );
 }
