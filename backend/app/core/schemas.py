@@ -51,7 +51,7 @@ class Envelope(BaseModel, Generic[DataT]):
 def _resolve_trace_id(explicit: str | None) -> str | None:
     if explicit is not None:
         return explicit
-    # Lazy import to avoid circular dependency: logging -> nothing, schemas -> logging.
+    # Lazy import to avoid a schemas -> logging circular dependency.
     from app.core.logging import get_trace_id
 
     return get_trace_id()

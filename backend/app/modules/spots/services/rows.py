@@ -14,13 +14,8 @@ class SpotCardRow:
     mapx: float | None
     mapy: float | None
     category: str | None = None  # derive_category chip code, NOT lcls_systm3_nm
-    # KTO subtype label (lcls_systm_codes.lcls_systm3_nm, e.g. "사적지", "찻집").
-    # The canonical card's `category` is sourced from this (Task 9); the coarse
-    # `category` chip code above is the legacy nearby/home value.
-    lcls_systm3_nm: str | None = None
-    # Optional congestion bucket ("low"|"medium"|"high") from spot_concentration,
-    # attached by the consuming endpoint via load_congestion() — None when no row.
-    congestion: str | None = None
+    lcls_systm3_nm: str | None = None  # KTO subtype label; canonical card category
+    congestion: str | None = None  # spot_concentration bucket; None when no row
 
 
 @dataclass
@@ -37,9 +32,7 @@ class SpotImageRow:
 
 @dataclass
 class SpotIntroRow:
-    """detailIntro2-derived display fields, normalized across contentTypeId.
-    All optional; absent keys stay None. (관광 12/14/28: usetime/restdate/parking/
-    infocenter; 음식점 39: firstmenu/treatmenu)."""
+    """detailIntro2 display fields, normalized across contentTypeId. All optional."""
 
     usetime: str | None = None
     restdate: str | None = None
@@ -65,10 +58,8 @@ class SpotDetailRow:
     sigungu_name: str | None
     detail_status: str
     images: list[SpotImageRow]
-    # crowd-level bucket ("low"|"medium"|"high") from spot_concentration (Task 9);
-    # None when the spot has no 집중률 row.
-    congestion: str | None = None
-    category: str | None = None  # lcls_systm3_nm (e.g. "사적지", "찻집")
+    congestion: str | None = None  # spot_concentration bucket; None when no row
+    category: str | None = None  # lcls_systm3_nm subtype label
     intro: SpotIntroRow | None = None
 
 

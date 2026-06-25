@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from "react";
-import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Animated, View, Text, Pressable, ScrollView, StyleSheet, Dimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { Skeleton } from "@/components/Skeleton";
 import { KakaoWebMap } from "@/features/map/components/KakaoWebMap";
-import { MapBottomSheet } from "@/features/map/components/MapBottomSheet";
+import { MapBottomSheet, SHEET_SNAP_Y } from "@/features/map/components/MapBottomSheet";
 import { CategoryChips } from "@/features/map/components/CategoryChips";
 import { NearbyCard } from "@/features/map/components/NearbyCard";
 import { SearchHerePill } from "@/features/map/components/SearchHerePill";
@@ -13,82 +13,48 @@ import { RecenterFab } from "@/features/map/components/RecenterFab";
 import { PermissionPrimer } from "@/features/map/components/PermissionPrimer";
 import { RegionPicker } from "@/features/map/components/RegionPicker";
 import { useMapStore } from "@/features/map/stores/map-store";
+import { useMapInit } from "@/features/map/hooks/use-map-init";
 import { useNearbyMap, useRegionLabel } from "@/features/map/queries";
 import { formatHeaderLabel } from "@/features/map/lib/region-label";
-import {
-  getPermissionStatus,
-  requestPermission,
-  getCurrentCoords,
-  type PermStatus,
-} from "@/features/map/usecases/request-location";
-import { SEOUL_CITY_HALL, NEARBY_CAP } from "@/constants/map";
+import { NEARBY_CAP } from "@/constants/map";
 import { colors, spacing } from "@/constants/theme";
 
 export default function MapTab() {
   const insets = useSafeAreaInsets();
   const s = useMapStore();
-  const [perm, setPerm] = useState<PermStatus | "ready">("undetermined");
+  const { perm, allow, skipToSeoul, recenter } = useMapInit();
   const [pickerOpen, setPickerOpen] = useState(false);
-  const started = useRef(false);
 
   const nearby = useNearbyMap(s.center, s.category);
   const label = useRegionLabel(s.center, s.anchorSource !== "region");
   const spots = (nearby.data ?? []).slice(0, NEARBY_CAP);
 
+  // The sheet owns its translateY Animated.Value and hands it up via onTranslate.
+  // We start from a fallback matching the current snap so the pill/FAB are placed
+  // correctly on the very first frame (before the sheet's mount effect fires).
+  const [sheetY, setSheetY] = useState<Animated.Value>(
+    () => new Animated.Value(SHEET_SNAP_Y[s.snap]),
+  );
+  const handleTranslate = useCallback((v: Animated.Value) => setSheetY(v), []);
+  // Anchor each control so its BOTTOM edge sits SHEET_GAP px above the sheet top.
+  // Derived from the sheet's translateY; the sheet JS-drives that value (see
+  // MapBottomSheet) so these followers update every frame during drag AND snap.
+  const pillTranslateY = useMemo(
+    () => Animated.subtract(sheetY, SHEET_GAP + PILL_HEIGHT),
+    [sheetY],
+  );
+  const fabTranslateY = useMemo(() => Animated.subtract(sheetY, SHEET_GAP + FAB_HEIGHT), [sheetY]);
+
+  // Last list card must clear the off-screen sheet overflow + tab bar + inset.
+  // useBottomTabBarHeight isn't publicly exported by expo-router (and
+  // @react-navigation/bottom-tabs isn't installed), so use the iOS default tab
+  // content height (49) + safe-area inset, per the plan's documented fallback.
+  const tabBarHeight = TAB_BAR_CONTENT_HEIGHT + insets.bottom;
+  const listPaddingBottom = tabBarHeight + insets.bottom + WINDOW_H * 0.1 + spacing.xxl;
+
   useEffect(() => {
     if (label.data) s.setLabel(label.data);
   }, [label.data]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Entry: branch on permission status (S05 §1.4).
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    (async () => {
-      // map-store survives tab switches; if a center is already set, this is a
-      // re-entry — mark ready without re-running the permission/GPS branch (no
-      // GPS re-fetch, no primer flash, no stale-center flash).
-      if (s.center != null) {
-        setPerm("ready");
-        return;
-      }
-      const status = await getPermissionStatus();
-      if (status === "granted") {
-        const c = (await getCurrentCoords()) ?? SEOUL_CITY_HALL;
-        s.setAnchor(c, "gps", c);
-        setPerm("ready");
-      } else {
-        setPerm(status);
-      }
-    })();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const allow = async () => {
-    const status = await requestPermission();
-    if (status === "granted") {
-      const c = (await getCurrentCoords()) ?? SEOUL_CITY_HALL;
-      s.setAnchor(c, "gps", c);
-      setPerm("ready");
-    } else {
-      setPerm("denied");
-    }
-  };
-
-  const skipToSeoul = () => {
-    s.setAnchor(SEOUL_CITY_HALL, "pan", null);
-    setPerm("ready");
-  };
-
-  const recenter = async () => {
-    if (s.gpsCoords) s.recenterToGps();
-    else {
-      const status = await getPermissionStatus();
-      setPerm(status === "granted" ? "ready" : status);
-      if (status === "granted") {
-        const c = (await getCurrentCoords()) ?? SEOUL_CITY_HALL;
-        s.setAnchor(c, "gps", c);
-      }
-    }
-  };
 
   if (perm === "undetermined" || perm === "denied") {
     return (
@@ -123,21 +89,28 @@ export default function MapTab() {
       </View>
 
       {s.pillVisible() ? (
-        <View style={styles.pill} pointerEvents="box-none">
+        <Animated.View
+          style={[styles.pill, { transform: [{ translateY: pillTranslateY }] }]}
+          pointerEvents="box-none"
+        >
           <SearchHerePill onPress={() => s.searchHere()} />
-        </View>
+        </Animated.View>
       ) : null}
-      <View style={styles.fab} pointerEvents="box-none">
+      <Animated.View
+        style={[styles.fab, { transform: [{ translateY: fabTranslateY }] }]}
+        pointerEvents="box-none"
+      >
         <RecenterFab onPress={recenter} />
-      </View>
+      </Animated.View>
 
       <MapBottomSheet
         snap={s.snap}
         onSnapChange={s.setSnap}
+        onTranslate={handleTranslate}
         headerExtra={<CategoryChips value={s.category} onChange={s.setCategory} />}
       >
         {nearby.isLoading ? (
-          <View style={styles.list}>
+          <View style={[styles.list, { paddingBottom: listPaddingBottom }]}>
             {[0, 1, 2].map((i) => (
               <Skeleton
                 key={i}
@@ -148,14 +121,14 @@ export default function MapTab() {
             ))}
           </View>
         ) : nearby.isError ? (
-          <View style={styles.center}>
+          <View style={[styles.center, { paddingBottom: listPaddingBottom }]}>
             <Text style={styles.dim}>주변 정보를 불러오지 못했어요</Text>
             <Pressable style={styles.retry} onPress={() => nearby.refetch()}>
               <Text style={styles.retryText}>다시 시도</Text>
             </Pressable>
           </View>
         ) : spots.length === 0 ? (
-          <View style={styles.center}>
+          <View style={[styles.center, { paddingBottom: listPaddingBottom }]}>
             <Text style={styles.dim}>이 주변엔 아직 추천 스팟이 없어요</Text>
             <Text style={styles.dimSub}>
               지도를 옮겨 &apos;이 지역에서 검색&apos;을 누르거나, 다른 지역을 선택해 보세요
@@ -164,7 +137,7 @@ export default function MapTab() {
         ) : (
           <ScrollView
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: spacing.xxl }}
+            contentContainerStyle={{ paddingBottom: listPaddingBottom }}
           >
             {spots.map((spot) => (
               <NearbyCard
@@ -191,6 +164,13 @@ export default function MapTab() {
   );
 }
 
+const WINDOW_H = Dimensions.get("window").height;
+// RN bottom-tab content height on iOS (excludes the safe-area inset, added separately).
+const TAB_BAR_CONTENT_HEIGHT = 49;
+const PILL_HEIGHT = 38; // SearchHerePill height
+const FAB_HEIGHT = 46; // RecenterFab height
+const SHEET_GAP = 14; // mockup: control bottom sits 14px above the sheet top edge
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   header: { position: "absolute", left: spacing.lg, right: spacing.lg },
@@ -211,8 +191,9 @@ const styles = StyleSheet.create({
     maxWidth: "80%",
   },
   labelText: { fontSize: 15, fontWeight: "700", color: colors.ink },
-  pill: { position: "absolute", left: 0, right: 0, bottom: "60%" },
-  fab: { position: "absolute", right: spacing.lg, bottom: "60%" },
+  // top:0 + translateY anchors these to the sheet's animated top edge (see body).
+  pill: { position: "absolute", left: 0, right: 0, top: 0, alignItems: "center" },
+  fab: { position: "absolute", right: spacing.lg, top: 0 },
   list: { paddingTop: spacing.sm },
   center: {
     alignItems: "center",

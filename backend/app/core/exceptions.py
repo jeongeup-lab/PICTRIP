@@ -118,6 +118,18 @@ class OAuthIdTokenInvalid(AppError):
     message = "소셜 로그인 토큰이 유효하지 않습니다."
 
 
+class EmailAlreadyRegistered(AppError):
+    code = "EMAIL_TAKEN"
+    http_status = 409
+    message = "이미 가입된 이메일입니다."
+
+
+class InvalidCredentials(AppError):
+    code = "AUTH_INVALID_CREDENTIALS"
+    http_status = 401
+    message = "이메일 또는 비밀번호가 올바르지 않습니다."
+
+
 class AuthSessionRevoked(AppError):
     code = "AUTH_SESSION_REVOKED"
     http_status = 401

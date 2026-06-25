@@ -11,11 +11,7 @@ from app.modules.spots.services.rows import SpotCardRow
 
 
 def bucket_congestion(rate: float | None) -> str | None:
-    """Bucket a KTO 집중률 (0-100) into the card's congestion label.
-
-    Boundaries are inclusive at the seams: ``rate < 34 -> "low"``,
-    ``34 <= rate <= 66 -> "medium"``, ``rate > 66 -> "high"``, ``None -> None``.
-    """
+    """Bucket a KTO 집중률 (0-100): <34 low, 34-66 medium, >66 high, None None."""
     if rate is None:
         return None
     if rate < 34:
@@ -29,13 +25,7 @@ async def load_congestion(
     session: AsyncSession,
     content_ids: list[str],
 ) -> dict[str, str | None]:
-    """Bucket the preserved ``spot_concentration`` rate for each content_id.
-
-    Returns ``{content_id: "low"|"medium"|"high"}`` keyed only by ids that have a
-    row; misses are absent so the caller defaults them to ``None`` (omit-friendly,
-    matching the canonical card's optional ``congestion``). Shared enrichment seam
-    for Tasks 10-17.
-    """
+    """{content_id: bucket} for ids with a spot_concentration row; misses are absent."""
     if not content_ids:
         return {}
     rows = (
@@ -53,13 +43,7 @@ async def load_region_meta(
     session: AsyncSession,
     content_ids: list[str],
 ) -> dict[str, tuple[str | None, str | None]]:
-    """Resolve ``{content_id: (region_name, sigungu_name)}`` for a batch of ids.
-
-    Shared enrichment seam (e.g. TST photo-search) — joins ``spots`` to
-    ``regions``/``sigungus`` by legal-dong code in one query. Ids with no
-    region/sigungu code (or no matching row) map to ``(None, None)`` /
-    a half-filled tuple; missing ids are simply absent.
-    """
+    """{content_id: (region_name, sigungu_name)} for a batch of ids; missing ids absent."""
     if not content_ids:
         return {}
     stmt = (
@@ -81,12 +65,8 @@ async def cover_url(
     cover_spot_id: str | None,
     resolved: list[SpotCardRow],
 ) -> str | None:
-    """coverUrl = cover spot's firstImageUrl, else first resolved spot's, else None.
-
-    Shared by the home feed (heroes) and curation detail. Lives here (both already
-    import from ``cards``) to avoid the feed→curations circular import that the
-    earlier per-module duplication worked around.
-    """
+    """coverUrl = cover spot's image, else first resolved spot's, else None.
+    Lives here (not feed/curations) to avoid the feed->curations circular import."""
     if cover_spot_id is not None:
         img = (
             await session.execute(
@@ -105,12 +85,7 @@ async def load_spot_cards_by_ids(
     session: AsyncSession,
     content_ids: list[str],
 ) -> dict[str, SpotCardRow]:
-    """Resolve a list of content_ids to SpotCardRow summaries, keyed by id.
-
-    Public seam for other modules (e.g. TST photo-search) that already hold a
-    list of nearest content_ids and need SPT metadata without reaching into
-    SPT models. Missing/inactive ids are simply absent from the result.
-    """
+    """{content_id: SpotCardRow}; missing ids absent. Public seam for other modules."""
     rows = await _load_spot_cards(session, content_ids)
     return {r.content_id: r for r in rows}
 
@@ -119,16 +94,9 @@ async def load_active_spot_cards_by_ids(
     session: AsyncSession,
     content_ids: list[str],
 ) -> dict[str, SpotCardRow]:
-    """Like ``load_spot_cards_by_ids`` but restricted to active (show_flag=1)
-    spots, keyed by content_id.
-
-    Public seam for CRS course persistence: validate + hydrate a list of
-    content_ids in one query without reaching into SPT models. Missing or hidden
-    ids are simply absent from the result, so the caller can diff the requested
-    ids against the returned keys to reject unknown/inactive spots *before* an
-    insert that would otherwise trip the RESTRICT FK on
-    ``course_items.content_id``.
-    """
+    """Like load_spot_cards_by_ids but active-only (show_flag=1). Lets CRS diff
+    requested vs returned ids to reject unknown/inactive spots before the
+    RESTRICT FK on course_items.content_id would trip."""
     if not content_ids:
         return {}
     stmt = (

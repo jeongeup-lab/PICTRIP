@@ -48,5 +48,12 @@ def record_run(conn: psycopg.Connection, mode: str) -> Iterator[dict[str, int]]:
     status/finished_at/duration on success, or status='error' + message on raise.
     """
     ensure_table(conn)
-    counters = {"api_calls": 0, "fetched": 0, "inserted": 0, "updated": 0, "soft_deleted": 0, "skipped": 0}
+    counters = {
+        "api_calls": 0,
+        "fetched": 0,
+        "inserted": 0,
+        "updated": 0,
+        "soft_deleted": 0,
+        "skipped": 0,
+    }
     yield counters

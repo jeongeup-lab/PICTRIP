@@ -38,7 +38,15 @@ function toast(msg, mono) {
     t.className = "toast";
     document.body.appendChild(t);
   }
-  t.innerHTML = msg + (mono ? ` <span class="mono">${mono}</span>` : "");
+  // Build via textContent (not innerHTML) so msg/mono can't inject markup (js/xss).
+  t.textContent = msg;
+  if (mono) {
+    t.append(" ");
+    const span = document.createElement("span");
+    span.className = "mono";
+    span.textContent = mono;
+    t.append(span);
+  }
   requestAnimationFrame(() => t.classList.add("show"));
   clearTimeout(t._timer);
   t._timer = setTimeout(() => t.classList.remove("show"), 2600);

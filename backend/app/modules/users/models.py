@@ -1,4 +1,4 @@
-"""USR ORM models. See DB schema §Section 1."""
+"""USR ORM models."""
 
 from __future__ import annotations
 
@@ -43,6 +43,7 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     name: Mapped[str | None] = mapped_column(String(50), nullable=True)
     bio: Mapped[str | None] = mapped_column(String(255), nullable=True)
     location_label: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -101,10 +102,7 @@ class UserConsent(Base):
     )
     location_consent: Mapped[bool] = mapped_column(Boolean, server_default=false(), nullable=False)
     photo_consent: Mapped[bool] = mapped_column(Boolean, server_default=false(), nullable=False)
-    # NOTE: the `notification_consent` DB column still exists (dropped in M3 /
-    # Task 20). Its ORM mapping was removed here (expand/contract) so this image
-    # stops referencing it; it has a DB default (false) so INSERTs that omit it
-    # still succeed.
+    # `notification_consent` DB column intentionally unmapped (expand/contract; has DB default false).
     terms_version: Mapped[str] = mapped_column(String(16), nullable=False)
     consented_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

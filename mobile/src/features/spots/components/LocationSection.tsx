@@ -1,55 +1,10 @@
 import { View, Text, Pressable, Linking, StyleSheet } from "react-native";
-import Svg, { Path, Circle, Line } from "react-native-svg";
-import type { SpotDetail } from "@/lib/api-types";
+import type { SpotDetail, NearbySpot } from "@/lib/api-types";
 import { Icon } from "@/components/Icon";
 import type { IconName } from "@/components/Icon";
+import { KakaoWebMap } from "@/features/map/components/KakaoWebMap";
+import { cleanHomepage } from "@/lib/homepage";
 import { colors } from "@/constants/theme";
-
-const GRID = 36;
-const MAP_W = 362; // phone width 402 - 2*20 padding (approx; flex stretches it)
-const MAP_H = 200;
-
-function MapPreview() {
-  const cols = Math.ceil(MAP_W / GRID);
-  const rows = Math.ceil(MAP_H / GRID);
-  return (
-    <View style={styles.map}>
-      <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
-        {Array.from({ length: rows }).map((_, r) => (
-          <Line
-            key={`h${r}`}
-            x1={0}
-            y1={r * GRID}
-            x2={MAP_W * 2}
-            y2={r * GRID}
-            stroke={colors.line}
-            strokeWidth={1}
-          />
-        ))}
-        {Array.from({ length: cols * 2 }).map((_, c) => (
-          <Line
-            key={`v${c}`}
-            x1={c * GRID}
-            y1={0}
-            x2={c * GRID}
-            y2={MAP_H}
-            stroke={colors.line}
-            strokeWidth={1}
-          />
-        ))}
-      </Svg>
-      <Svg width={34} height={34} viewBox="0 0 24 24" fill="none">
-        <Path
-          d="M12 22s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z"
-          fill={colors.ink}
-          stroke="#fff"
-          strokeWidth={1.4}
-        />
-        <Circle cx={12} cy={11} r={2.6} fill="#fff" />
-      </Svg>
-    </View>
-  );
-}
 
 function MapLink({ label, onPress }: { label: string; onPress: () => void }) {
   return (
@@ -86,6 +41,21 @@ export function LocationSection({ spot }: { spot: SpotDetail }) {
   const q = encodeURIComponent(spot.title);
   const lat = spot.mapy;
   const lng = spot.mapx;
+  const homepage = cleanHomepage(spot.homepage);
+
+  // Single non-interactive pin for this spot. KakaoWebMap reads contentId/mapx/mapy.
+  const pin: NearbySpot = {
+    contentId: spot.contentId,
+    title: spot.title,
+    firstImageUrl: spot.firstImageUrl,
+    category: spot.category,
+    mapx: spot.mapx,
+    mapy: spot.mapy,
+    dist: null,
+    regionName: spot.regionName,
+    sigunguName: spot.sigunguName,
+    overview: spot.overview,
+  };
 
   const openNaver = () => {
     const fallback = `https://map.naver.com/v5/search/${q}`;
@@ -102,7 +72,24 @@ export function LocationSection({ spot }: { spot: SpotDetail }) {
   return (
     <View style={styles.section}>
       <Text style={styles.h2}>위치</Text>
-      <MapPreview />
+      {lat != null && lng != null ? (
+        // Non-interactive: pass touches to the page ScrollView (avoids a WKWebView
+        // dead zone that swallows touchmove and blocks scroll over the map).
+        <View style={styles.map} pointerEvents="none">
+          <KakaoWebMap
+            center={{ lat, lng }}
+            pins={[pin]}
+            userLocation={null}
+            interactive={false}
+            onPinTap={() => {}}
+            onCenterChanged={() => {}}
+          />
+        </View>
+      ) : (
+        <View style={[styles.map, styles.mapPlaceholder]}>
+          <Text style={styles.placeholderText}>위치 정보가 없어요</Text>
+        </View>
+      )}
       <View style={styles.mapLinks}>
         <MapLink label="네이버 지도" onPress={openNaver} />
         <MapLink label="카카오 지도" onPress={openKakao} />
@@ -117,12 +104,12 @@ export function LocationSection({ spot }: { spot: SpotDetail }) {
             onPress={() => Linking.openURL(`tel:${spot.tel}`)}
           />
         ) : null}
-        {spot.homepage ? (
+        {homepage ? (
           <InfoRow
             icon="globe"
-            value={spot.homepage}
+            value={homepage.label}
             link
-            onPress={() => Linking.openURL(spot.homepage as string)}
+            onPress={() => Linking.openURL(homepage.url)}
           />
         ) : null}
       </View>
@@ -140,14 +127,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   map: {
-    height: MAP_H,
+    height: 200,
     borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#e8eaee",
+    backgroundColor: colors.inset,
     marginBottom: 14,
-    alignItems: "center",
-    justifyContent: "center",
   },
+  mapPlaceholder: { alignItems: "center", justifyContent: "center" },
+  placeholderText: { color: colors.ter, fontSize: 14 },
   mapLinks: { flexDirection: "row", gap: 12, marginBottom: 4 },
   mapLink: {
     flex: 1,

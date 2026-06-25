@@ -257,11 +257,11 @@ async function loadDetail(id) {
   } catch (err) {
     if (err.message && /404/.test(err.message)) {
       if (titleH) titleH.textContent = "찾을 수 없음";
-      toast("상세를 불러오지 못했습니다", escapeHtml(err.message));
+      toast("상세를 불러오지 못했습니다", err.message);
       return;
     }
     if (titleH) titleH.textContent = "편집";
-    toast("상세를 불러오지 못했습니다", escapeHtml(err.message));
+    toast("상세를 불러오지 못했습니다", err.message);
   }
 }
 
@@ -574,14 +574,14 @@ function showValidationErrors(err) {
       // coverSpotId / spotIds — show a named toast so the user knows which field failed.
       toast(
         `${toastOnlyMap[fieldKey]} 오류`,
-        escapeHtml(det.issue || det.message || "입력값을 확인하세요"),
+        det.issue || det.message || "입력값을 확인하세요",
       );
       surfaced++;
     }
   });
   toast(
     surfaced ? "입력값을 확인하세요" : "검증 오류",
-    escapeHtml(err.message || "ADMIN_VALIDATION"),
+    err.message || "ADMIN_VALIDATION",
   );
 }
 
@@ -618,14 +618,14 @@ async function saveCuration(overrides, savedLabel) {
     if (savedEl) savedEl.textContent = stamp;
     const globalSaved = $(".page-head-row [data-saved]");
     if (globalSaved && detail.isPublished) globalSaved.textContent = `마지막 발행 · ${nowLabel()}`;
-    toast(savedLabel, escapeHtml(detail.title || ""));
+    toast(savedLabel, detail.title || "");
   } catch (err) {
     if (err.status === 422 || err.code === "ADMIN_VALIDATION") {
       showValidationErrors(err);
     } else if (err.status === 404 || err.code === "ADMIN_CURATION_NOT_FOUND") {
-      toast("큐레이션을 찾을 수 없습니다", escapeHtml(err.message));
+      toast("큐레이션을 찾을 수 없습니다", err.message);
     } else {
-      toast("저장 실패", escapeHtml(err.message || ""));
+      toast("저장 실패", err.message || "");
     }
   } finally {
     setBusy(false);
@@ -862,7 +862,7 @@ document.addEventListener("click", (e) => {
   if (CU.pickerMode === "cover") {
     renderCover({ contentId, name, imageUrl: img });
     markDirty();
-    toast("표지 스팟 설정", escapeHtml(name));
+    toast("표지 스팟 설정", name);
     closePicker();
     return;
   }
@@ -872,7 +872,7 @@ document.addEventListener("click", (e) => {
   const list = $(".picklist[data-sortable]");
   const ids = currentSpotIds();
   if (ids.includes(contentId)) {
-    toast("이미 추가된 스팟입니다", escapeHtml(name));
+    toast("이미 추가된 스팟입니다", name);
     return;
   }
   if (ids.length >= 8) {
@@ -894,7 +894,7 @@ document.addEventListener("click", (e) => {
   // mark this result row as added
   row.classList.add("added");
   addBtn.innerHTML = `<svg class="bi chk" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>추가됨`;
-  toast("손픽 스팟에 추가", escapeHtml(name));
+  toast("손픽 스팟에 추가", name);
 });
 
 // ─── page init ───────────────────────────────────────────────────────────────

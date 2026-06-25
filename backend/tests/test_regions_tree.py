@@ -68,17 +68,14 @@ async def _seed_basic(session: AsyncSession) -> None:
     await _seed_region(session, "11", "서울특별시")
     await _seed_sigungu(session, "1101", "11", "종로구")
     await _seed_sigungu(session, "1102", "11", "강남구")
-    # 종로구: two spots → AVG
+    # Jongno-gu: two spots → AVG
     await _seed_spot(session, "s1", regn="11", signgu="1101", lat=37.50, lng=127.00)
     await _seed_spot(session, "s2", regn="11", signgu="1101", lat=37.60, lng=127.10)
-    # 강남구: no spots → falls back to sido centroid
+    # Gangnam-gu: no spots → falls back to sido centroid
     # hidden spot must not move the centroid
     await _seed_spot(session, "s3", regn="11", signgu="1101", lat=99.0, lng=99.0, show=0)
 
 
-# --------------------------------------------------------------------------- #
-# Service
-# --------------------------------------------------------------------------- #
 async def test_centroid_is_runtime_avg(db_session: AsyncSession) -> None:
     redis = FakeRedis(decode_responses=True)
     await _seed_basic(db_session)
@@ -102,7 +99,7 @@ async def test_empty_sigungu_falls_back_to_sido_centroid(db_session: AsyncSessio
     tree = await regions_tree(db_session, redis)
     seoul = next(r for r in tree if r["regionCode"] == "11")
     gangnam = next(s for s in seoul["sigungus"] if s["sigunguCode"] == "1102")
-    # 강남구 has no spots → COALESCE to sido centroid
+    # Gangnam-gu has no spots → COALESCE to sido centroid
     assert gangnam["centroid"]["lat"] == seoul["centroid"]["lat"]
     assert gangnam["centroid"]["lng"] == seoul["centroid"]["lng"]
 
@@ -135,9 +132,6 @@ async def test_caches_assembled_tree_24h(db_session: AsyncSession) -> None:
     assert 86_000 < ttl <= 86_400
 
 
-# --------------------------------------------------------------------------- #
-# Route
-# --------------------------------------------------------------------------- #
 async def test_regions_tree_route(db_session: AsyncSession, client) -> None:
     redis = FakeRedis(decode_responses=True)
     await _seed_basic(db_session)

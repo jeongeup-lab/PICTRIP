@@ -30,6 +30,9 @@ interface Props {
   onReady?: () => void;
   onPinTap: (contentId: string) => void;
   onCenterChanged: (c: LatLng) => void;
+  /** When false, drag/zoom are locked so the map can sit inside a scrolling
+   * page (spot detail). Defaults true — the map tab is unaffected. */
+  interactive?: boolean;
 }
 
 export function KakaoWebMap({
@@ -39,6 +42,7 @@ export function KakaoWebMap({
   onReady,
   onPinTap,
   onCenterChanged,
+  interactive = true,
 }: Props) {
   // react-native-webview 14's `WebView<P = undefined>` collapses its props to
   // `never` under React 19's JSX typing; instantiating the generic as `<object>`
@@ -123,7 +127,7 @@ export function KakaoWebMap({
         // The Kakao JS SDK enforces a domain check — pinning the source baseUrl
         // to the registered origin (and matching the whitelist) lets it init.
         originWhitelist={["https://*", "http://*"]}
-        source={{ html: buildKakaoMapHtml(KAKAO_JS_KEY), baseUrl: KAKAO_WEB_ORIGIN }}
+        source={{ html: buildKakaoMapHtml(KAKAO_JS_KEY, interactive), baseUrl: KAKAO_WEB_ORIGIN }}
         onMessage={onMessage}
         javaScriptEnabled
         domStorageEnabled

@@ -1,11 +1,7 @@
-"""Integration tests for account deletion.
+"""Integration tests for DELETE /v1/users/me (account deletion).
 
-  DELETE /v1/users/me  — 회원 탈퇴 (anonymize PII, unlink OAuth, revoke sessions)
-
-App Store/Play review (5.1.1(v)) requires real in-app account deletion. The
-endpoint soft-deletes (``deleted_at``) but scrubs PII and removes auth-provider
-links so the account is genuinely gone. Auth is exercised end-to-end with a real
-user row + ``create_access_token``; Redis is the in-memory fakeredis fixture.
+App Store/Play review 5.1.1(v) requires real in-app deletion: soft-delete but scrub
+PII and unlink auth providers so the account is genuinely gone.
 """
 
 from __future__ import annotations
@@ -126,6 +122,42 @@ async def test_delete_anonymizes_unlinks_and_blocks_profile(
     me = await client.get("/v1/users/me", headers=_auth(uid))
     assert me.status_code == 401
     assert me.json()["error"]["code"] == "AUTH_TOKEN_INVALID"
+
+
+@pytest.mark.asyncio
+async def test_delete_clears_password_and_blocks_email_login(
+    client: AsyncClient, override_db_and_seed: AsyncSession
+) -> None:
+    email = f"pw-{uuid.uuid4().hex[:10]}@e.st"
+    password = "correct-horse-battery"  # test fixture, not a real secret
+
+    signup = await client.post(
+        "/v1/auth/email/signup",
+        json={"email": email, "password": password, "name": "비번유저"},
+    )
+    assert signup.status_code == 201
+    uid = signup.json()["data"]["user"]["id"]
+
+    # Sanity: the credential exists and login works before deletion.
+    pre = await client.post("/v1/auth/email/login", json={"email": email, "password": password})
+    assert pre.status_code == 200
+
+    resp = await client.delete("/v1/users/me", headers=_auth(uid))
+    assert resp.status_code == 204
+
+    row = (
+        await override_db_and_seed.execute(
+            text("SELECT password_hash, deleted_at FROM users WHERE id = :u"), {"u": uid}
+        )
+    ).first()
+    assert row is not None
+    assert row.deleted_at is not None  # soft-deleted
+    assert row.password_hash is None  # credential cleared
+
+    # The email login can no longer authenticate this account.
+    post = await client.post("/v1/auth/email/login", json={"email": email, "password": password})
+    assert post.status_code == 401
+    assert post.json()["error"]["code"] == "AUTH_INVALID_CREDENTIALS"
 
 
 @pytest.mark.asyncio

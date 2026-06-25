@@ -18,11 +18,8 @@ class MoodOut(BaseModel):
 
 
 class RegionOut(BaseModel):
-    """A sido (top-level province) for the home region filter. `code` is the
-    legal-dong sido code (e.g. "51"), the value `/moods/{code}/spots?region=`
-    expects. "Nationwide" (전국) is a client-side concept (omit the param), so it
-    is not in this list.
-    """
+    """A sido for the home region filter. code is the legal-dong sido code.
+    "Nationwide" (전국) is client-side (omit the param) and not in this list."""
 
     code: str
     name: str
@@ -35,15 +32,9 @@ class SpotCard(BaseModel):
     addr1: str | None = None
     mapx: float | None = None
     mapy: float | None = None
-    # Canonical subtype label = lcls_systm_codes.lcls_systm3_nm (e.g. "사적지",
-    # "찻집"). Endpoints map it from SpotCardRow.lcls_systm3_nm. Legacy home
-    # routes (by-region/batch) still populate it with the coarse chip code
-    # instead; all other consumers serialize null (backward compat —
-    # SimilarNeighbor/SimilarQuery inherit it as null too).
+    # Subtype label = lcls_systm3_nm; legacy home routes put the coarse chip code here instead.
     category: str | None = None
-    # Optional crowd-level bucket from spot_concentration (Task 9). Defaults None
-    # and is omit-friendly — endpoints enrich it via load_congestion() only where
-    # the screen shows it; everywhere else it stays null.
+    # Crowd bucket from spot_concentration; enriched via load_congestion() only where shown.
     congestion: Literal["low", "medium", "high"] | None = None
 
     @field_validator("firstImageUrl")
@@ -57,9 +48,7 @@ class SimilarNeighbor(SpotCard):
 
 
 class SimilarQuery(SpotCard):
-    """The spot the user picked. Same shape as SpotCard (incl. addr1/mapx/mapy)
-    so the map can center on and mark the query spot instead of guessing from
-    the first neighbor's coords."""
+    """The spot the user picked. Same shape as SpotCard so the map can center on it."""
 
 
 class SimilarResult(BaseModel):
@@ -68,12 +57,8 @@ class SimilarResult(BaseModel):
 
 
 class RelatedSpot(BaseModel):
-    """A "places people search together" entry from KTO TarRlteTar
-    (ADR-0005/0015). TarRlteTar is
-    name-keyed and carries no image (verified against the official field spec),
-    so this is a text chip, not an image card. `contentId` is filled only when
-    the related name exactly matches one of our active spots, letting that chip
-    deep-link to /spots/{contentId}; otherwise it stays a plain chip."""
+    """KTO TarRlteTar entry (ADR-0005/0015). Name-keyed, no image, so it's a text
+    chip; contentId is set only when the name matches an active spot (deep-link)."""
 
     name: str
     category: str | None = None
@@ -84,9 +69,8 @@ class RelatedSpot(BaseModel):
 
 
 class TrendingSpot(BaseModel):
-    """A 전국 "집중률 TOP" entry (#2 home, ADR-0016). `concentrationRate` is KTO's
-    published 관광지 집중률 (0-100, relative to the spot's own peak), `rank` is
-    1-based over the returned slice."""
+    """전국 "집중률 TOP" entry (ADR-0016). concentrationRate is KTO 집중률 (0-100,
+    relative to the spot's own peak); rank is 1-based over the returned slice."""
 
     contentId: str
     title: str
@@ -105,9 +89,7 @@ class TrendingSpot(BaseModel):
 
 
 class HomeHero(BaseModel):
-    """A home-feed hero card (region curation). `title` keeps `\\n` verbatim —
-    the client renders it `pre-line`. `coverUrl` is the cover spot's image (or
-    the first resolved spot's), already https-upgraded."""
+    """Home-feed hero card. title keeps \\n verbatim (client renders pre-line)."""
 
     id: int
     slug: str
@@ -122,7 +104,7 @@ class HomeHero(BaseModel):
 
 
 class HomeRail(BaseModel):
-    """A home-feed mood rail: up to 8 SpotCards (handpicked or quality-gate pool)."""
+    """Home-feed mood rail: up to 8 SpotCards."""
 
     id: int
     title: str
@@ -136,10 +118,8 @@ class HomeFeedResponse(BaseModel):
 
 
 class CurationDetailResponse(BaseModel):
-    """Region/curation detail (S09 §5.2). ``subtitle`` is intentionally omitted;
-    the detail screen shows ``title``/``lead``/``intro`` only. ``coverUrl`` reuses
-    the feed's fallback ordering (cover spot's image, else first resolved spot's),
-    already https-upgraded. ``spots`` are ≤8 congestion-enriched SpotCards."""
+    """Region/curation detail (S09 §5.2). subtitle is intentionally omitted —
+    the detail screen shows title/lead/intro only."""
 
     id: int
     type: str
@@ -167,8 +147,7 @@ class SpotImageOut(BaseModel):
 
 
 class SpotIntro(BaseModel):
-    """detailIntro2 display fields. All optional — null fields are hidden by the
-    client. Sourced verbatim from KTO (no modification)."""
+    """detailIntro2 display fields, verbatim from KTO. All optional."""
 
     usetime: str | None = None
     restdate: str | None = None
@@ -185,7 +164,7 @@ class SpotDetailResponse(SpotCard):
     tel: str | None = None
     regionName: str | None = None
     sigunguName: str | None = None
-    category: str | None = None  # lcls_systm3_nm 세분 라벨
+    category: str | None = None  # lcls_systm3_nm subtype label
     detailStatus: str
     images: list[SpotImageOut] = []
     intro: SpotIntro | None = None

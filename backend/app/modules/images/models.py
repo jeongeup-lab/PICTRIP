@@ -15,10 +15,7 @@ from app.core.embedding import EMBEDDING_DIM
 class SpotEmbedding(Base):
     __tablename__ = "spot_embeddings"
     __table_args__ = (
-        # HNSW serving index for halfvec cosine similarity (ADR-0006).
-        # m / ef_construction match what migration 0005 created so autogenerate
-        # treats the ORM declaration and the live DDL as equivalent — keeps
-        # this PR's new index out of the existing autogenerate drift list.
+        # HNSW cosine index (ADR-0006); m/ef_construction must match migration 0005 to avoid autogenerate drift.
         Index(
             "idx_spot_embeddings_hnsw",
             "embedding",

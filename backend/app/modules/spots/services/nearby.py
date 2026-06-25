@@ -1,9 +1,5 @@
-"""내 주변(nearby) SPT 서비스 — bbox+haversine 거리 쿼리 + 카테고리 taxonomy.
-
-`Spot.lcls_systm{1,2,3}` 컬럼에 묶인 도메인 지식과 `spots` 테이블에 대한
-SQLAlchemy 쿼리는 SPT가 소유한다(backend/CLAUDE.md: select against Spot은 SPT에만).
-MAP은 이 함수가 돌려준 행에 crowd(Redis)만 머지한다 — `app.modules.map.services` 참조.
-"""
+"""Nearby SPT service — bbox+haversine distance query + category taxonomy.
+SPT owns Spot queries; MAP only merges crowd (Redis) onto the returned rows."""
 
 from __future__ import annotations
 
@@ -39,21 +35,18 @@ class NearbySpotRow:
     mapx: float | None
     mapy: float | None
     dist: float | None
-    # KTO subtype 라벨(lcls_systm_codes.lcls_systm3_nm, 예: "사적지", "찻집") — Task 16부터
-    # 카드 category는 coarse 칩 코드가 아니라 이 subtype 라벨이다. 미매칭이면 None.
+    # KTO subtype label (lcls_systm3_nm); None if unmatched.
     category: str | None = None
-    # KTO overview(verbatim) — spot_details에만 존재하고 상세 조회 시 lazy 캐시되므로
-    # 대부분 None이다. 카드 설명 줄은 있을 때만 노출(요약·가공 금지, 클라가 시각 truncate).
+    # KTO overview, verbatim (no summarize); usually None (lazy-cached on detail only).
     overview: str | None = None
-    # 아래 두 필드는 SPT가 채우지 않고(이 함수는 None으로 둔다) 소비 모듈(MAP)이
-    # load_region_meta / load_congestion seam으로 머지한다.
+    # Below filled by the consuming module (MAP) via load_region_meta/load_congestion, not SPT.
     region_name: str | None = None
     sigungu_name: str | None = None
-    congestion: str | None = None  # "low"|"medium"|"high" — spot_concentration 버킷
+    congestion: str | None = None  # spot_concentration bucket
 
 
 def category_predicate(cat: NearbyCategory) -> ColumnElement[bool]:
-    """SSOT 규칙 → SQLAlchemy boolean 표현식 (nearby 쿼리 WHERE에 AND)."""
+    """Category SSOT rule -> SQLAlchemy boolean for the nearby WHERE."""
     if cat is NearbyCategory.attraction:
         return or_(
             Spot.lcls_systm1.in_(("HS", "NA", "EX")),
@@ -79,10 +72,8 @@ def category_predicate(cat: NearbyCategory) -> ColumnElement[bool]:
 
 
 def derive_category(l1: str | None, l2: str | None, l3: str | None) -> str | None:
-    """행의 lcls 값 → 칩 코드(표시용). 우선순위: cafe→food→attraction→leisure→shopping.
-
-    (cafe를 food보다 먼저: FD030100(제과)이 food 제외항목이자 cafe 포함항목.)
-    """
+    """lcls values -> chip code. Order cafe before food: FD030100 is excluded from
+    food but included in cafe."""
     if l2 == "FD05" or l3 == "FD030100":
         return "cafe"
     if l2 in ("FD01", "FD02", "FD03") and l3 != "FD030100":
@@ -104,19 +95,14 @@ async def find_nearby_spots(
     radius: int,
     category: NearbyCategory | None,
 ) -> list[NearbySpotRow]:
-    """반경 `radius` m 내 활성·이미지 보유 스팟을 거리순으로(crowd 없음 — MAP이 머지).
-
-    base = show_flag=1 AND first_image_url IS NOT NULL (spec §3.1).
-    bbox 프리필터(idx_spots_active_location) → Haversine 거리 → 카테고리 → 거리순 LIMIT.
-
-    category=None('전체')은 무필터가 아니라 정의된 5개 카테고리의 union으로 제한한다 —
-    숙박 외 미분류·면세점 등 어느 칩에도 안 잡히는(derive_category=None) 스팟은 제외.
-    """
-    # 1) bounding box (도 단위). 고위도 cos 0 방지.
+    """Active+image spots within radius m, distance-ordered (crowd merged by MAP).
+    Base: show_flag=1 AND first_image_url IS NOT NULL. category=None means the
+    union of the 5 defined categories, NOT no filter — uncategorized spots are excluded."""
+    # Bounding box (degrees); clamp cos to avoid div-by-0 at high latitudes.
     dlat = radius / 111_320.0
     dlng = radius / (111_320.0 * max(math.cos(math.radians(lat)), 0.01))
 
-    # 2) Haversine 거리(m). mapy=lat, mapx=lng. acos 도메인 클램프.
+    # Haversine distance (m); mapy=lat, mapx=lng. acos domain clamped.
     cos_term = func.cos(func.radians(lat)) * func.cos(func.radians(Spot.mapy)) * func.cos(
         func.radians(Spot.mapx) - func.radians(lng)
     ) + func.sin(func.radians(lat)) * func.sin(func.radians(Spot.mapy))
@@ -150,7 +136,7 @@ async def find_nearby_spots(
     if category is not None:
         inner = inner.where(category_predicate(category))
     else:
-        # '전체' = 정의된 5개 카테고리 union. 미분류 스팟은 노출 안 함.
+        # "All" = union of the 5 categories; uncategorized spots excluded.
         inner = inner.where(or_(*(category_predicate(c) for c in NearbyCategory)))
 
     sub = inner.subquery()

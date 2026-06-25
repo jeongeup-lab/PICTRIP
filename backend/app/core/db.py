@@ -1,11 +1,4 @@
-"""Async SQLAlchemy 2.0 setup with asyncpg.
-
-`Base` is the declarative base imported by all module models.
-`async_session` is the request-scoped session factory exposed via `get_db`.
-`DbSession` is the FastAPI dependency-typed alias used by route signatures,
-so routes can stay free of sqlalchemy imports (see ADR-0002 / ADR-0004 +
-backend/pyproject.toml `[tool.importlinter]`).
-"""
+"""Async SQLAlchemy 2.0 setup with asyncpg."""
 
 from __future__ import annotations
 
@@ -23,6 +16,9 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.config import settings
 
+# AsyncSession re-exported so services type their session param without importing sqlalchemy (ADR-0002).
+__all__ = ["AsyncSession", "Base", "DbSession", "engine", "get_db"]
+
 
 class Base(DeclarativeBase):
     """Declarative base for all ORM models."""
@@ -37,9 +33,7 @@ def _build_engine() -> AsyncEngine:
         pool_timeout=30,
         pool_recycle=1800,
         pool_pre_ping=True,
-        # ADR-0006: HNSW serving uses ef_search=80 as the recall/latency baseline.
-        # Pushed in via asyncpg server_settings so it's set once per physical
-        # connection — no per-session SET, no race with pooled reuse.
+        # hnsw.ef_search=80 set as asyncpg server_setting (once per connection, no per-session SET race). ADR-0006.
         connect_args={"server_settings": {"hnsw.ef_search": "80"}},
     )
 
@@ -54,10 +48,7 @@ async_session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency yielding an async session.
-
-    Rolls back on uncaught exceptions; commit must be explicit at the service layer.
-    """
+    """Yield an async session; rolls back on error, commit is explicit in services."""
     async with async_session_factory() as session:
         try:
             yield session
@@ -66,6 +57,5 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
 
 
-# Routes import this alias instead of sqlalchemy.ext.asyncio.AsyncSession
-# directly — keeps routes free of ORM imports per ADR-0002.
+# Route-facing alias so routes stay free of sqlalchemy imports (ADR-0002).
 DbSession = Annotated[AsyncSession, Depends(get_db)]

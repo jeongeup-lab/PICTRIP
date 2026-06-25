@@ -1,13 +1,4 @@
-"""SPT ORM models. See DB schema §Section 3.
-
-Covers the KTO spot master (`spots`), its three reference tables (`regions`,
-`sigungus`, `lcls_systm_codes`), and four spot-keyed children (`spot_details`,
-`spot_images`, `spot_moods`, `user_saved_spots`). `spot_embeddings` lives in
-`app/modules/img/models.py` per the IMG-owns-embedding-pipeline split.
-
-`moods` stays in this file as a reference table — both SPT (`spot_moods` FK
-mood_id) and TST (`user_mood_preferences` FK mood_id) read it.
-"""
+"""SPT ORM models. spot_embeddings lives in img/models.py; moods is shared with TST."""
 
 from __future__ import annotations
 
@@ -42,7 +33,7 @@ from app.core.db import Base
 
 
 class Mood(Base):
-    """8 base moods exposed in the UI. Seeded via Alembic data migration."""
+    """8 base moods exposed in the UI."""
 
     __tablename__ = "moods"
 
@@ -54,8 +45,7 @@ class Mood(Base):
 
 
 class Region(Base):
-    """17 sido (provinces). First 2 digits of the KOSTAT administrative-district
-    classification. Seeded inline in migration 0003."""
+    """17 sido (provinces)."""
 
     __tablename__ = "regions"
 
@@ -64,7 +54,7 @@ class Region(Base):
 
 
 class Sigungu(Base):
-    """~250 sigungu (districts). Populated by W4 KTO areaCode2 sync, not seeded here."""
+    """~250 sigungu (districts)."""
 
     __tablename__ = "sigungus"
 
@@ -76,7 +66,7 @@ class Sigungu(Base):
 
 
 class LclsSystmCode(Base):
-    """KTO classification system (lclsSystmCode2). Populated by W4 sync, not seeded here."""
+    """KTO classification system (lclsSystmCode2)."""
 
     __tablename__ = "lcls_systm_codes"
 
@@ -89,8 +79,7 @@ class LclsSystmCode(Base):
 
 
 class Spot(Base):
-    """KTO spot master. Synced via areaBasedSyncList2 by the external data
-    pipeline (separate ``pictrip-pipeline`` repo); this repo owns the schema."""
+    """KTO spot master. Synced by the pipeline repo; this repo owns the schema."""
 
     __tablename__ = "spots"
     __table_args__ = (
@@ -99,9 +88,7 @@ class Spot(Base):
             name="ck_spot_cpyrht_div_cd",
         ),
         CheckConstraint("show_flag IN (0, 1)", name="ck_spot_show_flag"),
-        # User-facing reads always filter show_flag = 1 (ADR-0007), so the
-        # default browsing/search indexes are partial. Full-table indexes were
-        # dropped in migration 0005.
+        # User reads always filter show_flag=1 (ADR-0007), so browsing indexes are partial.
         Index(
             "idx_spots_active_location",
             "mapx",
@@ -130,7 +117,7 @@ class Spot(Base):
             "show_flag",
             postgresql_where=text("show_flag = 1"),
         ),
-        # Quality-gate random pool for the home feed (M2, migration 0012).
+        # Partial index backs the home-feed quality-gate random pool.
         Index(
             "idx_spots_image_pool",
             "ldong_regn_cd",
@@ -168,12 +155,8 @@ class Spot(Base):
 
 
 class SpotDetail(Base):
-    """Lazy 7-day cache of detailCommon2 / detailIntro2 / detailInfo2.
-
-    `overview` lives here (not on `spots`) per ADR-0007: KTO areaBasedSyncList2
-    doesn't deliver it, so it's only populated on detail-view fetch, then cached
-    for 7 days. Stored verbatim — never derive or summarize.
-    """
+    """Lazy 7-day cache of detail* responses. overview lives here (not spots)
+    per ADR-0007 and is stored verbatim — never derive or summarize."""
 
     __tablename__ = "spot_details"
     __table_args__ = (Index("idx_spot_details_cached", "cached_at"),)
@@ -195,7 +178,7 @@ class SpotDetail(Base):
 
 
 class SpotImage(Base):
-    """Additional images from detailImage2. KTO URLs only — never store the bytes."""
+    """Additional images from detailImage2. KTO URLs only — never store bytes."""
 
     __tablename__ = "spot_images"
     __table_args__ = (
@@ -217,7 +200,7 @@ class SpotImage(Base):
 
 
 class SpotMood(Base):
-    """M:N spots ↔ moods. confidence: 1.0 = code match, 0.0 to 1.0 = image match."""
+    """M:N spots <-> moods. confidence: 1.0 = code match, 0.0-1.0 = image match."""
 
     __tablename__ = "spot_moods"
     __table_args__ = (
@@ -243,20 +226,9 @@ class SpotMood(Base):
 
 
 class SpotConcentration(Base):
-    """KTO 관광지 집중률 — TatsCnctrRateService (data.go.kr 15128555, ADR-0016).
-
-    ㈜KT mobile-data forward-30-day visitor concentration. The value is a
-    *relative* 0-100 figure where 100 = that spot's own busiest period - NOT an
-    absolute visitor count, so ranking by it surfaces "places near their seasonal
-    peak right now", which is exactly KTO's published 집중률 metric (honest source
-    attribution, no fabricated ranking).
-
-    The source is keyed by 관광지명 (`tAtsNm`) + 시군구, not contentId, so rows are
-    name-matched to our active spots; spots with no KTO 집중률 simply have no row
-    and are excluded from the 전국 tab. Only the collection-day value is kept (one
-    row per spot). Populated by the manual ``scripts/sync_concentration.py`` run
-    — the 30-day prediction is stable enough for a periodic manual refresh.
-    """
+    """KTO 관광지 집중률 (ADR-0016). concentration_rate is a relative 0-100 figure
+    (100 = that spot's own peak), not an absolute count. Source is name-keyed
+    (tAtsNm + 시군구), so rows are name-matched to active spots; no row = excluded."""
 
     __tablename__ = "spot_concentration"
     __table_args__ = (
@@ -264,7 +236,6 @@ class SpotConcentration(Base):
             "concentration_rate >= 0 AND concentration_rate <= 100",
             name="ck_spot_concentration_rate_range",
         ),
-        # Ranking reads order by rate DESC; partial to the active+ranked set.
         Index("idx_spot_concentration_rate", text("concentration_rate DESC")),
     )
 
@@ -283,7 +254,7 @@ class SpotConcentration(Base):
 
 
 class UserSavedSpot(Base):
-    """User saves a spot. CASCADE both sides — withdrawal/spot-removal wipes."""
+    """User saves a spot. CASCADE both sides."""
 
     __tablename__ = "user_saved_spots"
     __table_args__ = (Index("idx_user_saved_spots_user", "user_id", text("saved_at DESC")),)
@@ -303,12 +274,10 @@ class UserSavedSpot(Base):
     )
 
 
-# ---------- TarRlteTar §7 lives in Redis (rlte:{contentId}, 1h TTL) per ADR-0005.
-# No ORM models — related-spots data is never persisted in PostgreSQL.
+# TarRlteTar lives in Redis (rlte:{contentId}, 1h TTL, ADR-0005) — no ORM model.
 
 
-# ---------- Curation (S07 §3.1/§3.2) — first-class entity backing the home feed
-# and the region/mood detail pages. Mirrors migration 0011_curations exactly.
+# Curation (S07 §3.1/§3.2) — first-class entity backing the home feed + detail pages.
 class Curation(Base):
     __tablename__ = "curations"
 

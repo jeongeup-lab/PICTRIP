@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Redirect } from "expo-router";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
-import { getOnboardingSeen } from "@/lib/storage";
+import { ensureFreshInstall, getOnboardingSeen } from "@/lib/storage";
 import { SplashScreen } from "@/components/SplashScreen";
 
 export default function BootGate() {
@@ -11,6 +11,9 @@ export default function BootGate() {
   useEffect(() => {
     let active = true;
     (async () => {
+      // Reset the onboarding flag on a fresh install before reading it, since
+      // the secure-store flag survives uninstall on iOS (see ensureFreshInstall).
+      await ensureFreshInstall();
       const [seen] = await Promise.all([getOnboardingSeen(), useAuthStore.getState().hydrate()]);
       if (active) setTarget(seen ? "/(tabs)" : "/onboarding");
     })();

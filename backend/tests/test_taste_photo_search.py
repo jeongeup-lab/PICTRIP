@@ -1,14 +1,7 @@
-"""Integration tests for POST /v1/taste/photo-search (rewritten — Task 15).
+"""Integration tests for POST /v1/taste/photo-search.
 
-Flow: multipart image + optional lat/lng -> CLIP embed (in-memory, bytes
-discarded) -> HNSW-direct top-N over spot_embeddings.embedding (halfvec(512))
--> calibrated similarity floor (with a top-N soft floor) -> enriched matches
-(SpotCard + similarity + optional distance/region meta/congestion).
-
-The CLIP embed is stubbed at the boundary (ClipEmbedder.embed_image) so the
-test is deterministic and needs no model download. Everything below the stub —
-the service, the pgvector query, card hydration, congestion + region enrichment
-— runs for real against the migrated test DB.
+CLIP embed is stubbed at the ClipEmbedder.embed_image boundary (deterministic, no model
+download); everything below the stub runs for real against the migrated test DB.
 """
 
 from __future__ import annotations
