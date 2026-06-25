@@ -125,6 +125,42 @@ async def test_delete_anonymizes_unlinks_and_blocks_profile(
 
 
 @pytest.mark.asyncio
+async def test_delete_clears_password_and_blocks_email_login(
+    client: AsyncClient, override_db_and_seed: AsyncSession
+) -> None:
+    email = f"pw-{uuid.uuid4().hex[:10]}@e.st"
+    password = "correct-horse-battery"  # test fixture, not a real secret
+
+    signup = await client.post(
+        "/v1/auth/email/signup",
+        json={"email": email, "password": password, "name": "비번유저"},
+    )
+    assert signup.status_code == 201
+    uid = signup.json()["data"]["user"]["id"]
+
+    # Sanity: the credential exists and login works before deletion.
+    pre = await client.post("/v1/auth/email/login", json={"email": email, "password": password})
+    assert pre.status_code == 200
+
+    resp = await client.delete("/v1/users/me", headers=_auth(uid))
+    assert resp.status_code == 204
+
+    row = (
+        await override_db_and_seed.execute(
+            text("SELECT password_hash, deleted_at FROM users WHERE id = :u"), {"u": uid}
+        )
+    ).first()
+    assert row is not None
+    assert row.deleted_at is not None  # soft-deleted
+    assert row.password_hash is None  # credential cleared
+
+    # The email login can no longer authenticate this account.
+    post = await client.post("/v1/auth/email/login", json={"email": email, "password": password})
+    assert post.status_code == 401
+    assert post.json()["error"]["code"] == "AUTH_INVALID_CREDENTIALS"
+
+
+@pytest.mark.asyncio
 async def test_delete_is_idempotent(
     client: AsyncClient, override_db_and_seed: AsyncSession
 ) -> None:

@@ -3,9 +3,16 @@ import { SEOUL_CITY_HALL } from "@/constants/map";
 /** Build the self-contained HTML for the KakaoWebMap WebView. The Kakao JS SDK
  * is loaded with autoload=false and initialized in kakao.maps.load(). Markers
  * are CustomOverlays: ink teardrop pins + a blue current-location dot (the one
- * sanctioned color, S05 §1.2). Bridges via window.ReactNativeWebView. */
-export function buildKakaoMapHtml(jsKey: string): string {
+ * sanctioned color, S05 §1.2). Bridges via window.ReactNativeWebView.
+ *
+ * When `interactive` is false the map is locked (no drag/zoom, no
+ * center_changed events) so it can live inside a scrolling page (spot detail)
+ * without fighting the page scroll. */
+export function buildKakaoMapHtml(jsKey: string, interactive = true): string {
   const { lat, lng } = SEOUL_CITY_HALL;
+  const gestures = interactive
+    ? `kakao.maps.event.addListener(map,'dragend',function(){ var c=map.getCenter(); post('center_changed',{lat:c.getLat(),lng:c.getLng()}); });`
+    : `map.setDraggable(false); map.setZoomable(false);`;
   return `<!doctype html>
 <html>
 <head>
@@ -55,7 +62,7 @@ export function buildKakaoMapHtml(jsKey: string): string {
   function initMap(){
     try{
       map = new kakao.maps.Map(document.getElementById('map'), { center:new kakao.maps.LatLng(${lat},${lng}), level:6 });
-      kakao.maps.event.addListener(map,'dragend',function(){ var c=map.getCenter(); post('center_changed',{lat:c.getLat(),lng:c.getLng()}); });
+      ${gestures}
       document.getElementById('msg').textContent='';
       post('ready');
     }catch(e){ fail('init-failed','지도를 표시할 수 없어요'); }

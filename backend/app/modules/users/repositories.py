@@ -27,6 +27,28 @@ async def get_user(session: AsyncSession, user_id: int) -> User | None:
     return await session.get(User, user_id)
 
 
+async def get_active_user_by_email(session: AsyncSession, email: str) -> User | None:
+    return await session.scalar(  # type: ignore[no-any-return]
+        select(User).where(User.email == email, User.deleted_at.is_(None))
+    )
+
+
+async def create_email_user(
+    session: AsyncSession, *, email: str, name: str | None, password_hash: str
+) -> User:
+    """Insert a User + its 'email' provider link inside a savepoint.
+
+    Raises ``IntegrityError`` if a concurrent insert wins the partial-unique email
+    index / provider UNIQUE constraint; the caller maps that to a 409."""
+    async with session.begin_nested():
+        user = User(email=email, name=name, password_hash=password_hash)
+        session.add(user)
+        await session.flush()
+        session.add(UserAuthProvider(user_id=user.id, provider="email", provider_user_id=email))
+        await session.flush()
+    return user
+
+
 async def get_or_create_user_via_provider(
     session: AsyncSession,
     *,

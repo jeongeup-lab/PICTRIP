@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 import { router } from "expo-router";
 import { SocialButton } from "@/features/auth/components/SocialButton";
@@ -87,6 +87,16 @@ export function LoginCard({ variant, onSuccess, onCancel }: Props) {
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
+      <View style={styles.emailWrap}>
+        <Pressable
+          style={({ pressed }) => [styles.emailBtn, pressed && styles.emailBtnPressed]}
+          onPress={() => router.push("/auth/email")}
+          disabled={pending !== null}
+        >
+          <Text style={styles.emailBtnText}>이메일로 계속하기</Text>
+        </Pressable>
+      </View>
+
       <Text style={styles.terms}>
         계속 진행하면{" "}
         <Text style={styles.termsLink} onPress={() => router.push("/legal/terms")}>
@@ -125,6 +135,18 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   social: { paddingHorizontal: spacing.lg, gap: 11 },
+  emailWrap: { paddingHorizontal: spacing.lg, marginTop: 11 },
+  emailBtn: {
+    height: 54,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.bg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emailBtnPressed: { backgroundColor: colors.fill },
+  emailBtnText: { fontSize: 16, fontWeight: "700", color: colors.ink },
   error: { color: colors.sec, fontSize: 13, textAlign: "center", marginTop: spacing.md },
   terms: {
     textAlign: "center",

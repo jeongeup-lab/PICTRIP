@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import KtoApiUnavailable, ResourceNotFound
 from app.core.kto_client import KtoClient, KtoService
-from app.core.text import clean_scalar, verbatim
+from app.core.text import clean_homepage, clean_scalar, verbatim
 from app.modules.spots.models import (
     LclsSystmCode,
     Region,
@@ -288,7 +288,7 @@ async def _fetch_kto_detail(
 
     common = common_items[0] if common_items else {}
     overview = verbatim(common.get("overview"))
-    homepage = clean_scalar(common.get("homepage"))
+    homepage = clean_homepage(common.get("homepage"))
     tel = clean_scalar(common.get("tel"))
     images: list[tuple[str, str | None]] = []
     for item in image_items:

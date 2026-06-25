@@ -23,4 +23,13 @@ describe("buildKakaoMapHtml", () => {
     expect(html).toContain("pin_tap");
     expect(html).toContain("setPins");
   });
+  it("emits center_changed in the default (interactive) mode", () => {
+    expect(buildKakaoMapHtml("TESTKEY123", true)).toContain("center_changed");
+  });
+  it("locks the map and drops center_changed when non-interactive", () => {
+    // Locked map lives inside a scrolling page (spot detail) — no drag, no events.
+    const locked = buildKakaoMapHtml("TESTKEY123", false);
+    expect(locked).toContain("setDraggable(false)");
+    expect(locked).not.toContain("center_changed");
+  });
 });

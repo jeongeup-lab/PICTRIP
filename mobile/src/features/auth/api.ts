@@ -14,6 +14,27 @@ export async function oauthLogin(
   })) as unknown as TokenPair;
 }
 
+/** Email/password login → our token pair. Unauthed (bareClient). */
+export async function emailLogin(email: string, password: string): Promise<TokenPair> {
+  return (await bareClient.post("/auth/email/login", {
+    email,
+    password,
+  })) as unknown as TokenPair;
+}
+
+/** Email/password signup → our token pair. Unauthed (bareClient). */
+export async function emailSignup(
+  email: string,
+  password: string,
+  name?: string,
+): Promise<TokenPair> {
+  return (await bareClient.post("/auth/email/signup", {
+    email,
+    password,
+    name,
+  })) as unknown as TokenPair;
+}
+
 /** Denylist the refresh token server-side. Idempotent; unauthed. */
 export async function logoutRequest(refreshToken: string | null): Promise<void> {
   await bareClient.post("/auth/logout", { refreshToken });

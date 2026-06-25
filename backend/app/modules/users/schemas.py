@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class UserPublic(BaseModel):
@@ -19,6 +19,18 @@ class UserPublic(BaseModel):
 class OAuthLoginIn(BaseModel):
     idToken: str
     nonce: str | None = None
+
+
+class EmailSignupIn(BaseModel):
+    email: EmailStr
+    # bcrypt input is capped at 72 bytes; mirror that as the max password length.
+    password: str = Field(min_length=8, max_length=72)
+    name: str | None = None
+
+
+class EmailLoginIn(BaseModel):
+    email: EmailStr
+    password: str
 
 
 class RefreshBody(BaseModel):

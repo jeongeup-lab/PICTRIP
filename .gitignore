@@ -30,3 +30,7 @@ coverage/
 
 # --- deploy ---
 deploy/api-host/.deploy.env
+
+# Superpowers SDD scratch (local only)
+.superpowers/
+**/.superpowers/
