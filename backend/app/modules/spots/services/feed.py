@@ -1,10 +1,4 @@
-"""Home feed assembly — 6 region heroes + 3 mood rails (S07 §3).
-
-Backend-assembled feed: the 6 published ``type='region'`` curations (ordered by
-``position``) become heroes, and the 3 published ``type='mood'`` curations become
-rails. Each rail carries up to 8 resolved ``SpotCardRow``s (handpicked or the
-quality-gate random pool, see ``curations.resolve_curation_spots``).
-"""
+"""Home feed assembly — 6 region heroes + 3 mood rails (S07 §3)."""
 
 from __future__ import annotations
 

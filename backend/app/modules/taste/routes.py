@@ -25,12 +25,6 @@ async def photo_search(
     lat: float | None = Query(default=None),
     lng: float | None = Query(default=None),
 ) -> dict[str, Any]:
-    """Embed the uploaded image in memory (bytes discarded immediately, never
-    persisted — KTO compliance) and return the most similar spots, sorted by
-    CLIP similarity desc. ``lat``/``lng`` (both required together) add a
-    haversine ``distance`` to each match and set ``queryHadLocation``. An empty
-    result is a valid 200 (empty ``matches``), not an error.
-    """
     image_bytes = await image.read()
     result = await photo_search_service(session, image_bytes, lat=lat, lng=lng)
     payload = PhotoSearchResponse(

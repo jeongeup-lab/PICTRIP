@@ -126,8 +126,7 @@ class SessionStoreUnavailable(AppError):
     message = "세션 저장소에 일시적인 문제가 발생했습니다."
 
 
-# --- admin console (A01 §3) — used by the separate admin plan; kept here so the
-# preserved admin/ skeleton keeps compiling. ---
+# --- admin console (A01 §3) — kept here so the admin/ skeleton compiles ---
 class AdminUnauthorized(AppError):
     code = "ADMIN_UNAUTHORIZED"
     http_status = 401

@@ -95,9 +95,9 @@ async def test_authenticate_with_oauth_savepoint_rollback_on_race(
 
     fake_claims = OidcClaims(sub="kakao-race-1", email=None, name=None, picture=None)
 
-    from app.modules.users import services as users_services
+    from app.modules.users import repositories as users_repo
 
-    real_find = users_services._find_provider
+    real_find = users_repo.find_auth_provider
     call_count = {"n": 0}
 
     async def lying_find(
@@ -113,7 +113,10 @@ async def test_authenticate_with_oauth_savepoint_rollback_on_race(
             "app.modules.users.services.verify_oauth_id_token",
             AsyncMock(return_value=fake_claims),
         ),
-        patch("app.modules.users.services._find_provider", side_effect=lying_find),
+        patch(
+            "app.modules.users.repositories.find_auth_provider",
+            side_effect=lying_find,
+        ),
     ):
         pair = await authenticate_with_oauth(db_session, "kakao", OAuthLoginIn(idToken="x"))
 

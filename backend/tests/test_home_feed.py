@@ -1,10 +1,4 @@
-"""GET /v1/home/feed — backend-assembled feed (6 region heroes + 3 mood rails).
-
-Covers the JSend shape, the handpicked path, the quality-gate random pool
-(deterministic per curation+KST-date), the daily cache (resolved content_id list
-in ``curation:{id}:spots`` with a stable per-curation jitter), and coverUrl
-fallback ordering.
-"""
+"""GET /v1/home/feed — backend-assembled feed (6 region heroes + 3 mood rails)."""
 
 from __future__ import annotations
 
@@ -127,13 +121,11 @@ async def _add_handpick(session: AsyncSession, curation_id: int, cid: str, pos: 
 @pytest.fixture
 async def seed_feed(db_session: AsyncSession) -> None:
     """6 published region curations + 3 published mood curations + spots."""
-    # regions + moods
     for i in range(6):
         await _seed_region(db_session, f"R{i}", f"region-{i}")
     for i in range(3):
         await _seed_mood(db_session, 10 + i, f"mood{i}")
 
-    # spots: each region gets a pool of image-bearing spots
     for ri in range(6):
         for si in range(5):
             await _seed_spot(
@@ -143,7 +135,6 @@ async def seed_feed(db_session: AsyncSession) -> None:
                 overview="ov" if si % 2 == 0 else None,
                 embedding=si % 3 == 0,
             )
-    # mood spots
     for mi in range(3):
         for si in range(5):
             await _seed_spot(
@@ -154,7 +145,6 @@ async def seed_feed(db_session: AsyncSession) -> None:
                 overview="ov" if si % 2 == 0 else None,
             )
 
-    # 6 region heroes
     for i in range(6):
         await _seed_curation(
             db_session,
@@ -165,7 +155,6 @@ async def seed_feed(db_session: AsyncSession) -> None:
             position=i,
             region_cd=f"R{i}",
         )
-    # 3 mood rails
     for i in range(3):
         await _seed_curation(
             db_session,

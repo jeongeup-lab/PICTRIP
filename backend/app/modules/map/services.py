@@ -1,10 +1,4 @@
-"""MAP service layer — nearby enrichment + region reverse geocode.
-
-nearby 쿼리(bbox+haversine+카테고리)와 taxonomy는 SPT가 소유한다
-(`app.modules.spots.services.find_nearby_spots`). MAP은 그 거리순 행에 congestion
-(spot_concentration 버킷)과 region 메타(regions/sigungus)를 SPT seam으로 머지한다 —
-둘 다 행이 없으면 None(graceful, 에러 아님). crowd(Redis) 머지는 Task 16에서 제거됐다.
-"""
+"""MAP service layer — nearby enrichment + region reverse geocode."""
 
 from __future__ import annotations
 
@@ -12,11 +6,11 @@ import json
 from typing import Any
 
 from redis.asyncio import Redis
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db import AsyncSession
 from app.core.kakao_local import kakao_local_get
 from app.core.logging import get_logger
+from app.modules.map import repositories as repo
 from app.modules.map.schemas import RegionLabel
 from app.modules.spots.services import (
     NearbyCategory,
@@ -45,12 +39,7 @@ async def nearby_spots(
     radius: int,
     category: NearbyCategory | None,
 ) -> list[NearbySpotRow]:
-    """SPT의 거리순 nearby 행에 congestion + region 메타를 머지하고 30개로 자른다.
-
-    congestion(spot_concentration 버킷)과 region/sigungu 라벨은 SPT seam
-    (load_congestion / load_region_meta)에서 한 번에 조회해 머지한다 — 둘 다 행이 없으면
-    None으로 둔다(graceful, 에러 아님).
-    """
+    """Merge congestion + region meta onto SPT's distance-ranked rows, capped at 30."""
     rows = await find_nearby_spots(session, lat=lat, lng=lng, radius=radius, category=category)
     rows = rows[:_NEARBY_LIMIT]
     if not rows:
@@ -71,7 +60,7 @@ def _to_region_label(payload: dict[str, Any]) -> RegionLabel | None:
     docs = payload.get("documents") or []
     if not docs:
         return None
-    # Prefer administrative-dong (H), then fall back to the first document.
+    # Prefer administrative-dong (H), else first document.
     doc = next((d for d in docs if d.get("region_type") == "H"), docs[0])
     sido = doc.get("region_1depth_name") or None
     sigungu = doc.get("region_2depth_name") or None
@@ -85,12 +74,9 @@ def _to_region_label(payload: dict[str, Any]) -> RegionLabel | None:
 async def reverse_geocode(redis: Redis, *, lat: float, lng: float) -> RegionLabel | None:
     """Return a region label from Kakao coord2regioncode with Redis caching.
 
-    Failures and empty responses degrade to None so the client can display its
-    generic "near me" fallback.
+    Failures and empty responses degrade to None for a generic "near me" fallback.
     """
     key = _REGION_CACHE_KEY.format(lat=lat, lng=lng)
-    # Dead cache = miss. Redis outages or corrupt cache must not turn region
-    # lookup into a 500.
     cached = None
     try:
         cached = await redis.get(key)
@@ -102,7 +88,7 @@ async def reverse_geocode(redis: Redis, *, lat: float, lng: float) -> RegionLabe
             if raw == "null":
                 return None
             return RegionLabel.model_validate_json(raw)
-        except ValueError as exc:  # includes UnicodeDecodeError and pydantic ValidationError
+        except ValueError as exc:  # UnicodeDecodeError + pydantic ValidationError
             logger.warning("map.region.cache_corrupt", error=str(exc))
 
     payload = await kakao_local_get(_COORD2REGIONCODE_PATH, params={"x": lng, "y": lat})
@@ -117,29 +103,8 @@ async def reverse_geocode(redis: Redis, *, lat: float, lng: float) -> RegionLabe
     return label
 
 
-# Centroids are runtime AVG of visible spot coordinates. mapx=lng, mapy=lat
-# (S07 ERD) — do not swap. The "{시도} 전체" centroid is the sido-scope AVG; a
-# sigungu with no spots COALESCEs to that sido centroid.
-_SIDO_CENTROID_SQL = text(
-    "SELECT ldong_regn_cd AS code, AVG(mapx) AS cx, AVG(mapy) AS cy "
-    "FROM spots WHERE show_flag = 1 AND ldong_regn_cd IS NOT NULL "
-    "GROUP BY ldong_regn_cd"
-)
-_SIGUNGU_CENTROID_SQL = text(
-    "SELECT ldong_signgu_cd AS code, AVG(mapx) AS cx, AVG(mapy) AS cy "
-    "FROM spots WHERE show_flag = 1 AND ldong_signgu_cd IS NOT NULL "
-    "GROUP BY ldong_signgu_cd"
-)
-
-
 async def regions_tree(session: AsyncSession, redis: Redis) -> list[dict[str, Any]]:
-    """17 sido + their sigungus, each with a runtime-AVG centroid, cached 24h.
-
-    Centroids are computed once over the whole spots table (two GROUP BY scans)
-    rather than per-row to keep the assembly O(regions + sigungus). A sigungu
-    with no visible spots falls back to its sido centroid; the cache stores the
-    fully assembled JSON so subsequent reads skip the DB entirely.
-    """
+    """17 sido + their sigungus, each with a runtime-AVG centroid, cached 24h."""
     try:
         cached = await redis.get(REGIONS_TREE_KEY)
     except Exception as exc:  # cache is non-critical — degrade to a rebuild.
@@ -152,29 +117,10 @@ async def regions_tree(session: AsyncSession, redis: Redis) -> list[dict[str, An
         except (ValueError, TypeError) as exc:
             logger.warning("map.regions_tree.cache_corrupt", error=str(exc))
 
-    regions = (
-        await session.execute(
-            text("SELECT ldong_regn_cd, ldong_regn_nm FROM regions ORDER BY ldong_regn_cd")
-        )
-    ).all()
-    sigungus = (
-        await session.execute(
-            text(
-                "SELECT ldong_signgu_cd, ldong_regn_cd, ldong_signgu_nm FROM sigungus "
-                "ORDER BY ldong_signgu_cd"
-            )
-        )
-    ).all()
-    sido_centroids = {
-        r.code: (float(r.cx), float(r.cy))
-        for r in (await session.execute(_SIDO_CENTROID_SQL)).all()
-        if r.cx is not None and r.cy is not None
-    }
-    sigungu_centroids = {
-        r.code: (float(r.cx), float(r.cy))
-        for r in (await session.execute(_SIGUNGU_CENTROID_SQL)).all()
-        if r.cx is not None and r.cy is not None
-    }
+    regions = await repo.fetch_regions(session)
+    sigungus = await repo.fetch_sigungus(session)
+    sido_centroids = await repo.fetch_sido_centroids(session)
+    sigungu_centroids = await repo.fetch_sigungu_centroids(session)
 
     sigungus_by_regn: dict[str, list[Any]] = {}
     for sg in sigungus:
@@ -185,6 +131,7 @@ async def regions_tree(session: AsyncSession, redis: Redis) -> list[dict[str, An
         sido_lng, sido_lat = sido_centroids.get(region.ldong_regn_cd, (0.0, 0.0))
         sg_nodes: list[dict[str, Any]] = []
         for sg in sigungus_by_regn.get(region.ldong_regn_cd, []):
+            # A sigungu with no visible spots falls back to its sido centroid.
             lng, lat = sigungu_centroids.get(sg.ldong_signgu_cd, (sido_lng, sido_lat))
             sg_nodes.append(
                 {

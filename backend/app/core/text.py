@@ -1,10 +1,4 @@
-"""Shared KTO scalar-field cleaning helpers.
-
-Both SPT (detail / related) and MAP (nearby) parse raw KTO API items, so the
-trim-empty-to-None logic lives here in core rather than being duplicated per
-module. `clean_scalar` is the default; `verbatim` is the exception for KTO
-`overview`, which must be stored exactly as sent (ADR-0007).
-"""
+"""Shared KTO scalar-field cleaning. `clean_scalar` trims; `verbatim` preserves `overview` exactly (ADR-0007)."""
 
 from __future__ import annotations
 

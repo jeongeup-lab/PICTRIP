@@ -1,10 +1,4 @@
-"""GET /v1/curations/{slug} — region/curation detail (S09 §5.2).
-
-Covers the JSend detail shape (id/type/slug/title/lead/intro/coverUrl/spots),
-``subtitle`` omission, coverUrl fallback ordering (reused from the feed), the
-≤8 congestion-enriched SpotCards via ``resolve_curation_spots``, and the 404
-``RESOURCE_NOT_FOUND`` for unknown or unpublished slugs.
-"""
+"""GET /v1/curations/{slug} — region/curation detail (S09 §5.2)."""
 
 from __future__ import annotations
 

@@ -1,12 +1,7 @@
 """JWT issuance, verification, and FastAPI dependencies.
 
-RS256 with key material loaded from settings (Secrets Manager in prod).
-For local dev with empty keys, a dev fallback HS256 secret is used.
-
-Uses PyJWT (with `cryptography` backend) rather than python-jose because the
-latter transitively pulls in `python-ecdsa`, which has an unfixed Minerva
-timing attack on P-256 (CVE-2024-23342). See docs/adr/0005 if we need to
-revisit JWT lib choice.
+RS256 in prod, HS256 dev fallback when keys are empty. Uses PyJWT not python-jose:
+python-jose pulls in python-ecdsa with an unfixed P-256 timing attack (CVE-2024-23342, ADR-0005).
 """
 
 from __future__ import annotations
@@ -34,10 +29,7 @@ logger = get_logger(__name__)
 if TYPE_CHECKING:
     from app.modules.users.schemas import TokenPair, UserPublic
 
-# `users.schemas` is imported lazily inside the functions that mint a TokenPair to
-# avoid an import cycle: a module whose package sorts before `usr` (e.g. `sys`)
-# loads `app.core.auth` first, and an eager top-level `usr` import here would
-# re-enter `users.routes` -> `app.core.auth` before this module finished loading.
+# `users.schemas` is imported lazily inside mint functions to break an import cycle.
 
 _DEV_HS256_SECRET = "pictrip-local-dev-only-not-for-prod"
 
@@ -117,7 +109,7 @@ CurrentUserId = Annotated[int, Depends(get_current_user_id)]
 
 
 def mint_token_pair(*, user_id: int, user: UserPublic | None = None) -> TokenPair:
-    """Issue a fresh access+refresh pair. Zero Redis writes (denylist model)."""
+    """Issue a fresh access+refresh pair (no Redis writes — denylist model)."""
     from app.modules.users.schemas import TokenPair, UserPublic
 
     access = create_access_token(user_id=user_id)
@@ -131,8 +123,7 @@ def mint_token_pair(*, user_id: int, user: UserPublic | None = None) -> TokenPai
 
 
 async def refresh_tokens(redis: Redis, refresh_token: str) -> TokenPair:
-    """Sliding refresh, no rotation. Verify sig+exp, check the denylist (fail-open),
-    re-mint a new access + a refresh with the SAME jti and a fresh 30d exp."""
+    """Sliding refresh, no rotation: re-mint with the SAME jti, fresh exp."""
     from app.modules.users.schemas import TokenPair, UserPublic
 
     payload = decode_token(refresh_token)
@@ -161,8 +152,7 @@ async def refresh_tokens(redis: Redis, refresh_token: str) -> TokenPair:
 
 
 async def deny_refresh(redis: Redis, refresh_token: str | None) -> None:
-    """Logout/withdraw: add the refresh jti to the denylist for its remaining TTL.
-    Idempotent; missing/malformed/expired tokens are silent no-ops."""
+    """Logout/withdraw: denylist the refresh jti for its remaining TTL (idempotent)."""
     if not refresh_token:
         return
     try:

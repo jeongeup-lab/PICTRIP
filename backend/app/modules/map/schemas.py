@@ -17,12 +17,10 @@ class NearbySpotCard(BaseModel):
     mapx: float | None = None
     mapy: float | None = None
     dist: float | None = None  # distance from query point, metres
-    # KTO subtype 라벨(lcls_systm_codes.lcls_systm3_nm, 예: "사적지", "찻집") — null 가능.
-    category: str | None = None
-    regionName: str | None = None  # regions.ldong_regn_nm — null when unmapped
-    sigunguName: str | None = None  # sigungus.ldong_signgu_nm — null when unmapped
-    overview: str | None = None  # KTO overview(verbatim) — null when not yet cached
-    # spot_concentration 버킷(Task 9) — concentration 행이 없으면 null.
+    category: str | None = None  # KTO subtype label (lcls_systm3_nm)
+    regionName: str | None = None
+    sigunguName: str | None = None
+    overview: str | None = None  # KTO overview, verbatim
     congestion: Literal["low", "medium", "high"] | None = None
 
     @field_validator("firstImageUrl")

@@ -1,4 +1,4 @@
-"""USR routes. See API spec §5 + design 2026-05-27 §1."""
+"""USR routes (API spec §5)."""
 
 from __future__ import annotations
 
@@ -107,9 +107,6 @@ async def put_consents(
 ) -> dict[str, Any]:
     consent = await services.put_consents(session, user_id, body)
     return ok(consent.model_dump())
-
-
-# ---------- Saved spots / bookmarks (ADR-0011) ----------
 
 
 @router.get(
