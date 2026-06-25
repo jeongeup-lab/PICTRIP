@@ -1,4 +1,4 @@
-"""MAP는 spots의 ORM 모델을 직접 import하지 않는다 — cross-module read는 spots.services seam으로(#22)."""
+"""MAP must not import spots ORM models directly — cross-module reads go through the spots.services seam (#22)."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def test_map_routes_does_not_import_spots_models() -> None:
 
 
 def test_map_categories_module_is_gone() -> None:
-    # taxonomy는 spots로 이동했다 — 옛 위치는 더 이상 존재하지 않아야 한다.
+    # taxonomy moved to spots — the old location must no longer exist.
     import importlib.util
 
     assert importlib.util.find_spec("app.modules.map.categories") is None

@@ -1,13 +1,7 @@
-"""Provider-agnostic OIDC id_token verification (kakao / google / apple).
+"""Provider-agnostic OIDC id_token verification (kakao/google/apple).
 
-Kakao delegates to the existing `app.core.kakao_oidc` path. Google and Apple use
-a generic verifier that fetches the provider JWKS (1h fresh / 24h stale-on-error,
-same policy as Kakao), matches the `kid`, and verifies signature + iss + aud +
-exp, rejecting `alg:none`. Apple additionally checks the hashed nonce.
-
-Per S09 §3.1 the user identity key is `provider + sub`. On the failure path each
-branch logs the exception class only — never token contents — so 401 root-causes
-are diagnosable without leaking PII.
+Generic verifier checks sig + iss + aud + exp (rejects alg:none); Apple adds hashed-nonce.
+Identity key is provider+sub (S09 §3.1). Failure paths log the exception class only, never token PII.
 """
 
 from __future__ import annotations
@@ -96,11 +90,7 @@ async def _verify_generic(
     expected_nonce: str | None,
     hash_nonce: bool,
 ) -> OidcClaims:
-    # An empty `audiences` list would make PyJWT SKIP `aud` validation entirely
-    # (jwt.decode(audience=None)), so any validly-signed token from ANY OAuth
-    # client of this provider would be accepted — a token-substitution /
-    # account-takeover hole. A provider with no configured audience is therefore
-    # treated as misconfigured/disabled and fails loudly rather than silently.
+    # SECURITY: empty audiences would make PyJWT skip `aud` checks (token-substitution hole) — fail loudly.
     if not audiences:
         log.error("oidc[%s]: no configured audience — provider misconfigured", provider)
         raise OAuthProviderUnavailable()
@@ -134,8 +124,7 @@ async def _verify_generic(
         log.info("oidc[%s]: decode rejected (%s)", provider, type(exc).__name__)
         raise OAuthIdTokenInvalid() from exc
 
-    # Issuer is validated manually so a provider with multiple valid issuers
-    # (Google: with/without https) works across PyJWT versions.
+    # Issuer checked manually to allow multiple valid issuers (Google with/without https) across PyJWT versions.
     if payload.get("iss") not in issuers:
         log.info("oidc[%s]: issuer mismatch", provider)
         raise OAuthIdTokenInvalid()

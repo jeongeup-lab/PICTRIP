@@ -1,8 +1,4 @@
-"""Async client for the four KTO Open APIs.
-
-Wraps httpx with shared params, retry, and response unwrapping. Calls are traced
-via structured logging; the client stays thin (no DB writes).
-"""
+"""Async client for the four KTO Open APIs (shared params, retry, response unwrapping)."""
 
 from __future__ import annotations
 

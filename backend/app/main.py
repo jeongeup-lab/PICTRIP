@@ -1,8 +1,4 @@
-"""FastAPI application entrypoint.
-
-Wires lifespan (DB pool warm-up, Sentry init, KTO client), middleware (trace-id,
-CORS, trusted hosts), error handlers, and all 6 domain routers under /v1.
-"""
+"""FastAPI application entrypoint."""
 
 from __future__ import annotations
 
@@ -67,7 +63,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # --- Middleware (order: outermost first) ---
+    # Middleware order matters: outermost added first.
     if settings.TRUSTED_HOSTS and settings.TRUSTED_HOSTS != ["*"]:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.TRUSTED_HOSTS)
 
@@ -82,15 +78,13 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(TraceIdMiddleware)
 
-    # --- Error handlers ---
     register_error_handlers(app)
 
-    # --- Liveness (outside /v1 — used by ALB) ---
+    # Liveness probe lives outside /v1.
     @app.get("/health", include_in_schema=False)
     async def health() -> dict[str, Any]:
         return ok({"status": "ok"})
 
-    # --- Routers under /v1 ---
     prefix = settings.API_V1_PREFIX
     app.include_router(users_router, prefix=prefix)
     app.include_router(taste_router, prefix=prefix)

@@ -1,5 +1,4 @@
-"""KST time helpers. Extracted from recommendations (removed in the refactor) so
-the curation daily cache can reuse the next-midnight TTL."""
+"""KST time helpers (curation daily cache reuses the next-midnight TTL)."""
 
 from __future__ import annotations
 

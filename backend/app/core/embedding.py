@@ -1,8 +1,4 @@
-"""CLIP image embedding (ADR-006: inline FastAPI, CPU).
-
-The model is loaded lazily on first use. User-uploaded images are processed
-in-memory and discarded immediately — never persisted to disk.
-"""
+"""CLIP image embedding (ADR-006, inline/CPU). Images processed in-memory, never persisted."""
 
 from __future__ import annotations
 
@@ -18,12 +14,9 @@ EMBEDDING_DIM = 512  # CLIP ViT-B/32
 
 
 class ClipEmbedder:
-    """Lazy-loaded CLIP embedder. Keeps a single model instance per process."""
+    """Lazy-loaded CLIP embedder, single model instance per process."""
 
-    # `transformers` and `torch` are intentionally Any-typed: importing them at
-    # module level would add ~1s to cold start and force CI to install the GPU
-    # variant of torch on every process, including request workers that may never
-    # hit the photo-search path.
+    # torch/transformers are Any-typed and imported lazily to avoid the cold-start/GPU-install cost.
     _model: Any = None
     _processor: Any = None
     _torch: Any = None
@@ -60,10 +53,7 @@ class ClipEmbedder:
 
         with self._torch.no_grad():
             features = self._model.get_image_features(**inputs)
-            # transformers <5 returns the projected image-embeds tensor directly;
-            # >=5 wraps it in a ModelOutput whose `pooler_output` holds the same
-            # 512-dim projected embedding. Handle both so the embedder is
-            # version-agnostic (the deployed image drifted to transformers 5.x).
+            # transformers <5 returns the tensor; >=5 wraps it in ModelOutput.pooler_output — handle both.
             if not isinstance(features, self._torch.Tensor):
                 features = features.pooler_output
             features = features / features.norm(dim=-1, keepdim=True)

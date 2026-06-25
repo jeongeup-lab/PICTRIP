@@ -1,16 +1,4 @@
-"""TST service layer (role-split WBS W6).
-
-Photo-search: a user-uploaded photo is CLIP-embedded in memory, the bytes are
-discarded immediately (never persisted — KTO compliance), and the embedding is
-used to find the nearest active spots via pgvector (HNSW-direct, S07 §10).
-
-Ranking applies a *calibrated* cosine-similarity floor
-(``PHOTO_SEARCH_SIMILARITY_FLOOR``) with a top-N **soft floor**: if every
-candidate is below the floor we still surface the best ones (capped at
-``PHOTO_SEARCH_MAX``) rather than returning an empty set, so a sparse pool isn't
-silently empty. When the request carries ``lat``/``lng`` each match also gets a
-haversine ``distance`` (metres) from the query point.
-"""
+"""TST service layer — photo-search (CLIP embed in memory, HNSW-direct over spot_embeddings, S07 §10)."""
 
 from __future__ import annotations
 
@@ -63,15 +51,7 @@ async def photo_search(
     lat: float | None = None,
     lng: float | None = None,
 ) -> PhotoSearchResult:
-    """Embed the uploaded photo in memory, then return the most similar active
-    spots ordered by descending CLIP similarity.
-
-    The image bytes are consumed only to produce the embedding and are never
-    persisted (KTO compliance). The CPU-bound embed is offloaded off the event
-    loop. The calibrated similarity floor is applied with a top-N soft floor so
-    a sparse pool still yields a non-empty list; an embedding with no neighbors
-    at all yields an empty result (a valid 200 empty, not an error).
-    """
+    # Image bytes embedded in memory only, never persisted (KTO compliance).
     query_had_location = lat is not None and lng is not None
 
     cap = max(1, settings.PHOTO_SEARCH_MAX)
@@ -85,8 +65,7 @@ async def photo_search(
     congestion = await load_congestion(session, content_ids)
     region_meta = await load_region_meta(session, content_ids)
 
-    # Similarity = 1 - cosine distance, clamped to [0, 1]. Keep only active
-    # spots that hydrated to a card (HNSW-direct query skips show_flag).
+    # Keep only spots that hydrated to a card; HNSW-direct query skips show_flag.
     scored: list[PhotoMatchRow] = []
     for cid, distance in pairs:
         card = cards.get(cid)

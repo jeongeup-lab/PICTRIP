@@ -1,21 +1,4 @@
-"""Integration tests for the 4 W3 auth/user routes.
-
-Routes under test:
-  POST /v1/auth/oauth/kakao
-  POST /v1/auth/refresh
-  POST /v1/auth/logout
-  GET  /v1/users/me
-
-These tests patch ``verify_id_token`` so no real Kakao OIDC network calls occur,
-and override the ``get_redis`` FastAPI dependency with ``redis_client_fake``
-(in-memory fakeredis) so no real Redis is required.
-
-The ``get_db`` FastAPI dependency is also overridden to use a per-test NullPool
-engine wrapped in an outer transaction that is always rolled back at teardown.
-Sessions are bound to that connection with ``join_transaction_mode="create_savepoint"``
-so service-level ``session.commit()`` calls become savepoints — the outer
-rollback undoes everything, preventing row leakage into subsequent tests.
-"""
+"""Integration tests for the auth/user routes (oauth/refresh/logout, GET /users/me)."""
 
 from __future__ import annotations
 
@@ -34,11 +17,7 @@ from app.main import app
 
 @pytest.fixture
 def patched_verify():
-    """Replace verify_oauth_id_token with fixed OidcClaims for happy-path tests.
-
-    A unique ``sub`` is generated per test invocation so each test creates a
-    distinct user row and tests never collide on the UNIQUE constraint.
-    """
+    # Unique sub per invocation so tests never collide on the provider UNIQUE constraint.
     claims = OidcClaims(
         sub=f"kakao-rt-{uuid.uuid4().hex}",
         email=f"t-{uuid.uuid4().hex[:8]}@e.st",
@@ -54,7 +33,6 @@ def patched_verify():
 
 @pytest.fixture(autouse=True)
 def override_redis(redis_client_fake):
-    """Pipe the FastAPI Redis dependency to the in-memory fakeredis for the test."""
     from app.core.redis import get_redis
 
     app.dependency_overrides[get_redis] = lambda: redis_client_fake
@@ -64,15 +42,7 @@ def override_redis(redis_client_fake):
 
 @pytest_asyncio.fixture(autouse=True)
 async def override_db():
-    """Override get_db with a savepoint-isolated session.
-
-    A single connection per test is wrapped in an outer transaction that is
-    always rolled back at teardown.  The inner ``AsyncSession`` uses
-    ``join_transaction_mode="create_savepoint"`` so service-level
-    ``session.commit()`` demotes to a savepoint flush rather than a real
-    COMMIT.  The outer rollback therefore erases every write the test makes,
-    preventing row leakage into subsequent tests.
-    """
+    # Savepoint-isolated session: service commits demote to savepoints, the outer rollback erases all writes.
     from app.core.db import get_db
 
     eng = create_async_engine(str(settings.sqlalchemy_database_url), poolclass=NullPool)

@@ -1,19 +1,8 @@
-"""Curation resolution — handpicked spots or the quality-gate random pool.
+"""Curation resolution — handpicked spots, else the quality-gate random pool (S07 §3.3).
 
-A curation's display spots come from one of two sources:
-
-1. **Handpicked** — rows in ``curation_spots`` ordered by ``position``.
-2. **Quality-gate random pool** (S07 §3.3) — when a curation has no handpicks,
-   draw from active, image-bearing spots scoped by the curation's ``region_cd``
-   (region type) or ``mood_id`` (mood type), ranked by quality signals
-   (overview present, embedding present), then deterministically pick/rotate 8
-   by a per-curation + per-KST-date hash seed.
-
-The resolved ``content_id`` list is cached in ``curation:{id}:spots`` until the
-next KST midnight plus a *stable* per-curation jitter (0..600s) so the whole
-feed does not expire simultaneously (thundering-herd avoidance). Determinism
-uses ``hashlib`` (not the salted builtin ``hash()``) so it is stable across
-processes.
+Resolved content_ids are cached daily; cache TTL adds a stable per-curation jitter
+to avoid the whole feed expiring at once (thundering herd). Determinism uses hashlib,
+not the salted builtin hash(), so picks are stable across processes.
 """
 
 from __future__ import annotations
@@ -27,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ResourceNotFound
 from app.core.time import kst_now, seconds_until_kst_midnight
-from app.modules.images.models import SpotEmbedding
+from app.modules.images.services import spot_has_embedding_clause
 from app.modules.spots.models import Curation, CurationSpot, Spot, SpotDetail, SpotMood
 from app.modules.spots.services.cards import (
     cover_url,
@@ -44,7 +33,7 @@ _JITTER_MAX = 601  # 0..600 inclusive
 
 @dataclass
 class CurationRow:
-    """Lightweight curation projection for the feed (no ORM leakage to routes)."""
+    """Curation projection for the feed (no ORM leakage to routes)."""
 
     id: int
     type: str
@@ -63,9 +52,7 @@ class CurationRow:
 class CurationDetailRow:
     """Curation detail projection (S09 §5.2) — header fields + resolved spots.
 
-    ``subtitle`` is intentionally absent: the detail screen omits it. ``cover_url``
-    reuses the feed's fallback ordering (cover spot's image, else first resolved
-    spot's, else None).
+    subtitle is intentionally absent: the detail screen omits it.
     """
 
     id: int
@@ -84,11 +71,10 @@ def _jitter(curation_id: int) -> int:
 
 
 def _seed_pick(curation_id: int, ordered_ids: list[str]) -> list[str]:
-    """Deterministically pick/rotate up to ``_SHOW`` ids.
+    """Deterministically pick/rotate up to _SHOW ids.
 
-    Same ``curation_id`` + same KST date yields the same selection. Uses a
-    rotation offset derived from a stable sha256 of ``curation_id|YYYY-MM-DD``
-    so the daily feed shifts but is reproducible across processes.
+    Same curation_id + KST date yields the same selection (sha256 rotation offset):
+    the daily feed shifts but is reproducible across processes.
     """
     if not ordered_ids:
         return []
@@ -146,12 +132,10 @@ async def _handpicked_ids(session: AsyncSession, curation_id: int) -> list[str]:
 async def _pool_ids(session: AsyncSession, curation: CurationRow) -> list[str]:
     """Quality-gate random pool candidate ids (top ~30, ranked by quality).
 
-    Metadata query against ``idx_spots_image_pool`` (``show_flag = 1 AND
-    first_image_url IS NOT NULL`` partial index). Quality ranking uses EXISTS
-    subqueries — never a JOIN/CTE against the HNSW index.
+    Ranking uses EXISTS subqueries — never a JOIN/CTE against the HNSW index.
     """
     has_overview = exists().where(SpotDetail.content_id == Spot.content_id)
-    has_embedding = exists().where(SpotEmbedding.content_id == Spot.content_id)
+    has_embedding = spot_has_embedding_clause(Spot.content_id)
 
     stmt = select(Spot.content_id).where(
         Spot.show_flag == 1,
@@ -185,9 +169,7 @@ async def resolve_curation_spots(
 ) -> list[SpotCardRow]:
     """Resolve a curation's display spots (handpicked, else quality-gate pool).
 
-    Returns ordered ``SpotCardRow``s (max 8 for both paths; handpicks are the
-    first ``_SHOW`` by ``position``). The resolved content_id list is cached
-    daily in ``curation:{id}:spots``.
+    Returns ordered SpotCardRows, max 8 per path. Resolved ids are cached daily.
     """
     cache_key = f"curation:{curation.id}:spots"
     cached = await redis.get(cache_key)
@@ -216,11 +198,9 @@ async def get_curation_detail(
     redis: Redis,
     slug: str,
 ) -> CurationDetailRow:
-    """Resolve a published curation by ``slug`` to its detail projection.
+    """Resolve a published curation by slug to its detail projection (S09 §5.2).
 
-    Raises ``ResourceNotFound`` when the slug is unknown or the curation is not
-    published. Spots reuse ``resolve_curation_spots`` (handpicked or pool, ≤8),
-    congestion-enriched per card; coverUrl reuses the feed's fallback ordering.
+    Raises ResourceNotFound when the slug is unknown or unpublished.
     """
     row = (
         await session.execute(

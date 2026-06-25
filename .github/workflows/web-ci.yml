@@ -1,0 +1,27 @@
+name: web-ci
+on:
+  pull_request:
+    paths: ["web/**", ".github/workflows/web-ci.yml"]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # .well-known files (apple-app-site-association, assetlinks.json) must be
+      # valid JSON and served verbatim (web/_headers fixes their MIME). Invalid
+      # JSON silently breaks universal links / app links, so gate it.
+      - name: validate .well-known JSON
+        run: |
+          set -e
+          found=0
+          for f in web/.well-known/*; do
+            [ -f "$f" ] || continue
+            found=1
+            echo "validating $f"
+            jq empty "$f"
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "no web/.well-known files found" >&2
+            exit 1
+          fi
+          echo "all .well-known JSON files are valid"

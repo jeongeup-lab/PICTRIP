@@ -1,8 +1,4 @@
-"""Application settings loaded from environment.
-
-Composed via pydantic-settings BaseSettings — see .env.example for the full list.
-Settings are validated at process startup; missing required values fail fast.
-"""
+"""Application settings (pydantic-settings, validated at startup)."""
 
 from __future__ import annotations
 
@@ -69,9 +65,7 @@ class Settings(BaseSettings):
     JWT_PUBLIC_KEY: str = ""
 
     # --- OAuth ---
-    # Kakao id_token's `aud` claim equals the app key used by the client when
-    # initiating login. Mobile native SDK uses NATIVE_APP_KEY; web/server OAuth
-    # uses REST_API_KEY. Both are valid audiences for our backend.
+    # Both Kakao keys are valid id_token `aud`: native SDK uses NATIVE_APP_KEY, web/server uses REST_API_KEY.
     KAKAO_REST_API_KEY: str = ""
     KAKAO_NATIVE_APP_KEY: str = ""
     KAKAO_CLIENT_SECRET: str = ""
@@ -90,9 +84,7 @@ class Settings(BaseSettings):
     KAKAO_JWKS_STALE_ON_ERROR_TTL_SECONDS: int = 86400
 
     # --- Google / Apple OIDC (S09 §3.1) ---
-    # id_token verification accepts these as `aud`. Google: iOS/Android/web
-    # client_ids; Apple: the app bundle id. (Apple id_tokens are RS256-signed —
-    # the ES256 key is only for the client_secret we send to Apple.)
+    # Accepted id_token `aud`: Google client_ids and Apple bundle id (Apple id_tokens are RS256-signed).
     GOOGLE_CLIENT_IDS: list[str] = Field(default_factory=list)
     GOOGLE_JWKS_URL: str = "https://www.googleapis.com/oauth2/v3/certs"
     GOOGLE_OIDC_ISSUERS: list[str] = Field(
@@ -123,16 +115,12 @@ class Settings(BaseSettings):
     CLIP_DEVICE: Literal["cpu", "cuda", "mps"] = "cpu"
 
     # --- Photo search (TST) ---
-    # Calibrated cosine-similarity floor for photo-search matches (S07 §10).
-    # Matches below this are dropped — *unless* the whole set is below it, in
-    # which case a top-N soft floor still surfaces the best ones (a sparse
-    # result must not be empty). Cap the returned matches at PHOTO_SEARCH_MAX.
+    # Cosine-similarity floor (S07 §10); soft top-N floor keeps a sparse result non-empty.
     PHOTO_SEARCH_SIMILARITY_FLOOR: float = 0.60
     PHOTO_SEARCH_MAX: int = 30
 
     # --- Admin console (A01) ---
-    # Used by the separate admin plan; required to be set before /admin is wired,
-    # otherwise /admin/* returns 503.
+    # Must be set before /admin is wired, else /admin/* returns 503.
     ADMIN_PASSWORD: str | None = None
 
     # --- Observability ---

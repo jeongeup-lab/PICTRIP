@@ -1,11 +1,4 @@
-"""Task 14: GET /v1/users/me serialization (displayName/avatarUrl) +
-GET /v1/users/me/saved cursor pagination.
-
-Mirrors tests/test_users_saved_spots_routes.py: a per-test override binds the
-FastAPI ``get_db`` dependency and the seed session to one connection wrapped in
-an outer transaction that is rolled back on teardown. Auth is exercised
-end-to-end with a real user row + a real access token.
-"""
+"""GET /v1/users/me serialization (displayName/avatarUrl) + /users/me/saved cursor pagination."""
 
 from __future__ import annotations
 
@@ -181,8 +174,7 @@ async def test_saved_card_shape_is_canonical(
 async def test_saved_card_category_is_subtype_label(
     client: AsyncClient, override_db_and_seed: AsyncSession
 ) -> None:
-    """FIX 4: saved-list card.category is the KTO subtype label (lcls_systm3_nm)
-    via the LclsSystmCode join — aligned with feed/curation/nearby cards."""
+    """saved-list card.category is the KTO subtype label (lcls_systm3_nm), aligned with other cards."""
     session = override_db_and_seed
     uid = await _seed_user(session)
     await session.execute(

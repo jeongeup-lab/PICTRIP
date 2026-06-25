@@ -1,0 +1,24 @@
+# Opt-in local hooks. Install once with: pre-commit install
+# (or run ad hoc: pre-commit run --all-files)
+# Ruff is scoped to the Python units (backend/, pipeline/); mobile uses its own
+# eslint/prettier via npm scripts and is intentionally excluded here.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.19
+    hooks:
+      - id: ruff
+        name: ruff (backend, pipeline)
+        args: ["--fix"]
+        files: ^(backend|pipeline)/.*\.py$
+      - id: ruff-format
+        name: ruff-format (backend, pipeline)
+        files: ^(backend|pipeline)/.*\.py$
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: \.md$
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json

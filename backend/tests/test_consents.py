@@ -1,14 +1,4 @@
-"""Integration tests for the consent route.
-
-Route under test:
-  PUT /v1/users/me/consents  — upsert the user's consent row (PK user_id)
-
-The endpoint is protected: auth is exercised end-to-end by seeding a real user
-row and minting a real access token via ``create_access_token``. The pattern
-mirrors tests/test_users_saved_spots_routes.py — a per-test override binds both
-the FastAPI ``get_db`` dependency and the seed session to a single connection
-wrapped in an outer transaction that is rolled back on teardown.
-"""
+"""Integration tests for PUT/GET /v1/users/me/consents."""
 
 from __future__ import annotations
 

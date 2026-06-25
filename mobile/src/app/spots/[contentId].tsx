@@ -2,8 +2,7 @@ import { useState } from "react";
 import { ScrollView, View, Text, Pressable, Share, StyleSheet } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSpot } from "@/features/spots/queries";
-import { useAuthGate } from "@/features/auth/hooks/use-auth-gate";
-import { useIsSaved, useSaveMutation, useUnsaveMutation } from "@/features/saved/queries";
+import { useSaveOptimistic } from "@/features/saved/hooks/use-save-optimistic";
 import { Icon } from "@/components/Icon";
 import { RemoteImage } from "@/components/RemoteImage";
 import { Skeleton } from "@/components/Skeleton";
@@ -13,24 +12,13 @@ import { PhotoViewer } from "@/features/spots/components/PhotoViewer";
 import { LocationSection } from "@/features/spots/components/LocationSection";
 import { VisitSection } from "@/features/spots/components/VisitSection";
 import { NearbyRail } from "@/features/spots/components/NearbyRail";
+import { firstSentence } from "@/features/spots/lib/overview";
 import { colors, spacing } from "@/constants/theme";
-
-/** First sentence of overview, trimmed — used as the centered hero lead. */
-function firstSentence(text: string | null): string | null {
-  if (!text) return null;
-  const match = text.trim().match(/^[\s\S]*?[.!?。]/);
-  return (match ? match[0] : text).trim() || null;
-}
 
 export default function SpotScreen() {
   const { contentId } = useLocalSearchParams<{ contentId: string }>();
   const { data, isLoading } = useSpot(contentId);
-  const requireAuth = useAuthGate();
-  const persisted = useIsSaved(contentId);
-  const [optimistic, setOptimistic] = useState<boolean | null>(null);
-  const saved = optimistic ?? persisted;
-  const saveMut = useSaveMutation();
-  const unsaveMut = useUnsaveMutation();
+  const { saved, toggle: onToggleSave } = useSaveOptimistic(contentId);
   const [galleryOpen, setGalleryOpen] = useState(false);
 
   const galleryImages =
@@ -39,15 +27,6 @@ export default function SpotScreen() {
       : data?.firstImageUrl
         ? [data.firstImageUrl]
         : [];
-
-  const onToggleSave = async () => {
-    if (!(await requireAuth("save"))) return;
-    const next = !saved;
-    setOptimistic(next);
-    const rollback = () => setOptimistic(!next);
-    if (next) saveMut.mutate(contentId, { onError: rollback });
-    else unsaveMut.mutate(contentId, { onError: rollback });
-  };
 
   const onShare = () => {
     if (!data) return;

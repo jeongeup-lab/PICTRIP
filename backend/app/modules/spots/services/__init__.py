@@ -1,9 +1,4 @@
-"""SPT service layer — public API aggregator.
-
-Behavior lives in the focused submodules (rows, cards, detail, nearby, saved).
-This package re-exports the stable public surface so external callers keep
-importing from ``app.modules.spots.services``.
-"""
+"""SPT service layer — re-exports the public surface from the submodules."""
 
 from __future__ import annotations
 

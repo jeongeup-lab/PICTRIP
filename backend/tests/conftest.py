@@ -34,13 +34,8 @@ async def client() -> AsyncGenerator[AsyncClient, None]:
 
 @pytest_asyncio.fixture
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
-    """Function-scoped session wrapped in an outer transaction that is always
-    rolled back, so DB-touching tests stay isolated even when they hit
-    triggers or constraint violations.
-
-    A fresh engine with NullPool is created per test because pytest-asyncio's
-    default function-scoped event loop makes the module-level `app.core.db.engine`
-    unsafe to share across tests."""
+    # Outer transaction rolled back per test for isolation; fresh NullPool engine
+    # because the function-scoped event loop makes the module-level engine unsafe to share.
     eng = create_async_engine(settings.sqlalchemy_database_url, poolclass=NullPool)
     try:
         async with eng.connect() as conn:
@@ -62,9 +57,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 
 @pytest_asyncio.fixture
 async def redis_client_fake() -> AsyncGenerator[FakeRedis, None]:
-    """In-memory async Redis for unit tests. Single connection per test.
-
-    Mirrors the production pool's ``decode_responses=True`` (one unified pool)."""
+    # decode_responses=True mirrors the production pool.
     client = FakeRedis(decode_responses=True)
     try:
         yield client

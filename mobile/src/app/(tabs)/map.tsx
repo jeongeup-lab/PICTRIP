@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Animated, View, Text, Pressable, ScrollView, StyleSheet, Dimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -13,23 +13,17 @@ import { RecenterFab } from "@/features/map/components/RecenterFab";
 import { PermissionPrimer } from "@/features/map/components/PermissionPrimer";
 import { RegionPicker } from "@/features/map/components/RegionPicker";
 import { useMapStore } from "@/features/map/stores/map-store";
+import { useMapInit } from "@/features/map/hooks/use-map-init";
 import { useNearbyMap, useRegionLabel } from "@/features/map/queries";
 import { formatHeaderLabel } from "@/features/map/lib/region-label";
-import {
-  getPermissionStatus,
-  requestPermission,
-  getCurrentCoords,
-  type PermStatus,
-} from "@/features/map/usecases/request-location";
-import { SEOUL_CITY_HALL, NEARBY_CAP } from "@/constants/map";
+import { NEARBY_CAP } from "@/constants/map";
 import { colors, spacing } from "@/constants/theme";
 
 export default function MapTab() {
   const insets = useSafeAreaInsets();
   const s = useMapStore();
-  const [perm, setPerm] = useState<PermStatus | "ready">("undetermined");
+  const { perm, allow, skipToSeoul, recenter } = useMapInit();
   const [pickerOpen, setPickerOpen] = useState(false);
-  const started = useRef(false);
 
   const nearby = useNearbyMap(s.center, s.category);
   const label = useRegionLabel(s.center, s.anchorSource !== "region");
@@ -61,57 +55,6 @@ export default function MapTab() {
   useEffect(() => {
     if (label.data) s.setLabel(label.data);
   }, [label.data]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Entry: branch on permission status (S05 §1.4).
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    (async () => {
-      // map-store survives tab switches; if a center is already set, this is a
-      // re-entry — mark ready without re-running the permission/GPS branch (no
-      // GPS re-fetch, no primer flash, no stale-center flash).
-      if (s.center != null) {
-        setPerm("ready");
-        return;
-      }
-      const status = await getPermissionStatus();
-      if (status === "granted") {
-        const c = (await getCurrentCoords()) ?? SEOUL_CITY_HALL;
-        s.setAnchor(c, "gps", c);
-        setPerm("ready");
-      } else {
-        setPerm(status);
-      }
-    })();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const allow = async () => {
-    const status = await requestPermission();
-    if (status === "granted") {
-      const c = (await getCurrentCoords()) ?? SEOUL_CITY_HALL;
-      s.setAnchor(c, "gps", c);
-      setPerm("ready");
-    } else {
-      setPerm("denied");
-    }
-  };
-
-  const skipToSeoul = () => {
-    s.setAnchor(SEOUL_CITY_HALL, "pan", null);
-    setPerm("ready");
-  };
-
-  const recenter = async () => {
-    if (s.gpsCoords) s.recenterToGps();
-    else {
-      const status = await getPermissionStatus();
-      setPerm(status === "granted" ? "ready" : status);
-      if (status === "granted") {
-        const c = (await getCurrentCoords()) ?? SEOUL_CITY_HALL;
-        s.setAnchor(c, "gps", c);
-      }
-    }
-  };
 
   if (perm === "undetermined" || perm === "denied") {
     return (

@@ -1,9 +1,5 @@
-"""Saved spots / bookmarks (ADR-0011).
-
-The ``user_saved_spots`` join table lives in SPT (it FKs ``spots.content_id``),
-so all of its DB access stays here even though the collection is user-owned;
-USR routes call these via the service seam.
-"""
+"""Saved spots / bookmarks (ADR-0011). user_saved_spots FKs spots.content_id, so
+its DB access stays in SPT; USR routes call these via the service seam."""
 
 from __future__ import annotations
 
@@ -19,10 +15,8 @@ from app.core.exceptions import ResourceNotFound, ValidationFailed
 from app.modules.spots.models import LclsSystmCode, Spot, UserSavedSpot
 from app.modules.spots.services.rows import SpotCardRow
 
-# Opaque keyset cursor for the saved-spots list. The keyset is
-# ``(user_saved_spots.saved_at, content_id)`` ordered DESC, base64-encoded so the
-# client treats it as an opaque token. The pair is unique (content_id is the PK
-# tail) so the sort is total and resume is exact.
+# Opaque keyset cursor on (saved_at, content_id) DESC, base64-encoded. The pair
+# is unique (content_id is the PK tail) so the sort is total and resume is exact.
 _CURSOR_SEP = "\x1f"
 
 
@@ -41,8 +35,7 @@ def decode_saved_cursor(cursor: str) -> tuple[datetime, str]:
 
 
 async def save_spot(session: AsyncSession, *, user_id: int, content_id: str) -> bool:
-    """Idempotent save. Returns True if a new row was inserted, False if the
-    spot was already saved. Raises ResourceNotFound if the spot doesn't exist."""
+    """Idempotent save. True if inserted, False if already saved. 404 if no spot."""
     exists = await session.scalar(
         select(Spot.content_id).where(Spot.content_id == content_id, Spot.show_flag == 1)
     )
@@ -61,8 +54,7 @@ async def save_spot(session: AsyncSession, *, user_id: int, content_id: str) -> 
 
 
 async def unsave_spot(session: AsyncSession, *, user_id: int, content_id: str) -> bool:
-    """Idempotent unsave. Returns True if a row was removed, False if there was
-    nothing to remove."""
+    """Idempotent unsave. True if a row was removed, False if nothing to remove."""
     stmt = (
         delete(UserSavedSpot)
         .where(UserSavedSpot.user_id == user_id, UserSavedSpot.content_id == content_id)
@@ -80,12 +72,8 @@ async def list_saved_spots(
     limit: int = 24,
     cursor: str | None = None,
 ) -> tuple[list[SpotCardRow], str | None, bool]:
-    """User's saved spots as spot cards, newest-saved first.
-
-    Keyset pagination on ``(saved_at, content_id) DESC``. Returns
-    ``(rows, next_cursor, has_more)``. ``next_cursor`` is None on the final page.
-    An invalid ``cursor`` raises ``ValidationFailed``.
-    """
+    """User's saved spots as cards, newest first. Keyset on (saved_at, content_id)
+    DESC. Returns (rows, next_cursor, has_more); next_cursor None on the last page."""
     stmt = (
         select(
             Spot.content_id,
@@ -103,8 +91,7 @@ async def list_saved_spots(
     )
     if cursor is not None:
         c_saved_at, c_content_id = decode_saved_cursor(cursor)
-        # Strictly "after" the cursor in DESC order: older saved_at, or same
-        # saved_at with a lexicographically smaller content_id.
+        # Strictly after the cursor in DESC order: older saved_at, or equal with smaller content_id.
         stmt = stmt.where(
             or_(
                 UserSavedSpot.saved_at < c_saved_at,

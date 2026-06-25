@@ -1,11 +1,7 @@
-"""Integration tests for account deletion.
+"""Integration tests for DELETE /v1/users/me (account deletion).
 
-  DELETE /v1/users/me  — 회원 탈퇴 (anonymize PII, unlink OAuth, revoke sessions)
-
-App Store/Play review (5.1.1(v)) requires real in-app account deletion. The
-endpoint soft-deletes (``deleted_at``) but scrubs PII and removes auth-provider
-links so the account is genuinely gone. Auth is exercised end-to-end with a real
-user row + ``create_access_token``; Redis is the in-memory fakeredis fixture.
+App Store/Play review 5.1.1(v) requires real in-app deletion: soft-delete but scrub
+PII and unlink auth providers so the account is genuinely gone.
 """
 
 from __future__ import annotations

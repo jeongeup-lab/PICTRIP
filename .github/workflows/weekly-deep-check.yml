@@ -4,10 +4,25 @@ on:
     - cron: "0 4 * * 1"
   workflow_dispatch:
 jobs:
-  deep-check:
+  dependency-audit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # TODO: weekly maintenance — dependency audit, slow tests, drift checks
-      # (e.g. admin static vs docs/mockups/admin, api-types vs core/schemas)
-      - run: echo "weekly deep check — TODO"
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # Audits are advisory: a newly published CVE must not hard-fail the
+      # scheduled job, but the output is surfaced in the logs.
+      - name: backend pip-audit
+        continue-on-error: true
+        working-directory: backend
+        run: uvx pip-audit
+      - name: pipeline pip-audit
+        continue-on-error: true
+        working-directory: pipeline
+        run: uvx pip-audit
+      - name: mobile npm audit
+        continue-on-error: true
+        working-directory: mobile
+        run: npm audit --audit-level=high

@@ -39,13 +39,11 @@ class LlmClient:
         except RateLimitError as exc:
             raise RateLimited() from exc
         except AnthropicError as exc:
-            # Auth, connection, timeout, 5xx — surface a domain code instead of
-            # leaking a generic INTERNAL_ERROR to the mobile client.
+            # Surface a domain code, not a generic INTERNAL_ERROR.
             logger.warning("llm.explain_match.failed", error_type=type(exc).__name__)
             raise LlmApiUnavailable() from exc
 
-        # Guard against an empty/non-text content list rather than IndexError-ing
-        # or silently returning "".
+        # Guard empty/non-text content rather than IndexError or returning "".
         if not msg.content:
             raise LlmApiUnavailable()
         text = getattr(msg.content[0], "text", "")
