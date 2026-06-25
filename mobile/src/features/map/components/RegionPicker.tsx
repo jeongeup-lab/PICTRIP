@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
   panes: { flex: 1, flexDirection: "row", minHeight: 0 },
 
   left: {
-    width: "33%",
+    width: 112,
     backgroundColor: colors.inset,
     borderRightWidth: 1,
     borderRightColor: HAIR,
@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingVertical: 19,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
   },
   sidoText: { fontSize: 17, fontWeight: "600", color: colors.ter },
   sidoTextActive: { color: colors.ink, fontWeight: "800" },

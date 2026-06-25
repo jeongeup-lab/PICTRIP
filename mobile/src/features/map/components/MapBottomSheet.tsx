@@ -14,7 +14,14 @@ interface Props {
 
 const H = Dimensions.get("window").height;
 // translateY from the top of the sheet container; smaller = taller sheet.
-const Y: Record<Snap, number> = { peek: H * 0.88, half: H * 0.42, full: H * 0.08 };
+// Exported so the map screen can anchor the search pill + recenter FAB to the
+// sheet's top edge (see map.tsx fallback initial value).
+export const SHEET_SNAP_Y: Record<Snap, number> = {
+  peek: H * 0.88,
+  half: H * 0.42,
+  full: H * 0.08,
+};
+const Y = SHEET_SNAP_Y;
 
 export function MapBottomSheet({ snap, onSnapChange, headerExtra, children, onTranslate }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- stable value: init once, never re-create.
@@ -25,7 +32,11 @@ export function MapBottomSheet({ snap, onSnapChange, headerExtra, children, onTr
   }, [y, onTranslate]);
 
   useEffect(() => {
-    Animated.spring(y, { toValue: Y[snap], useNativeDriver: true, bounciness: 2 }).start();
+    // JS driver (not native): the map screen anchors the search pill + recenter
+    // FAB to this value via Animated.subtract. A native-driven spring never
+    // updates the JS value, so those JS-side followers would freeze mid-snap.
+    // JS-driving keeps the shared value updating every frame for both.
+    Animated.spring(y, { toValue: Y[snap], useNativeDriver: false, bounciness: 2 }).start();
   }, [snap, y]);
 
   const pan = useMemo(
@@ -42,7 +53,11 @@ export function MapBottomSheet({ snap, onSnapChange, headerExtra, children, onTr
             Math.abs(Y[s] - landing) < Math.abs(Y[best] - landing) ? s : best,
           );
           onSnapChange(nearest);
-          Animated.spring(y, { toValue: Y[nearest], useNativeDriver: true, bounciness: 2 }).start();
+          Animated.spring(y, {
+            toValue: Y[nearest],
+            useNativeDriver: false,
+            bounciness: 2,
+          }).start();
         },
       }),
     [snap, y, onSnapChange],
