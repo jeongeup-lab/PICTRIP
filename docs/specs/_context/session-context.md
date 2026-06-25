@@ -224,7 +224,7 @@ DB/인프라/API 세션은 화면 세션들의 data needs를 종합해 형식화
   차별=규모+출시완성도). **crosscheck 확정: 1차마감 2026-09-21(사용자 확인)·루브릭 30/30/20/20·
   15128555=공사 집중률 API(재융합이 공사 OpenAPI 게이트 충족)·S4 유사도%항상노출·auth 30일고정에코.**
 - **A1+ (2026-06-21) 어드민 홈 큐레이션 편집기 채택 (스코프 확장, read-write)** →
-  `admin/A01-admin-console.md`(A9·§7·Phase 4), 목업 `mockups/admin/curation.html`(B안 확정),
+  `admin/specs/A01-admin-console.md`(A9·§7·Phase 4), 목업 `admin/mockups/curation.html`(B안 확정),
   요구사항 `requirements/dev-requirements.md`(ADM-012~018). A01 본래 "콘텐츠 큐레이션=비목표·
   어드민 read-only" 결정을 **사용자 승인으로 뒤집음**: 홈 편성(히어로6+무드레일3)을 앱 재배포
   없이 운영자가 편집/발행(홈=백엔드 주도 잠긴 결정 2의 마지막 조각; 현재는 시드 스크립트 수정이

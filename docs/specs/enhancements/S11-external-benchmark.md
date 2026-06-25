@@ -265,7 +265,7 @@
 
 ## 9. 관리자 콘솔 (A1) — 외부 벤치마크
 
-> 입력: `specs/A01-admin-console.md` + 목업 `docs/mockups/admin/`(3p) + 현 백엔드.
+> 입력: `admin/specs/A01-admin-console.md` + 목업 `admin/mockups/`(3p) + 현 백엔드.
 > 리서치(2026-06-21 추가 패스): Exa 웹검색×2(내부툴/백오피스 아키텍처 정설, FastAPI SQLAdmin
 > vs 분리형 SPA) + GitHub 코드(`bankotij/rbac-admin-platform`·`SenZmaKi/spa-sqladmin`·benavlabs
 > FastAPI-boilerplate·`aminalaee/sqladmin`·`jowilf/starlette-admin` 비교표).

@@ -17,6 +17,7 @@ holds the locked decisions.
 | `web/` | Cloudflare Pages — apex `pictrip.org` | Cloudflare |
 | `pipeline/` | KTO ETL CLI + Streamlit (`pictrip-data`) | CT111 |
 | `deploy/api-host/` · `deploy/monitoring/` | Ops/IaC | CT112 / CT113 |
+| `admin/` | Admin console specs · mockups · status (code lives in `backend/app/modules/admin/`) | — |
 | `docs/` | Design + spec SSOT | — |
 
 ## Commands
@@ -81,7 +82,7 @@ Mobile layers: `src/app` (thin Expo Router screens) · `src/features/<domain>`
   (`include_object`). Backend reads it read-only via raw SQL.
 - **`backend/` and `pipeline/` stay separate Python projects** — no shared venv,
   no uv workspace. Only coupling = CT110 prod DB tables `spots` + `sync_runs`.
-- **admin `static/` is a copy of `docs/mockups/admin/`** (UI SSOT) + CI drift
+- **admin `static/` is a copy of `admin/mockups/`** (UI SSOT) + CI drift
   check; not a symlink.
 - **CF Pages build root = `web/`** (S08 §5.2). `.well-known/*` needs fixed JSON
   MIME and no redirects (`web/_headers`).

@@ -6,7 +6,7 @@ Setup (when porting/initializing):
 - `alembic.ini` + `env.py` (`target_metadata = Base.metadata`, `compare_type=True`).
 - In `env.py`, add an `include_object` filter that **excludes `sync_runs`** so
   autogenerate never proposes to drop it (pipeline creates it via
-  `CREATE TABLE IF NOT EXISTS`). See `docs/specs/admin/A01-admin-console.md` §4.
+  `CREATE TABLE IF NOT EXISTS`). See `admin/specs/A01-admin-console.md` §4.
 
 Conventions:
 - Autogenerate misses partial indexes (`WHERE show_flag = 1`) and named CHECK

@@ -9,5 +9,5 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # TODO: weekly maintenance — dependency audit, slow tests, drift checks
-      # (e.g. admin static vs docs/mockups/admin, api-types vs core/schemas)
+      # (e.g. admin static vs admin/mockups, api-types vs core/schemas)
       - run: echo "weekly deep check — TODO"
