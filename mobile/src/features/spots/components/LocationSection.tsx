@@ -73,7 +73,9 @@ export function LocationSection({ spot }: { spot: SpotDetail }) {
     <View style={styles.section}>
       <Text style={styles.h2}>위치</Text>
       {lat != null && lng != null ? (
-        <View style={styles.map}>
+        // Non-interactive: pass touches to the page ScrollView (avoids a WKWebView
+        // dead zone that swallows touchmove and blocks scroll over the map).
+        <View style={styles.map} pointerEvents="none">
           <KakaoWebMap
             center={{ lat, lng }}
             pins={[pin]}
