@@ -80,8 +80,18 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: [self-hosted, ct112]
+    # Pull the private GHCR image: authenticate the CT112 runner's docker before
+    # deploy.sh runs `docker compose pull`. GITHUB_TOKEN needs packages:read.
+    permissions:
+      contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       # deploy.sh: pin tag -> compose pull -> up -d (entrypoint runs
       # `alembic upgrade head`) -> local+public smoke -> rollback on fail.
       - run: ./deploy/api-host/deploy.sh "${{ github.sha }}"
