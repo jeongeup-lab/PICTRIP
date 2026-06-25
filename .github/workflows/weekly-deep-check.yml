@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # TODO: weekly maintenance — dependency audit, slow tests, drift checks
-      # (e.g. admin static vs admin/mockups, api-types vs core/schemas)
-      - run: echo "weekly deep check — TODO"
+      - name: Admin static ↔ mockups drift check
+        run: bash .github/scripts/check-admin-mockup-drift.sh
+      # TODO: more weekly maintenance — dependency audit, slow tests,
+      # api-types vs core/schemas drift.
