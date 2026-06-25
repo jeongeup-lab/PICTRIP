@@ -192,9 +192,11 @@ async def delete_user_account(session: AsyncSession, redis: Redis, user_id: int)
     """회원 탈퇴 — App Store/Play 심사 가이드(5.1.1(v))를 만족하는 실제 계정 삭제.
 
     Soft-delete (``deleted_at``) keeps the row for referential integrity, but PII
-    is scrubbed and OAuth links are removed so the account is genuinely gone, not
-    merely deactivated: re-logging-in with the same Kakao/Google/Apple identity
-    creates a *new* account (the provider link no longer maps to this user).
+    is scrubbed, the password credential is cleared, and OAuth links are removed
+    so the account is genuinely gone, not merely deactivated: re-logging-in with
+    the same Kakao/Google/Apple identity creates a *new* account (the provider
+    link no longer maps to this user) and the email login no longer has a
+    credential to verify against.
     Idempotent — a second call (or a deleted user) is a no-op. Personal child rows
     fall away on the eventual hard delete via ``ondelete=CASCADE``; the
     soft-deleted row carries no personal data in the meantime.
@@ -207,6 +209,7 @@ async def delete_user_account(session: AsyncSession, redis: Redis, user_id: int)
         user.location_label = None
         user.profile_image_url = None
         user.taste_vector = None
+        user.password_hash = None
         user.deleted_at = datetime.now(tz=UTC)
         # Unlink OAuth identities so the provider account can start fresh.
         await session.execute(delete(UserAuthProvider).where(UserAuthProvider.user_id == user_id))

@@ -41,11 +41,12 @@ describe("storage", () => {
   });
 
   describe("ensureFreshInstall", () => {
-    it("clears the onboarding flag and writes the marker on a fresh install", async () => {
+    it("clears the onboarding flag and refresh token and writes the marker on a fresh install", async () => {
       const create = jest.fn();
       (File as unknown as jest.Mock).mockImplementation(() => ({ exists: false, create }));
       await ensureFreshInstall();
       expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith("onboarding_seen");
+      expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith("refresh_token");
       expect(create).toHaveBeenCalled();
     });
 

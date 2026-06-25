@@ -107,6 +107,7 @@ export default function EmailAuthScreen() {
                 placeholder="이름"
                 placeholderTextColor={colors.ter}
                 autoCapitalize="none"
+                autoComplete="name"
                 returnKeyType="next"
                 editable={!pending}
               />
@@ -124,6 +125,7 @@ export default function EmailAuthScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
+              autoComplete="email"
               textContentType="emailAddress"
               returnKeyType="next"
               editable={!pending}
@@ -141,6 +143,7 @@ export default function EmailAuthScreen() {
               secureTextEntry
               autoCapitalize="none"
               autoCorrect={false}
+              autoComplete={isSignup ? "new-password" : "password"}
               textContentType={isSignup ? "newPassword" : "password"}
               returnKeyType="done"
               onSubmitEditing={() => {

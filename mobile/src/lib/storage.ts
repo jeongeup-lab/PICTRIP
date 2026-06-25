@@ -38,7 +38,9 @@ export async function setOnboardingSeen(): Promise<void> {
  * a new install — clear the stale onboarding flag, then drop the marker so
  * later launches within the same install skip the reset. Everything is wrapped
  * so any FileSystem failure silently falls back to the prior behavior and never
- * blocks boot. The refresh token is intentionally left untouched.
+ * blocks boot. The refresh token is cleared too: the keychain entry also
+ * survives uninstall, so a reinstaller would otherwise be silently hydrated into
+ * the previous install's session.
  */
 export async function ensureFreshInstall(): Promise<void> {
   try {
@@ -46,8 +48,9 @@ export async function ensureFreshInstall(): Promise<void> {
     if (marker.exists) return;
     try {
       await SecureStore.deleteItemAsync(ONBOARDING_KEY);
+      await clearRefreshToken();
     } catch {
-      // Leave the flag as-is if it can't be cleared.
+      // Leave the entries as-is if they can't be cleared.
     }
     marker.create();
   } catch {
