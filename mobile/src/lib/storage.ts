@@ -1,7 +1,9 @@
 import * as SecureStore from "expo-secure-store";
+import { File, Paths } from "expo-file-system";
 
 const REFRESH_KEY = "refresh_token";
 const ONBOARDING_KEY = "onboarding_seen";
+const INSTALL_MARKER = "install.marker";
 
 const refreshOptions = {
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
@@ -25,4 +27,30 @@ export async function getOnboardingSeen(): Promise<boolean> {
 
 export async function setOnboardingSeen(): Promise<void> {
   await SecureStore.setItemAsync(ONBOARDING_KEY, "1");
+}
+
+/**
+ * iOS keychain entries survive an app uninstall, so the secure-store
+ * `onboarding_seen` flag would otherwise persist across a fresh reinstall and
+ * the onboarding flow would never appear again (the reported "온보딩이 사라짐"
+ * symptom). The app's document directory IS wiped on uninstall, so we keep a
+ * marker file there to detect a fresh install: if the marker is absent this is
+ * a new install — clear the stale onboarding flag, then drop the marker so
+ * later launches within the same install skip the reset. Everything is wrapped
+ * so any FileSystem failure silently falls back to the prior behavior and never
+ * blocks boot. The refresh token is intentionally left untouched.
+ */
+export async function ensureFreshInstall(): Promise<void> {
+  try {
+    const marker = new File(Paths.document, INSTALL_MARKER);
+    if (marker.exists) return;
+    try {
+      await SecureStore.deleteItemAsync(ONBOARDING_KEY);
+    } catch {
+      // Leave the flag as-is if it can't be cleared.
+    }
+    marker.create();
+  } catch {
+    // FileSystem unavailable — fall back to existing behavior.
+  }
 }
