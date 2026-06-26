@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Animated, View, Text, Pressable, ScrollView, StyleSheet, Dimensions } from "react-native";
+import { Animated, View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -16,6 +16,7 @@ import { useMapStore } from "@/features/map/stores/map-store";
 import { useMapInit } from "@/features/map/hooks/use-map-init";
 import { useNearbyMap, useRegionLabel } from "@/features/map/queries";
 import { formatHeaderLabel } from "@/features/map/lib/region-label";
+import { mapListPaddingBottom } from "@/features/map/lib/list-padding";
 import { NEARBY_CAP } from "@/constants/map";
 import { colors, spacing } from "@/constants/theme";
 
@@ -45,12 +46,13 @@ export default function MapTab() {
   );
   const fabTranslateY = useMemo(() => Animated.subtract(sheetY, SHEET_GAP + FAB_HEIGHT), [sheetY]);
 
-  // Last list card must clear the off-screen sheet overflow + tab bar + inset.
-  // useBottomTabBarHeight isn't publicly exported by expo-router (and
-  // @react-navigation/bottom-tabs isn't installed), so use the iOS default tab
-  // content height (49) + safe-area inset, per the plan's documented fallback.
+  // useBottomTabBarHeight isn't exported by expo-router and bottom-tabs isn't
+  // installed, so use the iOS default tab content height (49) + safe-area inset.
   const tabBarHeight = TAB_BAR_CONTENT_HEIGHT + insets.bottom;
-  const listPaddingBottom = tabBarHeight + insets.bottom + WINDOW_H * 0.1 + spacing.xxl;
+  // The sheet (height H, translated down) hangs SHEET_SNAP_Y[snap] px off-screen,
+  // so the last card must clear that overflow + the tab bar. Snap-aware — a fixed
+  // value clips the last card at the half/peek snaps.
+  const listPaddingBottom = mapListPaddingBottom(SHEET_SNAP_Y[s.snap], tabBarHeight, spacing.xxl);
 
   useEffect(() => {
     if (label.data) s.setLabel(label.data);
@@ -164,7 +166,6 @@ export default function MapTab() {
   );
 }
 
-const WINDOW_H = Dimensions.get("window").height;
 // RN bottom-tab content height on iOS (excludes the safe-area inset, added separately).
 const TAB_BAR_CONTENT_HEIGHT = 49;
 const PILL_HEIGHT = 38; // SearchHerePill height
