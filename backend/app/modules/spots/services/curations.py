@@ -162,30 +162,43 @@ async def _pool_ids(session: AsyncSession, curation: CurationRow) -> list[str]:
     return list(rows)
 
 
-async def resolve_curation_spots(
+async def resolve_curation_ids(
     session: AsyncSession,
     redis: Redis,
     curation: CurationRow,
-) -> list[SpotCardRow]:
-    """Resolve a curation's display spots (handpicked, else quality-gate pool).
+) -> list[str]:
+    """Resolve a curation's display content_ids (handpicked, else quality-gate pool).
 
-    Returns ordered SpotCardRows, max 8 per path. Resolved ids are cached daily.
+    Returns up to _SHOW ordered ids. Cached daily. Hydration is kept separate so the
+    home feed can batch every curation's card load into one query.
     """
     cache_key = f"curation:{curation.id}:spots"
     cached = await redis.get(cache_key)
     # None = miss; "" = cached-empty (don't re-resolve empty curations every request)
     if cached is not None:
-        ids = cached.split(",") if cached else []
-    else:
-        handpicked = await _handpicked_ids(session, curation.id)
-        if handpicked:
-            ids = handpicked[:_SHOW]
-        else:
-            pool = await _pool_ids(session, curation)
-            ids = _seed_pick(curation.id, pool)
-        ttl = seconds_until_kst_midnight(kst_now()) + _jitter(curation.id)
-        await redis.set(cache_key, ",".join(ids), ex=ttl)
+        return cached.split(",") if cached else []
 
+    handpicked = await _handpicked_ids(session, curation.id)
+    if handpicked:
+        ids = handpicked[:_SHOW]
+    else:
+        pool = await _pool_ids(session, curation)
+        ids = _seed_pick(curation.id, pool)
+    ttl = seconds_until_kst_midnight(kst_now()) + _jitter(curation.id)
+    await redis.set(cache_key, ",".join(ids), ex=ttl)
+    return ids
+
+
+async def resolve_curation_spots(
+    session: AsyncSession,
+    redis: Redis,
+    curation: CurationRow,
+) -> list[SpotCardRow]:
+    """Resolve + hydrate a curation's display spots (handpicked, else quality-gate pool).
+
+    Returns ordered SpotCardRows, max 8 per path. Resolved ids are cached daily.
+    """
+    ids = await resolve_curation_ids(session, redis, curation)
     if not ids:
         return []
     by_id = await load_spot_cards_by_ids(session, ids)
