@@ -31,8 +31,13 @@ def _email() -> str:
 
 @pytest_asyncio.fixture(autouse=True)
 async def override_db():
-    from app.core.db import get_db
+    from fakeredis.aioredis import FakeRedis
 
+    from app.core.db import get_db
+    from app.core.redis import get_redis
+
+    # Fresh fakeredis per test so rate-limit counters never bleed across tests.
+    fake = FakeRedis(decode_responses=True)
     eng = create_async_engine(str(settings.sqlalchemy_database_url), poolclass=NullPool)
     async with eng.connect() as conn:
         tx = await conn.begin()
@@ -50,12 +55,15 @@ async def override_db():
                     await session.close()
 
             app.dependency_overrides[get_db] = _override
+            app.dependency_overrides[get_redis] = lambda: fake
             yield
             app.dependency_overrides.pop(get_db, None)
+            app.dependency_overrides.pop(get_redis, None)
         finally:
             if tx.is_active:
                 await tx.rollback()
     await eng.dispose()
+    await fake.aclose()
 
 
 # ---------------------------------------------------------------------------
@@ -128,6 +136,35 @@ async def test_login_unknown_email_returns_401(client):
     )
     assert resp.status_code == 401
     assert resp.json()["error"]["code"] == "AUTH_INVALID_CREDENTIALS"
+
+
+async def test_login_rate_limited_after_threshold(client):
+    # 10/min/IP — the 11th attempt (over limit) is throttled regardless of creds,
+    # blunting brute-force / credential-stuffing from a single source.
+    body = {"email": _email(), "password": "whatever1"}
+    statuses = [
+        (await client.post("/v1/auth/email/login", json=body)).status_code for _ in range(11)
+    ]
+    assert statuses[:10] == [401] * 10  # under the limit: handler runs (unknown email)
+    assert statuses[10] == 429
+    assert (await client.post("/v1/auth/email/login", json=body)).json()["error"][
+        "code"
+    ] == "RATE_LIMITED"
+
+
+async def test_signup_rate_limited_after_threshold(client):
+    # 5/min/IP — the 6th signup (over limit) is throttled, capping email
+    # enumeration / spam account creation from a single source.
+    statuses = [
+        (
+            await client.post(
+                "/v1/auth/email/signup", json={"email": _email(), "password": "hunter2pw"}
+            )
+        ).status_code
+        for _ in range(6)
+    ]
+    assert statuses[:5] == [201] * 5
+    assert statuses[5] == 429
 
 
 # ---------------------------------------------------------------------------
