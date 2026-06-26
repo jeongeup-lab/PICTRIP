@@ -11,6 +11,9 @@ interface Props {
   variant: "full" | "sheet";
   onSuccess: () => void;
   onCancel?: () => void;
+  /** Override the email-button handler. The sheet variant must close its native
+   *  <Modal> before routing (see AuthPromptSheet); the full screen pushes directly. */
+  onEmailPress?: () => void;
 }
 
 const PROVIDERS: Provider[] = ["kakao", "google", "apple"];
@@ -41,7 +44,7 @@ function BrandSymbol() {
   );
 }
 
-export function LoginCard({ variant, onSuccess, onCancel }: Props) {
+export function LoginCard({ variant, onSuccess, onCancel, onEmailPress }: Props) {
   const loginWithOAuth = useAuthStore((s) => s.loginWithOAuth);
   const [pending, setPending] = useState<Provider | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +93,7 @@ export function LoginCard({ variant, onSuccess, onCancel }: Props) {
       <View style={styles.emailWrap}>
         <Pressable
           style={({ pressed }) => [styles.emailBtn, pressed && styles.emailBtnPressed]}
-          onPress={() => router.push("/auth/email")}
+          onPress={onEmailPress ?? (() => router.push("/auth/email"))}
           disabled={pending !== null}
         >
           <Text style={styles.emailBtnText}>이메일로 계속하기</Text>

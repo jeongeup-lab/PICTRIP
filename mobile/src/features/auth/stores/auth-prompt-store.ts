@@ -8,6 +8,7 @@ interface AuthPromptState {
   resolve: ((ok: boolean) => void) | null;
   prompt: (reason: AuthReason) => Promise<boolean>;
   succeed: () => void;
+  hide: () => void;
   dismiss: () => void;
 }
 
@@ -23,6 +24,11 @@ export const useAuthPromptStore = create<AuthPromptState>((set, get) => ({
     get().resolve?.(true);
     set({ visible: false, reason: null, resolve: null });
   },
+  // Close the sheet UI but KEEP the pending action armed — used when handing off
+  // to the email screen (a separate route that logs in and resolves the pending
+  // action later via the isAuthenticated watcher in AuthPromptSheet). Pushing a
+  // route while the native <Modal> is open would render it behind the sheet.
+  hide: () => set({ visible: false }),
   dismiss: () => {
     get().resolve?.(false);
     set({ visible: false, reason: null, resolve: null });

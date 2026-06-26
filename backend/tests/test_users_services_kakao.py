@@ -71,6 +71,39 @@ async def test_authenticate_with_oauth_distinct_providers_same_sub_are_separate(
 
 
 @pytest.mark.asyncio
+async def test_authenticate_with_oauth_email_collision_does_not_crash(
+    db_session: AsyncSession,
+) -> None:
+    """An OAuth login whose profile email already belongs to an active account
+    must not 500 on the partial-unique active-email index. The OAuth account is
+    created separately (identity = provider+sub, no auto-linking) with the
+    conflicting profile email dropped."""
+    from app.modules.users.schemas import EmailSignupIn
+    from app.modules.users.services import signup_with_email
+
+    await signup_with_email(
+        db_session,
+        EmailSignupIn(email="dup@example.com", password="password123", name="Email User"),
+    )
+
+    fake_claims = OidcClaims(
+        sub="google-dup", email="dup@example.com", name="Google User", picture=None
+    )
+    with patch(
+        "app.modules.users.services.verify_oauth_id_token",
+        AsyncMock(return_value=fake_claims),
+    ):
+        pair = await authenticate_with_oauth(db_session, "google", OAuthLoginIn(idToken="x"))
+
+    users = (await db_session.scalars(select(User))).all()
+    assert len(users) == 2  # separate accounts — NOT auto-linked
+    oauth_user = next(u for u in users if u.id == pair.user.id)
+    assert oauth_user.email is None  # conflicting profile email was dropped
+    providers = (await db_session.scalars(select(UserAuthProvider))).all()
+    assert {p.provider for p in providers} == {"email", "google"}
+
+
+@pytest.mark.asyncio
 async def test_authenticate_with_oauth_savepoint_rollback_on_race(
     db_session: AsyncSession,
 ) -> None:
