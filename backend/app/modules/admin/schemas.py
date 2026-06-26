@@ -36,6 +36,16 @@ class CollectionStatus(BaseModel):
     nextScheduledAt: datetime | None
 
 
+# --- POST /admin/api/collection/trigger (A01 §3 / ADM-009) --------------------
+class TriggerResult(BaseModel):
+    """Result of a collection trigger. ``runId`` is None for workflow_dispatch
+    (GitHub returns 204 with no run id; the admin polls sync_runs for status)."""
+
+    job: str
+    runId: str | None
+    accepted: bool
+
+
 # --- GET /admin/api/history?days=N --------------------------------------------
 class HistoryDay(BaseModel):
     date: date

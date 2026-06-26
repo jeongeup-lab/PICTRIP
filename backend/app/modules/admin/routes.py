@@ -79,6 +79,16 @@ async def api_collection(_: AdminAuth, db: DbSession) -> dict[str, Any]:
     return ok(await services.get_collection_status(db))
 
 
+@router.post("/api/collection/trigger")
+async def api_collection_trigger(_: AdminAuth, db: DbSession) -> dict[str, Any]:
+    """TriggerResult — kick sync-daily (A01 §3 / ADM-009).
+
+    On failure (not configured / GitHub error / already running) the service
+    raises AdminTriggerFailed → ADMIN_TRIGGER_FAILED(502) envelope.
+    """
+    return ok(await services.trigger_collection(db))
+
+
 @router.get("/api/history")
 async def api_history(
     _: AdminAuth, db: DbSession, days: int = Query(7, ge=1, le=90)

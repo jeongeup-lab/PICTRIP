@@ -1,0 +1,47 @@
+# On-demand collection trigger target for the admin "수집 즉시 실행" button.
+#
+# This is the workflow_dispatch target the backend admin endpoint
+# (POST /admin/api/collection/trigger) kicks via GitHub REST. It runs the
+# pipeline CLI `pictrip-data sync-daily` on the self-hosted homeserver runner
+# (which can reach CT110). The EXISTING CT111 cron stays the scheduled path —
+# this file is workflow_dispatch ONLY (no schedule), so it never double-runs.
+#
+# REQUIRES, before this can fire (pending team confirmation per A01 decision A7):
+#   - repo secrets: KTO_SERVICE_KEY (→ pipeline KTO_API_KEY) + DATABASE_URL
+#     (CT110 prod DB DSN the pipeline writes spots/sync_runs to)
+#   - a backend GITHUB_DISPATCH_TOKEN with `actions:write` (set in CT112 .env)
+#   - a self-hosted runner labelled [self-hosted, ct112] that can reach CT110
+#
+# MECHANISM PENDING (A7): workflow_dispatch vs a CT111/Tailscale HTTP listener
+# is not finalized. If the decision flips, only the backend trigger adapter
+# (app/modules/admin/triggers.py) changes; this file is the workflow_dispatch
+# proposal.
+name: pipeline-sync
+
+on:
+  workflow_dispatch:
+
+# One on-demand sync at a time; the admin endpoint also rejects when a run is
+# already in flight, but guard here too.
+concurrency:
+  group: pipeline-sync
+  cancel-in-progress: false
+
+jobs:
+  sync-daily:
+    runs-on: [self-hosted, ct112]
+    defaults:
+      run:
+        working-directory: pipeline
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      - name: Run sync-daily
+        run: uv run pictrip-data sync-daily
+        env:
+          # Pipeline config (pipeline/src/pictrip_data/config.py): DATABASE_URL +
+          # KTO_API_KEY. KTO_SERVICE_KEY is the repo secret name; map it onto the
+          # pipeline's KTO_API_KEY env var.
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          KTO_API_KEY: ${{ secrets.KTO_SERVICE_KEY }}
