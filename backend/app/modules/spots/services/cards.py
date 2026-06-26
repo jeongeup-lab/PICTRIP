@@ -81,6 +81,22 @@ async def cover_url(
     return None
 
 
+async def load_cover_images(
+    session: AsyncSession,
+    content_ids: list[str],
+) -> dict[str, str | None]:
+    """{content_id: first_image_url} for cover-spot lookups; missing ids absent.
+    Lets the feed batch every hero's cover image into a single query."""
+    if not content_ids:
+        return {}
+    rows = (
+        await session.execute(
+            select(Spot.content_id, Spot.first_image_url).where(Spot.content_id.in_(content_ids))
+        )
+    ).all()
+    return {r.content_id: r.first_image_url for r in rows}
+
+
 async def load_spot_cards_by_ids(
     session: AsyncSession,
     content_ids: list[str],
