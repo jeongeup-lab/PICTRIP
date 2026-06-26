@@ -28,6 +28,8 @@ function messageForError(err: unknown): string {
         return "이메일 또는 비밀번호가 올바르지 않아요.";
       case "VALIDATION_FAILED":
         return "이메일과 비밀번호(8자 이상)를 확인해 주세요.";
+      case "RATE_LIMITED":
+        return "시도가 너무 많아요. 잠시 후 다시 시도해 주세요.";
       case "NETWORK_ERROR":
         return "네트워크에 연결할 수 없어요.";
     }

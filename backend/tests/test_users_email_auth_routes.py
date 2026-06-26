@@ -138,6 +138,12 @@ async def test_login_unknown_email_returns_401(client):
     assert resp.json()["error"]["code"] == "AUTH_INVALID_CREDENTIALS"
 
 
+async def test_login_overlong_password_returns_422(client):
+    # Capped at bcrypt's 72-byte limit so a huge string can't waste a hash.
+    resp = await client.post("/v1/auth/email/login", json={"email": _email(), "password": "x" * 73})
+    assert resp.status_code == 422
+
+
 async def test_login_rate_limited_after_threshold(client):
     # 10/min/IP — the 11th attempt (over limit) is throttled regardless of creds,
     # blunting brute-force / credential-stuffing from a single source.
