@@ -30,7 +30,10 @@ class EmailSignupIn(BaseModel):
 
 class EmailLoginIn(BaseModel):
     email: EmailStr
-    password: str
+    # Cap at bcrypt's 72-byte limit (same as signup) so a huge string can't waste
+    # a hash. No min_length: a too-short password stays a uniform 401 (credential
+    # check), never a 422 that would behave differently from a wrong password.
+    password: str = Field(max_length=72)
 
 
 class RefreshBody(BaseModel):
