@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -39,6 +39,7 @@ export default function EmailAuthScreen() {
   const insets = useSafeAreaInsets();
   const loginWithEmail = useAuthStore((s) => s.loginWithEmail);
   const signupWithEmail = useAuthStore((s) => s.signupWithEmail);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
@@ -49,7 +50,17 @@ export default function EmailAuthScreen() {
 
   const close = () => {
     if (router.canGoBack()) router.back();
+    else router.replace("/(tabs)"); // deep-link / cold-start entry has nothing to pop
   };
+
+  // Single source of dismissal: close once authenticated by any path (this
+  // screen's own submit, or already-authed re-entry). Avoids an imperative
+  // close() racing a second router.back(). This screen is never stacked under
+  // another auth screen (the full login screen routes here via replace), so the
+  // effect only ever fires one back().
+  useEffect(() => {
+    if (isAuthenticated) close();
+  }, [isAuthenticated]);
 
   const isSignup = mode === "signup";
   const canSubmit = email.trim().length > 0 && password.length >= (isSignup ? 8 : 1) && !pending;
@@ -71,7 +82,7 @@ export default function EmailAuthScreen() {
       } else {
         await loginWithEmail(trimmedEmail, password);
       }
-      close();
+      // Dismissal is handled by the isAuthenticated effect — success flips auth.
     } catch (e) {
       setError(messageForError(e));
     } finally {

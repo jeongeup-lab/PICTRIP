@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
 
 from app.core.auth import CurrentUserId
 from app.core.db import DbSession
+from app.core.ratelimit import rate_limit
 from app.core.redis import RedisDep
 from app.core.schemas import PaginationMeta, ok
 from app.modules.spots import services as spots_services
@@ -44,6 +45,7 @@ async def oauth_login(
     "/auth/email/signup",
     status_code=status.HTTP_201_CREATED,
     summary="Email/password signup → internal token pair",
+    dependencies=[Depends(rate_limit(bucket="email_signup", limit=5, window_seconds=60))],
 )
 async def email_signup(body: EmailSignupIn, session: DbSession) -> dict[str, Any]:
     pair = await services.signup_with_email(session, body)
@@ -54,6 +56,7 @@ async def email_signup(body: EmailSignupIn, session: DbSession) -> dict[str, Any
     "/auth/email/login",
     status_code=status.HTTP_200_OK,
     summary="Email/password login → internal token pair",
+    dependencies=[Depends(rate_limit(bucket="email_login", limit=10, window_seconds=60))],
 )
 async def email_login(body: EmailLoginIn, session: DbSession) -> dict[str, Any]:
     pair = await services.login_with_email(session, body)
