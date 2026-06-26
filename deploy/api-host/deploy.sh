@@ -38,10 +38,23 @@ fi
 # alembic upgrade head runs on container start (forward-only)
 docker compose --env-file .deploy.env up -d
 
-# smoke: local + public
-if ! curl -fsS http://127.0.0.1:8000/health >/dev/null \
-   || ! curl -fsS https://api.pictrip.org/health >/dev/null; then
-  echo "smoke FAILED — rolling back to ${PREV_TAG}"
+# smoke: poll local + public health until the new container finishes booting
+# (alembic upgrade + uvicorn start), up to ~60s, before declaring failure — a
+# single immediate check races the container startup and false-fails.
+smoke_ok() {
+  curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1 &&
+    curl -fsS https://api.pictrip.org/health >/dev/null 2>&1
+}
+_ok=0
+for _ in $(seq 1 30); do
+  if smoke_ok; then
+    _ok=1
+    break
+  fi
+  sleep 2
+done
+if [ "${_ok}" -ne 1 ]; then
+  echo "smoke FAILED after ~60s — rolling back to ${PREV_TAG:-<none>}"
   if [ -n "${PREV_TAG}" ]; then
     sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${PREV_TAG}/" .deploy.env
     docker compose --env-file .deploy.env up -d
