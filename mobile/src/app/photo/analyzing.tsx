@@ -6,12 +6,26 @@ import { Icon } from "@/components/Icon";
 import { usePhotoFlowStore } from "@/features/photo/stores/photo-flow-store";
 import { useLoadingAnimation } from "@/features/photo/hooks/use-loading-animation";
 import { MIN_VISIBLE_MS } from "@/features/photo/constants/timing";
+import type { ErrorCode } from "@/lib/app-error";
 import { colors, spacing, radii } from "@/constants/theme";
+
+// Branch on error code only — never message (S01).
+function messageForPhotoError(code: ErrorCode | null): { title: string; sub: string } {
+  switch (code) {
+    case "RATE_LIMITED":
+      return { title: "잠시 후 다시 시도해 주세요", sub: "사진 분석 요청이 너무 많아요." };
+    case "NETWORK_ERROR":
+      return { title: "분석하지 못했어요", sub: "네트워크에 연결할 수 없어요." };
+    default:
+      return { title: "분석하지 못했어요", sub: "잠시 후 다시 시도해 주세요" };
+  }
+}
 
 export default function PhotoAnalyzingScreen() {
   const insets = useSafeAreaInsets();
   const asset = usePhotoFlowStore((s) => s.asset);
   const status = usePhotoFlowStore((s) => s.status);
+  const errorCode = usePhotoFlowStore((s) => s.errorCode);
   const startSearch = usePhotoFlowStore((s) => s.startSearch);
   const abort = usePhotoFlowStore((s) => s.abort);
 
@@ -32,6 +46,7 @@ export default function PhotoAnalyzingScreen() {
   };
 
   const isError = status === "error";
+  const errorMessage = messageForPhotoError(errorCode);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + spacing.sm }]}>
@@ -44,8 +59,8 @@ export default function PhotoAnalyzingScreen() {
 
         {isError ? (
           <>
-            <Text style={styles.title}>분석하지 못했어요</Text>
-            <Text style={styles.sub}>잠시 후 다시 시도해 주세요</Text>
+            <Text style={styles.title}>{errorMessage.title}</Text>
+            <Text style={styles.sub}>{errorMessage.sub}</Text>
             <View style={styles.errorActions}>
               <Pressable style={[styles.errBtn, styles.errPrimary]} onPress={() => startSearch()}>
                 <Text style={styles.errPrimaryText}>다시 시도</Text>

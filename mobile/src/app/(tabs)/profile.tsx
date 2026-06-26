@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { useSavedList } from "@/features/saved/queries";
+import { prefetchSpot } from "@/features/spots/queries";
 import { SavedRail } from "@/features/saved/components/SavedRail";
 import { EmptyBoard } from "@/features/saved/components/EmptyBoard";
 import { ProfileHeader } from "@/features/profile/components/ProfileHeader";
@@ -53,7 +54,13 @@ export default function ProfileTab() {
 
           {isAuthenticated ? (
             saved && saved.length > 0 ? (
-              <SavedRail spots={saved} onPressItem={(id) => router.push(`/spots/${id}`)} />
+              <SavedRail
+                spots={saved}
+                onPressItem={(id) => {
+                  prefetchSpot(id);
+                  router.push(`/spots/${id}`);
+                }}
+              />
             ) : (
               <EmptyBoard
                 text="아직 스크랩한 곳이 없어요"

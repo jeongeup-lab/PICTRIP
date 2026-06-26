@@ -150,3 +150,24 @@ async def test_regions_tree_route(db_session: AsyncSession, client) -> None:
     assert isinstance(seoul["centroid"]["lat"], float)
     assert isinstance(seoul["centroid"]["lng"], float)
     assert seoul["sigungus"]
+
+
+async def test_regions_tree_sets_edge_cache_header(db_session: AsyncSession, client) -> None:
+    redis = FakeRedis(decode_responses=True)
+    await _seed_basic(db_session)
+
+    app.dependency_overrides[get_db] = lambda: db_session
+    app.dependency_overrides[get_redis] = lambda: redis
+    try:
+        resp = await client.get("/v1/map/regions-tree")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert resp.status_code == 200
+    assert resp.headers["cache-control"] == "public, s-maxage=86400"
+
+
+async def test_non_cacheable_route_has_no_edge_cache_header(client) -> None:
+    resp = await client.get("/health")
+    assert resp.status_code == 200
+    assert "cache-control" not in resp.headers

@@ -1,13 +1,17 @@
 import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import { router } from "expo-router";
 import { RemoteImage } from "@/components/RemoteImage";
-import { useNearby } from "@/features/spots/queries";
+import { useNearby, prefetchSpot } from "@/features/spots/queries";
 import type { NearbySpot } from "@/lib/api-types";
 import { colors } from "@/constants/theme";
 
 function NearbyCard({ spot }: { spot: NearbySpot }) {
   return (
-    <Pressable style={styles.card} onPress={() => router.push(`/spots/${spot.contentId}`)}>
+    <Pressable
+      style={styles.card}
+      onPressIn={() => prefetchSpot(spot.contentId)}
+      onPress={() => router.push(`/spots/${spot.contentId}`)}
+    >
       <RemoteImage uri={spot.firstImageUrl} radius={13} style={styles.photo} />
       <Text style={styles.name} numberOfLines={1}>
         {spot.title}

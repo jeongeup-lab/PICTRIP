@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -276,14 +277,16 @@ async def _read_cached_detail(
 async def _fetch_kto_detail(
     kto: KtoClient, content_id: str, content_type_id: int
 ) -> tuple[str | None, str | None, str | None, list[tuple[str, str | None]], dict[str, Any]]:
-    """Fetch + parse the 3 KTO detail endpoints. Propagates KtoApiUnavailable."""
-    common_items = await kto.call(KtoService.KOR, "detailCommon2", contentId=content_id)
-    image_items = await kto.call(KtoService.KOR, "detailImage2", contentId=content_id, imageYN="Y")
-    intro_items = await kto.call(
-        KtoService.KOR,
-        "detailIntro2",
-        contentId=content_id,
-        contentTypeId=content_type_id,
+    """Fetch + parse the 3 KTO detail endpoints concurrently. Propagates KtoApiUnavailable."""
+    common_items, image_items, intro_items = await asyncio.gather(
+        kto.call(KtoService.KOR, "detailCommon2", contentId=content_id),
+        kto.call(KtoService.KOR, "detailImage2", contentId=content_id, imageYN="Y"),
+        kto.call(
+            KtoService.KOR,
+            "detailIntro2",
+            contentId=content_id,
+            contentTypeId=content_type_id,
+        ),
     )
 
     common = common_items[0] if common_items else {}

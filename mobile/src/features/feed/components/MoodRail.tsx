@@ -2,6 +2,7 @@ import { View, Text, StyleSheet } from "react-native";
 import { router } from "expo-router";
 import { Rail } from "@/components/Rail";
 import { SpotCard } from "@/components/SpotCard";
+import { prefetchSpot } from "@/features/spots/queries";
 import type { MoodRailDto } from "@/lib/api-types";
 import { colors, spacing } from "@/constants/theme";
 
@@ -17,6 +18,7 @@ export function MoodRail({ rail }: { rail: MoodRailDto }) {
           <SpotCard
             key={spot.contentId}
             spot={spot}
+            onPressIn={() => prefetchSpot(spot.contentId)}
             onPress={() => router.push(`/spots/${spot.contentId}`)}
           />
         ))}

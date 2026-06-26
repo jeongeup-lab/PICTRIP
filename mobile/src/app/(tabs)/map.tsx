@@ -15,6 +15,7 @@ import { RegionPicker } from "@/features/map/components/RegionPicker";
 import { useMapStore } from "@/features/map/stores/map-store";
 import { useMapInit } from "@/features/map/hooks/use-map-init";
 import { useNearbyMap, useRegionLabel } from "@/features/map/queries";
+import { prefetchSpot } from "@/features/spots/queries";
 import { formatHeaderLabel } from "@/features/map/lib/region-label";
 import { NEARBY_CAP } from "@/constants/map";
 import { colors, spacing } from "@/constants/theme";
@@ -144,6 +145,7 @@ export default function MapTab() {
                 key={spot.contentId}
                 spot={spot}
                 selected={spot.contentId === s.selectedSpotId}
+                onPressIn={() => prefetchSpot(spot.contentId)}
                 onPress={() => router.push(`/spots/${spot.contentId}`)}
               />
             ))}

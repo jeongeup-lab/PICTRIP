@@ -2,6 +2,7 @@ import { ScrollView, View, Text, useWindowDimensions, StyleSheet } from "react-n
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import { useCuration } from "@/features/curation/queries";
+import { prefetchSpot } from "@/features/spots/queries";
 import { AppBar } from "@/components/AppBar";
 import { RemoteImage } from "@/components/RemoteImage";
 import { SpotCard } from "@/components/SpotCard";
@@ -41,6 +42,7 @@ export default function CurationScreen() {
                   key={spot.contentId}
                   spot={spot}
                   width={cardWidth}
+                  onPressIn={() => prefetchSpot(spot.contentId)}
                   onPress={() => router.push(`/spots/${spot.contentId}`)}
                 />
               ))}

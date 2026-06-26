@@ -17,7 +17,7 @@ import { colors, spacing } from "@/constants/theme";
 
 export default function SpotScreen() {
   const { contentId } = useLocalSearchParams<{ contentId: string }>();
-  const { data, isLoading } = useSpot(contentId);
+  const { data, isLoading, isError, refetch } = useSpot(contentId);
   const { saved, toggle: onToggleSave } = useSaveOptimistic(contentId);
   const [galleryOpen, setGalleryOpen] = useState(false);
 
@@ -43,6 +43,25 @@ export default function SpotScreen() {
         .join(" · ")
     : "";
   const lead = firstSentence(data?.overview ?? null);
+
+  if (isError && !data) {
+    return (
+      <View style={styles.root}>
+        <View style={styles.errNav}>
+          <Pressable style={styles.errBack} onPress={() => router.back()} hitSlop={6}>
+            <Icon name="chevron-left" size={22} color={colors.ink} />
+          </Pressable>
+        </View>
+        <View style={styles.errWrap}>
+          <Text style={styles.errTitle}>불러오지 못했어요</Text>
+          <Text style={styles.errSub}>잠시 후 다시 시도해 주세요</Text>
+          <Pressable style={styles.retryBtn} onPress={() => refetch()}>
+            <Text style={styles.retryText}>다시 시도</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.root}>
@@ -167,4 +186,31 @@ const styles = StyleSheet.create({
     marginHorizontal: 26,
   },
   heroSkeleton: { height: 300 },
+  errNav: { flexDirection: "row", paddingHorizontal: 14, paddingTop: 62 },
+  errBack: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.inset,
+  },
+  errWrap: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 44 },
+  errTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    letterSpacing: -0.36,
+    marginBottom: 6,
+    color: colors.ink,
+  },
+  errSub: { fontSize: 13, color: colors.sec, marginBottom: 26 },
+  retryBtn: {
+    height: 48,
+    paddingHorizontal: 26,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.ink,
+  },
+  retryText: { fontSize: 15, fontWeight: "700", color: colors.onImage },
 });

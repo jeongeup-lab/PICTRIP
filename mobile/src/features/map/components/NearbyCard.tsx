@@ -9,11 +9,12 @@ interface Props {
   spot: NearbySpot;
   selected?: boolean;
   onPress: () => void;
+  onPressIn?: () => void;
 }
 
 const CONGESTION: Record<string, string> = { low: "한산", medium: "보통", high: "붐빔" };
 
-export function NearbyCard({ spot, selected, onPress }: Props) {
+export function NearbyCard({ spot, selected, onPress, onPressIn }: Props) {
   const meta = [
     spot.sigunguName,
     spot.category,
@@ -24,7 +25,11 @@ export function NearbyCard({ spot, selected, onPress }: Props) {
   const congestion = spot.congestion ? CONGESTION[spot.congestion] : null;
 
   return (
-    <Pressable onPress={onPress} style={[styles.card, selected && styles.selected]}>
+    <Pressable
+      onPress={onPress}
+      onPressIn={onPressIn}
+      style={[styles.card, selected && styles.selected]}
+    >
       <RemoteImage uri={spot.firstImageUrl} radius={radii.md} style={styles.img} />
       <View style={styles.body}>
         <View style={styles.titleRow}>

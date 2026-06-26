@@ -16,7 +16,7 @@ from app.config import settings
 from app.core.error_handlers import register_error_handlers
 from app.core.kto_client import KtoClient
 from app.core.logging import configure_logging, get_logger
-from app.core.middleware import TraceIdMiddleware
+from app.core.middleware import CacheControlMiddleware, TraceIdMiddleware
 from app.core.redis import redis_lifespan
 from app.core.schemas import ok
 from app.modules.images import router as images_router
@@ -77,6 +77,7 @@ def create_app() -> FastAPI:
         max_age=86400,
     )
     app.add_middleware(TraceIdMiddleware)
+    app.add_middleware(CacheControlMiddleware, prefix=settings.API_V1_PREFIX)
 
     register_error_handlers(app)
 

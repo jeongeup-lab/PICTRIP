@@ -7,12 +7,13 @@ import { colors, radii } from "@/constants/theme";
 interface Props {
   spot: SpotCard;
   onPress: () => void;
+  onPressIn?: () => void;
   onUnsave: () => void;
 }
 
-export function SavedCard({ spot, onPress, onUnsave }: Props) {
+export function SavedCard({ spot, onPress, onPressIn, onUnsave }: Props) {
   return (
-    <Pressable style={styles.card} onPress={onPress}>
+    <Pressable style={styles.card} onPress={onPress} onPressIn={onPressIn}>
       <RemoteImage uri={spot.firstImageUrl} style={styles.img} />
       <View style={styles.ov} pointerEvents="none" />
       <Pressable style={styles.heart} onPress={onUnsave} hitSlop={8}>
