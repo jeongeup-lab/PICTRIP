@@ -1,4 +1,4 @@
-"""ASGI middleware: trace-id injection + request access logging."""
+"""ASGI middleware: trace-id injection + request access logging + edge cache hints."""
 
 from __future__ import annotations
 
@@ -8,8 +8,10 @@ from collections.abc import Awaitable, Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.types import ASGIApp
 
 from app.core.logging import get_logger, set_trace_id
+from app.core.time import kst_now, seconds_until_kst_midnight
 
 logger = get_logger(__name__)
 
@@ -47,4 +49,35 @@ class TraceIdMiddleware(BaseHTTPMiddleware):
             status_code=response.status_code,
             duration_ms=duration_ms,
         )
+        return response
+
+
+class CacheControlMiddleware(BaseHTTPMiddleware):
+    """Cache-Control on public 200 GETs so a CDN can serve them from the edge.
+
+    Feed/curations expire at the next KST midnight; regions-tree after 24h.
+    Requires a matching Cloudflare Cache Rule to take effect.
+    """
+
+    def __init__(self, app: ASGIApp, prefix: str) -> None:
+        super().__init__(app)
+        self._feed = f"{prefix}/home/feed"
+        self._regions_tree = f"{prefix}/map/regions-tree"
+        self._curations_prefix = f"{prefix}/curations/"
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        response = await call_next(request)
+        if request.method != "GET" or response.status_code != 200:
+            return response
+
+        path = request.url.path
+        if path == self._feed or path.startswith(self._curations_prefix):
+            ttl = seconds_until_kst_midnight(kst_now())
+            response.headers["Cache-Control"] = f"public, s-maxage={ttl}"
+        elif path == self._regions_tree:
+            response.headers["Cache-Control"] = "public, s-maxage=86400"
         return response

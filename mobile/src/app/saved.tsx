@@ -5,6 +5,7 @@ import { Icon } from "@/components/Icon";
 import { Skeleton } from "@/components/Skeleton";
 import { SavedCard } from "@/features/saved/components/SavedCard";
 import { useSavedList, useUnsaveMutation } from "@/features/saved/queries";
+import { prefetchSpot } from "@/features/spots/queries";
 import { colors, spacing } from "@/constants/theme";
 
 export default function SavedScreen() {
@@ -29,6 +30,7 @@ export default function SavedScreen() {
             <SavedCard
               key={spot.contentId}
               spot={spot}
+              onPressIn={() => prefetchSpot(spot.contentId)}
               onPress={() => router.push(`/spots/${spot.contentId}`)}
               onUnsave={() => unsave.mutate(spot.contentId)}
             />

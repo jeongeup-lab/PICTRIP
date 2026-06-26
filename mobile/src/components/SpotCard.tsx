@@ -8,11 +8,12 @@ interface SpotCardProps {
   spot: SpotCardDto;
   width?: number;
   onPress?: () => void;
+  onPressIn?: () => void;
 }
 
-export function SpotCard({ spot, width = 185, onPress }: SpotCardProps) {
+export function SpotCard({ spot, width = 185, onPress, onPressIn }: SpotCardProps) {
   return (
-    <Pressable onPress={onPress} style={{ width }}>
+    <Pressable onPress={onPress} onPressIn={onPressIn} style={{ width }}>
       <RemoteImage
         uri={spot.firstImageUrl}
         radius={radii.md}

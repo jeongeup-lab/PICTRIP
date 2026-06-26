@@ -1,11 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
 import { getSpot, getNearby } from "@/features/spots/api";
+import { queryClient } from "@/lib/query-client";
 
 export function useSpot(contentId: string) {
   return useQuery({
     queryKey: ["spot", contentId],
     queryFn: () => getSpot(contentId),
     enabled: !!contentId,
+  });
+}
+
+/** Warm the spot-detail cache before navigation (cold detail can take seconds). */
+export function prefetchSpot(contentId: string) {
+  if (!contentId) return;
+  void queryClient.prefetchQuery({
+    queryKey: ["spot", contentId],
+    queryFn: () => getSpot(contentId),
   });
 }
 
