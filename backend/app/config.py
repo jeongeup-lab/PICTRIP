@@ -120,8 +120,9 @@ class Settings(BaseSettings):
     PHOTO_SEARCH_MAX: int = 30
 
     # --- Admin console (A01) ---
-    # Must be set before /admin is wired, else /admin/* returns 503.
-    ADMIN_PASSWORD: str | None = None
+    # Auth is DB-backed (admin_users table), NOT an env var (decision 2026-06-27):
+    # the credential lives in the shared CT110 DB so it needs no CT112 .env/shell to
+    # set or rotate. See app/modules/admin/security.py + migration 0016.
 
     # --- Collection trigger (A01 §3/§5 Phase 2, decision A7) ---
     # The trigger MECHANISM is config-gated behind an adapter (triggers.py). The

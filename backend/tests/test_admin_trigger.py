@@ -23,7 +23,10 @@ from app.core.db import get_db
 from app.main import app
 from app.modules.admin import triggers
 
-_PASSWORD = "s3cret-admin-pw"
+# DB-backed admin auth: migration 0016 seeds admin/admin into the test DB, so
+# requests authenticate with this fixed credential (no settings monkeypatch).
+# settings is still used by the trigger-config fixture below.
+_PASSWORD = "admin"
 _AUTH = ("admin", _PASSWORD)
 
 # Measured sync_runs schema (A01 §0); same as test_admin_api.py.
@@ -49,8 +52,8 @@ CREATE TABLE IF NOT EXISTS sync_runs (
 
 
 @pytest.fixture
-def admin_password(monkeypatch: pytest.MonkeyPatch) -> str:
-    monkeypatch.setattr(settings, "ADMIN_PASSWORD", _PASSWORD)
+def admin_password() -> str:
+    """The DB-seeded default admin credential (migration 0016)."""
     return _PASSWORD
 
 

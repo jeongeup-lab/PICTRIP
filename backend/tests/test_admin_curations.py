@@ -24,13 +24,13 @@ from fakeredis.aioredis import FakeRedis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.core.db import get_db
 from app.core.redis import get_redis
 from app.main import app
 
-_ADMIN_PASSWORD = "test-admin-pw"
-_AUTH = {"Authorization": "Basic " + b64encode(b"admin:test-admin-pw").decode()}
+# DB-backed admin auth: migration 0016 seeds admin/admin into the test DB
+# (alembic upgrade head runs before pytest in CI).
+_AUTH = {"Authorization": "Basic " + b64encode(b"admin:admin").decode()}
 
 
 # --- seed helpers (replicated from test_home_feed.py) -------------------------
@@ -124,11 +124,6 @@ async def _add_handpick(session: AsyncSession, curation_id: int, cid: str, pos: 
         text("INSERT INTO curation_spots (curation_id, content_id, position) VALUES (:c, :s, :p)"),
         {"c": curation_id, "s": cid, "p": pos},
     )
-
-
-@pytest.fixture(autouse=True)
-def _admin_password(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "ADMIN_PASSWORD", _ADMIN_PASSWORD)
 
 
 @pytest.fixture
