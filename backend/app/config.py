@@ -123,6 +123,17 @@ class Settings(BaseSettings):
     # Must be set before /admin is wired, else /admin/* returns 503.
     ADMIN_PASSWORD: str | None = None
 
+    # --- Collection trigger (A01 §3/§5 Phase 2, decision A7) ---
+    # The trigger MECHANISM is config-gated behind an adapter (triggers.py). The
+    # recommended mechanism is GitHub ``workflow_dispatch``: when unconfigured
+    # (no token) the endpoint returns a clean ADMIN_TRIGGER_FAILED(502) instead
+    # of crashing.
+    # SECRET — set in .env only (PAT/fine-grained token with ``actions:write``).
+    GITHUB_DISPATCH_TOKEN: str = ""
+    GITHUB_REPO: str = "jeongeup-lab/PICTRIP"  # owner/repo
+    COLLECTION_WORKFLOW: str = "pipeline-sync.yml"  # workflow file id
+    COLLECTION_WORKFLOW_REF: str = "main"  # git ref to dispatch on
+
     # --- Observability ---
     SENTRY_DSN: str = ""
     SENTRY_TRACES_SAMPLE_RATE: float = 0.1

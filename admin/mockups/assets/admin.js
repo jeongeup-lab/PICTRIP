@@ -210,6 +210,90 @@ async function loadCollection() {
   }
 }
 
+// ─── 수집 트리거 (ADM-009) ──────────────────────────────────────────────────
+// POST helper: same JSend contract as adminFetch but with a method, and it
+// surfaces error.message on non-2xx so the 502 "not configured"/"already
+// running" messages reach the operator.
+async function adminPost(path) {
+  const res = await fetch(path, { method: "POST", credentials: "same-origin" });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || (json && json.error)) {
+    const msg = (json && json.error && json.error.message) || `HTTP ${res.status} ${res.statusText}`;
+    throw new Error(msg);
+  }
+  return json.data;
+}
+
+let _triggerPoll = null;
+// Safety cap: stop polling after this many attempts (~10 min at 5 s/tick).
+const _POLL_MAX_ATTEMPTS = 120;
+
+function setTriggerBtn(disabled, label) {
+  const btn = document.getElementById("col-trigger-btn");
+  if (!btn) return;
+  btn.disabled = disabled;
+  if (label != null) btn.textContent = label;
+}
+
+// Poll /collection until the latest run leaves "running" (or no running run is
+// reported), then refresh the displayed status and re-enable the button.
+// Cap: after _POLL_MAX_ATTEMPTS ticks (~10 min) give up and re-enable the
+// button so the operator is never permanently stuck.
+function startTriggerPolling() {
+  if (_triggerPoll) clearInterval(_triggerPoll);
+  let _pollAttempts = 0;
+  _triggerPoll = setInterval(async () => {
+    if (document.hidden) return;
+    _pollAttempts += 1;
+    if (_pollAttempts > _POLL_MAX_ATTEMPTS) {
+      clearInterval(_triggerPoll);
+      _triggerPoll = null;
+      setTriggerBtn(false, "수집 즉시 실행");
+      toast("여전히 진행 중 — 수집 이력을 확인하세요");
+      return;
+    }
+    try {
+      const data = await adminFetch("/admin/api/collection");
+      renderCollection(data);
+      const run = data.source && data.source.lastRun;
+      const status = run ? run.status : null;
+      // Stop once we observe a terminal state (success/error) or no run object.
+      if (status !== "running") {
+        clearInterval(_triggerPoll);
+        _triggerPoll = null;
+        setTriggerBtn(false, "수집 즉시 실행");
+        toast(status === "error" ? "수집 실패" : "수집 완료");
+      }
+    } catch (_e) {
+      // transient fetch error — keep polling; the next tick may recover.
+    }
+  }, 5000);
+}
+
+async function onTriggerClick() {
+  setTriggerBtn(true, "시작 중…");
+  try {
+    await adminPost("/admin/api/collection/trigger");
+    toast("수집 시작됨");
+    setTriggerBtn(true, "수집 중…");
+    startTriggerPolling();
+  } catch (err) {
+    // 502 ADMIN_TRIGGER_FAILED (not configured / already running / GitHub error).
+    toast(err.message);
+    setTriggerBtn(false, "수집 즉시 실행");
+  }
+}
+
+function wireTriggerButton() {
+  const btn = document.getElementById("col-trigger-btn");
+  if (!btn) return;
+  // Promote the "준비 중" stub to the live trigger control.
+  btn.disabled = false;
+  btn.removeAttribute("title");
+  btn.textContent = "수집 즉시 실행";
+  btn.addEventListener("click", onTriggerClick);
+}
+
 // ─── 수집 이력 (history.html) ───────────────────────────────────────────────
 function showHistoryLoading() {
   const l = document.getElementById("history-loading");
@@ -523,6 +607,7 @@ window.addEventListener("load", () => {
   // detect which page we are on and kick off the right fetch + refresh
   if (document.getElementById("collection-loading")) {
     loadCollection();
+    wireTriggerButton();
     startRefresh(loadCollection, 30000);
   } else if (document.getElementById("history-loading")) {
     loadHistory();

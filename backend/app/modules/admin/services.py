@@ -11,10 +11,12 @@ from datetime import UTC, date, datetime
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.db import engine
 from app.core.exceptions import (
     AdminCurationNotFound,
     AdminHistoryNotFound,
+    AdminTriggerFailed,
     AdminValidationFailed,
 )
 from app.core.logging import get_logger
@@ -43,7 +45,9 @@ from app.modules.admin.schemas import (
     SpotSearchItem,
     SpotSearchResult,
     SpotsUpdate,
+    TriggerResult,
 )
+from app.modules.admin.triggers import get_collection_trigger
 from app.modules.spots.services.curations import invalidate_curation_cache
 
 _SOURCE_NAME = "국문 관광정보 서비스"
@@ -169,6 +173,59 @@ async def get_health(session: AsyncSession) -> Health:
         # Tunnel health check deferred (A01 §2.3) → honest nulls.
         tunnel=HealthTunnel(ok=None, detail=None),
         users=users,
+    )
+
+
+# --- collection trigger (A01 §3/§5 Phase 2 / ADM-009·010) ---------------------
+async def trigger_collection(
+    session: AsyncSession,
+    actor: str = _ADMIN_ACTOR,
+) -> TriggerResult:
+    """Kick the daily collection (``sync-daily``) via the A7 trigger adapter.
+
+    Read-only on our DB: the actual write (``sync_runs``) happens in the
+    pipeline run the trigger kicks. No transaction boundary here.
+
+    CONCURRENCY (my decision; A7 left it open): if the latest sync_run is still
+    ``running`` we REJECT (the button must not double-fire) before touching the
+    adapter, so a stuck/in-flight run can't be stampeded.
+    """
+    latest = await repo.latest_sync_run(session)
+    # App-level guard — best-effort. There is a TOCTOU window between this read
+    # and the workflow_dispatch below (two requests can race through). The
+    # AUTHORITATIVE guard against double-runs is the GitHub Actions
+    # ``concurrency.group: pipeline-sync`` in
+    # ``.github/workflows/pipeline-sync.yml`` — that serialises at the CI layer.
+    if latest is not None and latest.status == "running":
+        _audit_trigger(actor, accepted=False, ref=None, reason="already-running")
+        raise AdminTriggerFailed("이미 수집이 진행 중입니다.")
+
+    try:
+        ref = await get_collection_trigger().trigger("sync-daily")
+    except AdminTriggerFailed:
+        # Distinguish the two failure modes in the audit so operators can tell
+        # a misconfiguration from a live GitHub error without reading the message.
+        # Token check mirrors WorkflowDispatchTrigger.trigger() — no token value logged.
+        audit_reason = "not-configured" if not settings.GITHUB_DISPATCH_TOKEN else "github-error"
+        _audit_trigger(actor, accepted=False, ref=None, reason=audit_reason)
+        raise
+
+    _audit_trigger(actor, accepted=True, ref=ref, reason=None)
+    return TriggerResult(job="sync-daily", runId=ref, accepted=True)
+
+
+def _audit_trigger(actor: str, *, accepted: bool, ref: str | None, reason: str | None) -> None:
+    # ADM-010 audit: one structured log line per trigger call via app.core.logging
+    # (same JSON pipeline as the curation-write audit below). No audit table —
+    # the structured line is the record (actor · action · job · result · ref).
+    _logger.info(
+        "collection.trigger",
+        actor=actor,
+        action="collection.trigger",
+        job="sync-daily",
+        result="accepted" if accepted else "failed",
+        ref=ref,
+        reason=reason,
     )
 
 
