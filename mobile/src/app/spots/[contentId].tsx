@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ScrollView, View, Text, Pressable, Share, StyleSheet } from "react-native";
+import Svg, { Defs, LinearGradient, Stop, Rect } from "react-native-svg";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSpot } from "@/features/spots/queries";
 import { useSaveOptimistic } from "@/features/saved/hooks/use-save-optimistic";
@@ -71,9 +72,20 @@ export default function SpotScreen() {
       >
         {/* Hero */}
         <View style={styles.hero}>
-          <RemoteImage uri={data?.firstImageUrl ?? null} style={styles.heroImage} />
-          <View style={styles.scrim} pointerEvents="none" />
-          <View style={styles.scrimBottom} pointerEvents="none" />
+          <RemoteImage
+            uri={data?.firstImageUrl ?? null}
+            style={styles.heroImage}
+            cropBanner={false}
+          />
+          <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
+            <Defs>
+              <LinearGradient id="heroScrim" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor="#141216" stopOpacity={0.5} />
+                <Stop offset="1" stopColor="#141216" stopOpacity={0.62} />
+              </LinearGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height="100%" fill="url(#heroScrim)" />
+          </Svg>
 
           <View style={styles.nav}>
             <Pressable style={styles.obtn} onPress={() => router.back()} hitSlop={6}>
@@ -134,22 +146,6 @@ const styles = StyleSheet.create({
   // Push the KTO image down past the hero's bottom edge so its embedded
   // "한국관광공사" watermark (baked into the bottom-right of the source) is clipped.
   heroImage: { position: "absolute", left: 0, right: 0, top: 0, bottom: -56 },
-  scrim: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    top: 0,
-    height: "55%",
-    backgroundColor: colors.scrim,
-  },
-  scrimBottom: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    top: "45%",
-    backgroundColor: "rgba(20,18,22,0.62)",
-  },
   nav: {
     flexDirection: "row",
     justifyContent: "space-between",

@@ -66,6 +66,7 @@ async def nearby(
                 mapy=r.mapy,
                 dist=r.dist,
                 category=r.category,
+                categoryGroup=r.category_group,
                 regionName=r.region_name,
                 sigunguName=r.sigungu_name,
                 overview=r.overview,

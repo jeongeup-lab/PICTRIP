@@ -16,6 +16,7 @@ class NearbySpotCard(BaseModel):
     mapy: float | None = None
     dist: float | None = None  # distance from query point, metres
     category: str | None = None  # KTO subtype label (lcls_systm3_nm)
+    categoryGroup: str | None = None  # 5-bucket: attraction/food/cafe/leisure/shopping
     regionName: str | None = None
     sigunguName: str | None = None
     overview: str | None = None  # KTO overview, verbatim
