@@ -1,0 +1,44 @@
+/* PicTrip legal pages — shared monochrome style. */
+:root {
+  --ink: #111;
+  --muted: #666;
+  --line: #e5e5e5;
+  --bg: #fff;
+}
+* { box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 24px 72px;
+  line-height: 1.75;
+  font-size: 15px;
+  word-break: keep-all;
+}
+header.doc { border-bottom: 1px solid var(--ink); padding-bottom: 16px; margin-bottom: 24px; }
+.brand { font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: 22px; margin: 6px 0 4px; }
+.meta { font-size: 13px; color: var(--muted); margin: 0; }
+h2 { font-size: 16px; margin: 32px 0 8px; padding-top: 8px; }
+h3 { font-size: 14px; margin: 20px 0 6px; }
+p, li { font-size: 15px; }
+ul, ol { padding-left: 20px; }
+li { margin: 4px 0; }
+a { color: var(--ink); }
+small, .muted { color: var(--muted); }
+.callout {
+  border: 1px solid var(--line);
+  background: #fafafa;
+  padding: 14px 16px;
+  margin: 16px 0;
+  font-size: 14px;
+}
+.callout strong { display: block; margin-bottom: 6px; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+th { background: #fafafa; font-weight: 600; }
+nav.legal { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; }
+nav.legal a { color: var(--muted); margin-right: 14px; white-space: nowrap; }
+footer.doc { margin-top: 24px; font-size: 12px; color: var(--muted); }
