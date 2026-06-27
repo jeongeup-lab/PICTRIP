@@ -21,6 +21,10 @@ name: pipeline-sync
 on:
   workflow_dispatch:
 
+# Least privilege: the job only runs the pipeline CLI; it never uses
+# GITHUB_TOKEN for git/API writes, so drop all default permissions.
+permissions: {}
+
 # One on-demand sync at a time; the admin endpoint also rejects when a run is
 # already in flight, but guard here too.
 concurrency:
