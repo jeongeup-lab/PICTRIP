@@ -3,17 +3,63 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PicTrip — data-sources</title>
-  <style>
-    body { font-family: -apple-system, system-ui, sans-serif; color: #111;
-           background: #fff; max-width: 720px; margin: 0 auto; padding: 24px;
-           line-height: 1.7; }
-    h1 { font-size: 20px; } .callout { border: 1px solid #e5e5e5; padding: 12px 16px; }
-  </style>
+  <title>PicTrip — 데이터 출처 고지</title>
+  <link rel="stylesheet" href="legal.css" />
 </head>
 <body>
-  <h1>data-sources</h1>
-  <!-- TODO: 약관 본문. data-sources 페이지에는 KTO 출처 고지 callout 포함 -->
-  <p>준비 중입니다.</p>
+  <header class="doc">
+    <div class="brand">PicTrip</div>
+    <h1>데이터 출처 고지</h1>
+    <p class="meta">공공데이터 이용 및 출처표시</p>
+  </header>
+
+  <p>PicTrip은 한국관광공사가 공공데이터포털(data.go.kr)을 통해 개방한 「국문 관광정보 서비스(TourAPI)」를
+     제공받아 국내 관광지 정보와 이미지를 표시합니다. 해당 관광정보와 사진은 공공누리(KOGL) 이용 조건에
+     따라 개방된 한국관광공사의 공공저작물입니다.</p>
+
+  <div class="callout">
+    <strong>출처표시</strong>
+    본 서비스는 한국관광공사의 「국문 관광정보 서비스(TourAPI)」를 공공데이터포털을 통해 제공받아
+    이용하며, 해당 관광정보·사진은 <b>공공누리 제1유형(출처표시)</b> 및 <b>공공누리 제3유형(출처표시+변경금지)</b>에
+    따라 개방된 한국관광공사의 공공저작물입니다.<br />
+    출처: 한국관광공사, 대한민국 구석구석(<a href="https://kto.visitkorea.or.kr" rel="noopener noreferrer">kto.visitkorea.or.kr</a>)
+    / 공공데이터포털(<a href="https://www.data.go.kr/data/15101578/openapi.do" rel="noopener noreferrer">data.go.kr</a>)
+  </div>
+
+  <h2>공공누리 이용 조건의 준수</h2>
+  <ul>
+    <li><b>출처표시</b>: 모든 관광정보·이미지의 출처가 한국관광공사임을 본 페이지 및 서비스 내에 표시합니다.</li>
+    <li><b>변경금지(제3유형)</b>: 제3유형으로 개방된 저작물은 변경 없이 이용해야 합니다. 본 서비스는
+        관광지 설명(overview) 텍스트를 가공·수정 없이 원문 그대로 표시하며, 관광 이미지는 원본 URL을
+        그대로 참조하여 다운로드·변형·합성 없이 표시합니다.</li>
+    <li><b>저장하지 않음</b>: 한국관광공사가 제공하는 이미지를 단말이나 서버에 내려받아 저장하지 않으며
+        원본 출처의 URL만을 참조합니다.</li>
+  </ul>
+
+  <h2>저작권 및 사진 이용에 관한 안내</h2>
+  <p>제공되는 사진 자료는 피사체에 대한 명예훼손 및 인격권 침해 등 일반 정서에 반하는 용도로 사용하거나
+     기업 CI·BI로 이용할 수 없습니다. 관광정보·이미지의 저작권은 한국관광공사 등 원저작자에게 있습니다.</p>
+
+  <div class="callout">
+    <strong>비후원 고지</strong>
+    본 서비스는 한국관광공사의 공공데이터를 이용할 뿐이며, 한국관광공사가 본 서비스를 후원하거나 본
+    서비스와 제휴·특수한 관계에 있지 않습니다. 본 서비스는 2026 한국관광공사 관광 데이터 활용 공모전
+    출품작입니다.
+  </div>
+
+  <h2>이용 데이터 목록</h2>
+  <table>
+    <tr><th>데이터</th><th>제공처</th><th>이용 범위</th></tr>
+    <tr><td>국문 관광정보 서비스(TourAPI) — 지역기반 관광정보, 상세정보</td><td>한국관광공사 / 공공데이터포털</td><td>관광지 목록·상세·설명·이미지 URL</td></tr>
+    <tr><td>지도</td><td>카카오</td><td>지도 표시 및 위치 시각화</td></tr>
+  </table>
+
+  <nav class="legal">
+    <a href="terms.html">서비스 이용약관</a>
+    <a href="privacy.html">개인정보처리방침</a>
+    <a href="location.html">위치기반서비스 이용약관</a>
+    <a href="data-sources.html">데이터 출처 고지</a>
+  </nav>
+  <footer class="doc">© 2026 PicTrip · 문의: support@pictrip.org</footer>
 </body>
 </html>
