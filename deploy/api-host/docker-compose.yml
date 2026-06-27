@@ -1,4 +1,9 @@
-# CT112 runtime compose (api + redis + cloudflared). Image tag from .deploy.env.
+# CT112 runtime compose (api + redis). Image tag from .deploy.env.
+# The Cloudflare tunnel (api.pictrip.org -> localhost:8000) is run host-side on
+# CT112 (`cloudflared --config /etc/cloudflared/config.yml run`, tunnel
+# ac767e37-...), NOT in this stack. A prior in-compose `cloudflared` service ran
+# `tunnel run` with no tunnel name/creds and only crash-looped while the host
+# process served traffic — removed to match reality.
 services:
   api:
     image: ${IMAGE}:${IMAGE_TAG}
@@ -14,10 +19,5 @@ services:
       redis-server --save 60 1 --appendonly yes --appendfsync everysec
       --maxmemory 256mb --maxmemory-policy noeviction --loglevel warning
     volumes: ["redisdata:/data"]
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    restart: unless-stopped
-    command: tunnel run
-    # token/credentials via env or mounted config (pictrip-tunnel)
 volumes:
   redisdata:
