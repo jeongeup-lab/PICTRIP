@@ -13,7 +13,6 @@ from app.core.embedding import embedder
 from app.modules.images.services import find_neighbor_ids_by_vector_direct
 from app.modules.spots.services import (
     SpotCardRow,
-    load_congestion,
     load_region_meta,
     load_spot_cards_by_ids,
 )
@@ -62,7 +61,6 @@ async def photo_search(
 
     content_ids = [cid for cid, _ in pairs]
     cards = await load_spot_cards_by_ids(session, content_ids)
-    congestion = await load_congestion(session, content_ids)
     region_meta = await load_region_meta(session, content_ids)
 
     # Keep only spots that hydrated to a card; HNSW-direct query skips show_flag.
@@ -71,7 +69,6 @@ async def photo_search(
         card = cards.get(cid)
         if card is None:
             continue
-        card.congestion = congestion.get(cid)
         region_name, sigungu_name = region_meta.get(cid, (None, None))
         similarity = max(0.0, min(1.0, 1.0 - distance))
         geo_distance: float | None = None

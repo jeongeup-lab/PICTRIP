@@ -14,7 +14,7 @@ interface GalleryProps {
 export function Gallery({ images, firstImageUrl, onViewAll }: GalleryProps) {
   const uris =
     images.length > 0
-      ? images.map((img) => img.smallImageUrl ?? img.originImageUrl)
+      ? images.map((img) => img.originImageUrl ?? img.smallImageUrl)
       : firstImageUrl
         ? [firstImageUrl]
         : [];

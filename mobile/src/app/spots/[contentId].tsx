@@ -71,7 +71,7 @@ export default function SpotScreen() {
       >
         {/* Hero */}
         <View style={styles.hero}>
-          <RemoteImage uri={data?.firstImageUrl ?? null} style={StyleSheet.absoluteFill} />
+          <RemoteImage uri={data?.firstImageUrl ?? null} style={styles.heroImage} />
           <View style={styles.scrim} pointerEvents="none" />
           <View style={styles.scrimBottom} pointerEvents="none" />
 
@@ -130,7 +130,10 @@ export default function SpotScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  hero: { backgroundColor: colors.sec, paddingBottom: 22 },
+  hero: { backgroundColor: colors.sec, paddingBottom: 22, overflow: "hidden" },
+  // Push the KTO image down past the hero's bottom edge so its embedded
+  // "한국관광공사" watermark (baked into the bottom-right of the source) is clipped.
+  heroImage: { position: "absolute", left: 0, right: 0, top: 0, bottom: -56 },
   scrim: {
     position: "absolute",
     left: 0,

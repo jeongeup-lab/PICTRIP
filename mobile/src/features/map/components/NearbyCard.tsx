@@ -12,8 +12,6 @@ interface Props {
   onPressIn?: () => void;
 }
 
-const CONGESTION: Record<string, string> = { low: "한산", medium: "보통", high: "붐빔" };
-
 export function NearbyCard({ spot, selected, onPress, onPressIn }: Props) {
   const meta = [
     spot.sigunguName,
@@ -22,7 +20,6 @@ export function NearbyCard({ spot, selected, onPress, onPressIn }: Props) {
   ]
     .filter(Boolean)
     .join(" · ");
-  const congestion = spot.congestion ? CONGESTION[spot.congestion] : null;
 
   return (
     <Pressable
@@ -32,12 +29,9 @@ export function NearbyCard({ spot, selected, onPress, onPressIn }: Props) {
     >
       <RemoteImage uri={spot.firstImageUrl} radius={radii.md} style={styles.img} />
       <View style={styles.body}>
-        <View style={styles.titleRow}>
-          <Text numberOfLines={1} style={styles.title}>
-            {spot.title}
-          </Text>
-          {congestion ? <Text style={styles.congestion}>{congestion}</Text> : null}
-        </View>
+        <Text numberOfLines={1} style={styles.title}>
+          {spot.title}
+        </Text>
         {meta ? (
           <View style={styles.metaRow}>
             <Icon name="map-pin" size={13} color={colors.ter} />
@@ -66,18 +60,7 @@ const styles = StyleSheet.create({
   selected: { backgroundColor: colors.fill },
   img: { width: 92, height: 92, borderRadius: radii.md, backgroundColor: colors.inset },
   body: { flex: 1, justifyContent: "center", minWidth: 0 },
-  titleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  title: { flex: 1, fontSize: 16, fontWeight: "700", color: colors.ink },
-  congestion: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.sec,
-    backgroundColor: colors.fill,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radii.sm,
-    overflow: "hidden",
-  },
+  title: { fontSize: 16, fontWeight: "700", color: colors.ink },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
   meta: { flex: 1, fontSize: 12.5, color: colors.ter },
   overview: { fontSize: 12.5, color: colors.sec, marginTop: 4 },

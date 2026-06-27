@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.spots.services import curations as curation_svc
 from app.modules.spots.services.cards import (
-    load_congestion,
     load_cover_images,
     load_spot_cards_by_ids,
 )
@@ -65,9 +64,9 @@ async def assemble_home_feed(session: AsyncSession, redis: Redis) -> HomeFeedRow
     mood_curations = (await curation_svc.list_published_curations(session, "mood"))[:_RAIL_COUNT]
 
     # Resolve ids per curation (Redis-cached; a cold miss is one light query each),
-    # then hydrate every curation's cards / congestion / covers in one batched query
-    # apiece instead of 3 per curation — the cold feed's serial DB round-trips drop
-    # from ~30 to a handful.
+    # then hydrate every curation's cards / covers in one batched query apiece
+    # instead of per-curation — the cold feed's serial DB round-trips drop from
+    # ~30 to a handful.
     hero_ids = [
         await curation_svc.resolve_curation_ids(session, redis, c) for c in region_curations
     ]
@@ -75,7 +74,6 @@ async def assemble_home_feed(session: AsyncSession, redis: Redis) -> HomeFeedRow
 
     all_ids = {cid for ids in (*hero_ids, *rail_ids) for cid in ids}
     by_id = await load_spot_cards_by_ids(session, list(all_ids))
-    congestion = await load_congestion(session, [cid for ids in rail_ids for cid in ids])
     cover_images = await load_cover_images(
         session, [c.cover_spot_id for c in region_curations if c.cover_spot_id]
     )
@@ -96,8 +94,6 @@ async def assemble_home_feed(session: AsyncSession, redis: Redis) -> HomeFeedRow
     rails: list[RailRow] = []
     for cur, ids in zip(mood_curations, rail_ids, strict=True):
         resolved = [by_id[cid] for cid in ids if cid in by_id]
-        for r in resolved:
-            r.congestion = congestion.get(r.content_id)
         rails.append(RailRow(id=cur.id, title=cur.title, subtitle=cur.subtitle, spots=resolved))
 
     return HomeFeedRow(heroes=heroes, rails=rails)

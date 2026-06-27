@@ -20,7 +20,6 @@ from app.modules.images.services import spot_has_embedding_clause
 from app.modules.spots.models import Curation, CurationSpot, Spot, SpotDetail, SpotMood
 from app.modules.spots.services.cards import (
     cover_url,
-    load_congestion,
     load_spot_cards_by_ids,
 )
 from app.modules.spots.services.rows import SpotCardRow
@@ -238,9 +237,6 @@ async def get_curation_detail(
 
     cur = _to_row(row)
     resolved = await resolve_curation_spots(session, redis, cur)
-    congestion = await load_congestion(session, [r.content_id for r in resolved])
-    for r in resolved:
-        r.congestion = congestion.get(r.content_id)
 
     return CurationDetailRow(
         id=cur.id,

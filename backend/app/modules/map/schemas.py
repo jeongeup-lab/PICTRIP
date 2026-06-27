@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Literal
-
 from pydantic import BaseModel, field_validator
 
 from app.core.kto_images import https_kto_image
@@ -21,7 +19,6 @@ class NearbySpotCard(BaseModel):
     regionName: str | None = None
     sigunguName: str | None = None
     overview: str | None = None  # KTO overview, verbatim
-    congestion: Literal["low", "medium", "high"] | None = None
 
     @field_validator("firstImageUrl")
     @classmethod

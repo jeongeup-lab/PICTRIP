@@ -202,22 +202,6 @@ async def test_region_sigungu_meta(db_session: AsyncSession, redis: FakeRedis) -
 
 
 @pytest.mark.asyncio
-async def test_congestion_from_concentration(db_session: AsyncSession, redis: FakeRedis) -> None:
-    await _insert_spot(db_session, "DT-CONG")
-    await _insert_detail(db_session, "DT-CONG", overview="x", age_days=1)
-    await db_session.execute(
-        text(
-            "INSERT INTO spot_concentration "
-            "(content_id, concentration_rate, base_ymd, raw_name) "
-            "VALUES ('DT-CONG', 80.0, '2026-01-01', 'raw')"
-        )
-    )
-
-    row = await load_spot_detail(db_session, FakeKto(), redis, "DT-CONG")
-    assert row.congestion == "high"
-
-
-@pytest.mark.asyncio
 async def test_overview_stored_verbatim(db_session: AsyncSession, redis: FakeRedis) -> None:
     await _insert_spot(db_session, "DT-VERB")
     verbatim = "한라산\n  <b>정상</b>에서 본 풍경  "

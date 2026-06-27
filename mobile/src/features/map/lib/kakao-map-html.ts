@@ -10,8 +10,14 @@ import { SEOUL_CITY_HALL } from "@/constants/map";
  * without fighting the page scroll. */
 export function buildKakaoMapHtml(jsKey: string, interactive = true): string {
   const { lat, lng } = SEOUL_CITY_HALL;
+  // 'idle' fires after the map settles from a drag, zoom, OR programmatic
+  // setCenter — so the viewport bbox (sw/ne) is reported on every movement, not
+  // just drags. The bbox drives "이 지역에서 검색" (query what the user sees).
   const gestures = interactive
-    ? `kakao.maps.event.addListener(map,'dragend',function(){ var c=map.getCenter(); post('center_changed',{lat:c.getLat(),lng:c.getLng()}); });`
+    ? `kakao.maps.event.addListener(map,'idle',function(){
+         var c=map.getCenter(), b=map.getBounds(), sw=b.getSouthWest(), ne=b.getNorthEast();
+         post('center_changed',{lat:c.getLat(),lng:c.getLng(),swLat:sw.getLat(),swLng:sw.getLng(),neLat:ne.getLat(),neLng:ne.getLng()});
+       });`
     : `map.setDraggable(false); map.setZoomable(false);`;
   return `<!doctype html>
 <html>

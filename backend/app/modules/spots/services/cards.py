@@ -5,38 +5,9 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.spots.models import LclsSystmCode, Region, Sigungu, Spot, SpotConcentration
+from app.modules.spots.models import LclsSystmCode, Region, Sigungu, Spot
 from app.modules.spots.services.nearby import derive_category
 from app.modules.spots.services.rows import SpotCardRow
-
-
-def bucket_congestion(rate: float | None) -> str | None:
-    """Bucket a KTO 집중률 (0-100): <34 low, 34-66 medium, >66 high, None None."""
-    if rate is None:
-        return None
-    if rate < 34:
-        return "low"
-    if rate <= 66:
-        return "medium"
-    return "high"
-
-
-async def load_congestion(
-    session: AsyncSession,
-    content_ids: list[str],
-) -> dict[str, str | None]:
-    """{content_id: bucket} for ids with a spot_concentration row; misses are absent."""
-    if not content_ids:
-        return {}
-    rows = (
-        await session.execute(
-            select(
-                SpotConcentration.content_id,
-                SpotConcentration.concentration_rate,
-            ).where(SpotConcentration.content_id.in_(content_ids))
-        )
-    ).all()
-    return {cid: bucket_congestion(float(rate)) for cid, rate in rows}
 
 
 async def load_region_meta(

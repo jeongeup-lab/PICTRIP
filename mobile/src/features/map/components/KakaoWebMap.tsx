@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import { buildKakaoMapHtml } from "@/features/map/lib/kakao-map-html";
 import { KAKAO_JS_KEY } from "@/constants/env";
-import type { LatLng } from "@/features/map/lib/geo";
+import type { Bounds, LatLng } from "@/features/map/lib/geo";
 import type { NearbySpot } from "@/lib/api-types";
 import { colors, spacing } from "@/constants/theme";
 
@@ -29,7 +29,9 @@ interface Props {
   userLocation: LatLng | null;
   onReady?: () => void;
   onPinTap: (contentId: string) => void;
-  onCenterChanged: (c: LatLng) => void;
+  /** Fired on every viewport settle (drag/zoom/recenter) with the new center
+   * and the visible bbox. Omitted for non-interactive maps. */
+  onViewportChange?: (center: LatLng, bounds: Bounds) => void;
   /** When false, drag/zoom are locked so the map can sit inside a scrolling
    * page (spot detail). Defaults true — the map tab is unaffected. */
   interactive?: boolean;
@@ -41,7 +43,7 @@ export function KakaoWebMap({
   userLocation,
   onReady,
   onPinTap,
-  onCenterChanged,
+  onViewportChange,
   interactive = true,
 }: Props) {
   // react-native-webview 14's `WebView<P = undefined>` collapses its props to
@@ -103,7 +105,14 @@ export function KakaoWebMap({
       } else if (m.type === "pin_tap" && m.payload) {
         onPinTap(String(m.payload.contentId));
       } else if (m.type === "center_changed" && m.payload) {
-        onCenterChanged({ lat: Number(m.payload.lat), lng: Number(m.payload.lng) });
+        const p = m.payload;
+        onViewportChange?.(
+          { lat: Number(p.lat), lng: Number(p.lng) },
+          {
+            sw: { lat: Number(p.swLat), lng: Number(p.swLng) },
+            ne: { lat: Number(p.neLat), lng: Number(p.neLng) },
+          },
+        );
       }
     } catch {
       // ignore malformed bridge messages

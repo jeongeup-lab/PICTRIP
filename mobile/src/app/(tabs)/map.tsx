@@ -27,7 +27,7 @@ export default function MapTab() {
   const { perm, allow, skipToSeoul, recenter } = useMapInit();
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  const nearby = useNearbyMap(s.center, s.category);
+  const nearby = useNearbyMap(s.queryBounds, s.category);
   const label = useRegionLabel(s.center, s.anchorSource !== "region");
   const spots = (nearby.data ?? []).slice(0, NEARBY_CAP);
 
@@ -79,7 +79,7 @@ export default function MapTab() {
           s.selectSpot(id);
           s.setSnap("half");
         }}
-        onCenterChanged={(c) => s.onViewportChange(c)}
+        onViewportChange={(c, bounds) => s.onViewportChange(c, bounds)}
       />
 
       <View style={[styles.header, { top: insets.top + spacing.xs }]}>

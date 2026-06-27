@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { LatLng } from "@/features/map/lib/geo";
+import { type Bounds, type LatLng, bboxFromCenter } from "@/features/map/lib/geo";
 import type { AnchorSource } from "@/features/map/lib/region-label";
 import type { NearbyCategory } from "@/features/map/lib/nearby-categories";
 import type { RegionLabel } from "@/lib/api-types";
@@ -16,12 +16,16 @@ interface MapState {
   label: RegionLabel | null;
   snap: Snap;
   viewportCenter: LatLng | null;
+  viewportBounds: Bounds | null;
+  // The bbox the nearby query fetches. Derived from the anchor center (±RADIUS_M)
+  // on GPS/region anchors, or the real visible rectangle when "이 지역에서 검색".
+  queryBounds: Bounds | null;
   lastQueryCenter: LatLng | null;
   selectedSpotId: string | null;
-  setAnchor: (center: LatLng, source: AnchorSource, gps?: LatLng | null) => void;
+  setAnchor: (center: LatLng, source: AnchorSource, gps?: LatLng | null, bounds?: Bounds) => void;
   setLabel: (label: RegionLabel | null) => void;
   setCategory: (c: NearbyCategory | null) => void;
-  onViewportChange: (c: LatLng) => void;
+  onViewportChange: (c: LatLng, bounds?: Bounds) => void;
   searchHere: () => void;
   recenterToGps: () => void;
   applyRegion: (centroid: LatLng) => void;
@@ -39,33 +43,39 @@ const initial = {
   label: null,
   snap: "half" as Snap,
   viewportCenter: null,
+  viewportBounds: null,
+  queryBounds: null,
   lastQueryCenter: null,
   selectedSpotId: null,
 };
 
-/** Single source of truth for the map tab. Center/anchor drive the nearby
- * fetch (queries read center+category); panning only updates viewportCenter so
- * the pill can appear without refetching (S05 §1.3-1.4). */
+/** Single source of truth for the map tab. queryBounds drives the nearby fetch
+ * (the bbox the user sees); panning only updates viewportCenter/Bounds so the
+ * pill can appear without refetching (S05 §1.3-1.4). */
 export const useMapStore = create<MapState>((set, get) => ({
   ...initial,
 
-  setAnchor: (center, source, gps) =>
+  setAnchor: (center, source, gps, bounds) =>
     set((s) => ({
       center,
       anchorSource: source,
       gpsCoords: gps !== undefined ? gps : s.gpsCoords,
       lastQueryCenter: center,
       viewportCenter: center,
+      // Real viewport bbox if the map reported one (pan→search), else a square
+      // ±RADIUS_M box around the new center (GPS/region anchors).
+      queryBounds: bounds ?? bboxFromCenter(center, RADIUS_M),
     })),
 
   setLabel: (label) => set({ label }),
   setCategory: (category) => set({ category }),
-  onViewportChange: (viewportCenter) => set({ viewportCenter }),
+  onViewportChange: (viewportCenter, viewportBounds) =>
+    set((s) => ({ viewportCenter, viewportBounds: viewportBounds ?? s.viewportBounds })),
 
   searchHere: () => {
-    const vp = get().viewportCenter;
-    if (!vp) return;
-    get().setAnchor(vp, "pan");
+    const { viewportCenter, viewportBounds } = get();
+    if (!viewportCenter) return;
+    get().setAnchor(viewportCenter, "pan", undefined, viewportBounds ?? undefined);
   },
 
   recenterToGps: () => {
