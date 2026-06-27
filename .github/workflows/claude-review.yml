@@ -33,7 +33,7 @@ jobs:
             - 정확성 버그, 명백한 로직 오류
             - 모듈 경계 위반 (routes에서 DB/모델 import, cross-module models 직접 접근)
             - 모노레포 불변규칙: sync_runs는 pipeline 소유(backend alembic 금지),
-              backend/pipeline 별도 프로젝트, admin static은 docs/mockups/admin 복사
+              backend/pipeline 별도 프로젝트, admin static은 admin/mockups 복사
             - JSend 엔벨로프·AppError 코드 분기 누락, KTO 컴플라이언스(이미지 다운로드/
               overview 수정/업로드 이미지 영속화 금지)
             확실한 문제만 인라인 코멘트로. 사소한 스타일은 생략. 한국어로.

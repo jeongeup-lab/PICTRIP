@@ -206,6 +206,16 @@ async def resolve_curation_spots(
     return [by_id[cid] for cid in ids if cid in by_id]
 
 
+async def invalidate_curation_cache(redis: Redis, curation_id: int) -> None:
+    """Drop the resolved-spots cache for one curation (ADM-016 on-publish DEL).
+
+    Reuses the exact ``resolve_curation_spots`` cache key so an admin edit
+    (publish / cover / handpicks) is reflected on the next /home/feed or
+    /curations/{slug} request, which repopulates from the DB.
+    """
+    await redis.delete(f"curation:{curation_id}:spots")
+
+
 async def get_curation_detail(
     session: AsyncSession,
     redis: Redis,

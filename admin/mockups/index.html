@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PicTrip Admin · 수집 현황</title>
+<link rel="stylesheet" href="/admin/assets/admin.css" />
+</head>
+<body>
+<div class="shell">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sb-brand">
+      <div class="logo">P</div>
+      <div class="name">PicTrip<small>관광지 수집 관리</small></div>
+    </div>
+    <div class="sb-group">spots 일일 수집</div>
+    <a class="nav-item active" href="/admin">
+      <svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      수집 현황
+    </a>
+    <a class="nav-item" href="/admin/history">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="3.5" cy="6" r="1.2"/><circle cx="3.5" cy="12" r="1.2"/><circle cx="3.5" cy="18" r="1.2"/></svg>
+      수집 이력
+      <span class="badge" id="sb-history-badge" style="display:none"></span>
+    </a>
+    <div class="sb-group">서비스</div>
+    <a class="nav-item" href="/admin/health">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M3 12h4l2 7 4-14 2 7h6"/></svg>
+      서비스 헬스
+    </a>
+    <div class="sb-foot"><span class="dot live"></span> admin · 로그인됨</div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb"><b>수집 현황</b></div>
+      <div class="spacer"></div>
+      <div class="env-pill"><span class="dot ok"></span> <b>prod</b> · api.pictrip.org</div>
+      <div class="clock" id="clock">--:--:--</div>
+    </div>
+
+    <div class="content">
+      <div class="page-head">
+        <h1>관광지(spots) 수집 현황</h1>
+        <p>KTO 데이터 소스별 마지막 수집 결과입니다.</p>
+      </div>
+
+      <!-- loading state -->
+      <div id="collection-loading" class="src" style="justify-content:center;padding:32px">
+        <span style="color:var(--ink-3);font-size:13px">불러오는 중…</span>
+      </div>
+
+      <!-- error state (hidden) -->
+      <div id="collection-error" style="display:none;background:var(--bad-soft);border:1px solid #f0b9bd;border-radius:14px;padding:24px 28px">
+        <p style="margin:0 0 12px;color:var(--bad);font-weight:600">데이터를 불러오지 못했습니다.</p>
+        <p id="collection-error-msg" style="margin:0 0 16px;font-size:13px;color:var(--ink-2)"></p>
+        <button class="btn ghost sm" onclick="loadCollection()">다시 시도</button>
+      </div>
+
+      <!-- data (hidden until loaded) -->
+      <div id="collection-data" style="display:none">
+        <!-- column header -->
+        <div class="src" style="background:transparent;border:0;box-shadow:none;padding:0 0 2px">
+          <div class="cell name" style="padding-top:0;padding-bottom:8px"><div class="lbl">데이터 소스</div></div>
+          <div class="cell" style="padding-top:0;padding-bottom:8px"><div class="lbl">실행 시간</div></div>
+          <div class="cell" style="padding-top:0;padding-bottom:8px"><div class="lbl">API 호출</div></div>
+          <div class="cell" style="padding-top:0;padding-bottom:8px"><div class="lbl">추가 / 수정 / 숨김</div></div>
+          <div class="cell" style="padding-top:0;padding-bottom:8px"><div class="lbl">소요</div></div>
+          <div class="cell act" style="padding-top:0;padding-bottom:8px"></div>
+        </div>
+
+        <!-- source row -->
+        <div class="src">
+          <div class="cell name">
+            <div class="title">국문 관광정보 서비스</div>
+            <div class="ep">areaBasedSyncList2 → spots</div>
+          </div>
+          <div class="cell">
+            <div class="v" id="col-ran-at">—<br><small id="col-ran-rel"></small></div>
+          </div>
+          <div class="cell">
+            <div class="v" id="col-api-calls">—</div>
+          </div>
+          <div class="cell">
+            <div class="v" id="col-changes">—</div>
+          </div>
+          <div class="cell">
+            <div class="v" id="col-duration">—</div>
+          </div>
+          <div class="cell act">
+            <span class="status" id="col-status-icon"></span>
+            <button class="btn" id="col-trigger-btn" disabled title="준비 중 (Phase 2)">준비 중</button>
+          </div>
+        </div>
+
+        <p id="col-footer" style="font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin-top:14px"></p>
+      </div>
+
+    </div>
+  </div>
+</div>
+<script src="/admin/assets/admin.js"></script>
+</body>
+</html>

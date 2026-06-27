@@ -8,6 +8,7 @@ from fastapi import APIRouter, status
 
 from app.config import settings
 from app.core.schemas import ok
+from app.core.version import API_VERSION
 
 router = APIRouter(tags=["SYS · system/meta"])
 
@@ -16,7 +17,7 @@ router = APIRouter(tags=["SYS · system/meta"])
 async def version() -> dict[str, Any]:
     return ok(
         {
-            "apiVersion": "1.0.0-dev",
+            "apiVersion": API_VERSION,
             "environment": settings.ENVIRONMENT,
             "ktoApiStatus": "unknown",
         }

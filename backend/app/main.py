@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
@@ -19,6 +21,8 @@ from app.core.logging import configure_logging, get_logger
 from app.core.middleware import CacheControlMiddleware, TraceIdMiddleware
 from app.core.redis import redis_lifespan
 from app.core.schemas import ok
+from app.core.version import API_VERSION
+from app.modules.admin import router as admin_router
 from app.modules.images import router as images_router
 from app.modules.map import router as map_router
 from app.modules.spots import router as spots_router
@@ -55,7 +59,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     app = FastAPI(
         title="PicTrip API",
-        version="1.0.0-dev",
+        version=API_VERSION,
         description="Image-based Korea tourism recommendation service backend.",
         openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
         docs_url=f"{settings.API_V1_PREFIX}/docs",
@@ -86,6 +90,18 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, Any]:
         return ok({"status": "ok"})
 
+    # --- Admin console (outside /v1 — internal ops surface; A01 §1.2) ---
+    app.include_router(admin_router, prefix="/admin")
+    admin_assets = Path(__file__).parent / "modules" / "admin" / "static" / "assets"
+    # PUBLIC/unauthenticated mount: must contain ONLY non-sensitive CSS/JS
+    # (no data, no secrets, no source maps) — it is served without the AdminAuth gate.
+    app.mount(
+        "/admin/assets",
+        StaticFiles(directory=admin_assets),
+        name="admin-assets",
+    )
+
+    # --- Routers under /v1 ---
     prefix = settings.API_V1_PREFIX
     app.include_router(users_router, prefix=prefix)
     app.include_router(taste_router, prefix=prefix)

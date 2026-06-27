@@ -1,1 +1,373 @@
-"""admin services — aggregation, health probes, trigger orchestration."""
+"""admin services — read-only aggregation + health probes (A01 §2/§3).
+
+Transaction-free (read-only). Calls :mod:`repositories`, shapes rows into the
+§3 DTOs. No HTTP concerns (routes wrap the DTO in the JSend envelope).
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, date, datetime
+
+from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.db import engine
+from app.core.exceptions import (
+    AdminCurationNotFound,
+    AdminHistoryNotFound,
+    AdminValidationFailed,
+)
+from app.core.logging import get_logger
+from app.core.version import API_VERSION, uptime_seconds
+from app.modules.admin import repositories as repo
+from app.modules.admin.schemas import (
+    CollectionSource,
+    CollectionStatus,
+    CoverSpot,
+    CurationDetail,
+    CurationList,
+    CurationListItem,
+    CurationUpdate,
+    Handpick,
+    HandpickList,
+    Health,
+    HealthApi,
+    HealthDb,
+    HealthTunnel,
+    HealthUsers,
+    HistoryDay,
+    HistoryDetail,
+    HistoryList,
+    HistoryRun,
+    LastRun,
+    SpotSearchItem,
+    SpotSearchResult,
+    SpotsUpdate,
+)
+from app.modules.spots.services.curations import invalidate_curation_cache
+
+_SOURCE_NAME = "국문 관광정보 서비스"
+_SOURCE_ENDPOINT = "areaBasedSyncList2"
+
+# Fixed admin actor (A04 single Basic user); no role/user table exists (out of scope).
+_ADMIN_ACTOR = "admin"
+_MAX_HANDPICKS = 8
+
+_logger = get_logger(__name__)
+
+
+async def get_collection_status(session: AsyncSession) -> CollectionStatus:
+    total = await repo.count_spots(session)
+    row = await repo.latest_sync_run(session)
+
+    last_run: LastRun | None = None
+    if row is not None:
+        last_run = LastRun(
+            status=row.status,
+            finishedAt=row.finished_at,
+            # ranAt = finished_at when present, else started_at (A01 §2.1).
+            ranAt=row.finished_at or row.started_at,
+            apiCalls=row.api_calls,
+            inserted=row.inserted,
+            updated=row.updated,
+            softDeleted=row.soft_deleted,
+            durationSec=row.duration_sec,
+        )
+
+    return CollectionStatus(
+        totalSpots=total,
+        source=CollectionSource(
+            name=_SOURCE_NAME,
+            endpoint=_SOURCE_ENDPOINT,
+            lastRun=last_run,
+        ),
+        # Honest null: no scheduler metadata is wired yet (A01 §2.1 allows it).
+        nextScheduledAt=None,
+    )
+
+
+async def get_history(session: AsyncSession, days: int) -> HistoryList:
+    rows = await repo.sync_run_daily_counts(session, days)
+    return HistoryList(
+        days=[
+            HistoryDay(
+                date=r.day,
+                success=r.success,
+                error=r.error,
+                running=r.running,
+                runs=r.runs,
+            )
+            for r in rows
+        ]
+    )
+
+
+async def get_history_detail(session: AsyncSession, day: date) -> HistoryDetail:
+    rows = await repo.sync_runs_on_date(session, day)
+    if not rows:
+        raise AdminHistoryNotFound
+    return HistoryDetail(
+        date=day.isoformat(),
+        runs=[
+            HistoryRun(
+                id=r.id,
+                status=r.status,
+                mode=r.mode,
+                startedAt=r.started_at,
+                finishedAt=r.finished_at,
+                apiCalls=r.api_calls,
+                inserted=r.inserted,
+                updated=r.updated,
+                softDeleted=r.soft_deleted,
+                durationSec=r.duration_sec,
+                error=r.error,
+            )
+            for r in rows
+        ],
+    )
+
+
+def _pool_stats() -> tuple[int, int]:
+    """(poolInUse, poolSize) from the live serving engine.
+
+    Read from the module-level ``engine`` (the real QueuePool), not the request
+    session — that's the pool the spec's ``poolSize=20`` refers to. Guarded with
+    ``getattr`` so a NullPool (tests) degrades to zeros instead of raising.
+    """
+    pool = engine.pool
+    size_fn = getattr(pool, "size", None)
+    checkedout_fn = getattr(pool, "checkedout", None)
+    pool_size = size_fn() if callable(size_fn) else 0
+    in_use = checkedout_fn() if callable(checkedout_fn) else 0
+    return in_use, pool_size
+
+
+async def get_health(session: AsyncSession) -> Health:
+    db_ok = await repo.db_ping(session)
+    in_use, pool_size = _pool_stats()  # reads the engine pool, not the DB
+
+    if db_ok:
+        spots = await repo.count_spots(session)
+        users_row = await repo.user_aggregates(session)
+        users = HealthUsers(
+            total=users_row.total,
+            active=users_row.active,
+            new7d=users_row.new7d,
+            deleted30d=users_row.deleted30d,
+            kakao=users_row.kakao,
+        )
+    else:
+        # DB is down — the health page exists precisely to show this. Skip the
+        # DB-touching aggregates (they would raise → 500) and report zeros so the
+        # endpoint degrades to db.ok=false instead of 500ing (A01 §2.3/§3).
+        spots = 0
+        users = HealthUsers(total=0, active=0, new7d=0, deleted30d=0, kakao=0)
+
+    return Health(
+        api=HealthApi(version=API_VERSION, uptimeSec=uptime_seconds(), p95Ms=None),
+        db=HealthDb(ok=db_ok, poolInUse=in_use, poolSize=pool_size, spots=spots),
+        # Tunnel health check deferred (A01 §2.3) → honest nulls.
+        tunnel=HealthTunnel(ok=None, detail=None),
+        users=users,
+    )
+
+
+# --- curation editor (A01 §7 / ADM-012~016) -----------------------------------
+# This is the admin module's only write surface; transaction commit boundaries
+# live here (repos mutate the passed session, services commit). Every write
+# invalidates the on-publish cache and emits a structured audit line.
+
+
+async def list_curations(session: AsyncSession) -> CurationList:
+    rows = await repo.list_curations(session)
+    by_type: dict[str, list[CurationListItem]] = {"region": [], "mood": [], "editorial": []}
+    for r in rows:
+        item = CurationListItem(
+            id=r.id,
+            type=r.type,
+            slug=r.slug,
+            title=r.title,
+            subtitle=r.subtitle,
+            coverUrl=r.cover_url,
+            isPublished=r.is_published,
+            position=r.position,
+        )
+        by_type.setdefault(r.type, []).append(item)
+    # rows arrive ordered by (type, position); the per-group lists preserve it.
+    return CurationList(
+        heroes=by_type["region"],
+        rails=by_type["mood"],
+        editorial=by_type["editorial"],
+    )
+
+
+async def _build_detail(session: AsyncSession, curation) -> CurationDetail:  # type: ignore[no-untyped-def]
+    cover: CoverSpot | None = None
+    if curation.cover_spot_id is not None:
+        row = await repo.get_cover_spot(session, curation.cover_spot_id)
+        if row is not None:
+            cover = CoverSpot(
+                contentId=row.content_id, name=row.title, imageUrl=row.first_image_url
+            )
+    hp_rows = await repo.curation_handpicks(session, curation.id)
+    handpicks = [
+        Handpick(
+            contentId=h.content_id,
+            name=h.title,
+            category=h.category,
+            imageUrl=h.first_image_url,
+            position=h.position,
+        )
+        for h in hp_rows
+    ]
+    return CurationDetail(
+        id=curation.id,
+        type=curation.type,
+        slug=curation.slug,
+        title=curation.title,
+        subtitle=curation.subtitle,
+        lead=curation.lead,
+        intro=curation.intro,
+        coverSpot=cover,
+        regionCd=curation.region_cd,
+        moodId=curation.mood_id,
+        isPublished=curation.is_published,
+        position=curation.position,
+        handpicks=handpicks,
+    )
+
+
+async def get_curation_detail(session: AsyncSession, curation_id: int) -> CurationDetail:
+    curation = await repo.get_curation(session, curation_id)
+    if curation is None:
+        raise AdminCurationNotFound
+    return await _build_detail(session, curation)
+
+
+async def update_curation(
+    session: AsyncSession,
+    redis: Redis,
+    curation_id: int,
+    body: CurationUpdate,
+) -> CurationDetail:
+    curation = await repo.get_curation(session, curation_id)
+    if curation is None:
+        raise AdminCurationNotFound
+
+    details: list[dict[str, str]] = []
+    title = body.title  # newlines allowed; only reject blank-after-strip
+    if not title.strip():
+        details.append({"field": "title", "issue": "제목은 비워둘 수 없습니다."})
+    if body.position < 0:
+        details.append({"field": "position", "issue": "노출 순서는 0 이상이어야 합니다."})
+    if body.coverSpotId is not None and not await repo.spot_exposable_with_image(
+        session, body.coverSpotId
+    ):
+        # 표지 스팟은 존재 + 노출(show_flag=1) + 대표 이미지가 모두 있어야 함 (A01 §7).
+        details.append(
+            {
+                "field": "coverSpotId",
+                "issue": "표지 스팟이 없거나 노출 불가하거나 이미지가 없습니다.",
+            }
+        )
+    if details:
+        raise AdminValidationFailed(details=details)
+
+    await repo.update_curation_fields(
+        session,
+        curation,
+        title=title,
+        subtitle=body.subtitle,
+        lead=body.lead,
+        intro=body.intro,
+        cover_spot_id=body.coverSpotId,
+        is_published=body.isPublished,
+        position=body.position,
+    )
+    # Defensive: type/scope are not editable here, so ck_curation_scope still
+    # holds; the COMMIT would surface any DB-level CHECK violation regardless.
+    await session.commit()
+    await invalidate_curation_cache(redis, curation_id)  # ADM-016 on-publish DEL
+    _audit("curation.update", curation)
+    return await _build_detail(session, curation)
+
+
+async def set_curation_spots(
+    session: AsyncSession,
+    redis: Redis,
+    curation_id: int,
+    body: SpotsUpdate,
+) -> HandpickList:
+    curation = await repo.get_curation(session, curation_id)
+    if curation is None:
+        raise AdminCurationNotFound
+
+    spot_ids = body.spotIds
+    details: list[dict[str, str]] = []
+    if len(spot_ids) > _MAX_HANDPICKS:
+        details.append(
+            {"field": "spotIds", "issue": f"손픽 스팟은 최대 {_MAX_HANDPICKS}개까지 가능합니다."}
+        )
+    if len(set(spot_ids)) != len(spot_ids):
+        details.append({"field": "spotIds", "issue": "중복된 스팟이 있습니다."})
+    if spot_ids:
+        existing = await repo.existing_spot_ids(session, spot_ids)
+        missing = [cid for cid in spot_ids if cid not in existing]
+        if missing:
+            details.append(
+                {"field": "spotIds", "issue": f"존재하지 않는 스팟: {', '.join(missing)}"}
+            )
+    if details:
+        raise AdminValidationFailed(details=details)
+
+    await repo.replace_curation_spots(session, curation_id, spot_ids)
+    curation.updated_at = datetime.now(tz=UTC)
+    await session.commit()
+    await invalidate_curation_cache(redis, curation_id)  # ADM-016 on-publish DEL
+    _audit("curation.spots", curation, count=len(spot_ids))
+
+    hp_rows = await repo.curation_handpicks(session, curation_id)
+    return HandpickList(
+        handpicks=[
+            Handpick(
+                contentId=h.content_id,
+                name=h.title,
+                category=h.category,
+                imageUrl=h.first_image_url,
+                position=h.position,
+            )
+            for h in hp_rows
+        ]
+    )
+
+
+async def search_spots(
+    session: AsyncSession, q: str, region: str | None, limit: int
+) -> SpotSearchResult:
+    rows = await repo.admin_spot_search(session, q, region, limit)
+    return SpotSearchResult(
+        spots=[
+            SpotSearchItem(
+                contentId=r.content_id,
+                name=r.title,
+                regionCd=r.ldong_regn_cd,
+                regionName=r.region_name,
+                imageUrl=r.first_image_url,
+            )
+            for r in rows
+        ]
+    )
+
+
+def _audit(action: str, curation, **extra) -> None:  # type: ignore[no-untyped-def]
+    # ADM-016 audit: no audit table exists (creating one is scope creep). Emit a
+    # single structured log line per write via the app logger instead — actor +
+    # action + what changed. Ingested by the same JSON log pipeline (app.core.logging).
+    _logger.info(
+        action,
+        actor=_ADMIN_ACTOR,
+        curationId=curation.id,
+        slug=curation.slug,
+        isPublished=curation.is_published,
+        **extra,
+    )

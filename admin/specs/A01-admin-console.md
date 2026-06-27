@@ -1,6 +1,6 @@
 # A1 — 관리자 콘솔 설계 (데이터 수집 운영 어드민)
 
-> 입력 SSOT: 목업 `docs/mockups/admin/`(3페이지 + `assets/`), 루트 `CLAUDE.md`
+> 입력 SSOT: 목업 `admin/mockups/`(3페이지 + `assets/`), 루트 `CLAUDE.md`
 > (Conventions·Prohibitions·DB facts), **현 백엔드 코드 + 홈서버 인프라(실측)** —
 > `backend/app/modules/*`, `app/core/{schemas,exceptions,db,redis}.py`,
 > juns `pictrip-data`(CT111: `sync/audit.py`·`sync/daily.py`·`dashboard/`).
@@ -53,7 +53,7 @@
 | A6 | **상세 로그 = run 요약 + `error`** (raw stdout 아님) | DB에 로그 컬럼 없음. 전체 로그가 필요해지면 juns가 적재 추가(차기) |
 | A7 | **트리거 메커니즘 미정 → 어댑터로 격리** | `workflow_dispatch` vs CT111 Tailscale HTTP는 juns 협의. 인터페이스 `trigger(job)->run_id`만 고정, 구현체 교체 가능 |
 | A8 | **단계화: Phase 1(조회 전용) 단독 선출시** | 현황·이력·헬스는 공용 DB 읽기 + 백엔드 내부값 = 0 외부의존. 트리거만 Phase 2 |
-| A9 | **홈 큐레이션 편집기 채택 — read-write 확장** (2026-06-21, 사용자 승인) | A01 본래 "콘텐츠 큐레이션=비목표"·어드민 read-only 결정을 뒤집음. 홈 편성(히어로6+무드레일3)을 앱 재배포 없이 편집/발행. `curations`/`curation_spots`에 한정한 **스코프된 쓰기**(그 외 표면은 read-only 유지). Phase 4. → §7, 목업 `mockups/admin/curation.html`(B안), 요구사항 ADM-012~018 |
+| A9 | **홈 큐레이션 편집기 채택 — read-write 확장** (2026-06-21, 사용자 승인) | A01 본래 "콘텐츠 큐레이션=비목표"·어드민 read-only 결정을 뒤집음. 홈 편성(히어로6+무드레일3)을 앱 재배포 없이 편집/발행. `curations`/`curation_spots`에 한정한 **스코프된 쓰기**(그 외 표면은 read-only 유지). Phase 4. → §7, 목업 `admin/mockups/curation.html`(B안), 요구사항 ADM-012~018 |
 
 **미정(blocking은 트리거뿐):** A7 트리거 메커니즘.
 **제외(스코프 밖):** 데이터 품질/커버리지 패널, Redis ping·`rlte:*` 카운트, 취향벡터 보유,
@@ -262,7 +262,7 @@ TriggerResult { job: "sync-daily", runId: str|null, accepted: bool }
 > A01 본래 결정(콘텐츠 큐레이션=비목표 · 어드민 read-only)을 **사용자 승인으로 뒤집은**
 > 확장. 근거: 홈은 백엔드 주도 설계(잠긴 결정 2)라 *편성 교체에 앱 재배포가 필요 없도록*
 > 의도됨 — 현재는 시드 스크립트 수정(개발자 작업)이 유일 경로이고, 편집기가 그 마지막 조각.
-> UI SSOT = `docs/mockups/admin/curation.html`(B안: 편성 미리보기 우선).
+> UI SSOT = `admin/mockups/curation.html`(B안: 편성 미리보기 우선).
 > 작업 분해 = `docs/requirements/dev-requirements.md`(ADM-012~018).
 
 - **스코프된 쓰기:** `curations`·`curation_spots`에 한정. 그 외 어드민 표면(spots·sync_runs·

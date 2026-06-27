@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 
 class AppError(Exception):
@@ -11,6 +11,10 @@ class AppError(Exception):
     code: str = "INTERNAL_ERROR"
     http_status: int = 500
     message: str = "Internal server error."
+    # Optional response headers (e.g. ``WWW-Authenticate: Basic``). The envelope
+    # handler forwards these onto the JSONResponse, mirroring the Starlette
+    # HTTPException handler's ``headers=exc.headers``.
+    headers: ClassVar[dict[str, str] | None] = None
 
     def __init__(
         self,
@@ -138,17 +142,41 @@ class SessionStoreUnavailable(AppError):
     message = "세션 저장소에 일시적인 문제가 발생했습니다."
 
 
-# --- admin console (A01 §3) — kept here so the admin/ skeleton compiles ---
+# --- admin console (A01 §3) ---
 class AdminUnauthorized(AppError):
     code = "ADMIN_UNAUTHORIZED"
     http_status = 401
+    message = "관리자 인증이 필요합니다."
+    # CF-exposed surface: a 401 must carry the Basic challenge so a browser
+    # prompts for credentials (A01 §1.3).
+    headers: ClassVar[dict[str, str] | None] = {"WWW-Authenticate": "Basic"}
+
+
+class AdminLocked(AppError):
+    code = "ADMIN_LOCKED"
+    http_status = 503
+    message = "관리자 콘솔이 잠겨 있습니다."
 
 
 class AdminHistoryNotFound(AppError):
     code = "ADMIN_HISTORY_NOT_FOUND"
     http_status = 404
+    message = "해당 날짜의 수집 이력이 없습니다."
 
 
 class AdminTriggerFailed(AppError):  # Phase 2
     code = "ADMIN_TRIGGER_FAILED"
     http_status = 502
+
+
+# --- admin curation editor (A01 §7 / ADM-012~016) ---
+class AdminCurationNotFound(AppError):
+    code = "ADMIN_CURATION_NOT_FOUND"
+    http_status = 404
+    message = "해당 큐레이션을 찾을 수 없습니다."
+
+
+class AdminValidationFailed(AppError):
+    code = "ADMIN_VALIDATION"
+    http_status = 422
+    message = "큐레이션 편집 요청이 유효하지 않습니다."
