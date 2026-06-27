@@ -37,6 +37,9 @@ class NearbySpotRow:
     dist: float | None
     # KTO subtype label (lcls_systm3_nm); None if unmatched.
     category: str | None = None
+    # 5-bucket code via derive_category (attraction/food/cafe/leisure/shopping); drives
+    # the map marker glyph. Always one of the 5 since the base WHERE excludes uncategorized.
+    category_group: str | None = None
     # KTO overview, verbatim (no summarize); usually None (lazy-cached on detail only).
     overview: str | None = None
     # Below filled by the consuming module (MAP) via load_region_meta, not SPT.
@@ -110,6 +113,9 @@ def _base_select(dist: ColumnElement[float], category: NearbyCategory | None):  
             Spot.mapx.label("mapx"),
             Spot.mapy.label("mapy"),
             LclsSystmCode.lcls_systm3_nm.label("category"),
+            Spot.lcls_systm1.label("lcls_systm1"),
+            Spot.lcls_systm2.label("lcls_systm2"),
+            Spot.lcls_systm3.label("lcls_systm3"),
             SpotDetail.overview.label("overview"),
             dist,
         )
@@ -141,6 +147,7 @@ def _materialize(result: object) -> list[NearbySpotRow]:
                 mapy=float(r.mapy) if r.mapy is not None else None,
                 dist=float(r.dist) if r.dist is not None else None,
                 category=r.category,
+                category_group=derive_category(r.lcls_systm1, r.lcls_systm2, r.lcls_systm3),
                 overview=r.overview,
             )
         )

@@ -3,13 +3,7 @@ import { Icon } from "@/components/Icon";
 import { APP_VERSION } from "@/lib/app-meta";
 import { colors, spacing } from "@/constants/theme";
 
-export function SettingsRows({
-  onLogout,
-  onConsent,
-}: {
-  onLogout?: () => void;
-  onConsent?: () => void;
-}) {
+export function SettingsRows({ onLogout }: { onLogout?: () => void }) {
   return (
     <View style={styles.group}>
       <Pressable style={[styles.row, styles.first]} onPress={() => Linking.openSettings()}>
@@ -19,16 +13,6 @@ export function SettingsRows({
         <Text style={styles.label}>위치 권한</Text>
         <Icon name="chevron-right" size={20} color={colors.ter} />
       </Pressable>
-
-      {onConsent ? (
-        <Pressable style={styles.row} onPress={onConsent}>
-          <View style={styles.icon}>
-            <Icon name="shield-check" size={21} color={colors.sec} />
-          </View>
-          <Text style={styles.label}>동의 관리</Text>
-          <Icon name="chevron-right" size={20} color={colors.ter} />
-        </Pressable>
-      ) : null}
 
       <View style={styles.row}>
         <View style={styles.icon}>

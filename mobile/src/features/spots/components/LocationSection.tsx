@@ -52,6 +52,7 @@ export function LocationSection({ spot }: { spot: SpotDetail }) {
     mapx: spot.mapx,
     mapy: spot.mapy,
     dist: null,
+    categoryGroup: null, // single self-pin on the detail map → generic dot glyph
     regionName: spot.regionName,
     sigunguName: spot.sigunguName,
     overview: spot.overview,

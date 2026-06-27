@@ -115,6 +115,7 @@ export interface SpotDetail {
 
 export interface NearbySpot extends SpotCard {
   dist: number | null;
+  categoryGroup: string | null; // attraction/food/cafe/leisure/shopping — drives marker glyph
   regionName: string | null;
   sigunguName: string | null;
   overview: string | null;

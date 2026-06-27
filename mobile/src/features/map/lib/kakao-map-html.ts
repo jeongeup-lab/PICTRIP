@@ -26,7 +26,9 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true): string {
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <style>
   html,body,#map{margin:0;padding:0;width:100%;height:100%;overflow:hidden}
-  .pin{width:18px;height:18px;background:#171719;border:2px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 1px 3px rgba(0,0,0,.3)}
+  .pin{width:28px;height:28px;background:#171719;border:2px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 1px 3px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center}
+  .pin .g{transform:rotate(45deg);width:15px;height:15px;display:flex;align-items:center;justify-content:center}
+  .pin svg{width:15px;height:15px;display:block}
   .me{width:16px;height:16px;background:#2D7DF6;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 6px rgba(45,125,246,.25)}
   #msg{position:absolute;top:0;left:0;right:0;font:14px -apple-system,sans-serif;color:#8a8a8e;padding:16px;text-align:center;z-index:10}
 </style>
@@ -36,6 +38,19 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true): string {
 <div id="msg"></div>
 <script>
   var map, pins = [], me = null;
+  // Monochrome category glyphs (white line-icons on the ink pin) — keeps the
+  // sanctioned all-grey palette while letting each marker read as 관광지/음식점/카페/레저/쇼핑.
+  var GLYPHS = {
+    attraction: '<path d="M3 18l5-8 3 4 3-5 4 9z"/>',
+    food: '<path d="M6 3v8M9 3v8M7.5 11v10M16 3c-1.4 0-2 2.2-2 5s.6 4 2 4v9"/>',
+    cafe: '<path d="M5 8h9v4a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4zM14 9h2a2 2 0 0 1 0 4h-2M5 20h10"/>',
+    leisure: '<path d="M3 9c2-2 4-2 6 0s4 2 6 0M3 15c2-2 4-2 6 0s4 2 6 0"/>',
+    shopping: '<path d="M6 8h10l-1 12H7zM9 8V6a3 3 0 0 1 6 0v2"/>'
+  };
+  function glyphSvg(cat){
+    var p = GLYPHS[cat] || '<circle cx="12" cy="12" r="3" fill="#fff" stroke="none"/>';
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
+  }
   function post(type, payload){ if(window.ReactNativeWebView){ window.ReactNativeWebView.postMessage(JSON.stringify({type:type,payload:payload||{}})); } }
   function fail(msg, human){ document.getElementById('msg').textContent = human; post('error',{message:msg}); }
   function clearPins(){ pins.forEach(function(o){ o.setMap(null); }); pins = []; }
@@ -45,6 +60,7 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true): string {
     spots.forEach(function(s){
       if(s.mapy==null||s.mapx==null) return;
       var el = document.createElement('div'); el.className='pin';
+      el.innerHTML = '<span class="g">'+glyphSvg(s.categoryGroup)+'</span>';
       var ov = new kakao.maps.CustomOverlay({ position:new kakao.maps.LatLng(s.mapy,s.mapx), content:el, yAnchor:1 });
       ov.setMap(map);
       el.addEventListener('click', function(){ post('pin_tap',{contentId:s.contentId}); });

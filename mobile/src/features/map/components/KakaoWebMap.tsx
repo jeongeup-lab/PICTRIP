@@ -67,7 +67,12 @@ export function KakaoWebMap({
     if (ready.current)
       send({
         cmd: "setPins",
-        spots: pins.map((p) => ({ contentId: p.contentId, mapx: p.mapx, mapy: p.mapy })),
+        spots: pins.map((p) => ({
+          contentId: p.contentId,
+          mapx: p.mapx,
+          mapy: p.mapy,
+          categoryGroup: p.categoryGroup,
+        })),
       });
   }, [pins]);
   useEffect(() => {
@@ -91,7 +96,12 @@ export function KakaoWebMap({
         if (center) send({ cmd: "setCenter", lat: center.lat, lng: center.lng });
         send({
           cmd: "setPins",
-          spots: pins.map((p) => ({ contentId: p.contentId, mapx: p.mapx, mapy: p.mapy })),
+          spots: pins.map((p) => ({
+            contentId: p.contentId,
+            mapx: p.mapx,
+            mapy: p.mapy,
+            categoryGroup: p.categoryGroup,
+          })),
         });
         send({
           cmd: "setUserMarker",
