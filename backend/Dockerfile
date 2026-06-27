@@ -30,6 +30,7 @@ RUN .venv/bin/python -c "from transformers import CLIPModel, CLIPProcessor; \
     CLIPProcessor.from_pretrained('openai/clip-vit-base-patch32')"
 
 COPY app ./app
+COPY scripts ./scripts
 COPY alembic ./alembic
 COPY alembic.ini ./
 COPY docker-entrypoint.sh ./
