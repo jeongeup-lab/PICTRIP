@@ -6,19 +6,21 @@ jest.mock("@/lib/api-client", () => ({ api: { get: jest.fn() } }));
 describe("map api", () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it("getNearby sends lat/lng/radius and category when given", async () => {
+  const bbox = { sw: { lat: 37.4, lng: 126.9 }, ne: { lat: 37.6, lng: 127.1 } };
+
+  it("getNearby sends the bbox corners and category when given", async () => {
     (api.get as jest.Mock).mockResolvedValue([]);
-    await getNearby(37.5, 127, "cafe");
+    await getNearby(bbox, "cafe");
     expect(api.get).toHaveBeenCalledWith("/map/nearby", {
-      params: { lat: 37.5, lng: 127, radius: 3000, category: "cafe" },
+      params: { sw_lat: 37.4, sw_lng: 126.9, ne_lat: 37.6, ne_lng: 127.1, category: "cafe" },
     });
   });
 
   it("getNearby omits category when null", async () => {
     (api.get as jest.Mock).mockResolvedValue([]);
-    await getNearby(37.5, 127, null);
+    await getNearby(bbox, null);
     expect(api.get).toHaveBeenCalledWith("/map/nearby", {
-      params: { lat: 37.5, lng: 127, radius: 3000, category: undefined },
+      params: { sw_lat: 37.4, sw_lng: 126.9, ne_lat: 37.6, ne_lng: 127.1, category: undefined },
     });
   });
 

@@ -167,7 +167,6 @@ async def test_saved_card_shape_is_canonical(
         "mapx",
         "mapy",
         "category",
-        "congestion",
     } <= set(card)
 
 

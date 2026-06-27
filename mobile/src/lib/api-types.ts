@@ -26,8 +26,6 @@ export interface Envelope<T> {
   meta: ResponseMeta;
 }
 
-export type Congestion = "low" | "medium" | "high" | null;
-
 // Canonical card — extended across endpoints.
 export interface SpotCard {
   contentId: string;
@@ -37,7 +35,6 @@ export interface SpotCard {
   mapx?: number | null;
   mapy?: number | null;
   category: string | null;
-  congestion?: Congestion;
 }
 
 export interface PhotoMatch extends SpotCard {
@@ -112,7 +109,6 @@ export interface SpotDetail {
   regionName: string | null;
   sigunguName: string | null;
   detailStatus: string;
-  congestion: Congestion;
   images: SpotImage[];
   intro: SpotIntro | null;
 }

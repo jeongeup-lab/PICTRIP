@@ -115,7 +115,7 @@ async def test_detail_returns_envelope(
     assert data["images"][0]["originImageUrl"] == "http://kto/1.jpg"
     assert "moods" not in data
     assert "detailStatus" in data
-    assert "congestion" in data
+    assert "congestion" not in data
     assert {"contentId", "title", "addr1", "regionName", "images"} <= set(data)
 
 

@@ -157,7 +157,6 @@ async def list_saved(
             mapx=r.mapx,
             mapy=r.mapy,
             category=r.lcls_systm3_nm,
-            congestion=r.congestion,
         )
         for r in rows
     ]

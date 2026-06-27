@@ -82,7 +82,6 @@ export function LocationSection({ spot }: { spot: SpotDetail }) {
             userLocation={null}
             interactive={false}
             onPinTap={() => {}}
-            onCenterChanged={() => {}}
           />
         </View>
       ) : (

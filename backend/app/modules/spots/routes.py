@@ -54,7 +54,6 @@ async def home_feed(session: DbSession, redis: RedisDep) -> dict[str, Any]:
                         mapx=s.mapx,
                         mapy=s.mapy,
                         category=s.lcls_systm3_nm,
-                        congestion=s.congestion,
                     )
                     for s in rail.spots
                 ],
@@ -85,7 +84,6 @@ async def get_curation(slug: str, session: DbSession, redis: RedisDep) -> dict[s
                 mapx=s.mapx,
                 mapy=s.mapy,
                 category=s.lcls_systm3_nm,
-                congestion=s.congestion,
             )
             for s in row.spots
         ],
@@ -116,7 +114,6 @@ async def get_spot(
         regionName=row.region_name,
         sigunguName=row.sigungu_name,
         detailStatus=row.detail_status,
-        congestion=row.congestion,
         images=[
             SpotImageOut(originImageUrl=i.origin_image_url, smallImageUrl=i.small_image_url)
             for i in row.images

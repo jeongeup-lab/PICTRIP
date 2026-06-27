@@ -7,10 +7,16 @@ from typing import Any
 from fastapi import APIRouter, Query, status
 
 from app.core.db import DbSession
+from app.core.exceptions import ValidationFailed
 from app.core.redis import RedisDep
 from app.core.schemas import ok
 from app.modules.map.schemas import NearbySpotCard, RegionLabel, RegionNode
-from app.modules.map.services import nearby_spots, regions_tree, reverse_geocode
+from app.modules.map.services import (
+    nearby_spots,
+    nearby_spots_bbox,
+    regions_tree,
+    reverse_geocode,
+)
 from app.modules.spots.services import NearbyCategory
 
 router = APIRouter(tags=["MAP · map"])
@@ -19,16 +25,36 @@ router = APIRouter(tags=["MAP · map"])
 @router.get(
     "/map/nearby",
     status_code=status.HTTP_200_OK,
-    summary="Location-based recommendation (spots DB: bbox+haversine + category + congestion)",
+    summary="Location-based recommendation (spots DB: bbox+haversine + category)",
 )
 async def nearby(
     session: DbSession,
-    lat: float = Query(..., ge=-90, le=90),
-    lng: float = Query(..., ge=-180, le=180),
+    lat: float | None = Query(default=None, ge=-90, le=90),
+    lng: float | None = Query(default=None, ge=-180, le=180),
     radius: int = Query(default=3000, ge=1, le=20000),
     category: NearbyCategory | None = Query(default=None),
+    # Visible-map bounding box (south-west + north-east corners). When all four
+    # are supplied the query returns spots inside the rectangle the user sees,
+    # overriding lat/lng/radius. Otherwise it falls back to center+radius.
+    sw_lat: float | None = Query(default=None, ge=-90, le=90),
+    sw_lng: float | None = Query(default=None, ge=-180, le=180),
+    ne_lat: float | None = Query(default=None, ge=-90, le=90),
+    ne_lng: float | None = Query(default=None, ge=-180, le=180),
 ) -> dict[str, Any]:
-    rows = await nearby_spots(session, lat=lat, lng=lng, radius=radius, category=category)
+    bbox = (sw_lat, sw_lng, ne_lat, ne_lng)
+    if all(v is not None for v in bbox):
+        rows = await nearby_spots_bbox(
+            session,
+            sw_lat=sw_lat,  # type: ignore[arg-type]
+            sw_lng=sw_lng,  # type: ignore[arg-type]
+            ne_lat=ne_lat,  # type: ignore[arg-type]
+            ne_lng=ne_lng,  # type: ignore[arg-type]
+            category=category,
+        )
+    elif lat is not None and lng is not None:
+        rows = await nearby_spots(session, lat=lat, lng=lng, radius=radius, category=category)
+    else:
+        raise ValidationFailed("Provide either a bbox (sw_lat/sw_lng/ne_lat/ne_lng) or lat+lng.")
     return ok(
         [
             NearbySpotCard(
@@ -43,7 +69,6 @@ async def nearby(
                 regionName=r.region_name,
                 sigunguName=r.sigungu_name,
                 overview=r.overview,
-                congestion=r.congestion,
             )
             for r in rows
         ]

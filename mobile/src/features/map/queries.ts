@@ -1,14 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
-import type { LatLng } from "@/features/map/lib/geo";
+import type { Bounds, LatLng } from "@/features/map/lib/geo";
 import type { NearbyCategory } from "@/features/map/lib/nearby-categories";
 import { getNearby, getRegionLabel, getRegionsTree } from "@/features/map/api";
 
-/** Nearby spots for the current center + category. Disabled until a center exists. */
-export function useNearbyMap(center: LatLng | null, category: NearbyCategory | null) {
+/** Nearby spots inside the current query bbox + category. Disabled until a bbox exists. */
+export function useNearbyMap(bounds: Bounds | null, category: NearbyCategory | null) {
   return useQuery({
-    queryKey: ["map-nearby", center?.lat, center?.lng, category],
-    queryFn: () => getNearby(center!.lat, center!.lng, category),
-    enabled: center != null,
+    queryKey: [
+      "map-nearby",
+      bounds?.sw.lat,
+      bounds?.sw.lng,
+      bounds?.ne.lat,
+      bounds?.ne.lng,
+      category,
+    ],
+    queryFn: () => getNearby(bounds!, category),
+    enabled: bounds != null,
   });
 }
 

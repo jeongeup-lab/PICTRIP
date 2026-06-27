@@ -15,7 +15,6 @@ class SpotCardRow:
     mapy: float | None
     category: str | None = None  # derive_category chip code, NOT lcls_systm3_nm
     lcls_systm3_nm: str | None = None  # KTO subtype label; canonical card category
-    congestion: str | None = None  # spot_concentration bucket; None when no row
 
 
 @dataclass
@@ -58,7 +57,6 @@ class SpotDetailRow:
     sigungu_name: str | None
     detail_status: str
     images: list[SpotImageRow]
-    congestion: str | None = None  # spot_concentration bucket; None when no row
     category: str | None = None  # lcls_systm3_nm subtype label
     intro: SpotIntroRow | None = None
 
@@ -71,16 +69,3 @@ class RelatedSpotRow:
     address: str | None
     rank: int | None
     content_id: str | None
-
-
-@dataclass
-class TrendingSpotRow:
-    content_id: str
-    title: str
-    first_image_url: str | None
-    addr1: str | None
-    mapx: float | None
-    mapy: float | None
-    region_name: str | None
-    concentration_rate: float
-    rank: int

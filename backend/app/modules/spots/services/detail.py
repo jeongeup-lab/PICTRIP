@@ -23,7 +23,6 @@ from app.modules.spots.models import (
     SpotDetail,
     SpotImage,
 )
-from app.modules.spots.services.cards import load_congestion
 from app.modules.spots.services.rows import (
     SpotDetailRow,
     SpotImageRow,
@@ -81,7 +80,6 @@ def _assemble_detail(
     spot: Any,
     region_name: str | None,
     sigungu_name: str | None,
-    congestion: str | None,
     *,
     overview: str | None,
     homepage: str | None,
@@ -105,7 +103,6 @@ def _assemble_detail(
         region_name=region_name,
         sigungu_name=sigungu_name,
         detail_status=status,
-        congestion=congestion,
         images=images,
         category=category,
         intro=intro,
@@ -166,14 +163,13 @@ async def _persist_detail(
 
 @dataclass(frozen=True)
 class _DetailContext:
-    """Spot base row + scalar meta + congestion — the fixed inputs to every
-    `_assemble_detail` call, so the orchestrator only varies the KTO-derived fields."""
+    """Spot base row + scalar meta — the fixed inputs to every `_assemble_detail`
+    call, so the orchestrator only varies the KTO-derived fields."""
 
     spot: Any
     region_name: str | None
     sigungu_name: str | None
     category: str | None
-    congestion: str | None
 
     def assemble(
         self,
@@ -189,7 +185,6 @@ class _DetailContext:
             self.spot,
             self.region_name,
             self.sigungu_name,
-            self.congestion,
             overview=overview,
             homepage=homepage,
             tel=tel,
@@ -317,8 +312,7 @@ async def load_spot_detail(
     _ = redis
     spot = await _load_spot_base(session, content_id)
     region_name, sigungu_name, category = await _load_spot_meta(session, spot)
-    congestion = (await load_congestion(session, [content_id])).get(content_id)
-    ctx = _DetailContext(spot, region_name, sigungu_name, category, congestion)
+    ctx = _DetailContext(spot, region_name, sigungu_name, category)
 
     detail, existing_images = await _read_cached_detail(session, content_id)
 

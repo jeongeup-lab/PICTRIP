@@ -1,7 +1,7 @@
-"""GET /v1/map/nearby — spots query + haversine + category + congestion/subtype enrichment.
+"""GET /v1/map/nearby — spots query + haversine + bbox + category/subtype enrichment.
 
-card.category is the subtype label (lcls_systm3_nm), not a coarse chip; congestion is
-bucketed from the spot_concentration JOIN. crowd/firstImage2Url were removed.
+card.category is the subtype label (lcls_systm3_nm), not a coarse chip.
+crowd/firstImage2Url/congestion were removed.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.main import app
-from app.modules.map.services import nearby_spots
+from app.modules.map.services import nearby_spots, nearby_spots_bbox
 from app.modules.spots.services import NearbyCategory
 
 # reference point near Gwanghwamun
@@ -35,7 +35,6 @@ async def _seed(
     regn_nm=None,
     signgu_cd=None,
     signgu_nm=None,
-    concentration=None,
 ) -> None:
     if l3 is not None:
         await session.execute(
@@ -90,14 +89,6 @@ async def _seed(
                 "VALUES (:cid, 12, :ov)"
             ),
             {"cid": cid, "ov": overview},
-        )
-    if concentration is not None:
-        await session.execute(
-            text(
-                "INSERT INTO spot_concentration (content_id, concentration_rate, base_ymd, "
-                "raw_name) VALUES (:cid, :rate, CURRENT_DATE, :nm)"
-            ),
-            {"cid": cid, "rate": concentration, "nm": f"raw-{cid}"},
         )
 
 
@@ -174,16 +165,6 @@ async def test_overview_left_join_passthrough(db_session: AsyncSession) -> None:
     assert by_id["noov"].overview is None  # not yet cached → None, not an error
 
 
-async def test_congestion_bucketed_or_none(db_session: AsyncSession) -> None:
-    await _seed(db_session, "busy", lat=LAT, lng=LNG, concentration=80)  # > 66 → high
-    await _seed(db_session, "quiet", lat=LAT, lng=LNG)  # no row → None
-
-    rows = await nearby_spots(db_session, lat=LAT, lng=LNG, radius=1000, category=None)
-    by_id = {r.content_id: r for r in rows}
-    assert by_id["busy"].congestion == "high"
-    assert by_id["quiet"].congestion is None
-
-
 async def test_region_meta_passthrough(db_session: AsyncSession) -> None:
     await _seed(
         db_session,
@@ -212,7 +193,6 @@ async def test_nearby_route_returns_new_fields(db_session, client):
         l2="FD05",
         l3="FD050100",
         l3_nm="찻집",
-        concentration=80,
     )
 
     app.dependency_overrides[get_db] = lambda: db_session
@@ -225,11 +205,11 @@ async def test_nearby_route_returns_new_fields(db_session, client):
     body = resp.json()
     item = next(i for i in body["data"] if i["contentId"] == "rt1")
     assert item["category"] == "찻집"  # subtype label
-    assert item["congestion"] == "high"
     assert "dist" in item
-    # crowd / firstImage2Url were removed.
+    # crowd / firstImage2Url / congestion were removed.
     assert "crowd" not in item
     assert "firstImage2Url" not in item
+    assert "congestion" not in item
 
 
 async def test_nearby_route_category_param(db_session, client):
@@ -267,3 +247,46 @@ async def test_nearby_route_requires_lat_lng(db_session, client):
         app.dependency_overrides.clear()
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "VALIDATION_FAILED"
+
+
+async def test_bbox_returns_only_spots_inside_the_rectangle(db_session: AsyncSession) -> None:
+    # Inside a tight box around the reference point; one spot just outside it.
+    await _seed(db_session, "in1", lat=LAT + 0.002, lng=LNG + 0.002)
+    await _seed(db_session, "in2", lat=LAT - 0.002, lng=LNG - 0.002)
+    await _seed(db_session, "out", lat=LAT + 0.02, lng=LNG)  # north of the box
+
+    rows = await nearby_spots_bbox(
+        db_session,
+        sw_lat=LAT - 0.005,
+        sw_lng=LNG - 0.005,
+        ne_lat=LAT + 0.005,
+        ne_lng=LNG + 0.005,
+        category=None,
+    )
+    ids = [r.content_id for r in rows]
+    assert set(ids) == {"in1", "in2"}  # "out" is outside the bbox
+    # ordered by distance from the box center (LAT,LNG): both equidistant-ish, dist set
+    assert all(r.dist is not None for r in rows)
+
+
+async def test_nearby_route_bbox_params_override_radius(db_session, client):
+    await _seed(db_session, "inbox", lat=LAT, lng=LNG)
+    await _seed(db_session, "outbox", lat=LAT + 0.02, lng=LNG)
+
+    app.dependency_overrides[get_db] = lambda: db_session
+    try:
+        resp = await client.get(
+            "/v1/map/nearby",
+            params={
+                "sw_lat": LAT - 0.005,
+                "sw_lng": LNG - 0.005,
+                "ne_lat": LAT + 0.005,
+                "ne_lng": LNG + 0.005,
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert resp.status_code == 200
+    ids = {i["contentId"] for i in resp.json()["data"]}
+    assert ids == {"inbox"}  # outbox falls outside the rectangle

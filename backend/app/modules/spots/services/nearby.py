@@ -39,10 +39,9 @@ class NearbySpotRow:
     category: str | None = None
     # KTO overview, verbatim (no summarize); usually None (lazy-cached on detail only).
     overview: str | None = None
-    # Below filled by the consuming module (MAP) via load_region_meta/load_congestion, not SPT.
+    # Below filled by the consuming module (MAP) via load_region_meta, not SPT.
     region_name: str | None = None
     sigungu_name: str | None = None
-    congestion: str | None = None  # spot_concentration bucket
 
 
 def category_predicate(cat: NearbyCategory) -> ColumnElement[bool]:
@@ -87,29 +86,21 @@ def derive_category(l1: str | None, l2: str | None, l3: str | None) -> str | Non
     return None
 
 
-async def find_nearby_spots(
-    session: AsyncSession,
-    *,
-    lat: float,
-    lng: float,
-    radius: int,
-    category: NearbyCategory | None,
-) -> list[NearbySpotRow]:
-    """Active+image spots within radius m, distance-ordered (crowd merged by MAP).
-    Base: show_flag=1 AND first_image_url IS NOT NULL. category=None means the
-    union of the 5 defined categories, NOT no filter — uncategorized spots are excluded."""
-    # Bounding box (degrees); clamp cos to avoid div-by-0 at high latitudes.
-    dlat = radius / 111_320.0
-    dlng = radius / (111_320.0 * max(math.cos(math.radians(lat)), 0.01))
-
-    # Haversine distance (m); mapy=lat, mapx=lng. acos domain clamped.
+def _dist_expr(lat: float, lng: float) -> ColumnElement[float]:
+    """Haversine distance (m) from (lat,lng) to each spot; mapy=lat, mapx=lng.
+    acos domain clamped to avoid NaN at the poles."""
     cos_term = func.cos(func.radians(lat)) * func.cos(func.radians(Spot.mapy)) * func.cos(
         func.radians(Spot.mapx) - func.radians(lng)
     ) + func.sin(func.radians(lat)) * func.sin(func.radians(Spot.mapy))
-    dist = (_EARTH_RADIUS_M * func.acos(func.least(1.0, func.greatest(-1.0, cos_term)))).label(
+    return (_EARTH_RADIUS_M * func.acos(func.least(1.0, func.greatest(-1.0, cos_term)))).label(
         "dist"
     )
 
+
+def _base_select(dist: ColumnElement[float], category: NearbyCategory | None):  # type: ignore[no-untyped-def]
+    """Shared SELECT + base/category filters for the nearby queries (sans bbox).
+    Base: show_flag=1 AND first_image_url IS NOT NULL. category=None means the
+    union of the 5 defined categories, NOT no filter — uncategorized spots are excluded."""
     inner = (
         select(
             Spot.content_id.label("content_id"),
@@ -129,22 +120,17 @@ async def find_nearby_spots(
             Spot.first_image_url.isnot(None),
             Spot.mapx.isnot(None),
             Spot.mapy.isnot(None),
-            Spot.mapy.between(lat - dlat, lat + dlat),
-            Spot.mapx.between(lng - dlng, lng + dlng),
         )
     )
     if category is not None:
-        inner = inner.where(category_predicate(category))
-    else:
-        # "All" = union of the 5 categories; uncategorized spots excluded.
-        inner = inner.where(or_(*(category_predicate(c) for c in NearbyCategory)))
+        return inner.where(category_predicate(category))
+    # "All" = union of the 5 categories; uncategorized spots excluded.
+    return inner.where(or_(*(category_predicate(c) for c in NearbyCategory)))
 
-    sub = inner.subquery()
-    stmt = select(sub).where(sub.c.dist <= radius).order_by(sub.c.dist).limit(_MAX_NUM_OF_ROWS)
 
-    result = await session.execute(stmt)
+def _materialize(result: object) -> list[NearbySpotRow]:
     rows: list[NearbySpotRow] = []
-    for r in result:
+    for r in result:  # type: ignore[attr-defined]
         rows.append(
             NearbySpotRow(
                 content_id=r.content_id,
@@ -159,3 +145,52 @@ async def find_nearby_spots(
             )
         )
     return rows
+
+
+async def find_nearby_spots(
+    session: AsyncSession,
+    *,
+    lat: float,
+    lng: float,
+    radius: int,
+    category: NearbyCategory | None,
+) -> list[NearbySpotRow]:
+    """Active+image spots within radius m, distance-ordered (crowd merged by MAP)."""
+    # Bounding box (degrees); clamp cos to avoid div-by-0 at high latitudes.
+    dlat = radius / 111_320.0
+    dlng = radius / (111_320.0 * max(math.cos(math.radians(lat)), 0.01))
+
+    inner = _base_select(_dist_expr(lat, lng), category).where(
+        Spot.mapy.between(lat - dlat, lat + dlat),
+        Spot.mapx.between(lng - dlng, lng + dlng),
+    )
+    sub = inner.subquery()
+    stmt = select(sub).where(sub.c.dist <= radius).order_by(sub.c.dist).limit(_MAX_NUM_OF_ROWS)
+    return _materialize(await session.execute(stmt))
+
+
+async def find_nearby_spots_bbox(
+    session: AsyncSession,
+    *,
+    sw_lat: float,
+    sw_lng: float,
+    ne_lat: float,
+    ne_lng: float,
+    category: NearbyCategory | None,
+) -> list[NearbySpotRow]:
+    """Active+image spots inside the visible map rectangle (sw..ne), ordered by
+    distance from the box center. Same base/category rules as find_nearby_spots;
+    the map's bbox replaces the center+radius circle so results match what the
+    user sees on screen."""
+    min_lat, max_lat = min(sw_lat, ne_lat), max(sw_lat, ne_lat)
+    min_lng, max_lng = min(sw_lng, ne_lng), max(sw_lng, ne_lng)
+    center_lat = (min_lat + max_lat) / 2
+    center_lng = (min_lng + max_lng) / 2
+
+    inner = _base_select(_dist_expr(center_lat, center_lng), category).where(
+        Spot.mapy.between(min_lat, max_lat),
+        Spot.mapx.between(min_lng, max_lng),
+    )
+    sub = inner.subquery()
+    stmt = select(sub).order_by(sub.c.dist).limit(_MAX_NUM_OF_ROWS)
+    return _materialize(await session.execute(stmt))

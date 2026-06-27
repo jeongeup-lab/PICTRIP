@@ -1,17 +1,22 @@
 import { api } from "@/lib/api-client";
 import type { NearbySpot, RegionLabel, RegionNode } from "@/lib/api-types";
-import { RADIUS_M } from "@/constants/map";
+import type { Bounds } from "@/features/map/lib/geo";
 import type { NearbyCategory } from "@/features/map/lib/nearby-categories";
 
-/** Nearby spots within RADIUS_M (server sorts by distance asc + caps). 전체 =
- * omit category. api-client unwraps JSend once. */
+/** Nearby spots inside the visible map bbox (server sorts by distance asc +
+ * caps). 전체 = omit category. api-client unwraps JSend once. */
 export async function getNearby(
-  lat: number,
-  lng: number,
+  bounds: Bounds,
   category?: NearbyCategory | null,
 ): Promise<NearbySpot[]> {
   return (await api.get("/map/nearby", {
-    params: { lat, lng, radius: RADIUS_M, category: category ?? undefined },
+    params: {
+      sw_lat: bounds.sw.lat,
+      sw_lng: bounds.sw.lng,
+      ne_lat: bounds.ne.lat,
+      ne_lng: bounds.ne.lng,
+      category: category ?? undefined,
+    },
   })) as unknown as NearbySpot[];
 }
 

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Literal
-
 from pydantic import BaseModel, field_validator
 
 from app.core.kto_images import https_kto_image
@@ -34,8 +32,6 @@ class SpotCard(BaseModel):
     mapy: float | None = None
     # Subtype label = lcls_systm3_nm; legacy home routes put the coarse chip code here instead.
     category: str | None = None
-    # Crowd bucket from spot_concentration; enriched via load_congestion() only where shown.
-    congestion: Literal["low", "medium", "high"] | None = None
 
     @field_validator("firstImageUrl")
     @classmethod
@@ -66,26 +62,6 @@ class RelatedSpot(BaseModel):
     address: str | None = None
     rank: int | None = None
     contentId: str | None = None
-
-
-class TrendingSpot(BaseModel):
-    """전국 "집중률 TOP" entry (ADR-0016). concentrationRate is KTO 집중률 (0-100,
-    relative to the spot's own peak); rank is 1-based over the returned slice."""
-
-    contentId: str
-    title: str
-    firstImageUrl: str | None = None
-    addr1: str | None = None
-    regionName: str | None = None
-    mapx: float | None = None
-    mapy: float | None = None
-    concentrationRate: float
-    rank: int
-
-    @field_validator("firstImageUrl")
-    @classmethod
-    def _upgrade_first_image(cls, v: str | None) -> str | None:
-        return https_kto_image(v)
 
 
 class HomeHero(BaseModel):

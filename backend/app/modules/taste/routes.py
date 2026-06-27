@@ -37,7 +37,6 @@ async def photo_search(
                 mapx=m.card.mapx,
                 mapy=m.card.mapy,
                 category=m.card.lcls_systm3_nm,
-                congestion=m.card.congestion,
                 similarity=m.similarity,
                 distance=m.distance,
                 regionName=m.region_name,

@@ -1,4 +1,4 @@
-"""Canonical SpotCard serialization: bucket_congestion, load_congestion, subtype-category join."""
+"""Canonical SpotCard serialization: subtype-category join."""
 
 from __future__ import annotations
 
@@ -7,33 +7,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.spots.schemas import SpotCard
 from app.modules.spots.services.cards import (
-    bucket_congestion,
     load_active_spot_cards_by_ids,
-    load_congestion,
     load_spot_cards_by_ids,
 )
 
 
-def test_congestion_buckets() -> None:
-    assert bucket_congestion(10) == "low"
-    assert bucket_congestion(50) == "medium"
-    assert bucket_congestion(90) == "high"
-    assert bucket_congestion(None) is None
-    # Exact boundaries: <34 low, 34..66 medium (inclusive), >66 high.
-    assert bucket_congestion(34) == "medium"
-    assert bucket_congestion(66) == "medium"
-    assert bucket_congestion(33.9) == "low"
-    assert bucket_congestion(66.1) == "high"
-
-
-def test_spotcard_congestion_defaults_none_and_omittable() -> None:
+def test_spotcard_category_defaults_none_and_omittable() -> None:
     card = SpotCard(contentId="c1", title="t", firstImageUrl=None)
     assert card.category is None
-    assert card.congestion is None
 
-    enriched = SpotCard(contentId="c2", title="t", category="찻집", congestion="medium")
+    enriched = SpotCard(contentId="c2", title="t", category="찻집")
     assert enriched.category == "찻집"
-    assert enriched.congestion == "medium"
 
 
 async def _seed_spot(
@@ -59,36 +43,6 @@ async def _seed_spot(
         ),
         {"cid": cid, "t": f"t-{cid}", "show": show, "l3": l3},
     )
-
-
-async def _seed_concentration(session: AsyncSession, cid: str, rate: float) -> None:
-    await session.execute(
-        text(
-            "INSERT INTO spot_concentration (content_id, concentration_rate, base_ymd, raw_name) "
-            "VALUES (:cid, :rate, CURRENT_DATE, :nm)"
-        ),
-        {"cid": cid, "rate": rate, "nm": f"raw-{cid}"},
-    )
-
-
-async def test_load_congestion_buckets_and_misses(db_session: AsyncSession) -> None:
-    await _seed_spot(db_session, "lo")
-    await _seed_spot(db_session, "mid")
-    await _seed_spot(db_session, "hi")
-    await _seed_spot(db_session, "none")  # no concentration row
-    await _seed_concentration(db_session, "lo", 10)
-    await _seed_concentration(db_session, "mid", 50)
-    await _seed_concentration(db_session, "hi", 90)
-
-    out = await load_congestion(db_session, ["lo", "mid", "hi", "none"])
-    assert out == {"lo": "low", "mid": "medium", "hi": "high"}
-    # A content_id with no spot_concentration row is simply absent (caller defaults None).
-    assert "none" not in out
-
-
-async def test_load_congestion_empty_input() -> None:
-    # No-op fast path — no session call.
-    assert await load_congestion(None, []) == {}  # type: ignore[arg-type]
 
 
 async def test_load_spot_cards_carry_subtype_category(db_session: AsyncSession) -> None:

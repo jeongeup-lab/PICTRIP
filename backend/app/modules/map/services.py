@@ -16,7 +16,7 @@ from app.modules.spots.services import (
     NearbyCategory,
     NearbySpotRow,
     find_nearby_spots,
-    load_congestion,
+    find_nearby_spots_bbox,
     load_region_meta,
 )
 
@@ -31,6 +31,21 @@ REGIONS_TREE_KEY = "regions:tree"
 _REGIONS_TREE_TTL = 86_400  # 24h — the tree is administrative + slow-moving.
 
 
+async def _enrich(session: AsyncSession, rows: list[NearbySpotRow]) -> list[NearbySpotRow]:
+    """Merge region meta onto SPT's distance-ranked rows, capped at 30."""
+    rows = rows[:_NEARBY_LIMIT]
+    if not rows:
+        return rows
+
+    content_ids = [r.content_id for r in rows]
+    region_by_id = await load_region_meta(session, content_ids)
+    for row in rows:
+        region_name, sigungu_name = region_by_id.get(row.content_id, (None, None))
+        row.region_name = region_name
+        row.sigungu_name = sigungu_name
+    return rows
+
+
 async def nearby_spots(
     session: AsyncSession,
     *,
@@ -39,21 +54,30 @@ async def nearby_spots(
     radius: int,
     category: NearbyCategory | None,
 ) -> list[NearbySpotRow]:
-    """Merge congestion + region meta onto SPT's distance-ranked rows, capped at 30."""
+    """Center+radius nearby (legacy/fallback path)."""
     rows = await find_nearby_spots(session, lat=lat, lng=lng, radius=radius, category=category)
-    rows = rows[:_NEARBY_LIMIT]
-    if not rows:
-        return rows
+    return await _enrich(session, rows)
 
-    content_ids = [r.content_id for r in rows]
-    congestion_by_id = await load_congestion(session, content_ids)
-    region_by_id = await load_region_meta(session, content_ids)
-    for row in rows:
-        row.congestion = congestion_by_id.get(row.content_id)
-        region_name, sigungu_name = region_by_id.get(row.content_id, (None, None))
-        row.region_name = region_name
-        row.sigungu_name = sigungu_name
-    return rows
+
+async def nearby_spots_bbox(
+    session: AsyncSession,
+    *,
+    sw_lat: float,
+    sw_lng: float,
+    ne_lat: float,
+    ne_lng: float,
+    category: NearbyCategory | None,
+) -> list[NearbySpotRow]:
+    """Nearby spots inside the visible map rectangle (what the user sees on screen)."""
+    rows = await find_nearby_spots_bbox(
+        session,
+        sw_lat=sw_lat,
+        sw_lng=sw_lng,
+        ne_lat=ne_lat,
+        ne_lng=ne_lng,
+        category=category,
+    )
+    return await _enrich(session, rows)
 
 
 def _to_region_label(payload: dict[str, Any]) -> RegionLabel | None:
