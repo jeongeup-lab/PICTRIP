@@ -1,72 +1,46 @@
-"""ADM-001 — HTTP Basic auth gate on /admin/* (A01 §1.3).
+"""ADM-001 — DB-backed HTTP Basic auth gate on /admin/* (A01 §1.3).
 
-Covers the locked (503), wrong-credentials (401 + WWW-Authenticate), and
-authorized (200 HTML) paths. The JSON API (/admin/api/*) is a later slice and is
-not exercised here.
+Auth checks the ``admin_users`` table (username + bcrypt hash), not an env var.
+Migration 0016 seeds ``admin``/``admin`` into the migrated test DB, so the
+authorized path uses that fixed credential. Covers authorized (200 HTML),
+wrong-password / wrong-username / missing-credentials (401 + WWW-Authenticate),
+and the no-admin-row case (401) by clearing the table in a rolled-back tx.
+
+Every test overrides ``get_db`` with the function-scoped ``db_session`` (a fresh
+NullPool engine + per-test transaction) so the verify_admin lookup never touches
+the module-level engine across event loops — the same pattern the other admin
+tests use.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
+from app.core.db import get_db
+from app.main import app
 
-_PASSWORD = "s3cret-admin-pw"
-
-
-@pytest.fixture
-def admin_password(monkeypatch: pytest.MonkeyPatch) -> str:
-    """Configure ADMIN_PASSWORD on the live settings singleton for one test."""
-    monkeypatch.setattr(settings, "ADMIN_PASSWORD", _PASSWORD)
-    return _PASSWORD
+# Seeded by migration 0016.
+_USERNAME = "admin"
+_PASSWORD = "admin"
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize("path", ["/admin", "/admin/history", "/admin/health"])
-async def test_admin_locked_when_password_unset(
-    client: AsyncClient, monkeypatch: pytest.MonkeyPatch, path: str
-) -> None:
-    monkeypatch.setattr(settings, "ADMIN_PASSWORD", None)
-    resp = await client.get(path, auth=("admin", "anything"))
-    assert resp.status_code == 503
-    assert resp.json()["error"]["code"] == "ADMIN_LOCKED"
-
-
-@pytest.mark.asyncio
-async def test_admin_wrong_password_returns_401_with_challenge(
-    client: AsyncClient, admin_password: str
-) -> None:
-    resp = await client.get("/admin", auth=("admin", "wrong"))
-    assert resp.status_code == 401
-    assert resp.headers["www-authenticate"] == "Basic"
-    assert resp.json()["error"]["code"] == "ADMIN_UNAUTHORIZED"
-
-
-@pytest.mark.asyncio
-async def test_admin_wrong_username_returns_401(client: AsyncClient, admin_password: str) -> None:
-    resp = await client.get("/admin", auth=("root", admin_password))
-    assert resp.status_code == 401
-    assert resp.headers["www-authenticate"] == "Basic"
-    assert resp.json()["error"]["code"] == "ADMIN_UNAUTHORIZED"
-
-
-@pytest.mark.asyncio
-async def test_admin_missing_credentials_returns_401_with_challenge(
-    client: AsyncClient, admin_password: str
-) -> None:
-    resp = await client.get("/admin")
-    assert resp.status_code == 401
-    assert resp.headers["www-authenticate"] == "Basic"
-    assert resp.json()["error"]["code"] == "ADMIN_UNAUTHORIZED"
+@pytest.fixture(autouse=True)
+def _use_test_db(db_session: AsyncSession) -> Iterator[None]:
+    """Route every /admin auth lookup through the per-test transaction."""
+    app.dependency_overrides[get_db] = lambda: db_session
+    yield
+    app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("path", ["/admin", "/admin/history", "/admin/health"])
-async def test_admin_correct_password_serves_html(
-    client: AsyncClient, admin_password: str, path: str
-) -> None:
-    resp = await client.get(path, auth=("admin", admin_password))
+async def test_admin_correct_password_serves_html(client: AsyncClient, path: str) -> None:
+    resp = await client.get(path, auth=(_USERNAME, _PASSWORD))
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/html")
     assert "<html" in resp.text.lower()
@@ -75,21 +49,53 @@ async def test_admin_correct_password_serves_html(
 
 
 @pytest.mark.asyncio
-async def test_admin_index_trailing_slash_serves_html(
-    client: AsyncClient, admin_password: str
-) -> None:
+async def test_admin_index_trailing_slash_serves_html(client: AsyncClient) -> None:
     """GET /admin/ (trailing slash, common behind proxies) serves the index, not 404."""
-    resp = await client.get("/admin/", auth=("admin", admin_password))
+    resp = await client.get("/admin/", auth=(_USERNAME, _PASSWORD))
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/html")
     assert "<html" in resp.text.lower()
 
 
 @pytest.mark.asyncio
-async def test_admin_index_trailing_slash_requires_auth(
-    client: AsyncClient, admin_password: str
-) -> None:
+async def test_admin_wrong_password_returns_401_with_challenge(client: AsyncClient) -> None:
+    resp = await client.get("/admin", auth=(_USERNAME, "wrong"))
+    assert resp.status_code == 401
+    assert resp.headers["www-authenticate"] == "Basic"
+    assert resp.json()["error"]["code"] == "ADMIN_UNAUTHORIZED"
+
+
+@pytest.mark.asyncio
+async def test_admin_wrong_username_returns_401(client: AsyncClient) -> None:
+    resp = await client.get("/admin", auth=("nobody", _PASSWORD))
+    assert resp.status_code == 401
+    assert resp.headers["www-authenticate"] == "Basic"
+    assert resp.json()["error"]["code"] == "ADMIN_UNAUTHORIZED"
+
+
+@pytest.mark.asyncio
+async def test_admin_missing_credentials_returns_401_with_challenge(client: AsyncClient) -> None:
+    resp = await client.get("/admin")
+    assert resp.status_code == 401
+    assert resp.headers["www-authenticate"] == "Basic"
+    assert resp.json()["error"]["code"] == "ADMIN_UNAUTHORIZED"
+
+
+@pytest.mark.asyncio
+async def test_admin_index_trailing_slash_requires_auth(client: AsyncClient) -> None:
     """/admin/ is gated by AdminAuth just like /admin."""
     resp = await client.get("/admin/")
     assert resp.status_code == 401
+    assert resp.json()["error"]["code"] == "ADMIN_UNAUTHORIZED"
+
+
+@pytest.mark.asyncio
+async def test_admin_no_admin_row_returns_401(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """With the admin_users table empty, even the seeded creds get 401 (no 503)."""
+    await db_session.execute(text("DELETE FROM admin_users"))
+    resp = await client.get("/admin", auth=(_USERNAME, _PASSWORD))
+    assert resp.status_code == 401
+    assert resp.headers["www-authenticate"] == "Basic"
     assert resp.json()["error"]["code"] == "ADMIN_UNAUTHORIZED"

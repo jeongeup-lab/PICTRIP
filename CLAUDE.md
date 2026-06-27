@@ -94,7 +94,12 @@ Mobile layers: `src/app` (thin Expo Router screens) · `src/features/<domain>`
 - Errors raise `AppError` subclasses (`app/core/exceptions.py`) — the subclass
   sets HTTP status. Mobile branches on `err.code`, never `err.message`.
 - Settings module is `app/config.py` (`Settings(BaseSettings)`, `env_file=".env"`)
-  — **not** `app/core/`. `ADMIN_PASSWORD`/`SENTRY_DSN`/KTO/Kakao keys live here.
+  — **not** `app/core/`. `SENTRY_DSN`/KTO/Kakao keys live here. Admin-console auth
+  is **DB-backed** (`admin_users` table, not an env var) — see below.
+- Admin console (`/admin`) auth = `admin_users` table (username + bcrypt
+  `password_hash`), checked in `app/modules/admin/security.py`. Migration 0016
+  seeds `admin`/`admin` (weak default — rotate via `scripts/set_admin_password.py`).
+  Provisioning/rotation needs only DB write (CT110), no CT112 `.env`/shell.
 - File names: components PascalCase; runtime modules (api/lib/stores/hooks/
   usecases/constants) kebab-case; `src/app/**` follows Expo Router.
 

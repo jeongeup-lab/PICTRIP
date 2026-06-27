@@ -18,11 +18,13 @@ from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.core.db import get_db
 from app.main import app
 
-_PASSWORD = "s3cret-admin-pw"
+# DB-backed admin auth: migration 0016 seeds admin/admin into the test DB
+# (alembic upgrade head runs before pytest in CI), so requests authenticate with
+# this fixed credential — no settings monkeypatch.
+_PASSWORD = "admin"
 _AUTH = ("admin", _PASSWORD)
 
 # Measured sync_runs schema (A01 §0). Created per-test so the suite is self-
@@ -89,8 +91,8 @@ async def _insert_run(
 
 
 @pytest.fixture
-def admin_password(monkeypatch: pytest.MonkeyPatch) -> str:
-    monkeypatch.setattr(settings, "ADMIN_PASSWORD", _PASSWORD)
+def admin_password() -> str:
+    """The DB-seeded default admin credential (migration 0016)."""
     return _PASSWORD
 
 
@@ -256,10 +258,18 @@ async def test_history_grouping_7d(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("days", [0, 200])
 async def test_history_days_out_of_bounds_422(
-    client: AsyncClient, admin_password: str, days: int
+    db_session: AsyncSession, client: AsyncClient, admin_password: str, days: int
 ) -> None:
-    """days is bounded to [1, 90]; out-of-range → 422 (rejected before DB access)."""
-    resp = await client.get(f"/admin/api/history?days={days}", auth=_AUTH)
+    """days is bounded to [1, 90]; out-of-range → 422 (after the DB-backed auth gate).
+
+    get_db is overridden so the auth lookup uses the per-test session, not the
+    module engine (which would leak a connection across the function-scoped loop).
+    """
+    _override(db_session)
+    try:
+        resp = await client.get(f"/admin/api/history?days={days}", auth=_AUTH)
+    finally:
+        app.dependency_overrides.clear()
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "VALIDATION_FAILED"
 

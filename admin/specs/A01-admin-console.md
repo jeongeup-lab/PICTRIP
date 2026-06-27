@@ -96,11 +96,21 @@ app/modules/admin/
 
 ### 1.3 인증 (A4)
 
-- `app/config.py`의 `Settings(BaseSettings)`에 `ADMIN_PASSWORD`(필수, `.env`만; `model_config
-  env_file=".env"`). 미설정 시 `/admin/*` 503(잠금). ※설정 모듈은 `app/config.py` — `app/core/`가 아님.
-- HTTP Basic 의존성을 `/admin` HTML + `/admin/api/*` 전 라우트에 적용. 사용자명은 고정
-  (`admin`), 비교는 `secrets.compare_digest`(타이밍 공격 방지).
-- 공개 경로(CF 터널)이므로 Basic 누락 → `401 WWW-Authenticate: Basic`.
+> **🔄 2026-06-27 변경(사용자·친구 합의): 인증을 env(`ADMIN_PASSWORD`)에서 DB 테이블로 이관.**
+> 근거: 자격증명이 CT112 `.env`에 살면 설정/로테이션에 CT112 셸 접근이 필요한데
+> 그 경로가 막힘(CT112 비-tailnet + lss:22 ACL 차단). 자격증명을 **공용 CT110 DB**의
+> `admin_users` 테이블에 두면 로컬·프로덕션이 같은 DB를 읽어 **CT112 무접근으로 프로비저닝**.
+> 배포는 normal push-to-main(컨테이너 기동 시 `alembic upgrade head`가 시드)로 완료.
+> 아래 env 기반 서술은 마이그레이션 0016 이전 설계로 **superseded**.
+
+- **현행:** `admin_users(username PK, password_hash, created_at, updated_at)` 테이블.
+  `app/modules/admin/security.py`가 username 조회 + bcrypt `verify_password`로 검증.
+  마이그레이션 0016이 `admin`/`admin` 시드(약한 기본값 — `scripts/set_admin_password.py`로 로테이션).
+  자격증명 없음/오류 → `401 WWW-Authenticate: Basic`(503 잠금 개념 폐지).
+- HTTP Basic 의존성을 `/admin` HTML + `/admin/api/*` 전 라우트에 적용(공개 경로라 Basic 필수).
+- ⚠️ 보안: `/admin`은 CF 터널로 공개되고 홈 큐레이션 **쓰기** 권한이 있음. `admin`/`admin`은
+  데모용 약한 기본값 — 실사용 전 강한 비번 로테이션 또는 A9 CF Access 게이트 권장.
+- ~~(superseded) env `ADMIN_PASSWORD` 미설정 시 503, username 고정 `admin`, `secrets.compare_digest`.~~
 
 ### 1.4 응답 규약
 

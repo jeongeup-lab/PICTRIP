@@ -21,12 +21,21 @@ from sqlalchemy import Row, delete, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# Curation editor (A01 §7) is the admin module's ONE write surface. CLAUDE.md
-# grants admin scoped ownership of curations/curation_spots, so importing these
-# two ORM models here is sanctioned (ORM chosen over raw SQL for the writes:
-# clearer column binding, CHECK/FK violations surface as SQLAlchemy errors).
-# All OTHER admin access stays read-only raw SQL above.
+# The admin module's own ORM-mapped surfaces: admin_users (console credentials,
+# DB-backed auth A01 §1.3) and curations/curation_spots (the curation editor's
+# scoped write surface, A01 §7). CLAUDE.md grants admin scoped ownership of these,
+# so importing the models here is sanctioned (ORM over raw SQL for writes: clearer
+# column binding, CHECK/FK violations surface as SQLAlchemy errors). All OTHER
+# admin access stays read-only raw SQL.
+from app.modules.admin.models import AdminUser
 from app.modules.spots.models import Curation, CurationSpot
+
+
+async def get_admin_user(session: AsyncSession, username: str) -> AdminUser | None:
+    """The admin-console login for ``username`` (None if absent). Read-only."""
+    return (
+        await session.execute(select(AdminUser).where(AdminUser.username == username))
+    ).scalar_one_or_none()
 
 
 async def count_spots(session: AsyncSession) -> int:
