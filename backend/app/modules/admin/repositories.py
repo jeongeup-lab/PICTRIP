@@ -87,6 +87,63 @@ async def sync_runs_on_date(session: AsyncSession, day: date) -> list[Row[Any]]:
     return list(result.all())
 
 
+# --- embedding status (A01-extension; read-only) ------------------------------
+# Embedding is a separate step from collection: pipeline writes ``spots``, then
+# CLIP writes ``spot_embeddings``. These read-only aggregates let the console show
+# how far embedding has progressed and how many spots failed (embedding_failures).
+
+
+async def embedding_totals(session: AsyncSession) -> Row[Any]:
+    """Coverage + backlog in one round-trip.
+
+    ``missing`` is computed directly (image-bearing spots with no embedding row),
+    matching the embed job's target query; ``embedded`` is derived as
+    ``with_image - missing`` so embedded + missing == with_image exactly.
+    """
+    result = await session.execute(
+        text(
+            "SELECT "
+            "(SELECT count(*) FROM spots) AS total_spots, "
+            "(SELECT count(*) FROM spots WHERE first_image_url IS NOT NULL "
+            "   AND first_image_url <> '') AS with_image, "
+            "(SELECT count(*) FROM spots s WHERE s.first_image_url IS NOT NULL "
+            "   AND s.first_image_url <> '' AND NOT EXISTS "
+            "   (SELECT 1 FROM spot_embeddings e WHERE e.content_id = s.content_id)) AS missing, "
+            "(SELECT count(*) FROM embedding_failures) AS failed, "
+            "(SELECT max(computed_at) FROM spot_embeddings) AS last_computed_at"
+        )
+    )
+    return result.one()
+
+
+async def embedding_failures_by_reason(session: AsyncSession) -> list[Row[Any]]:
+    """(reason, count) rollup of the live failure backlog."""
+    result = await session.execute(
+        text("SELECT reason, count(*) AS n FROM embedding_failures GROUP BY reason ORDER BY reason")
+    )
+    return list(result.all())
+
+
+async def embedding_recent_window(session: AsyncSession, since: Any) -> Row[Any]:
+    """Image-bearing spots synced at/after ``since`` and how many are embedded.
+
+    Scopes the "this collection" view to the latest sync run's start.
+    """
+    result = await session.execute(
+        text(
+            "SELECT "
+            "count(*) FILTER (WHERE first_image_url IS NOT NULL AND first_image_url <> '') "
+            "  AS target, "
+            "count(*) FILTER (WHERE first_image_url IS NOT NULL AND first_image_url <> '' "
+            "  AND EXISTS (SELECT 1 FROM spot_embeddings e WHERE e.content_id = s.content_id)) "
+            "  AS embedded "
+            "FROM spots s WHERE s.synced_at >= :since"
+        ),
+        {"since": since},
+    )
+    return result.one()
+
+
 async def db_ping(session: AsyncSession) -> bool:
     """``SELECT 1`` liveness probe; False on any failure."""
     try:

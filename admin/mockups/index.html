@@ -121,6 +121,45 @@
           </section>
 
           <section>
+            <div class="sec-h"><h2>임베딩 현황</h2><span class="x">CLIP ViT-B/32 → spot_embeddings</span></div>
+
+            <div id="embedding-loading" class="src" style="justify-content:center;padding:32px">
+              <span style="color:var(--ink-3);font-size:13px">불러오는 중…</span>
+            </div>
+            <div id="embedding-error" style="display:none;background:var(--bad-soft);border:2px solid var(--ink);border-radius:4px;padding:22px 26px">
+              <p style="margin:0 0 12px;color:var(--bad);font-weight:700">데이터를 불러오지 못했습니다.</p>
+              <p id="embedding-error-msg" style="margin:0 0 16px;font-size:13px;color:var(--ink-2)"></p>
+              <button class="btn ghost sm" onclick="loadEmbedding()">다시 시도</button>
+            </div>
+            <div id="embedding-data" style="display:none">
+              <div class="src">
+                <div class="cell name">
+                  <div class="title">CLIP 임베딩</div>
+                  <div class="ep">수집과 분리 · 이미지 → 512d 벡터</div>
+                </div>
+                <div class="cell">
+                  <div class="lbl">이번 수집 (완료 / 미완료)</div>
+                  <div class="v" id="emb-recent">—</div>
+                </div>
+                <div class="cell">
+                  <div class="lbl">실패</div>
+                  <div class="v" id="emb-failed">—<br><small id="emb-failed-reasons"></small></div>
+                </div>
+                <div class="cell">
+                  <div class="lbl">백로그 (미임베딩)</div>
+                  <div class="v" id="emb-backlog">—<br><small id="emb-last">—</small></div>
+                </div>
+                <div class="cell act">
+                  <span class="status" id="emb-status-icon"></span>
+                  <button class="btn ghost sm" id="emb-retry-btn" disabled>실패분 재임베딩</button>
+                  <button class="btn sm" id="emb-all-btn" disabled>전체 처리</button>
+                </div>
+              </div>
+              <p id="emb-footer" style="font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin-top:14px"></p>
+            </div>
+          </section>
+
+          <section>
             <div class="sec-h"><h2>수집 이력</h2><span class="x">최근 14일</span><a class="x acc" href="/admin/history">전체 보기 →</a></div>
             <div class="chart" id="ov-hist" title="클릭하면 수집 이력으로 이동" style="cursor:pointer" onclick="location.href='/admin/history'">
               <div class="col" style="justify-content:center"><span style="color:var(--ink-3);font-size:12px">불러오는 중…</span></div>

@@ -12,7 +12,7 @@ from datetime import date as date_type
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Form, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Form, Query, Request
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
 from app.core.db import DbSession
@@ -128,6 +128,28 @@ async def api_collection_trigger(_: AdminAuth, db: DbSession) -> dict[str, Any]:
     raises AdminTriggerFailed → ADMIN_TRIGGER_FAILED(502) envelope.
     """
     return ok(await services.trigger_collection(db))
+
+
+@router.get("/api/embedding")
+async def api_embedding(_: AdminAuth, db: DbSession, redis: RedisDep) -> dict[str, Any]:
+    """EmbeddingStatus — coverage + failure backlog + this-collection progress.
+
+    Embedding is a separate step from collection (CLIP → spot_embeddings), so this
+    is its own endpoint rather than folded into /collection.
+    """
+    return ok(await services.get_embedding_status(db, redis))
+
+
+@router.post("/api/embedding/trigger")
+async def api_embedding_trigger(
+    _: AdminAuth,
+    redis: RedisDep,
+    background_tasks: BackgroundTasks,
+    scope: str = Query("failed", pattern="^(failed|missing)$"),
+) -> dict[str, Any]:
+    """Kick an in-process re-embed job. ``scope=failed`` retries recorded failures;
+    ``scope=missing`` processes the (capped) backlog. 502 if already running."""
+    return ok(await services.trigger_embedding(redis, background_tasks, scope))
 
 
 @router.get("/api/history")

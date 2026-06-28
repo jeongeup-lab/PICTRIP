@@ -46,6 +46,37 @@ class TriggerResult(BaseModel):
     accepted: bool
 
 
+# --- GET /admin/api/embedding -------------------------------------------------
+class EmbeddingRecent(BaseModel):
+    """The embedding state of spots from the latest collection run (synced since
+    ``since``). ``outstanding`` = target - embedded (still need embedding)."""
+
+    since: datetime | None
+    target: int
+    embedded: int
+    outstanding: int
+
+
+class EmbeddingStatus(BaseModel):
+    totalSpots: int
+    withImage: int  # image-bearing spots = the coverage denominator
+    embedded: int  # image-bearing spots that have an embedding
+    missing: int  # withImage - embedded (all-time backlog)
+    failed: int  # spots in embedding_failures (recorded failures)
+    pending: int  # missing - failed (never attempted)
+    failuresByReason: dict[str, int]
+    recent: EmbeddingRecent
+    lastComputedAt: datetime | None
+    running: bool  # an embed job currently holds the Redis lock
+
+
+# --- POST /admin/api/embedding/trigger ----------------------------------------
+class EmbeddingTriggerResult(BaseModel):
+    job: str  # "embed-failed" | "embed-missing"
+    scope: str  # "failed" | "missing"
+    accepted: bool
+
+
 # --- GET /admin/api/history?days=N --------------------------------------------
 class HistoryDay(BaseModel):
     date: date
