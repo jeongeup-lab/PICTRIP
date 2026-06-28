@@ -129,26 +129,20 @@ function renderCollection(data) {
 
   const ranAtEl = document.getElementById("col-ran-at");
   const ranRelEl = document.getElementById("col-ran-rel");
-  if (ranAtEl && ranRelEl) {
-    const ts = run ? (run.finishedAt || run.ranAt) : null;
-    ranAtEl.childNodes[0].textContent = ts ? fmtDatetime(ts) : "—";
-    ranRelEl.textContent = ts ? relativeTime(ts) : "";
-  }
+  const _ts = run ? run.finishedAt || run.ranAt : null;
+  if (ranAtEl) ranAtEl.textContent = _ts ? fmtDatetime(_ts) : "—";
+  if (ranRelEl) ranRelEl.textContent = _ts ? relativeTime(_ts) : "";
 
   const apiEl = document.getElementById("col-api-calls");
   if (apiEl) apiEl.textContent = run ? (run.apiCalls != null ? run.apiCalls.toLocaleString("ko-KR") : "—") : "—";
 
-  const chEl = document.getElementById("col-changes");
-  if (chEl) {
-    if (run) {
-      const ins = run.inserted != null ? run.inserted.toLocaleString("ko-KR") : "—";
-      const upd = run.updated != null ? run.updated.toLocaleString("ko-KR") : "—";
-      const del = run.softDeleted != null ? run.softDeleted.toLocaleString("ko-KR") : "—";
-      chEl.textContent = `${ins} / ${upd} / ${del}`;
-    } else {
-      chEl.textContent = "—";
-    }
-  }
+  const _num = (v) => (v != null ? v.toLocaleString("ko-KR") : "—");
+  const insEl = document.getElementById("col-ins");
+  if (insEl) insEl.textContent = run ? `+${_num(run.inserted)}` : "—";
+  const updEl = document.getElementById("col-upd");
+  if (updEl) updEl.textContent = run ? _num(run.updated) : "—";
+  const delEl = document.getElementById("col-del");
+  if (delEl) delEl.textContent = run ? _num(run.softDeleted) : "—";
 
   const durEl = document.getElementById("col-duration");
   if (durEl) durEl.textContent = run ? fmtDuration(run.durationSec) : "—";
@@ -449,9 +443,9 @@ function renderHealth(h) {
 
   const dbPoolEl = document.getElementById("h-db-pool");
   if (dbPoolEl) {
-    const inUse = h.db && h.db.poolInUse != null ? h.db.poolInUse : "—";
+    // Pool max (stable) so this matches the Overview KPI; live in-use is in the row below.
     const size = h.db && h.db.poolSize != null ? h.db.poolSize : "—";
-    dbPoolEl.textContent = `${inUse} / ${size}`;
+    dbPoolEl.textContent = String(size);
   }
 
   const usersTotalEl = document.getElementById("h-users-total");
@@ -559,14 +553,21 @@ async function loadOverviewCollection() {
     const data = await adminFetch("/admin/api/collection");
     renderCollection(data);
     ovSet("ov-total", data.totalSpots != null ? data.totalSpots.toLocaleString("ko-KR") : "—");
+    const embedded = data.embeddedSpots != null ? data.embeddedSpots : null;
+    ovSet("ov-embed", embedded != null ? embedded.toLocaleString("ko-KR") : "—");
+    if (embedded != null && data.totalSpots) {
+      const pct = Math.round((embedded / data.totalSpots) * 100);
+      ovSet("ov-embed-pct", `커버리지 ${pct}% · 총 ${data.totalSpots.toLocaleString("ko-KR")}`);
+    } else {
+      ovSet("ov-embed-pct", "커버리지 —");
+    }
     const run = data.source && data.source.lastRun;
     const status = run ? run.status : null;
     const label = status === "success" ? "성공" : status === "error" ? "실패" : status === "running" ? "실행 중" : "—";
     ovSet("ov-laststatus", label);
     const lsEl = document.getElementById("ov-laststatus");
-    if (lsEl)
-      lsEl.style.color =
-        status === "success" ? "var(--ok)" : status === "error" ? "var(--bad)" : status === "running" ? "var(--warn)" : "";
+    // Normal state stays ink; only problems get colour.
+    if (lsEl) lsEl.style.color = status === "error" ? "var(--bad)" : status === "running" ? "var(--warn)" : "";
     if (run) {
       const ts = run.finishedAt || run.ranAt;
       ovSet("ov-lastrun-meta", `${fmtDuration(run.durationSec)} · ${ts ? relativeTime(ts) : ""}`.trim());
@@ -580,49 +581,20 @@ async function loadOverviewCollection() {
 }
 
 async function loadOverviewHealth() {
+  // Overview only needs the DB-pool + users KPIs; full health lives on /admin/health.
   try {
     const h = await adminFetch("/admin/api/health");
-    if (h.db) {
-      const inUse = h.db.poolInUse != null ? h.db.poolInUse : "—";
-      const size = h.db.poolSize != null ? h.db.poolSize : "—";
-      ovHtml("ov-dbpool", `${inUse}<small> / ${size}</small>`);
-    }
+    if (h.db) ovSet("ov-dbpool", h.db.poolSize != null ? String(h.db.poolSize) : "—");
     if (h.users) {
       ovSet("ov-users", h.users.total != null ? h.users.total.toLocaleString("ko-KR") : "—");
-      ovHtml("ov-users-new", h.users.new7d != null ? `<b>+${h.users.new7d.toLocaleString("ko-KR")}</b> 신규 7일` : "—");
+      ovHtml(
+        "ov-users-new",
+        h.users.new7d != null ? `<b>+${h.users.new7d.toLocaleString("ko-KR")}</b> 신규 7일` : "—",
+      );
     }
-    const ver = h.api && h.api.version ? h.api.version : "—";
-    ovSet("ov-h-api-detail", `${ver} · uptime ${fmtUptime(h.api && h.api.uptimeSec)}`);
-    ovHtml("ov-h-api-reading", `<span class="chip ok">200 OK</span>`);
-
-    const dbOk = h.db && h.db.ok;
-    const spots = h.db && h.db.spots != null ? h.db.spots.toLocaleString("ko-KR") : "—";
-    const inUse = h.db && h.db.poolInUse != null ? h.db.poolInUse : "—";
-    const size = h.db && h.db.poolSize != null ? h.db.poolSize : "—";
-    ovSet("ov-h-db-detail", `CT110 · pool ${inUse}/${size} · ${spots} spots`);
-    ovHtml("ov-h-db-reading", dbOk ? `<span class="chip ok">connected</span>` : `<span class="chip bad">error</span>`);
-    ovHtml("ov-h-db-svc", `<span class="dot ${dbOk ? "ok" : "bad"}"></span> PostgreSQL`);
-
-    const tunnel = h.tunnel;
-    ovSet("ov-h-tunnel-detail", tunnel && tunnel.detail ? tunnel.detail : "미구현 (차기)");
-    if (tunnel == null || tunnel.ok == null) {
-      ovHtml("ov-h-tunnel-reading", `<span class="chip idle">—</span>`);
-      ovHtml("ov-h-tunnel-svc", `<span class="dot warn"></span> Cloudflare 터널`);
-    } else {
-      ovHtml("ov-h-tunnel-reading", tunnel.ok ? `<span class="chip ok">ok</span>` : `<span class="chip bad">error</span>`);
-      ovHtml("ov-h-tunnel-svc", `<span class="dot ${tunnel.ok ? "ok" : "bad"}"></span> Cloudflare 터널`);
-    }
-
-    if (h.users) {
-      const total = h.users.total != null ? h.users.total.toLocaleString("ko-KR") : "—";
-      const del30d = h.users.deleted30d != null ? h.users.deleted30d.toLocaleString("ko-KR") : "—";
-      const active = h.users.active != null ? h.users.active.toLocaleString("ko-KR") : "—";
-      ovSet("ov-h-users-detail", `${total} 가입 · ${del30d} 탈퇴(30d)`);
-      ovSet("ov-h-users-reading", `${active} 활성`);
-    }
-  } catch (err) {
-    ovHtml("ov-h-api-reading", `<span class="chip bad">probe 실패</span>`);
-    ovSet("ov-h-api-detail", err.message);
+  } catch (_err) {
+    ovSet("ov-dbpool", "—");
+    ovSet("ov-users", "—");
   }
 }
 
@@ -636,15 +608,14 @@ async function loadOverviewHistory() {
       el.innerHTML = `<div class="col" style="justify-content:center"><span style="color:var(--ink-3);font-size:12px">기록 없음</span></div>`;
       return;
     }
-    const maxRuns = Math.max(1, ...days.map((d) => d.runs || 0));
     const today = new Date().toISOString().slice(0, 10);
     el.innerHTML = days
       .map((d) => {
         const fail = d.error > 0;
-        const pct = Math.round(30 + ((d.runs || 0) / maxRuns) * 70);
         const md = escapeHtml(d.date.slice(5));
         const cls = `col${fail ? " fail" : ""}${d.date === today ? " today" : ""}`;
-        return `<div class="${cls}" title="${escapeHtml(d.date)} · 성공 ${d.success} / 실패 ${d.error}"><div class="stack" style="height:${pct}%"><div class="seg ins" style="height:100%"></div></div><div class="xlabel">${md}</div></div>`;
+        const cval = fail ? `${d.error}✕` : d.success > 0 ? "✓" : "";
+        return `<div class="${cls}" title="${escapeHtml(d.date)} · 성공 ${d.success} / 실패 ${d.error}"><div class="cval">${cval}</div><div class="stack" style="height:100%"><div class="seg ins" style="height:100%"></div></div><div class="xlabel">${md}</div></div>`;
       })
       .join("");
   } catch (err) {
@@ -677,12 +648,11 @@ async function loadOverviewCuration() {
   }
 }
 
-// Overview aggregates 4 read-only endpoints; each section fails independently.
+// Overview aggregates read-only endpoints; each section fails independently.
 function loadOverview() {
   loadOverviewCollection();
   loadOverviewHealth();
   loadOverviewHistory();
-  loadOverviewCuration();
 }
 
 let _refreshInterval = null;

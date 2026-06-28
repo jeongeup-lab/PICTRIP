@@ -32,6 +32,7 @@ class CollectionSource(BaseModel):
 
 class CollectionStatus(BaseModel):
     totalSpots: int
+    embeddedSpots: int
     source: CollectionSource
     nextScheduledAt: datetime | None
 
