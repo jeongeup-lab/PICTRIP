@@ -5,6 +5,12 @@
     "owner": "seeeeeeong",
     "scheme": "pictrip",
     "version": "0.4.1",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/b4beab09-95ca-45e7-8726-4b3dbcb520fa"
+    },
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
