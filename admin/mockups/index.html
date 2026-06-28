@@ -12,8 +12,8 @@
 
   <aside class="sidebar">
     <div class="sb-brand">
-      <div class="logo">P</div>
-      <div class="name">PicTrip<small>admin · 관광지 수집</small></div>
+      <div class="logo"><img src="/admin/assets/logo.png" alt="PicTrip" /></div>
+      <div class="name">PicTrip</div>
     </div>
     <div class="sb-group">운영</div>
     <a class="nav-item active" href="/admin">
@@ -41,7 +41,7 @@
 
   <div class="main">
     <div class="topbar">
-      <div class="crumb"><b>운영 개요</b></div>
+      <div class="crumb"><b>Overview</b></div>
       <div class="spacer"></div>
       <div class="env-pill"><span class="dot ok"></span> <b>prod</b> · api.pictrip.org</div>
       <div class="clock" id="clock">--:--:--</div>
@@ -49,28 +49,30 @@
 
     <div class="content">
       <div class="page-head">
-        <div class="eyebrow">OPS / OVERVIEW</div>
-        <h1>운영 개요</h1>
-        <p>KTO 관광지 수집과 서비스 상태를 한눈에 봅니다.</p>
+        <h1>Overview</h1>
       </div>
 
-      <div class="grid cols-4" style="margin-bottom:30px">
+      <div class="grid cols-4" style="margin-bottom:18px">
         <div class="kpi">
+          <div class="ic"><svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.9"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/></svg></div>
           <div class="label">총 관광지</div>
           <div class="val" id="ov-total">—</div>
           <div class="delta" id="ov-total-delta">spots</div>
         </div>
-        <div class="kpi hl">
-          <div class="label"><span class="dot" style="background:#fff"></span> 최근 수집</div>
+        <div class="kpi">
+          <div class="ic g"><svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg></div>
+          <div class="label">최근 수집</div>
           <div class="val" id="ov-laststatus">—</div>
           <div class="delta" id="ov-lastrun-meta">—</div>
         </div>
         <div class="kpi">
-          <div class="label"><span class="dot ok"></span> DB 풀</div>
+          <div class="ic b"><svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.9"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/></svg></div>
+          <div class="label">DB 풀</div>
           <div class="val" id="ov-dbpool">—</div>
           <div class="delta">CT110 · PostgreSQL</div>
         </div>
         <div class="kpi">
+          <div class="ic a"><svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.9"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0 1 14 0v1"/></svg></div>
           <div class="label">가입 사용자</div>
           <div class="val" id="ov-users">—</div>
           <div class="delta" id="ov-users-new">—</div>

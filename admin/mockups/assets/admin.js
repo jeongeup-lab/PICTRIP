@@ -563,6 +563,10 @@ async function loadOverviewCollection() {
     const status = run ? run.status : null;
     const label = status === "success" ? "성공" : status === "error" ? "실패" : status === "running" ? "실행 중" : "—";
     ovSet("ov-laststatus", label);
+    const lsEl = document.getElementById("ov-laststatus");
+    if (lsEl)
+      lsEl.style.color =
+        status === "success" ? "var(--ok)" : status === "error" ? "var(--bad)" : status === "running" ? "var(--warn)" : "";
     if (run) {
       const ts = run.finishedAt || run.ranAt;
       ovSet("ov-lastrun-meta", `${fmtDuration(run.durationSec)} · ${ts ? relativeTime(ts) : ""}`.trim());
