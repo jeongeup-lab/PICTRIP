@@ -15,7 +15,8 @@
       "env": {
         "EXPO_PUBLIC_API_BASE": "https://api.pictrip.org/v1",
         "EXPO_PUBLIC_KAKAO_JS_KEY": "415220ee8c806e742408cdeef1fbedc9",
-        "EXPO_PUBLIC_KAKAO_REST_KEY": "57e80b3ccf5de8a00374bd74c993cffd"
+        "EXPO_PUBLIC_KAKAO_REST_KEY": "57e80b3ccf5de8a00374bd74c993cffd",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "274163570035-bshtgdoqc3t5f4s0hovdd90um564n4cl.apps.googleusercontent.com"
       }
     },
     "production": {
@@ -25,7 +26,8 @@
       "env": {
         "EXPO_PUBLIC_API_BASE": "https://api.pictrip.org/v1",
         "EXPO_PUBLIC_KAKAO_JS_KEY": "415220ee8c806e742408cdeef1fbedc9",
-        "EXPO_PUBLIC_KAKAO_REST_KEY": "57e80b3ccf5de8a00374bd74c993cffd"
+        "EXPO_PUBLIC_KAKAO_REST_KEY": "57e80b3ccf5de8a00374bd74c993cffd",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "274163570035-bshtgdoqc3t5f4s0hovdd90um564n4cl.apps.googleusercontent.com"
       }
     }
   },

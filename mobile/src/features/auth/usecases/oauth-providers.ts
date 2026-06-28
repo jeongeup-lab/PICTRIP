@@ -116,13 +116,19 @@ interface OidcConfig {
   issuer: string;
   clientId: string;
   scopes: string[];
+  /** Custom URL scheme the provider redirects back to. Google iOS clients
+   *  require the reversed-client-id scheme, not the app's pictrip:// scheme. */
+  redirectScheme: string;
 }
 
 async function webOidcLogin(cfg: OidcConfig): Promise<OAuthOutcome> {
   if (!cfg.clientId) return providerError();
   const nonce = Crypto.randomUUID();
   const discovery = await AuthSession.fetchDiscoveryAsync(cfg.issuer);
-  const redirectUri = AuthSession.makeRedirectUri({ scheme: "pictrip", path: REDIRECT_PATH });
+  const redirectUri = AuthSession.makeRedirectUri({
+    scheme: cfg.redirectScheme,
+    path: REDIRECT_PATH,
+  });
   const request = new AuthSession.AuthRequest({
     clientId: cfg.clientId,
     scopes: cfg.scopes,
@@ -150,10 +156,16 @@ async function webOidcLogin(cfg: OidcConfig): Promise<OAuthOutcome> {
 export async function getIdToken(provider: Provider): Promise<OAuthOutcome> {
   if (provider === "apple") return appleLogin();
   if (provider === "google") {
+    const clientId = OAUTH.google.clientId;
+    // Google native OAuth clients redirect to the reversed-client-id scheme
+    // (e.g. com.googleusercontent.apps.123-abc://oauthredirect), not pictrip://.
+    const redirectScheme =
+      "com.googleusercontent.apps." + clientId.replace(/\.apps\.googleusercontent\.com$/, "");
     return webOidcLogin({
       issuer: "https://accounts.google.com",
-      clientId: OAUTH.google.clientId,
+      clientId,
       scopes: ["openid", "profile", "email"],
+      redirectScheme,
     });
   }
   return kakaoLogin();
