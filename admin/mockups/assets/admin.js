@@ -307,6 +307,10 @@ function renderEmbedding(d) {
   ovSet("emb-coverage", `${pct}%`);
   ovSet("emb-coverage-sub", `${fmt(d.embedded)} / ${fmt(d.withImage)} 이미지보유`);
 
+  // Own the top 임베딩 KPI tile too (single coverage number across the page).
+  ovSet("ov-embed", fmt(d.embedded));
+  ovSet("ov-embed-pct", `커버리지 ${pct}% · 이미지보유 ${fmt(d.withImage)}`);
+
   const statusEl = document.getElementById("emb-status-icon");
   if (statusEl) {
     if (d.running) {
@@ -694,14 +698,8 @@ async function loadOverviewCollection() {
     const data = await adminFetch("/admin/api/collection");
     renderCollection(data);
     ovSet("ov-total", data.totalSpots != null ? data.totalSpots.toLocaleString("ko-KR") : "—");
-    const embedded = data.embeddedSpots != null ? data.embeddedSpots : null;
-    ovSet("ov-embed", embedded != null ? embedded.toLocaleString("ko-KR") : "—");
-    if (embedded != null && data.totalSpots) {
-      const pct = Math.round((embedded / data.totalSpots) * 100);
-      ovSet("ov-embed-pct", `커버리지 ${pct}% · 총 ${data.totalSpots.toLocaleString("ko-KR")}`);
-    } else {
-      ovSet("ov-embed-pct", "커버리지 —");
-    }
+    // ov-embed KPI is owned by loadEmbedding() (image-bearing coverage) so the
+    // tile and the 임베딩 현황 card never show two different coverage numbers.
     const run = data.source && data.source.lastRun;
     const status = run ? run.status : null;
     const label = status === "success" ? "성공" : status === "error" ? "실패" : status === "running" ? "실행 중" : "—";
