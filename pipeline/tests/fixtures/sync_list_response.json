@@ -1,0 +1,34 @@
+{
+  "response": {
+    "header": { "resultCode": "0000", "resultMsg": "OK" },
+    "body": {
+      "items": { "item": [
+        {
+          "addr1": "충청북도 단양군 단양읍 상진리", "addr2": "122-1", "areacode": "33",
+          "cat1": "A02", "cat2": "A0208", "cat3": "A02081200",
+          "contentid": "2865520", "contenttypeid": "15", "createdtime": "20221011175314",
+          "firstimage": "http://tong.visitkorea.or.kr/cms/resource/60/3501060_image2_1.jpeg",
+          "firstimage2": "http://tong.visitkorea.or.kr/cms/resource/60/3501060_image3_1.jpeg",
+          "cpyrhtDivCd": "Type3", "mapx": "128.3514221857", "mapy": "36.9799499876",
+          "mlevel": "6", "modifiedtime": "20260627043000", "sigungucode": "2",
+          "tel": "043-421-7330", "title": "2025 단양레이크파크 수상페스티벌", "zipcode": "27027",
+          "showflag": "0", "lDongRegnCd": "43", "lDongSignguCd": "800",
+          "lclsSystm1": "EV", "lclsSystm2": "EV03", "lclsSystm3": "EV030300"
+        },
+        {
+          "addr1": "서울특별시 종로구 세종대로 175 (세종로)", "addr2": "", "areacode": "",
+          "cat1": "", "cat2": "", "cat3": "",
+          "contentid": "3509884", "contenttypeid": "15", "createdtime": "20250718170529",
+          "firstimage": "https://tong.visitkorea.or.kr/cms/resource/04/4079504_image2_1.png",
+          "firstimage2": "https://tong.visitkorea.or.kr/cms/resource/04/4079504_image3_1.png",
+          "cpyrhtDivCd": "Type3", "mapx": "126.9761682759", "mapy": "37.5718478585",
+          "mlevel": "6", "modifiedtime": "20260626183808", "sigungucode": "",
+          "tel": "02-6941-0645", "title": "서울썸머비치", "zipcode": "03172",
+          "showflag": "1", "lDongRegnCd": "11", "lDongSignguCd": "110",
+          "lclsSystm1": "EV", "lclsSystm2": "EV01", "lclsSystm3": "EV010600"
+        }
+      ] },
+      "numOfRows": 2, "pageNo": 1, "totalCount": 68433
+    }
+  }
+}
