@@ -10,6 +10,9 @@ from pictrip_data.config import settings
 
 @contextmanager
 def connect() -> Iterator[psycopg.Connection]:
-    """Yield a short-lived connection to the shared prod DB (CT110)."""
-    with psycopg.connect(settings.database_url) as conn:
+    """One psycopg connection, autocommit off (caller commits per page)."""
+    conn = psycopg.connect(settings.database_url, autocommit=False)
+    try:
         yield conn
+    finally:
+        conn.close()

@@ -10,6 +10,7 @@ dependencies = [
     "pydantic-settings",
     "structlog",
     "streamlit",
+    "tenacity",
 ]
 
 [dependency-groups]
