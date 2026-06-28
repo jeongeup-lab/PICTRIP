@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 import { router } from "expo-router";
 import { SocialButton } from "@/features/auth/components/SocialButton";
@@ -16,7 +16,13 @@ interface Props {
   onEmailPress?: () => void;
 }
 
-const PROVIDERS: Provider[] = ["kakao", "google", "apple"];
+// Sign in with Apple is iOS-only — expo-apple-authentication rejects on Android,
+// so don't surface a button that can only fail there.
+const PROVIDERS: Provider[] = [
+  "kakao",
+  "google",
+  ...(Platform.OS === "ios" ? (["apple"] as Provider[]) : []),
+];
 
 function BrandSymbol() {
   return (

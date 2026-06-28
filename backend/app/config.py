@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, RedisDsn, computed_field
+from pydantic import Field, PostgresDsn, RedisDsn, computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["local", "staging", "production"]
@@ -93,6 +93,23 @@ class Settings(BaseSettings):
     APPLE_BUNDLE_ID: str | None = None
     APPLE_OIDC_ISSUER: str = "https://appleid.apple.com"
     APPLE_JWKS_URL: str = "https://appleid.apple.com/auth/keys"
+
+    @model_validator(mode="after")
+    def _merge_google_client_ids(self) -> Settings:
+        # The OIDC verifier reads GOOGLE_CLIENT_IDS as the accepted id_token `aud`
+        # set. Fold the per-platform client IDs into it so filling
+        # GOOGLE_OAUTH_CLIENT_ID_{IOS,ANDROID,WEB} actually enables Google login
+        # (they were otherwise dead config — never read by the verifier).
+        merged = list(self.GOOGLE_CLIENT_IDS)
+        for cid in (
+            self.GOOGLE_OAUTH_CLIENT_ID_IOS,
+            self.GOOGLE_OAUTH_CLIENT_ID_ANDROID,
+            self.GOOGLE_OAUTH_CLIENT_ID_WEB,
+        ):
+            if cid and cid not in merged:
+                merged.append(cid)
+        self.GOOGLE_CLIENT_IDS = merged
+        return self
 
     # --- Refresh rotation ---
     AUTH_REFRESH_GRACE_SECONDS: int = 5
