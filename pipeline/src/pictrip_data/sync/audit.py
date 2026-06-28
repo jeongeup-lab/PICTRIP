@@ -8,8 +8,10 @@ the backend admin module — renaming breaks both sides.
 
 from __future__ import annotations
 
-from contextlib import contextmanager
+import time
 from collections.abc import Iterator
+from contextlib import contextmanager
+from datetime import datetime
 
 import psycopg
 
@@ -41,19 +43,69 @@ def ensure_table(conn: psycopg.Connection) -> None:
 
 
 @contextmanager
-def record_run(conn: psycopg.Connection, mode: str) -> Iterator[dict[str, int]]:
+def record_run(conn: psycopg.Connection, mode: str) -> Iterator[dict]:
     """Open a sync_runs row, yield a mutable counter dict, finalize on exit.
 
-    TODO: insert a 'running' row, yield counters, then UPDATE with terminal
-    status/finished_at/duration on success, or status='error' + message on raise.
+    INSERTs a 'running' row and commits it immediately so the audit row exists
+    independently of the run's data work. On clean exit UPDATEs the same row to
+    status='success' with finished_at/duration/watermark/counters; on exception
+    rolls back the data work, UPDATEs to status='error' with the message, and
+    re-raises.
     """
     ensure_table(conn)
-    counters = {
+    counters: dict = {
         "api_calls": 0,
         "fetched": 0,
         "inserted": 0,
         "updated": 0,
         "soft_deleted": 0,
         "skipped": 0,
+        "watermark_from": None,
+        "watermark_to": None,
     }
-    yield counters
+    cur = conn.cursor()
+    cur.execute("INSERT INTO sync_runs (status, mode) VALUES ('running', %s) RETURNING id", (mode,))
+    run_id = cur.fetchone()[0]
+    conn.commit()
+    start = time.monotonic()
+    try:
+        yield counters
+    except Exception as exc:
+        conn.rollback()
+        cur.execute(
+            "UPDATE sync_runs SET status='error', finished_at=now(), "
+            "duration_sec=%s, error=%s WHERE id=%s",
+            (time.monotonic() - start, str(exc)[:2000], run_id),
+        )
+        conn.commit()
+        raise
+    else:
+        cur.execute(
+            "UPDATE sync_runs SET status='success', finished_at=now(), duration_sec=%s, "
+            "watermark_from=%s, watermark_to=%s, api_calls=%s, fetched=%s, inserted=%s, "
+            "updated=%s, soft_deleted=%s, skipped=%s WHERE id=%s",
+            (
+                time.monotonic() - start,
+                counters["watermark_from"],
+                counters["watermark_to"],
+                counters["api_calls"],
+                counters["fetched"],
+                counters["inserted"],
+                counters["updated"],
+                counters["soft_deleted"],
+                counters["skipped"],
+                run_id,
+            ),
+        )
+        conn.commit()
+
+
+def last_success_watermark(conn: psycopg.Connection) -> datetime | None:
+    """Return the newest watermark_to among status='success' runs, else None."""
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT watermark_to FROM sync_runs WHERE status='success' AND watermark_to IS NOT NULL "
+        "ORDER BY watermark_to DESC LIMIT 1"
+    )
+    row = cur.fetchone()
+    return row[0] if row else None
