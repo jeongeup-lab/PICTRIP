@@ -43,6 +43,34 @@ class KtoClient:
         retry=retry_if_exception(_is_transient),
         reraise=True,
     )
+    def call(self, operation: str, **params: Any) -> list[dict[str, Any]]:
+        """Generic GET against a KorService2 operation. Sends the baseline auth
+        params + `_type=json` + the given params, unwraps `response.body.items.item`
+        (single dict or list; empty -> []). Same transient-only retry as the sync
+        list. Used by master-code loaders (ldongCode2, lclsSystmCode2)."""
+        merged: dict[str, Any] = {
+            "serviceKey": settings.kto_api_key,
+            "MobileOS": "ETC",
+            "MobileApp": settings.kto_mobile_app,
+            "_type": "json",
+            **params,
+        }
+        url = f"{settings.kto_base_url_kor}/{operation}"
+        resp = self._client.get(url, params=merged)
+        resp.raise_for_status()
+        body = resp.json().get("response", {}).get("body", {})
+        items = body.get("items")
+        if not items:
+            return []
+        item = items.get("item", [])
+        return item if isinstance(item, list) else [item]
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=8),
+        retry=retry_if_exception(_is_transient),
+        reraise=True,
+    )
     def area_based_sync_list(
         self, *, page: int, rows: int = 100, modifiedtime: str | None = None
     ) -> tuple[list[dict[str, Any]], int]:
