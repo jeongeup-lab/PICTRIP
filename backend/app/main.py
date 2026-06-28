@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sentry_sdk.integrations.fastapi import FastApiIntegration
+from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.config import settings
@@ -82,6 +83,15 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(TraceIdMiddleware)
     app.add_middleware(CacheControlMiddleware, prefix=settings.API_V1_PREFIX)
+    # Signed-cookie session for the /admin console login (replaces HTTP Basic).
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=settings.ADMIN_SESSION_SECRET,
+        session_cookie="pt_admin",
+        max_age=settings.ADMIN_SESSION_TTL_SECONDS,
+        same_site="lax",
+        https_only=settings.ENVIRONMENT == "production",
+    )
 
     register_error_handlers(app)
 

@@ -147,9 +147,8 @@ class AdminUnauthorized(AppError):
     code = "ADMIN_UNAUTHORIZED"
     http_status = 401
     message = "관리자 인증이 필요합니다."
-    # CF-exposed surface: a 401 must carry the Basic challenge so a browser
-    # prompts for credentials (A01 §1.3).
-    headers: ClassVar[dict[str, str] | None] = {"WWW-Authenticate": "Basic"}
+    # No WWW-Authenticate: the console uses a login page + signed-cookie session,
+    # not HTTP Basic, so the browser must not pop its native auth dialog.
 
 
 class AdminLocked(AppError):

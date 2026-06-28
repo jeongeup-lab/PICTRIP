@@ -38,6 +38,7 @@ dependencies = [
     "structlog>=24.4.0",
     "sentry-sdk[fastapi]>=2.16.0",
     "pyjwt[crypto]>=2.13.0",
+    "itsdangerous>=2.2.0",
 ]
 
 [dependency-groups]
