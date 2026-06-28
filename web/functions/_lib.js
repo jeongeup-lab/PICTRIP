@@ -83,7 +83,6 @@ ${bodyHtml}
     <a href="${PLAY_STORE}">Google Play에서 받기</a>
   </div>
   <footer>
-    관광정보·이미지 출처: 한국관광공사 (공공누리 제1·3유형) ·
     <a href="https://pictrip.org/legal/data-sources">데이터 출처 고지</a>
   </footer>
 </body>
