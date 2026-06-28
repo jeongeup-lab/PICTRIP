@@ -126,6 +126,26 @@ async def test_fresh_cache_skips_kto(db_session: AsyncSession, redis: FakeRedis)
 
 
 @pytest.mark.asyncio
+async def test_modified_time_supersedes_fresh_cache(
+    db_session: AsyncSession, redis: FakeRedis
+) -> None:
+    """A detail within TTL is still refetched when spots.modified_time is newer
+    than cached_at (pipeline signalled a KTO content change) (#37)."""
+    await _insert_spot(db_session, "DT-MODIFIED")
+    await _insert_detail(db_session, "DT-MODIFIED", overview="old", age_days=1)
+    await db_session.execute(
+        text("UPDATE spots SET modified_time = now() WHERE content_id = 'DT-MODIFIED'")
+    )
+    kto = FakeKto(_COMMON, _IMAGES)
+
+    row = await load_spot_detail(db_session, kto, redis, "DT-MODIFIED")
+
+    assert kto.calls == 3  # cache busted: refetched despite being within TTL
+    assert row.detail_status == "fresh"
+    assert row.overview == "한라산 정상 풍경"
+
+
+@pytest.mark.asyncio
 async def test_cache_miss_fetches_then_caches(db_session: AsyncSession, redis: FakeRedis) -> None:
     await _insert_spot(db_session, "DT-MISS")
     kto = FakeKto(_COMMON, _IMAGES)

@@ -12,29 +12,33 @@
   <aside class="sidebar">
     <div class="sb-brand">
       <div class="logo">P</div>
-      <div class="name">PicTrip<small>관광지 수집 관리</small></div>
+      <div class="name">PicTrip<small>admin · 관광지 수집</small></div>
     </div>
-    <div class="sb-group">spots 일일 수집</div>
+    <div class="sb-group">운영</div>
     <a class="nav-item" href="/admin">
       <svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
-      수집 현황
+      개요
     </a>
     <a class="nav-item active" href="/admin/history">
       <svg class="ico" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="3.5" cy="6" r="1.2"/><circle cx="3.5" cy="12" r="1.2"/><circle cx="3.5" cy="18" r="1.2"/></svg>
       수집 이력
       <span class="badge" id="sb-history-badge" style="display:none"></span>
     </a>
-    <div class="sb-group">서비스</div>
     <a class="nav-item" href="/admin/health">
       <svg class="ico" viewBox="0 0 24 24"><path d="M3 12h4l2 7 4-14 2 7h6"/></svg>
       서비스 헬스
     </a>
-    <div class="sb-foot"><span class="dot live"></span> admin · 로그인됨</div>
+    <div class="sb-group">콘텐츠</div>
+    <a class="nav-item" href="/admin/curation">
+      <svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="1.5"/><path d="M3 9h18M9 21V9"/></svg>
+      홈 큐레이션
+    </a>
+    <div class="sb-foot"><span class="dot live"></span> api.pictrip.org · live</div>
   </aside>
 
   <div class="main">
     <div class="topbar">
-      <div class="crumb"><a href="/admin">수집 현황</a> <span class="sep">/</span> <b>수집 이력</b></div>
+      <div class="crumb"><a href="/admin">개요</a> <span class="sep">/</span> <b>수집 이력</b></div>
       <div class="spacer"></div>
       <div class="env-pill"><span class="dot ok"></span> sync_runs</div>
       <div class="clock" id="clock">--:--:--</div>
@@ -46,19 +50,16 @@
         <p>날짜별 수집 성공·실패 건수입니다. 행을 클릭하면 해당 일자의 상세 로그를 볼 수 있습니다.</p>
       </div>
 
-      <!-- loading state -->
       <div id="history-loading" class="card" style="padding:32px;text-align:center">
         <span style="color:var(--ink-3);font-size:13px">불러오는 중…</span>
       </div>
 
-      <!-- error state (hidden) -->
       <div id="history-error" style="display:none;background:var(--bad-soft);border:1px solid #f0b9bd;border-radius:14px;padding:24px 28px">
         <p style="margin:0 0 12px;color:var(--bad);font-weight:600">데이터를 불러오지 못했습니다.</p>
         <p id="history-error-msg" style="margin:0 0 16px;font-size:13px;color:var(--ink-2)"></p>
         <button class="btn ghost sm" onclick="loadHistory()">다시 시도</button>
       </div>
 
-      <!-- data (hidden until loaded) -->
       <div id="history-data" style="display:none">
         <div class="card">
           <div class="card-h"><h2>날짜별 수집</h2><span class="sub">최근 7일</span></div>
@@ -69,7 +70,6 @@
 
     </div>
 
-    <!-- log modal -->
     <div class="modal-bg" id="logmodal">
       <div class="modal">
         <div class="mh">
@@ -77,14 +77,11 @@
           <span class="x">&times;</span>
         </div>
         <div class="mb">
-          <!-- loading in modal -->
           <div id="modal-loading" style="padding:24px;text-align:center;color:var(--ink-3);font-size:13px">불러오는 중…</div>
-          <!-- error in modal (hidden) -->
           <div id="modal-error" style="display:none;padding:24px">
             <p style="margin:0 0 8px;color:var(--bad);font-weight:600">상세 로그를 불러오지 못했습니다.</p>
             <p id="modal-error-msg" style="margin:0;font-size:13px;color:var(--ink-2)"></p>
           </div>
-          <!-- detail content (hidden until loaded) -->
           <div id="modal-content" style="display:none">
             <pre class="log" id="modal-log"></pre>
           </div>
