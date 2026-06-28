@@ -109,3 +109,11 @@ async def test_no_admin_row_rejects_login(client: AsyncClient, db_session: Async
     resp = await _login(client)
     assert resp.status_code == 303
     assert resp.headers["location"].endswith("/admin/login?error=1")
+
+
+@pytest.mark.asyncio
+async def test_admin_assets_are_not_cached(client: AsyncClient) -> None:
+    """Edge/browser must not cache admin CSS/JS, so a deploy needs no CF purge."""
+    resp = await client.get("/admin/assets/admin.css")
+    assert resp.status_code == 200
+    assert resp.headers["cache-control"] == "no-store"
