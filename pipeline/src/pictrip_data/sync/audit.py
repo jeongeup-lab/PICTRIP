@@ -11,7 +11,6 @@ from __future__ import annotations
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime
 
 import psycopg
 
@@ -21,16 +20,18 @@ CREATE TABLE IF NOT EXISTS sync_runs (
     started_at    timestamptz NOT NULL DEFAULT now(),
     finished_at   timestamptz,
     status        text NOT NULL DEFAULT 'running',   -- running | success | error
-    mode          text,
-    watermark_from timestamptz,
-    watermark_to  timestamptz,
+    mode          text NOT NULL DEFAULT 'incremental',
+    -- watermark is the raw KTO modifiedtime text 'YYYYMMDDHHMMSS' (matches the
+    -- pre-existing prod schema; do NOT use timestamptz — the API contract is text).
+    watermark_from text,
+    watermark_to  text,
     api_calls     int  NOT NULL DEFAULT 0,
     fetched       int  NOT NULL DEFAULT 0,
     inserted      int  NOT NULL DEFAULT 0,
     updated       int  NOT NULL DEFAULT 0,
     soft_deleted  int  NOT NULL DEFAULT 0,
     skipped       int  NOT NULL DEFAULT 0,
-    duration_sec  double precision,
+    duration_sec  numeric,
     error         text
 );
 CREATE INDEX IF NOT EXISTS idx_sync_runs_recent ON sync_runs (id DESC);
@@ -100,8 +101,10 @@ def record_run(conn: psycopg.Connection, mode: str) -> Iterator[dict]:
         conn.commit()
 
 
-def last_success_watermark(conn: psycopg.Connection) -> datetime | None:
-    """Return the newest watermark_to among status='success' runs, else None."""
+def last_success_watermark(conn: psycopg.Connection) -> str | None:
+    """Return the newest watermark_to (raw KTO text 'YYYYMMDDHHMMSS') among
+    status='success' runs, else None. Lexical DESC == chronological for this
+    fixed-width format."""
     cur = conn.cursor()
     cur.execute(
         "SELECT watermark_to FROM sync_runs WHERE status='success' AND watermark_to IS NOT NULL "
