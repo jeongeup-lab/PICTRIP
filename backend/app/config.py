@@ -160,6 +160,8 @@ class Settings(BaseSettings):
 
     # --- Observability ---
     SENTRY_DSN: str = ""
+    # Daily pipeline report card (scripts.notify_daily). Empty = no-op.
+    DISCORD_WEBHOOK_URL: str = ""
     SENTRY_TRACES_SAMPLE_RATE: float = 0.1
     SENTRY_PROFILES_SAMPLE_RATE: float = 0.05
 
