@@ -1,13 +1,8 @@
 """Tests for the sync_runs audit table (DDL + run lifecycle)."""
 
-from datetime import datetime
-from zoneinfo import ZoneInfo
-
 import pytest
 
 from pictrip_data.sync.audit import ensure_table, last_success_watermark, record_run
-
-KST = ZoneInfo("Asia/Seoul")
 
 
 def _latest(conn):
@@ -44,7 +39,8 @@ def test_last_success_watermark_none_when_empty(db_conn):
 
 def test_last_success_watermark_round_trip(db_conn):
     ensure_table(db_conn)
-    wm = datetime(2026, 6, 27, 4, 30, tzinfo=KST)
+    # Watermark is the raw KTO modifiedtime text 'YYYYMMDDHHMMSS'.
+    wm = "20260627043000"
     with record_run(db_conn, "daily") as c:
         c["watermark_to"] = wm
     assert last_success_watermark(db_conn) == wm

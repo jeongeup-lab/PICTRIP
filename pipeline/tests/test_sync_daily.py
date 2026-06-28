@@ -1,7 +1,5 @@
 import json
-from datetime import datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 from pictrip_data.sync.audit import ensure_table
 from pictrip_data.sync.daily import sync_daily, watermark_param
@@ -20,11 +18,11 @@ class FakeClient:
         return self.pages.get(page, ([], 2))
 
 
-def test_watermark_param_formats_date():
-    assert (
-        watermark_param(datetime(2026, 6, 27, 4, 30, tzinfo=ZoneInfo("Asia/Seoul"))) == "20260627"
-    )
+def test_watermark_param_slices_date():
+    # Watermark stored as raw KTO text 'YYYYMMDDHHMMSS'; the filter wants 'YYYYMMDD'.
+    assert watermark_param("20260627043000") == "20260627"
     assert watermark_param(None) is None
+    assert watermark_param("") is None
 
 
 def test_sync_daily_pages_until_empty_and_records(seed_refs):

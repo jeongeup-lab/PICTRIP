@@ -10,8 +10,11 @@ from pictrip_data.sync.refcodes import load_ref_codes
 from pictrip_data.sync.upsert import upsert_spots
 
 
-def watermark_param(wm: datetime | None) -> str | None:
-    return wm.strftime("%Y%m%d") if wm is not None else None
+def watermark_param(wm: str | None) -> str | None:
+    """Stored watermark is the raw KTO modifiedtime text 'YYYYMMDDHHMMSS'
+    (matches the prod sync_runs.watermark_to TEXT column). The areaBasedSyncList2
+    modifiedtime filter takes a date 'YYYYMMDD', so slice the first 8 chars."""
+    return wm[:8] if wm else None
 
 
 def _run(
@@ -19,7 +22,7 @@ def _run(
     modifiedtime: str | None,
     client: KtoClient,
     conn,
-    watermark_from: datetime | None = None,
+    watermark_from: str | None = None,
 ) -> None:
     refs = load_ref_codes(conn)
     with record_run(conn, mode) as c:
@@ -39,10 +42,13 @@ def _run(
                 if s.modified_time and (max_seen is None or s.modified_time > max_seen):
                     max_seen = s.modified_time
             page += 1
-        c["watermark_to"] = max_seen
+        # Store watermark as raw KTO text 'YYYYMMDDHHMMSS' (prod schema = TEXT).
+        # When nothing changed (max_seen None), keep the prior watermark so it
+        # never regresses to NULL.
+        c["watermark_to"] = max_seen.strftime("%Y%m%d%H%M%S") if max_seen else watermark_from
 
 
-def sync_daily(mode: str = "daily", client: KtoClient | None = None, conn=None) -> None:
+def sync_daily(mode: str = "incremental", client: KtoClient | None = None, conn=None) -> None:
     owns_client = client is None
     owns_conn = conn is None
     client = client or KtoClient()
