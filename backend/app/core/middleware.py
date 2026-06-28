@@ -64,6 +64,9 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
         self._feed = f"{prefix}/home/feed"
         self._regions_tree = f"{prefix}/map/regions-tree"
         self._curations_prefix = f"{prefix}/curations/"
+        # Admin console CSS/JS/logo: never cache at the edge or browser, so a deploy
+        # is visible immediately without a Cloudflare purge (assets are tiny).
+        self._admin_assets = "/admin/assets"
 
     async def dispatch(
         self,
@@ -71,6 +74,11 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
         response = await call_next(request)
+
+        if request.url.path.startswith(self._admin_assets):
+            response.headers["Cache-Control"] = "no-store"
+            return response
+
         if request.method != "GET" or response.status_code != 200:
             return response
 
