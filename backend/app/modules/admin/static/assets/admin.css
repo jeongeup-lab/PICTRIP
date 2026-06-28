@@ -260,11 +260,15 @@ td .strong { color: var(--ink); font-weight: 600; } .miss { color: var(--bad); }
 .login-btn { width: 100%; margin-top: 6px; display: flex; justify-content: center; padding: 12px; }
 .login-error { background: var(--bad-soft); border: 1px solid #f3c2c2; color: var(--bad); border-radius: 11px; padding: 11px 13px; font-size: 13px; margin-bottom: 16px; }
 
+/* Desktop ops console: the left sidebar stays a fixed vertical column at every
+   width. Only the content grids reflow so the 4 nav items never collapse. */
 @media (max-width: 1040px) {
-  .shell { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; }
-  .sb-group, .sb-foot { display: none; }
-  .ov-cols, .cols-2, .cols-3, .cols-4, .cols-5 { grid-template-columns: 1fr; }
-  .srcstats { grid-template-columns: repeat(2, 1fr); }
+  .shell { grid-template-columns: 210px 1fr; }
+  .ov-cols { grid-template-columns: 1fr; }
+  .cols-3, .cols-4, .cols-5 { grid-template-columns: repeat(2, 1fr); }
+  .srcstats { grid-template-columns: repeat(3, 1fr); }
   .span-2 { grid-column: auto; }
+}
+@media (max-width: 680px) {
+  .cols-2, .cols-3, .cols-4, .cols-5, .srcstats { grid-template-columns: 1fr; }
 }
