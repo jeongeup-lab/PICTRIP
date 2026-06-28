@@ -64,6 +64,12 @@ class Settings(BaseSettings):
     JWT_PRIVATE_KEY: str = ""
     JWT_PUBLIC_KEY: str = ""
 
+    # --- Admin console session (signed-cookie login; replaces HTTP Basic) ---
+    # Signs the /admin session cookie. Set a strong value in prod .env; rotating
+    # it invalidates all admin sessions. Cookie is Secure only in production.
+    ADMIN_SESSION_SECRET: str = "dev-insecure-admin-session-secret-change-me"
+    ADMIN_SESSION_TTL_SECONDS: int = 28_800  # 8h
+
     # --- OAuth ---
     # Both Kakao keys are valid id_token `aud`: native SDK uses NATIVE_APP_KEY, web/server uses REST_API_KEY.
     KAKAO_REST_API_KEY: str = ""

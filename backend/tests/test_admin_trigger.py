@@ -22,6 +22,7 @@ from app.config import settings
 from app.core.db import get_db
 from app.main import app
 from app.modules.admin import triggers
+from app.modules.admin.security import require_admin
 
 # DB-backed admin auth: migration 0016 seeds admin/admin into the test DB, so
 # requests authenticate with this fixed credential (no settings monkeypatch).
@@ -90,6 +91,7 @@ async def _insert_run(session: AsyncSession, status: str) -> None:
 
 def _override(db_session: AsyncSession) -> None:
     app.dependency_overrides[get_db] = lambda: db_session
+    app.dependency_overrides[require_admin] = lambda: "admin"
 
 
 # --- auth gate ----------------------------------------------------------------

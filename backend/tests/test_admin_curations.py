@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_db
 from app.core.redis import get_redis
 from app.main import app
+from app.modules.admin.security import require_admin
 
 # DB-backed admin auth: migration 0016 seeds admin/admin into the test DB
 # (alembic upgrade head runs before pytest in CI).
@@ -184,6 +185,7 @@ async def seed(db_session: AsyncSession) -> FakeRedis:
 def _override(db_session: AsyncSession, redis: FakeRedis) -> None:
     app.dependency_overrides[get_db] = lambda: db_session
     app.dependency_overrides[get_redis] = lambda: redis
+    app.dependency_overrides[require_admin] = lambda: "admin"
 
 
 # --- ADM-012: list -----------------------------------------------------------
@@ -549,6 +551,8 @@ async def test_spot_search_excludes_hidden(db_session, client, seed) -> None:
 )
 async def test_auth_required(db_session, client, seed, method, path, body) -> None:
     _override(db_session, seed)
+    # Exercise the real session gate (not the test auth override) for this case.
+    app.dependency_overrides.pop(require_admin, None)
     try:
         r = await client.request(method, path, json=body)
     finally:

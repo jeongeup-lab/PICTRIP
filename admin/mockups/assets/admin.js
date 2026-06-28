@@ -46,6 +46,9 @@ function toast(msg, mono) {
 // JSend fetch: returns the data field, throws on non-2xx or error payload.
 async function adminFetch(path) {
   const res = await fetch(path, { credentials: "same-origin" });
+  if (res.status === 401) {
+    location.href = "/admin/login";
+  }
   if (!res.ok) {
     throw new Error(`HTTP ${res.status} ${res.statusText}`);
   }
@@ -190,6 +193,9 @@ async function loadCollection() {
 async function adminPost(path) {
   const res = await fetch(path, { method: "POST", credentials: "same-origin" });
   const json = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    location.href = "/admin/login";
+  }
   if (!res.ok || (json && json.error)) {
     const msg = (json && json.error && json.error.message) || `HTTP ${res.status} ${res.statusText}`;
     throw new Error(msg);
@@ -557,6 +563,10 @@ async function loadOverviewCollection() {
     const status = run ? run.status : null;
     const label = status === "success" ? "성공" : status === "error" ? "실패" : status === "running" ? "실행 중" : "—";
     ovSet("ov-laststatus", label);
+    const lsEl = document.getElementById("ov-laststatus");
+    if (lsEl)
+      lsEl.style.color =
+        status === "success" ? "var(--ok)" : status === "error" ? "var(--bad)" : status === "running" ? "var(--warn)" : "";
     if (run) {
       const ts = run.finishedAt || run.ranAt;
       ovSet("ov-lastrun-meta", `${fmtDuration(run.durationSec)} · ${ts ? relativeTime(ts) : ""}`.trim());

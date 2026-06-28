@@ -1,36 +1,35 @@
 """admin routes — /admin (HTML) + /admin/api/* (JSON).
 
-Serves the three static mockup pages (수집 현황 · 수집 이력 · 서비스 헬스) and the
-Phase 1 read-only JSON API (A01 §3). Every route is guarded by HTTP Basic auth
+Serves the static console pages (운영 개요 · 수집 이력 · 서비스 헬스 · 홈 큐레이션) and
+the read-only JSON API (A01 §3). Auth is a login page + signed-cookie session:
+HTML pages redirect to /admin/login when logged out; /admin/api/* raises 401
 (``AdminAuth``). Routes do HTTP I/O only — aggregation lives in ``services``.
-The JSON API is ``/admin/api/*`` (outside ``/v1``; A01 §1.2) and wrapped in the
-standard JSend envelope via ``ok()``.
 """
 
 from __future__ import annotations
 
 from datetime import date as date_type
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Query
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Form, Query, Request
+from fastapi.responses import FileResponse, RedirectResponse, Response
 
 from app.core.db import DbSession
 from app.core.redis import RedisDep
 from app.core.schemas import ok
 from app.modules.admin import services
 from app.modules.admin.schemas import CurationUpdate, SpotsUpdate
-from app.modules.admin.security import AdminAuth
+from app.modules.admin.security import SESSION_KEY, AdminAuth, authenticate
 
 _STATIC_DIR = Path(__file__).parent / "static"
 
 router = APIRouter(tags=["ADM · admin console"], include_in_schema=False)
 
 # Security headers for the served admin HTML. The console only loads same-origin
-# CSS/JS; img-src allows https: because the curation/health views may render KTO
-# image URLs, and style-src allows 'unsafe-inline' because the mockups carry
-# inline style attributes. frame-ancestors/X-Frame-Options block clickjacking.
+# CSS/JS; img-src allows https: for KTO image URLs, style-src allows
+# 'unsafe-inline' for the mockups' inline style attributes. frame-ancestors /
+# X-Frame-Options block clickjacking.
 _HTML_SECURITY_HEADERS = {
     "Content-Security-Policy": (
         "default-src 'self'; script-src 'self'; "
@@ -46,29 +45,71 @@ def _page(name: str) -> FileResponse:
     return FileResponse(_STATIC_DIR / name, media_type="text/html", headers=_HTML_SECURITY_HEADERS)
 
 
-# --- Static HTML pages --------------------------------------------------------
+def _logged_in(request: Request) -> bool:
+    return bool(request.session.get(SESSION_KEY))
+
+
+# --- Auth: login page + session ----------------------------------------------
+@router.get("/login")
+async def admin_login_page(request: Request) -> Response:
+    """Public login page; redirect to the console if already signed in."""
+    if _logged_in(request):
+        return RedirectResponse("/admin", status_code=303)
+    return _page("login.html")
+
+
+@router.post("/login")
+async def admin_login_submit(
+    request: Request,
+    db: DbSession,
+    username: Annotated[str, Form()],
+    password: Annotated[str, Form()],
+) -> RedirectResponse:
+    """Verify credentials (bcrypt); on success set the session, else bounce back."""
+    if not await authenticate(db, username, password):
+        return RedirectResponse("/admin/login?error=1", status_code=303)
+    request.session[SESSION_KEY] = username
+    return RedirectResponse("/admin", status_code=303)
+
+
+@router.post("/logout")
+async def admin_logout(request: Request) -> RedirectResponse:
+    """Clear the session and return to the login page."""
+    request.session.clear()
+    return RedirectResponse("/admin/login", status_code=303)
+
+
+# --- Static HTML pages (session-gated; redirect to /admin/login if logged out) -
 @router.get("")
 @router.get("/")
-async def admin_index(_: AdminAuth) -> FileResponse:
-    """수집 현황 (index.html). Served at both /admin and /admin/ (trailing slash)."""
+async def admin_index(request: Request) -> Response:
+    """운영 개요 (index.html). Served at both /admin and /admin/."""
+    if not _logged_in(request):
+        return RedirectResponse("/admin/login", status_code=303)
     return _page("index.html")
 
 
 @router.get("/history")
-async def admin_history(_: AdminAuth) -> FileResponse:
+async def admin_history(request: Request) -> Response:
     """수집 이력 (history.html)."""
+    if not _logged_in(request):
+        return RedirectResponse("/admin/login", status_code=303)
     return _page("history.html")
 
 
 @router.get("/health")
-async def admin_health(_: AdminAuth) -> FileResponse:
+async def admin_health(request: Request) -> Response:
     """서비스 헬스 (health.html)."""
+    if not _logged_in(request):
+        return RedirectResponse("/admin/login", status_code=303)
     return _page("health.html")
 
 
 @router.get("/curation")
-async def admin_curation(_: AdminAuth) -> FileResponse:
+async def admin_curation(request: Request) -> Response:
     """홈 큐레이션 편집기 (curation.html; ADM-017)."""
+    if not _logged_in(request):
+        return RedirectResponse("/admin/login", status_code=303)
     return _page("curation.html")
 
 
