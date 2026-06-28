@@ -211,6 +211,7 @@ async def _load_spot_base(session: AsyncSession, content_id: str) -> Any:
                 Spot.ldong_regn_cd,
                 Spot.ldong_signgu_cd,
                 Spot.lcls_systm3,
+                Spot.modified_time,
             ).where(Spot.content_id == content_id, Spot.show_flag == 1)
         )
     ).first()
@@ -319,7 +320,14 @@ async def load_spot_detail(
     # End read txn before HTTP. commit() (not rollback) keeps rows under savepoint test fixtures.
     await session.commit()
 
-    if detail is not None and (datetime.now(UTC) - detail.cached_at) < _DETAIL_TTL:
+    # Fresh = within TTL AND not superseded by a newer KTO change (pipeline bumps
+    # spots.modified_time on content change). modified_time is NULL until the
+    # pipeline sync lands the field, so this is a safe no-op until then (#37).
+    if (
+        detail is not None
+        and (datetime.now(UTC) - detail.cached_at) < _DETAIL_TTL
+        and (spot.modified_time is None or detail.cached_at >= spot.modified_time)
+    ):
         return ctx.assemble(
             overview=detail.overview,
             homepage=detail.homepage,
