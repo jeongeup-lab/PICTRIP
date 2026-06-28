@@ -1,0 +1,37 @@
+# CD for the pictrip-data pipeline. On push to main touching pipeline/**, the
+# self-hosted runner on CT111 syncs the repo's pipeline/ into /opt/pictrip-pipeline,
+# re-resolves deps, and restarts the dashboard. The 04:00 KST sync timer
+# (pictrip-sync-v2, oneshot) picks up new code on its next fire. .env (secrets)
+# and .venv are preserved across deploys.
+name: pipeline-deploy
+
+on:
+  push:
+    branches: [main]
+    paths: ["pipeline/**", ".github/workflows/pipeline-deploy.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pipeline-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, ct111]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync to /opt/pictrip-pipeline and restart services
+        run: |
+          set -euo pipefail
+          command -v rsync >/dev/null || { apt-get update -qq && apt-get install -y -qq rsync; }
+          APP=/opt/pictrip-pipeline/pipeline
+          rsync -a --delete \
+            --exclude='.env' --exclude='.venv' --exclude='__pycache__' --exclude='.pytest_cache' \
+            "$GITHUB_WORKSPACE/pipeline/" "$APP/"
+          cd "$APP"
+          /usr/local/bin/uv sync --no-dev
+          systemctl restart pictrip-dashboard.service
+          echo "deployed $(git -C "$GITHUB_WORKSPACE" rev-parse --short HEAD); dashboard=$(systemctl is-active pictrip-dashboard.service)"
