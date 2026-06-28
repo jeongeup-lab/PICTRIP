@@ -17,11 +17,11 @@
 
 /* ---------- shared: type badge (region/mood) ---------- */
 .tbadge {
-  font-size: 10.5px; font-weight: 600; letter-spacing: .03em;
-  padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line);
+  font-family: var(--mono); font-size: 10.5px; font-weight: 700; letter-spacing: .03em;
+  padding: 3px 9px; border-radius: 3px; border: 1px solid var(--ink);
   color: var(--ink-2); background: var(--surface-2); white-space: nowrap;
 }
-.tbadge.region { color: var(--ink); border-color: #d7dce4; }
+.tbadge.region { color: var(--ink); }
 .tbadge.mood   { color: var(--ink-2); background: var(--line-2); border-color: var(--line-2); }
 
 /* publish toggle (monochrome switch) */
@@ -57,7 +57,7 @@
 .slot-no { font-family: var(--mono); font-size: 11px; color: var(--ink-3); width: 16px; text-align: center; flex: none; }
 
 /* thumbnails (KTO URL reference — gray placeholder, no real image) */
-.thumb { background: var(--line-2); border: 1px solid var(--line); border-radius: 8px; flex: none;
+.thumb { background: var(--line-2); border: 2px solid var(--ink); border-radius: 4px; flex: none;
   display: grid; place-items: center; color: var(--ink-3); position: relative; overflow: hidden; }
 .thumb svg { width: 40%; height: 40%; stroke: currentColor; fill: none; stroke-width: 1.5; opacity: .7; }
 .thumb.cover { background: repeating-linear-gradient(135deg, #eef1f5 0 10px, #e9edf2 10px 20px); }
@@ -68,11 +68,11 @@
   margin-bottom: 6px; letter-spacing: .01em; }
 .field > label .hint { font-weight: 400; color: var(--ink-3); margin-left: 6px; font-size: 11px; }
 .inp, .ta {
-  width: 100%; font-family: var(--sans); font-size: 13px; color: var(--ink);
-  background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px;
-  transition: border-color .12s, box-shadow .12s; resize: vertical;
+  width: 100%; font-family: var(--kr); font-size: 13px; color: var(--ink);
+  background: var(--surface); border: 2px solid var(--ink); border-radius: 4px; padding: 9px 11px;
+  transition: box-shadow .12s; resize: vertical;
 }
-.inp:focus, .ta:focus { outline: none; border-color: #c2cad6; box-shadow: 0 0 0 3px var(--line-2); }
+.inp:focus, .ta:focus { outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
 .ta { line-height: 1.5; }
 .ta.title { font-weight: 600; }
 .charcount { font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); text-align: right; margin-top: 4px; }
@@ -84,9 +84,9 @@
 .iconbtn.sm { width: 30px; height: 30px; }
 
 /* picked spot card / row */
-.pspot { display: flex; align-items: center; gap: 11px; padding: 8px 10px; border: 1px solid var(--line);
-  border-radius: 10px; background: var(--surface); transition: border-color .12s, box-shadow .12s; }
-.pspot:hover { border-color: #d7dce4; box-shadow: var(--shadow); }
+.pspot { display: flex; align-items: center; gap: 11px; padding: 8px 10px; border: 2px solid var(--ink);
+  border-radius: 4px; background: var(--surface); transition: box-shadow .12s; }
+.pspot:hover { box-shadow: var(--shadow); }
 .pspot .meta { min-width: 0; flex: 1; }
 .pspot .nm { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pspot .sub { font-size: 11.5px; color: var(--ink-3); font-family: var(--mono); margin-top: 2px; }
@@ -151,7 +151,7 @@
 .savebar .spacer { flex: 1; }
 
 /* small icon button */
-.iconbtn { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface);
+.iconbtn { width: 30px; height: 30px; border-radius: 4px; border: 2px solid var(--ink); background: var(--surface);
   display: grid; place-items: center; cursor: pointer; color: var(--ink-2); transition: background .12s, color .12s; }
 .iconbtn:hover { background: var(--line-2); color: var(--ink); }
 .iconbtn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--line-2); }
@@ -160,7 +160,7 @@
 /* ============ preview-first (상단 미리보기 + 하단 편집) ============ */
 .pv-wrap { margin-bottom: 18px; }
 .pv-heroes { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
-.pv-hero { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; cursor: pointer; background: var(--surface);
+.pv-hero { border: 2px solid var(--ink); border-radius: 4px; overflow: hidden; cursor: pointer; background: var(--surface);
   transition: box-shadow .14s, border-color .14s, transform .08s; }
 .pv-hero:hover { box-shadow: var(--shadow-lg); transform: translateY(-1px); }
 .pv-hero.active { border-color: var(--ink); box-shadow: 0 0 0 2px var(--ink); }
@@ -179,7 +179,7 @@
 .pv-ind i { height: 3px; border-radius: 2px; background: var(--line); }
 .pv-ind i.on { background: var(--ink); }
 .pv-rails { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
-.pv-rail { border: 1px solid var(--line); border-radius: 12px; padding: 12px 13px; background: var(--surface); cursor: pointer;
+.pv-rail { border: 2px solid var(--ink); border-radius: 4px; padding: 12px 13px; background: var(--surface); cursor: pointer;
   transition: box-shadow .14s, border-color .14s, transform .08s; }
 .pv-rail:hover { box-shadow: var(--shadow-lg); transform: translateY(-1px); }
 .pv-rail.active { border-color: var(--ink); box-shadow: 0 0 0 2px var(--ink); }
@@ -216,7 +216,7 @@
   width: 16px; height: 16px; stroke: var(--ink-3); fill: none; stroke-width: 1.8; }
 .picker .search input { width: 100%; padding: 10px 12px 10px 36px; }
 .picker .filters { display: flex; gap: 7px; margin-top: 12px; flex-wrap: wrap; }
-.fchip { font-size: 12px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface);
+.fchip { font-size: 12px; padding: 5px 11px; border-radius: 4px; border: 1px solid var(--ink); background: var(--surface);
   color: var(--ink-2); cursor: pointer; transition: background .12s, color .12s; }
 .fchip:hover { background: var(--line-2); }
 .fchip.on { background: var(--ink); color: #fff; border-color: var(--ink); }

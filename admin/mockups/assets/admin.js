@@ -592,6 +592,141 @@ async function loadHealth() {
   }
 }
 
+// ─── 운영 개요 (index.html) ─────────────────────────────────────────────────
+// One landing page that aggregates the existing read-only endpoints
+// (collection + health + history + curations). Each section fails independently
+// so one dead endpoint never blanks the whole dashboard.
+function ovSet(id, txt) { const e = document.getElementById(id); if (e) e.textContent = txt; }
+function ovHtml(id, html) { const e = document.getElementById(id); if (e) e.innerHTML = html; }
+
+async function loadOverviewCollection() {
+  try {
+    const data = await adminFetch("/admin/api/collection");
+    renderCollection(data); // reuse 수집 현황 row + col-* ids + trigger button
+    ovSet("ov-total", data.totalSpots != null ? data.totalSpots.toLocaleString("ko-KR") : "—");
+    const run = data.source && data.source.lastRun;
+    const status = run ? run.status : null;
+    const label = status === "success" ? "성공" : status === "error" ? "실패" : status === "running" ? "실행 중" : "—";
+    ovSet("ov-laststatus", label);
+    if (run) {
+      const ts = run.finishedAt || run.ranAt;
+      ovSet("ov-lastrun-meta", `${fmtDuration(run.durationSec)} · ${ts ? relativeTime(ts) : ""}`.trim());
+    } else {
+      ovSet("ov-lastrun-meta", "기록 없음");
+    }
+  } catch (err) {
+    showCollectionError(err.message);
+    ovSet("ov-total", "—"); ovSet("ov-laststatus", "오류"); ovSet("ov-lastrun-meta", err.message);
+  }
+}
+
+async function loadOverviewHealth() {
+  try {
+    const h = await adminFetch("/admin/api/health");
+    // KPIs
+    if (h.db) {
+      const inUse = h.db.poolInUse != null ? h.db.poolInUse : "—";
+      const size = h.db.poolSize != null ? h.db.poolSize : "—";
+      ovHtml("ov-dbpool", `${inUse}<small> / ${size}</small>`);
+    }
+    if (h.users) {
+      ovSet("ov-users", h.users.total != null ? h.users.total.toLocaleString("ko-KR") : "—");
+      ovHtml("ov-users-new", h.users.new7d != null ? `<b>+${h.users.new7d.toLocaleString("ko-KR")}</b> 신규 7일` : "—");
+    }
+    // health rows
+    const ver = h.api && h.api.version ? h.api.version : "—";
+    ovSet("ov-h-api-detail", `${ver} · uptime ${fmtUptime(h.api && h.api.uptimeSec)}`);
+    ovHtml("ov-h-api-reading", `<span class="chip ok">200 OK</span>`);
+
+    const dbOk = h.db && h.db.ok;
+    const spots = h.db && h.db.spots != null ? h.db.spots.toLocaleString("ko-KR") : "—";
+    const inUse = h.db && h.db.poolInUse != null ? h.db.poolInUse : "—";
+    const size = h.db && h.db.poolSize != null ? h.db.poolSize : "—";
+    ovSet("ov-h-db-detail", `CT110 · pool ${inUse}/${size} · ${spots} spots`);
+    ovHtml("ov-h-db-reading", dbOk ? `<span class="chip ok">connected</span>` : `<span class="chip bad">error</span>`);
+    ovHtml("ov-h-db-svc", `<span class="dot ${dbOk ? "ok" : "bad"}"></span> PostgreSQL`);
+
+    const tunnel = h.tunnel;
+    ovSet("ov-h-tunnel-detail", tunnel && tunnel.detail ? tunnel.detail : "미구현 (차기)");
+    if (tunnel == null || tunnel.ok == null) {
+      ovHtml("ov-h-tunnel-reading", `<span class="chip idle">—</span>`);
+      ovHtml("ov-h-tunnel-svc", `<span class="dot warn"></span> Cloudflare 터널`);
+    } else {
+      ovHtml("ov-h-tunnel-reading", tunnel.ok ? `<span class="chip ok">ok</span>` : `<span class="chip bad">error</span>`);
+      ovHtml("ov-h-tunnel-svc", `<span class="dot ${tunnel.ok ? "ok" : "bad"}"></span> Cloudflare 터널`);
+    }
+
+    if (h.users) {
+      const total = h.users.total != null ? h.users.total.toLocaleString("ko-KR") : "—";
+      const del30d = h.users.deleted30d != null ? h.users.deleted30d.toLocaleString("ko-KR") : "—";
+      const active = h.users.active != null ? h.users.active.toLocaleString("ko-KR") : "—";
+      ovSet("ov-h-users-detail", `${total} 가입 · ${del30d} 탈퇴(30d)`);
+      ovSet("ov-h-users-reading", `${active} 활성`);
+    }
+  } catch (err) {
+    ovHtml("ov-h-api-reading", `<span class="chip bad">probe 실패</span>`);
+    ovSet("ov-h-api-detail", err.message);
+  }
+}
+
+async function loadOverviewHistory() {
+  const el = document.getElementById("ov-hist");
+  if (!el) return;
+  try {
+    const data = await adminFetch("/admin/api/history?days=14");
+    const days = (data.days || []).slice().sort((a, b) => (a.date < b.date ? -1 : 1));
+    if (days.length === 0) {
+      el.innerHTML = `<div class="col" style="justify-content:center"><span style="color:var(--ink-3);font-size:12px">기록 없음</span></div>`;
+      return;
+    }
+    const maxRuns = Math.max(1, ...days.map((d) => d.runs || 0));
+    const today = new Date().toISOString().slice(0, 10);
+    el.innerHTML = days
+      .map((d) => {
+        const fail = d.error > 0;
+        const pct = Math.round(30 + ((d.runs || 0) / maxRuns) * 70);
+        const md = escapeHtml(d.date.slice(5));
+        const cls = `col${fail ? " fail" : ""}${d.date === today ? " today" : ""}`;
+        return `<div class="${cls}" title="${escapeHtml(d.date)} · 성공 ${d.success} / 실패 ${d.error}"><div class="stack" style="height:${pct}%"><div class="seg ins" style="height:100%"></div></div><div class="xlabel">${md}</div></div>`;
+      })
+      .join("");
+  } catch (err) {
+    el.innerHTML = `<div class="col" style="justify-content:center"><span style="color:var(--bad);font-size:12px">${escapeHtml(err.message)}</span></div>`;
+  }
+}
+
+async function loadOverviewCuration() {
+  const el = document.getElementById("ov-curation");
+  if (!el) return;
+  try {
+    const data = await adminFetch("/admin/api/curations");
+    const heroes = (data.heroes || []).slice(0, 4);
+    const railCount = (data.rails || []).length;
+    if (heroes.length === 0) {
+      el.innerHTML = `<span style="color:var(--ink-3);font-size:12px">큐레이션 없음</span>`;
+    } else {
+      el.innerHTML = heroes
+        .map((it, i) => {
+          const url = it.coverUrl ? escapeHtml(it.coverUrl) : "";
+          const pubColor = it.isPublished ? "var(--ok)" : "var(--warn)";
+          const num = String(i + 1).padStart(2, "0");
+          return `<div style="flex:1;position:relative;aspect-ratio:4/5;border:2px solid var(--ink);border-radius:4px;overflow:hidden;background:var(--surface-2)">${url ? `<img src="${url}" alt="" style="width:100%;height:100%;object-fit:cover">` : ""}<span style="position:absolute;top:0;left:0;background:var(--accent);color:#fff;font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 7px">${num}</span><span style="position:absolute;left:0;right:0;bottom:0;background:var(--ink);color:var(--surface);font-size:12px;font-weight:700;padding:5px 8px;display:flex;justify-content:space-between;align-items:center">${escapeHtml(it.title || "—")}<span style="width:8px;height:8px;border-radius:2px;background:${pubColor};flex:none"></span></span></div>`;
+        })
+        .join("");
+    }
+    ovSet("ov-curation-meta", `히어로 ${heroes.length} · 무드 레일 ${railCount}`);
+  } catch (err) {
+    el.innerHTML = `<span style="color:var(--bad);font-size:12px">${escapeHtml(err.message)}</span>`;
+  }
+}
+
+function loadOverview() {
+  loadOverviewCollection();
+  loadOverviewHealth();
+  loadOverviewHistory();
+  loadOverviewCuration();
+}
+
 // ─── page init + auto-refresh ───────────────────────────────────────────────
 let _refreshInterval = null;
 
@@ -605,7 +740,11 @@ function startRefresh(fn, intervalMs) {
 
 window.addEventListener("load", () => {
   // detect which page we are on and kick off the right fetch + refresh
-  if (document.getElementById("collection-loading")) {
+  if (document.getElementById("overview-page")) {
+    loadOverview();
+    wireTriggerButton();
+    startRefresh(loadOverview, 30000);
+  } else if (document.getElementById("collection-loading")) {
     loadCollection();
     wireTriggerButton();
     startRefresh(loadCollection, 30000);
@@ -630,7 +769,10 @@ document.addEventListener("visibilitychange", () => {
     _refreshInterval = null;
   } else if (!document.hidden) {
     // re-establish refresh when page becomes visible again
-    if (document.getElementById("collection-loading") !== null || document.getElementById("collection-data") !== null) {
+    if (document.getElementById("overview-page") !== null) {
+      loadOverview();
+      startRefresh(loadOverview, 30000);
+    } else if (document.getElementById("collection-loading") !== null || document.getElementById("collection-data") !== null) {
       loadCollection();
       startRefresh(loadCollection, 30000);
     } else if (document.getElementById("history-loading") !== null || document.getElementById("history-data") !== null) {
