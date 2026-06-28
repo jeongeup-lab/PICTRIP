@@ -1,0 +1,38 @@
+name: mobile-ota
+# JS-only over-the-air update (EAS Update). Use for changes that DON'T touch
+# native code — they ship to installed apps without a store build or review.
+# Native changes (new module, permission, SDK bump) still need mobile-deploy.yml.
+# The fingerprint runtimeVersion guards delivery: an OTA only lands on builds
+# whose native fingerprint matches, so an accidental native change can't ship here.
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "EAS Update branch (maps to channel)"
+        type: choice
+        options: [production, preview]
+        default: production
+      message:
+        description: "Update message"
+        type: string
+        required: true
+defaults:
+  run:
+    working-directory: mobile
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - run: npm run lint && npm run typecheck && npm run format:check && npm test
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - run: eas update --branch "${{ inputs.branch }}" --message "${{ inputs.message }}" --non-interactive
