@@ -18,7 +18,10 @@ def test_from_kto_maps_core_fields():
     assert spot.content_id == "2865520"
     assert spot.content_type_id == 15
     assert spot.mapx == Decimal("128.3514221857")
-    assert spot.first_image_url.startswith("http://tong.visitkorea")
+    assert (
+        spot.first_image_url
+        == "http://tong.visitkorea.or.kr/cms/resource/60/3501060_image2_1.jpeg"
+    )
     assert spot.cpyrht_div_cd == "Type3"
 
 
