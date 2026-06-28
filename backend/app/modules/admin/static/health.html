@@ -50,7 +50,6 @@
         <p>FastAPI · PostgreSQL · Cloudflare 터널 · 가입자 — 앱/서비스 운영 상태입니다.</p>
       </div>
 
-      <!-- loading state -->
       <div id="health-loading">
         <div class="grid cols-3" style="margin-bottom:16px">
           <div class="kpi"><div class="label">API uptime</div><div class="val" style="font-size:22px;color:var(--ink-3)">…</div></div>
@@ -62,16 +61,13 @@
         </div>
       </div>
 
-      <!-- error state (hidden) -->
       <div id="health-error" style="display:none;background:var(--bad-soft);border:1px solid #f0b9bd;border-radius:14px;padding:24px 28px">
         <p style="margin:0 0 12px;color:var(--bad);font-weight:600">데이터를 불러오지 못했습니다.</p>
         <p id="health-error-msg" style="margin:0 0 16px;font-size:13px;color:var(--ink-2)"></p>
         <button class="btn ghost sm" onclick="loadHealth()">다시 시도</button>
       </div>
 
-      <!-- data (hidden until loaded) -->
       <div id="health-data" style="display:none">
-        <!-- KPI -->
         <div class="grid cols-3" style="margin-bottom:16px">
           <div class="kpi">
             <div class="label" id="h-api-label"><span class="dot ok"></span> API uptime</div>
@@ -90,7 +86,6 @@
           </div>
         </div>
 
-        <!-- component status -->
         <div class="card">
           <div class="card-h"><h2>컴포넌트 상태</h2><span class="sub">GET /admin/api/health</span></div>
           <div class="card-b" style="padding:0">
@@ -117,7 +112,6 @@
           </div>
         </div>
 
-        <!-- secondary: users mini -->
         <div class="grid cols-2" style="margin-top:16px">
           <div class="card">
             <div class="card-h"><h2>API 응답시간 (24h)</h2><span class="sub">p95 ms</span></div>

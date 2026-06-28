@@ -10,7 +10,6 @@
 <body class="cu-page">
 <div class="shell">
 
-  <!-- SECTION: sidebar | status: locked -->
   <aside class="sidebar">
     <div class="sb-brand">
       <div class="logo">P</div>
@@ -37,20 +36,16 @@
     </a>
     <div class="sb-foot"><span class="dot live"></span> api.pictrip.org · live</div>
   </aside>
-  <!-- END SECTION: sidebar -->
 
   <div class="main">
-    <!-- SECTION: top-nav | status: locked -->
     <div class="topbar">
       <div class="crumb"><span>콘텐츠</span><span class="sep">/</span><b>홈 큐레이션</b></div>
       <div class="spacer"></div>
       <div class="env-pill"><span class="dot ok"></span> <b>prod</b> · /home/feed</div>
       <div class="clock" id="clock">--:--:--</div>
     </div>
-    <!-- END SECTION: top-nav -->
 
     <div class="content">
-      <!-- SECTION: page-head | status: editable -->
       <div class="page-head-row">
         <div class="page-head">
           <h1>홈 큐레이션 편집기</h1>
@@ -72,9 +67,7 @@
           </button>
         </div>
       </div>
-      <!-- END SECTION: page-head -->
 
-      <!-- SECTION: feed-preview | status: editable -->
       <div class="card pv-wrap" data-selectable>
         <div class="card-h">
           <h2>편성 미리보기</h2>
@@ -142,9 +135,7 @@
           </div>
         </div>
       </div>
-      <!-- END SECTION: feed-preview -->
 
-      <!-- SECTION: editor | status: editable -->
       <div class="card editor-card" data-editor>
         <div class="card-h">
           <h2>편집 · 제주</h2>
@@ -158,7 +149,6 @@
         <div class="card-b">
           <div class="b-edit">
 
-            <!-- col 1: copy -->
             <div class="ecol">
               <p class="elabel">카피</p>
               <div class="field">
@@ -182,7 +172,6 @@
               </div>
             </div>
 
-            <!-- col 2: cover + meta -->
             <div class="ecol">
               <p class="elabel">표지 · 편성</p>
               <div class="field">
@@ -193,12 +182,10 @@
                   <button class="btn ghost sm" type="button" data-open-picker>변경</button>
                 </div>
               </div>
-              <!-- SECTION: cover-notice | status: locked -->
               <div class="urlnote">
                 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16" r=".6" fill="currentColor" stroke="none"/></svg>
                 <span><b>KTO URL 참조만 표시</b> · 다운로드·저장 없음<br>tong.visitkorea.or.kr/…/126508_image2.jpg</span>
               </div>
-              <!-- END SECTION: cover-notice -->
               <div class="field" style="margin-top:16px">
                 <label>노출 순서</label>
                 <div class="orderfield">
@@ -210,8 +197,6 @@
               </div>
             </div>
 
-            <!-- col 3: handpick spots -->
-            <!-- SECTION: handpick-spots | status: editable -->
             <div class="ecol">
               <p class="elabel">손픽 스팟 <span class="count">4 / 8</span></p>
               <div class="softnote">
@@ -253,7 +238,6 @@
                 스팟 추가
               </button>
             </div>
-            <!-- END SECTION: handpick-spots -->
 
           </div>
         </div>
@@ -270,13 +254,11 @@
           </button>
         </div>
       </div>
-      <!-- END SECTION: editor -->
 
     </div>
   </div>
 </div>
 
-<!-- SECTION: picker-modal | status: editable -->
 <div class="modal-bg" id="pickermodal">
   <div class="modal picker">
     <div class="mh">
@@ -308,7 +290,6 @@
     </div>
   </div>
 </div>
-<!-- END SECTION: picker-modal -->
 
 <script src="/admin/assets/admin.js"></script>
 <script src="/admin/assets/curation.js"></script>

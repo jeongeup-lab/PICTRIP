@@ -1,11 +1,7 @@
-// PicTrip ADMIN — shared behavior + live fetch wiring
 
-// ─── live clock ────────────────────────────────────────────────────────────
 (function () {
   const el = document.getElementById("clock");
   if (!el) return;
-  // Render in Asia/Seoul so the "KST" label is truthful regardless of the
-  // operator's machine timezone.
   function tick() {
     const t = new Date().toLocaleString("ko-KR", {
       timeZone: "Asia/Seoul",
@@ -20,17 +16,13 @@
   setInterval(tick, 1000);
 })();
 
-// ─── HTML escaper ───────────────────────────────────────────────────────────
-// Escape server-derived values before interpolating into innerHTML. The
-// sync_runs table is externally owned (pipeline writes raw exception messages),
-// so run.error etc. are untrusted → prevent stored-DOM-XSS.
+// Escape untrusted sync_runs/error text before innerHTML (XSS).
 const escapeHtml = (s) =>
   String(s).replace(
     /[&<>"']/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
   );
 
-// toast helper
 function toast(msg, mono) {
   let t = document.querySelector(".toast");
   if (!t) {
@@ -38,7 +30,6 @@ function toast(msg, mono) {
     t.className = "toast";
     document.body.appendChild(t);
   }
-  // Build via textContent (not innerHTML) so msg/mono can't inject markup (js/xss).
   t.textContent = msg;
   if (mono) {
     t.append(" ");
@@ -52,10 +43,7 @@ function toast(msg, mono) {
   t._timer = setTimeout(() => t.classList.remove("show"), 2600);
 }
 
-// ─── JSend fetch helper ─────────────────────────────────────────────────────
-// Browser carries Basic-auth credentials automatically (same-origin session).
-// Returns the `data` field of the JSend envelope.
-// Throws on non-2xx or JSend error payload.
+// JSend fetch: returns the data field, throws on non-2xx or error payload.
 async function adminFetch(path) {
   const res = await fetch(path, { credentials: "same-origin" });
   if (!res.ok) {
@@ -68,7 +56,6 @@ async function adminFetch(path) {
   return json.data;
 }
 
-// ─── relative-time formatter ────────────────────────────────────────────────
 function relativeTime(isoStr) {
   if (!isoStr) return "";
   const then = new Date(isoStr);
@@ -82,7 +69,6 @@ function relativeTime(isoStr) {
   return `${diffD}일 전`;
 }
 
-// format absolute datetime as "MM-DD HH:MM"
 function fmtDatetime(isoStr) {
   if (!isoStr) return "—";
   const d = new Date(isoStr);
@@ -90,7 +76,6 @@ function fmtDatetime(isoStr) {
   return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-// format duration seconds as "Xm Ys" or "X.Xs"
 function fmtDuration(sec) {
   if (sec == null) return "—";
   if (sec < 60) return `${sec.toFixed(1)}s`;
@@ -99,7 +84,6 @@ function fmtDuration(sec) {
   return `${m}m ${s}s`;
 }
 
-// format uptime seconds as "Xd Xh" or "Xh Xm"
 function fmtUptime(sec) {
   if (sec == null) return "—";
   const d = Math.floor(sec / 86400);
@@ -110,7 +94,6 @@ function fmtUptime(sec) {
   return `${m}m`;
 }
 
-// ─── 수집 현황 (index.html) ─────────────────────────────────────────────────
 function showCollectionLoading() {
   const l = document.getElementById("collection-loading");
   const e = document.getElementById("collection-error");
@@ -141,7 +124,6 @@ function renderCollection(data) {
 
   const run = data.source && data.source.lastRun;
 
-  // ran-at
   const ranAtEl = document.getElementById("col-ran-at");
   const ranRelEl = document.getElementById("col-ran-rel");
   if (ranAtEl && ranRelEl) {
@@ -150,11 +132,9 @@ function renderCollection(data) {
     ranRelEl.textContent = ts ? relativeTime(ts) : "";
   }
 
-  // api calls
   const apiEl = document.getElementById("col-api-calls");
   if (apiEl) apiEl.textContent = run ? (run.apiCalls != null ? run.apiCalls.toLocaleString("ko-KR") : "—") : "—";
 
-  // changes
   const chEl = document.getElementById("col-changes");
   if (chEl) {
     if (run) {
@@ -167,11 +147,9 @@ function renderCollection(data) {
     }
   }
 
-  // duration
   const durEl = document.getElementById("col-duration");
   if (durEl) durEl.textContent = run ? fmtDuration(run.durationSec) : "—";
 
-  // status icon
   const statusEl = document.getElementById("col-status-icon");
   if (statusEl) {
     const status = run ? run.status : null;
@@ -191,7 +169,6 @@ function renderCollection(data) {
     }
   }
 
-  // footer
   const footEl = document.getElementById("col-footer");
   if (footEl) {
     const total = data.totalSpots != null ? data.totalSpots.toLocaleString("ko-KR") : "—";
@@ -210,10 +187,6 @@ async function loadCollection() {
   }
 }
 
-// ─── 수집 트리거 (ADM-009) ──────────────────────────────────────────────────
-// POST helper: same JSend contract as adminFetch but with a method, and it
-// surfaces error.message on non-2xx so the 502 "not configured"/"already
-// running" messages reach the operator.
 async function adminPost(path) {
   const res = await fetch(path, { method: "POST", credentials: "same-origin" });
   const json = await res.json().catch(() => ({}));
@@ -225,7 +198,7 @@ async function adminPost(path) {
 }
 
 let _triggerPoll = null;
-// Safety cap: stop polling after this many attempts (~10 min at 5 s/tick).
+// Safety cap: stop trigger polling after ~10 min so the button never sticks.
 const _POLL_MAX_ATTEMPTS = 120;
 
 function setTriggerBtn(disabled, label) {
@@ -235,10 +208,6 @@ function setTriggerBtn(disabled, label) {
   if (label != null) btn.textContent = label;
 }
 
-// Poll /collection until the latest run leaves "running" (or no running run is
-// reported), then refresh the displayed status and re-enable the button.
-// Cap: after _POLL_MAX_ATTEMPTS ticks (~10 min) give up and re-enable the
-// button so the operator is never permanently stuck.
 function startTriggerPolling() {
   if (_triggerPoll) clearInterval(_triggerPoll);
   let _pollAttempts = 0;
@@ -257,7 +226,6 @@ function startTriggerPolling() {
       renderCollection(data);
       const run = data.source && data.source.lastRun;
       const status = run ? run.status : null;
-      // Stop once we observe a terminal state (success/error) or no run object.
       if (status !== "running") {
         clearInterval(_triggerPoll);
         _triggerPoll = null;
@@ -265,7 +233,6 @@ function startTriggerPolling() {
         toast(status === "error" ? "수집 실패" : "수집 완료");
       }
     } catch (_e) {
-      // transient fetch error — keep polling; the next tick may recover.
     }
   }, 5000);
 }
@@ -278,7 +245,6 @@ async function onTriggerClick() {
     setTriggerBtn(true, "수집 중…");
     startTriggerPolling();
   } catch (err) {
-    // 502 ADMIN_TRIGGER_FAILED (not configured / already running / GitHub error).
     toast(err.message);
     setTriggerBtn(false, "수집 즉시 실행");
   }
@@ -287,14 +253,12 @@ async function onTriggerClick() {
 function wireTriggerButton() {
   const btn = document.getElementById("col-trigger-btn");
   if (!btn) return;
-  // Promote the "준비 중" stub to the live trigger control.
   btn.disabled = false;
   btn.removeAttribute("title");
   btn.textContent = "수집 즉시 실행";
   btn.addEventListener("click", onTriggerClick);
 }
 
-// ─── 수집 이력 (history.html) ───────────────────────────────────────────────
 function showHistoryLoading() {
   const l = document.getElementById("history-loading");
   const e = document.getElementById("history-error");
@@ -373,7 +337,6 @@ async function loadHistory() {
   }
 }
 
-// log modal for history detail
 function openHistoryDetail(date) {
   const bg = document.getElementById("logmodal");
   if (!bg) return;
@@ -445,7 +408,6 @@ function closeLog() {
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeLog(); });
 })();
 
-// ─── 서비스 헬스 (health.html) ──────────────────────────────────────────────
 function showHealthLoading() {
   const l = document.getElementById("health-loading");
   const e = document.getElementById("health-error");
@@ -474,13 +436,11 @@ function renderHealth(h) {
   if (e) e.style.display = "none";
   if (d) d.style.display = "";
 
-  // API KPI
   const uptimeEl = document.getElementById("h-api-uptime");
   if (uptimeEl) uptimeEl.textContent = fmtUptime(h.api && h.api.uptimeSec);
   const p95El = document.getElementById("h-api-p95");
   if (p95El) p95El.textContent = h.api && h.api.p95Ms != null ? `p95 ${h.api.p95Ms.toFixed(0)}ms` : "p95 —";
 
-  // DB KPI
   const dbPoolEl = document.getElementById("h-db-pool");
   if (dbPoolEl) {
     const inUse = h.db && h.db.poolInUse != null ? h.db.poolInUse : "—";
@@ -488,13 +448,11 @@ function renderHealth(h) {
     dbPoolEl.textContent = `${inUse} / ${size}`;
   }
 
-  // Users KPI
   const usersTotalEl = document.getElementById("h-users-total");
   if (usersTotalEl) usersTotalEl.textContent = h.users && h.users.total != null ? h.users.total.toLocaleString("ko-KR") : "—";
   const usersActiveEl = document.getElementById("h-users-active");
   if (usersActiveEl) usersActiveEl.textContent = h.users && h.users.active != null ? `활성 ${h.users.active.toLocaleString("ko-KR")}` : "—";
 
-  // API detail row
   const apiDetailEl = document.getElementById("h-api-detail");
   if (apiDetailEl) {
     const ver = h.api && h.api.version ? h.api.version : "—";
@@ -503,7 +461,6 @@ function renderHealth(h) {
     apiDetailEl.textContent = `${ver} · uptime ${uptime} · ${p95}`;
   }
 
-  // DB detail row
   const dbDetailEl = document.getElementById("h-db-detail");
   const dbReadingEl = document.getElementById("h-db-reading");
   if (dbDetailEl) {
@@ -525,7 +482,6 @@ function renderHealth(h) {
     }
   }
 
-  // Tunnel row
   const tunnelDetailEl = document.getElementById("h-tunnel-detail");
   const tunnelReadingEl = document.getElementById("h-tunnel-reading");
   const tunnelSvcEl = document.getElementById("h-tunnel-svc");
@@ -547,7 +503,6 @@ function renderHealth(h) {
     tunnelSvcEl.innerHTML = `<span class="dot ${dotClass}"></span> Cloudflare 터널`;
   }
 
-  // Users detail row
   const usersDetailEl = document.getElementById("h-users-detail");
   const usersReadingEl = document.getElementById("h-users-reading");
   if (usersDetailEl && h.users) {
@@ -560,7 +515,6 @@ function renderHealth(h) {
     usersReadingEl.textContent = `${active} 활성`;
   }
 
-  // Users mini table
   const uTotalEl = document.getElementById("h-u-total");
   const uActiveEl = document.getElementById("h-u-active");
   const uNew7dEl = document.getElementById("h-u-new7d");
@@ -574,7 +528,6 @@ function renderHealth(h) {
     if (uKakaoEl) uKakaoEl.textContent = h.users.kakao != null ? h.users.kakao.toLocaleString("ko-KR") : "—";
   }
 
-  // update probe pill timestamp
   const pillEl = document.getElementById("health-probe-pill");
   if (pillEl) {
     const dbOk = h.db && h.db.ok;
@@ -592,17 +545,13 @@ async function loadHealth() {
   }
 }
 
-// ─── 운영 개요 (index.html) ─────────────────────────────────────────────────
-// One landing page that aggregates the existing read-only endpoints
-// (collection + health + history + curations). Each section fails independently
-// so one dead endpoint never blanks the whole dashboard.
 function ovSet(id, txt) { const e = document.getElementById(id); if (e) e.textContent = txt; }
 function ovHtml(id, html) { const e = document.getElementById(id); if (e) e.innerHTML = html; }
 
 async function loadOverviewCollection() {
   try {
     const data = await adminFetch("/admin/api/collection");
-    renderCollection(data); // reuse 수집 현황 row + col-* ids + trigger button
+    renderCollection(data);
     ovSet("ov-total", data.totalSpots != null ? data.totalSpots.toLocaleString("ko-KR") : "—");
     const run = data.source && data.source.lastRun;
     const status = run ? run.status : null;
@@ -623,7 +572,6 @@ async function loadOverviewCollection() {
 async function loadOverviewHealth() {
   try {
     const h = await adminFetch("/admin/api/health");
-    // KPIs
     if (h.db) {
       const inUse = h.db.poolInUse != null ? h.db.poolInUse : "—";
       const size = h.db.poolSize != null ? h.db.poolSize : "—";
@@ -633,7 +581,6 @@ async function loadOverviewHealth() {
       ovSet("ov-users", h.users.total != null ? h.users.total.toLocaleString("ko-KR") : "—");
       ovHtml("ov-users-new", h.users.new7d != null ? `<b>+${h.users.new7d.toLocaleString("ko-KR")}</b> 신규 7일` : "—");
     }
-    // health rows
     const ver = h.api && h.api.version ? h.api.version : "—";
     ovSet("ov-h-api-detail", `${ver} · uptime ${fmtUptime(h.api && h.api.uptimeSec)}`);
     ovHtml("ov-h-api-reading", `<span class="chip ok">200 OK</span>`);
@@ -720,6 +667,7 @@ async function loadOverviewCuration() {
   }
 }
 
+// Overview aggregates 4 read-only endpoints; each section fails independently.
 function loadOverview() {
   loadOverviewCollection();
   loadOverviewHealth();
@@ -727,19 +675,17 @@ function loadOverview() {
   loadOverviewCuration();
 }
 
-// ─── page init + auto-refresh ───────────────────────────────────────────────
 let _refreshInterval = null;
 
 function startRefresh(fn, intervalMs) {
   if (_refreshInterval) clearInterval(_refreshInterval);
   _refreshInterval = setInterval(() => {
-    // pause when page is hidden
     if (!document.hidden) fn();
   }, intervalMs);
 }
 
+// Detect page via a marker element, then load + auto-refresh.
 window.addEventListener("load", () => {
-  // detect which page we are on and kick off the right fetch + refresh
   if (document.getElementById("overview-page")) {
     loadOverview();
     wireTriggerButton();
@@ -756,19 +702,16 @@ window.addEventListener("load", () => {
     startRefresh(loadHealth, 30000);
   }
 
-  // animate coverage bars (used on other potential pages)
   document.querySelectorAll(".bar i[data-w]").forEach((el, i) => {
     setTimeout(() => { el.style.width = el.dataset.w + "%"; }, 200 + i * 80);
   });
 });
 
-// clear interval on page hide to be tidy
 document.addEventListener("visibilitychange", () => {
   if (document.hidden && _refreshInterval) {
     clearInterval(_refreshInterval);
     _refreshInterval = null;
   } else if (!document.hidden) {
-    // re-establish refresh when page becomes visible again
     if (document.getElementById("overview-page") !== null) {
       loadOverview();
       startRefresh(loadOverview, 30000);

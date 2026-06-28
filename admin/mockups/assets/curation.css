@@ -1,10 +1,4 @@
-/* PicTrip ADMIN — 홈 큐레이션 편집기 (additive; layered on admin.css) */
-/* monochrome only — reuses admin.css tokens (--ink/--ink-2/--ink-3/--line/...). */
-/* status dots (ok/warn) are kept as functional state indicators, consistent with the
-   other 3 admin pages; primary actions + active selection are forced monochrome (ink)
-   on this page only, scoped under .cu-page so the shared admin.css stays untouched. */
-
-/* ---------- monochrome overrides (scoped to curation page) ---------- */
+/* PicTrip admin — curation editor (layered on admin.css) */
 .cu-page .btn { background: var(--ink); border-color: var(--ink); }
 .cu-page .btn:hover { filter: none; background: #2b2f37; }
 .cu-page .btn.ghost { background: var(--surface); color: var(--ink); border-color: var(--line); }
@@ -15,7 +9,6 @@
 .cu-page .btn .bi { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.8; flex: none; }
 .cu-page .btn.sm .bi { width: 13px; height: 13px; }
 
-/* ---------- shared: type badge (region/mood) ---------- */
 .tbadge {
   font-family: var(--mono); font-size: 10.5px; font-weight: 700; letter-spacing: .03em;
   padding: 3px 9px; border-radius: 3px; border: 1px solid var(--ink);
@@ -24,7 +17,6 @@
 .tbadge.region { color: var(--ink); }
 .tbadge.mood   { color: var(--ink-2); background: var(--line-2); border-color: var(--line-2); }
 
-/* publish toggle (monochrome switch) */
 .pub { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;
   border-radius: 999px; padding: 2px; transition: box-shadow .12s; }
 .pub:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--line-2); }
@@ -37,14 +29,12 @@
 .pub .lbl { font-size: 12px; color: var(--ink-3); font-weight: 500; min-width: 30px; }
 .pub.on .lbl { color: var(--ink); }
 
-/* publish/draft indicator dot (preview cards) */
 .pubdot { position: absolute; top: 8px; right: 8px; width: 9px; height: 9px; border-radius: 50%;
   border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(16,24,40,.12); z-index: 2; }
 .pubdot.on  { background: var(--ok); }
 .pubdot.off { background: var(--warn); }
 .pv-rail .rh .pubdot { position: static; margin-left: auto; border-width: 0; box-shadow: none; }
 
-/* drag handle */
 .handle { color: var(--ink-3); cursor: grab; display: grid; place-items: center; width: 18px; height: 30px;
   flex: none; border-radius: 6px; transition: color .12s, background .12s; }
 .handle svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 0; }
@@ -53,16 +43,13 @@
 .handle:active { cursor: grabbing; }
 .pspot.dragging { opacity: .55; border-color: var(--ink); box-shadow: var(--shadow-lg); }
 
-/* slot index */
 .slot-no { font-family: var(--mono); font-size: 11px; color: var(--ink-3); width: 16px; text-align: center; flex: none; }
 
-/* thumbnails (KTO URL reference — gray placeholder, no real image) */
 .thumb { background: var(--line-2); border: 2px solid var(--ink); border-radius: 4px; flex: none;
   display: grid; place-items: center; color: var(--ink-3); position: relative; overflow: hidden; }
 .thumb svg { width: 40%; height: 40%; stroke: currentColor; fill: none; stroke-width: 1.5; opacity: .7; }
 .thumb.cover { background: repeating-linear-gradient(135deg, #eef1f5 0 10px, #e9edf2 10px 20px); }
 
-/* form fields */
 .field { margin-bottom: 16px; } .field:last-child { margin-bottom: 0; }
 .field > label { display: block; font-size: 11.5px; font-weight: 600; color: var(--ink-2);
   margin-bottom: 6px; letter-spacing: .01em; }
@@ -77,13 +64,11 @@
 .ta.title { font-weight: 600; }
 .charcount { font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); text-align: right; margin-top: 4px; }
 
-/* number-order stepper */
 .orderfield { display: flex; align-items: center; gap: 8px; }
 .orderfield .inp { width: 72px; text-align: center; font-family: var(--mono); }
 .orderfield .ofnote { font-size: 11.5px; color: var(--ink-3); font-family: var(--mono); }
 .iconbtn.sm { width: 30px; height: 30px; }
 
-/* picked spot card / row */
 .pspot { display: flex; align-items: center; gap: 11px; padding: 8px 10px; border: 2px solid var(--ink);
   border-radius: 4px; background: var(--surface); transition: box-shadow .12s; }
 .pspot:hover { box-shadow: var(--shadow); }
@@ -99,65 +84,54 @@
 .picklist { display: flex; flex-direction: column; gap: 8px; }
 .addspot { margin-top: 12px; width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 
-/* KTO url notice strip */
 .urlnote { display: flex; gap: 9px; align-items: flex-start; background: var(--surface-2);
   border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px; font-size: 11.5px; color: var(--ink-3);
   font-family: var(--mono); line-height: 1.55; word-break: break-all; margin-top: 4px; }
 .urlnote b { color: var(--ink-2); font-weight: 600; }
 .urlnote svg { width: 15px; height: 15px; stroke: var(--ink-3); fill: none; stroke-width: 1.7; flex: none; margin-top: 1px; }
 
-/* soft inline note (auto-fill) */
 .softnote { font-size: 12px; color: var(--ink-3); background: var(--line-2); border-radius: 9px;
   padding: 10px 12px; display: flex; gap: 8px; align-items: flex-start; margin-bottom: 12px; }
 .softnote b { color: var(--ink-2); font-weight: 600; }
 .softnote svg { width: 15px; height: 15px; stroke: var(--ink-2); fill: none; stroke-width: 1.7; flex: none; margin-top: 1px; }
 
-/* section label inside editor */
 .elabel { font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
   color: var(--ink-3); margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
 .elabel .elabel-sub { font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--ink-3); font-size: 11px; }
 .elabel .count { font-family: var(--mono); margin-left: auto; color: var(--ink-2);
   background: var(--line-2); padding: 1px 7px; border-radius: 999px; letter-spacing: 0; text-transform: none; }
 
-/* editor column rhythm */
 .ecol { min-width: 0; }
 
-/* page-head legend */
 .savebar .legend { display: flex; align-items: center; gap: 12px; padding-right: 4px; margin-right: 2px;
   border-right: 1px solid var(--line); }
 .savebar .legend .lg-item { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-2); }
 
-/* feed-preview header count */
 .card-h .hcount { font-size: 12px; color: var(--ink-2); font-family: var(--mono); margin-left: 10px; }
 .card-h .hcount b { color: var(--ink); font-weight: 600; }
 .card-h .sub { margin-left: auto; }
 
-/* empty / placeholder state */
 .estate { text-align: center; padding: 48px 24px; color: var(--ink-3); }
 .estate svg { width: 34px; height: 34px; stroke: var(--ink-3); fill: none; stroke-width: 1.4; margin-bottom: 12px; }
 .estate .t { font-size: 14px; font-weight: 600; color: var(--ink-2); margin-bottom: 4px; }
 .estate .d { font-size: 12.5px; }
 
-/* skeleton (loading) */
 .sk { background: linear-gradient(90deg, var(--line-2) 25%, #f1f4f8 37%, var(--line-2) 63%);
   background-size: 400% 100%; border-radius: 8px; animation: shimmer 1.4s ease infinite; }
 .sk.line { height: 12px; } .sk.line.sm { height: 10px; width: 60%; }
 @keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
 
-/* save bar */
 .savebar { display: flex; align-items: center; gap: 12px; }
 .savebar .dirty { font-size: 12px; color: var(--warn); font-family: var(--mono); display: flex; align-items: center; gap: 6px; }
 .savebar .saved { font-size: 12px; color: var(--ink-3); font-family: var(--mono); }
 .savebar .spacer { flex: 1; }
 
-/* small icon button */
 .iconbtn { width: 30px; height: 30px; border-radius: 4px; border: 2px solid var(--ink); background: var(--surface);
   display: grid; place-items: center; cursor: pointer; color: var(--ink-2); transition: background .12s, color .12s; }
 .iconbtn:hover { background: var(--line-2); color: var(--ink); }
 .iconbtn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--line-2); }
 .iconbtn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.7; }
 
-/* ============ preview-first (상단 미리보기 + 하단 편집) ============ */
 .pv-wrap { margin-bottom: 18px; }
 .pv-heroes { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
 .pv-hero { border: 2px solid var(--ink); border-radius: 4px; overflow: hidden; cursor: pointer; background: var(--surface);
@@ -197,7 +171,6 @@
 .pv-rail .cards .more.auto { border-style: solid; background: var(--surface-2); }
 .pv-rail .cards .more.two { border-style: solid; background: var(--line-2); }
 
-/* editor card + 3-column body */
 .editor-card .card-h h2 { margin-right: 2px; }
 .b-edit { display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 22px; align-items: start; }
 .b-edit .ecol + .ecol { border-left: 1px solid var(--line-2); padding-left: 22px; }
@@ -205,7 +178,6 @@
 .editor-foot .btn.ghost.sm { display: inline-flex; align-items: center; gap: 6px; }
 .editor-foot .btn { display: inline-flex; align-items: center; gap: 7px; }
 
-/* ---------- spot picker modal ---------- */
 .modal .mh .mh-titles { display: flex; flex-direction: column; gap: 2px; }
 .modal .mh .mh-sub { font-size: 11.5px; color: var(--ink-3); font-weight: 400; }
 .modal .mb { padding: 18px 22px; }

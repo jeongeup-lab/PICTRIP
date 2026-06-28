@@ -10,7 +10,6 @@
 <span id="overview-page" hidden></span>
 <div class="shell">
 
-  <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="sb-brand">
       <div class="logo">P</div>
@@ -38,7 +37,6 @@
     <div class="sb-foot"><span class="dot live"></span> api.pictrip.org · live</div>
   </aside>
 
-  <!-- MAIN -->
   <div class="main">
     <div class="topbar">
       <div class="crumb"><b>운영 개요</b></div>
@@ -54,7 +52,6 @@
         <p>KTO 관광지 수집과 서비스 상태를 한눈에 봅니다.</p>
       </div>
 
-      <!-- KPI ROW -->
       <div class="grid cols-4" style="margin-bottom:30px">
         <div class="kpi">
           <div class="label">총 관광지</div>
@@ -79,23 +76,18 @@
       </div>
 
       <div class="ov-cols">
-        <!-- LEFT -->
         <div class="ov-stack">
-          <!-- 수집 현황 -->
           <section>
             <div class="sec-h"><h2>수집 현황</h2><span class="x">areaBasedSyncList2 → spots</span></div>
 
-            <!-- loading state -->
             <div id="collection-loading" class="src" style="justify-content:center;padding:32px">
               <span style="color:var(--ink-3);font-size:13px">불러오는 중…</span>
             </div>
-            <!-- error state -->
             <div id="collection-error" style="display:none;background:var(--bad-soft);border:2px solid var(--ink);border-radius:4px;padding:22px 26px">
               <p style="margin:0 0 12px;color:var(--bad);font-weight:700">데이터를 불러오지 못했습니다.</p>
               <p id="collection-error-msg" style="margin:0 0 16px;font-size:13px;color:var(--ink-2)"></p>
               <button class="btn ghost sm" onclick="loadOverview()">다시 시도</button>
             </div>
-            <!-- data -->
             <div id="collection-data" style="display:none">
               <div class="src">
                 <div class="cell name">
@@ -124,7 +116,6 @@
             </div>
           </section>
 
-          <!-- 수집 이력 (미니) -->
           <section>
             <div class="sec-h"><h2>수집 이력</h2><span class="x">최근 14일</span><a class="x acc" href="/admin/history">전체 보기 →</a></div>
             <div class="chart" id="ov-hist" title="클릭하면 수집 이력으로 이동" style="cursor:pointer" onclick="location.href='/admin/history'">
@@ -137,9 +128,7 @@
           </section>
         </div>
 
-        <!-- RIGHT -->
         <div class="ov-stack">
-          <!-- 서비스 헬스 -->
           <section>
             <div class="sec-h"><h2>서비스 헬스</h2><a class="x acc" href="/admin/health">상세 →</a></div>
             <div class="card">
@@ -166,7 +155,6 @@
             </div>
           </section>
 
-          <!-- 홈 큐레이션 (미니) -->
           <section>
             <div class="sec-h"><h2>홈 큐레이션</h2><a class="x acc" href="/admin/curation">편집 →</a></div>
             <div class="card">
