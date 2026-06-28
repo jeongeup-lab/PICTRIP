@@ -300,10 +300,12 @@ function renderEmbedding(d) {
   const rec = d.recent || {};
 
   const recentEl = document.getElementById("emb-recent");
-  if (recentEl) {
+  if (recentEl) recentEl.childNodes[0].textContent = `${fmt(rec.target)}건`;
+  const recentDetailEl = document.getElementById("emb-recent-detail");
+  if (recentDetailEl) {
     const done = rec.embedded != null ? fmt(rec.embedded) : "—";
     const out = rec.outstanding != null ? fmt(rec.outstanding) : "—";
-    recentEl.textContent = `${fmt(rec.target)}건 · 완료 ${done} · 미완료 ${out}`;
+    recentDetailEl.textContent = `완료 ${done} · 미완료 ${out}`;
   }
 
   const failedEl = document.getElementById("emb-failed");

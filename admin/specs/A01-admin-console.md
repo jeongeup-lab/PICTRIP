@@ -54,11 +54,13 @@
 | A7 | **트리거 메커니즘 미정 → 어댑터로 격리** | `workflow_dispatch` vs CT111 Tailscale HTTP는 juns 협의. 인터페이스 `trigger(job)->run_id`만 고정, 구현체 교체 가능 |
 | A8 | **단계화: Phase 1(조회 전용) 단독 선출시** | 현황·이력·헬스는 공용 DB 읽기 + 백엔드 내부값 = 0 외부의존. 트리거만 Phase 2 |
 | A9 | **홈 큐레이션 편집기 채택 — read-write 확장** (2026-06-21, 사용자 승인) | A01 본래 "콘텐츠 큐레이션=비목표"·어드민 read-only 결정을 뒤집음. 홈 편성(히어로6+무드레일3)을 앱 재배포 없이 편집/발행. `curations`/`curation_spots`에 한정한 **스코프된 쓰기**(그 외 표면은 read-only 유지). Phase 4. → §7, 목업 `admin/mockups/curation.html`(B안), 요구사항 ADM-012~018 |
+| A10 | **임베딩 현황 카드 + 재임베딩 채택 — read-write 확장** (2026-06-28, 사용자 승인) | 수집(`spots`)과 임베딩(CLIP→`spot_embeddings`)은 분리된 단계인데 현황 페이지엔 수집만 보였음. 임베딩 커버리지·실패 백로그·이번 수집분 진행을 노출하고, 실패/백로그를 **인프로세스 BackgroundTask**로 재임베딩(Celery 없음, Redis `SET NX` 락=동시성 가드+running 표시). 실패 영속화용 `embedding_failures` 신설(백엔드 소유). 쓰기는 `images.services` 경유(어드민이 모델 직접 쓰지 않음). `GET /admin/api/embedding` · `POST /admin/api/embedding/trigger?scope=failed\|missing` → 수집 현황 아래 카드 |
 
 **미정(blocking은 트리거뿐):** A7 트리거 메커니즘.
-**제외(스코프 밖):** 데이터 품질/커버리지 패널, Redis ping·`rlte:*` 카운트, 취향벡터 보유,
-다른 KTO 수집/가공(상세·이미지·마스터·임베딩·무드) 트리거, 회원 관리.
-(콘텐츠 큐레이션은 2026-06-21 채택으로 스코프에 편입 → A9·§7.)
+**제외(스코프 밖):** Redis ping·`rlte:*` 카운트, 취향벡터 보유,
+다른 KTO 수집/가공(상세·이미지·마스터·무드) 트리거, 회원 관리.
+(콘텐츠 큐레이션은 2026-06-21 채택으로 스코프 편입 → A9·§7. **임베딩 현황/재임베딩은
+2026-06-28 채택으로 편입 → A10**; 따라서 "데이터 품질/커버리지 패널·임베딩 트리거"는 더 이상 제외 아님.)
 
 ---
 
