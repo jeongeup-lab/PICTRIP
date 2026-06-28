@@ -26,6 +26,14 @@ LDONG_ROWS = [
         "lDongSignguNm": "중구",
         "rnum": 3,
     },
+    {
+        # Sejong: KTO gives the province as 5-char '36110' (not 2-char).
+        "lDongRegnCd": "36110",
+        "lDongRegnNm": "세종특별자치시",
+        "lDongSignguCd": "36110",
+        "lDongSignguNm": "세종특별자치시",
+        "rnum": 4,
+    },
 ]
 
 LCLS_ROWS = [
@@ -66,8 +74,8 @@ class FakeClient:
 def _cleanup_codes(conn):
     cur = conn.cursor()
     # Codes from this test's fixtures only.
-    cur.execute("DELETE FROM sigungus WHERE ldong_regn_cd IN ('11','26')")
-    cur.execute("DELETE FROM regions WHERE ldong_regn_cd IN ('11','26')")
+    cur.execute("DELETE FROM sigungus WHERE ldong_regn_cd IN ('11','26','36')")
+    cur.execute("DELETE FROM regions WHERE ldong_regn_cd IN ('11','26','36')")
     cur.execute("DELETE FROM lcls_systm_codes WHERE lcls_systm3_cd IN ('AC010100','AC020100')")
     conn.commit()
 
@@ -155,3 +163,15 @@ def test_client_call_single_item_wrapped_to_list():
     http = httpx.Client(transport=transport, base_url="http://test")
     client = KtoClient(client=http)
     assert client.call("lclsSystmCode2") == [LCLS_ROWS[0]]
+
+
+def test_load_codes_normalizes_sejong(db_conn):
+    _cleanup_codes(db_conn)
+    load_codes(client=FakeClient(), conn=db_conn)
+    cur = db_conn.cursor()
+    cur.execute("SELECT ldong_regn_nm FROM regions WHERE ldong_regn_cd = '36'")
+    assert cur.fetchone() == ("세종특별자치시",)
+    # composite = normalized regn '36' + signgu '36110' = '3636110' (fits varchar 8).
+    cur.execute("SELECT ldong_regn_cd FROM sigungus WHERE ldong_signgu_cd = '3636110'")
+    assert cur.fetchone() == ("36",)
+    _cleanup_codes(db_conn)

@@ -15,6 +15,7 @@ import psycopg
 
 from pictrip_data.db import connect
 from pictrip_data.kto.client import KtoClient
+from pictrip_data.kto.schemas import normalize_regn_cd
 
 _REGION_SQL = """
 INSERT INTO regions (ldong_regn_cd, ldong_regn_nm)
@@ -51,7 +52,9 @@ def _load_ldong(client: KtoClient, conn: psycopg.Connection) -> None:
     regions: dict[str, str] = {}
     sigungus: list[tuple[str, str, str]] = []
     for r in rows:
-        regn_cd = str(r["lDongRegnCd"])
+        # Sejong's province code is the 5-char '36110'; normalize to 2-char so it
+        # fits regions/sigungus (varchar 8) and matches existing data.
+        regn_cd = normalize_regn_cd(str(r["lDongRegnCd"]))
         regn_nm = str(r["lDongRegnNm"])
         signgu_cd = str(r["lDongSignguCd"])
         signgu_nm = str(r["lDongSignguNm"])
