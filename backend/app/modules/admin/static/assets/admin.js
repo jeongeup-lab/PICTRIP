@@ -259,6 +259,151 @@ function wireTriggerButton() {
   btn.addEventListener("click", onTriggerClick);
 }
 
+// --- 임베딩 현황 (collection/embedding are separate steps) --------------------
+const _EMB_REASON_KO = { download_failed: "다운로드실패", clip_error: "이미지오류" };
+
+function showEmbeddingLoading() {
+  const l = document.getElementById("embedding-loading");
+  const e = document.getElementById("embedding-error");
+  const d = document.getElementById("embedding-data");
+  if (l) l.style.display = "";
+  if (e) e.style.display = "none";
+  if (d) d.style.display = "none";
+}
+
+function showEmbeddingError(msg) {
+  const l = document.getElementById("embedding-loading");
+  const e = document.getElementById("embedding-error");
+  const d = document.getElementById("embedding-data");
+  if (l) l.style.display = "none";
+  if (e) e.style.display = "";
+  if (d) d.style.display = "none";
+  const em = document.getElementById("embedding-error-msg");
+  if (em) em.textContent = msg;
+}
+
+function renderEmbedding(d) {
+  const l = document.getElementById("embedding-loading");
+  const e = document.getElementById("embedding-error");
+  const dd = document.getElementById("embedding-data");
+  if (l) l.style.display = "none";
+  if (e) e.style.display = "none";
+  if (dd) dd.style.display = "";
+
+  const fmt = (n) => (n != null ? n.toLocaleString("ko-KR") : "—");
+  const rec = d.recent || {};
+
+  ovSet("emb-recent", `${fmt(rec.target)}건`);
+  ovSet("emb-recent-detail", `완료 ${fmt(rec.embedded)} · 미완료 ${fmt(rec.outstanding)}`);
+
+  ovSet("emb-failed", fmt(d.failed));
+  const by = d.failuresByReason || {};
+  ovSet("emb-failed-reasons", Object.keys(by).map((k) => `${_EMB_REASON_KO[k] || k} ${by[k]}`).join(" · "));
+
+  ovSet("emb-backlog", fmt(d.missing));
+  ovSet("emb-last", d.lastComputedAt ? `최근 ${relativeTime(d.lastComputedAt)}` : "기록 없음");
+
+  const pct = d.withImage > 0 ? Math.round((d.embedded / d.withImage) * 100) : 0;
+  ovSet("emb-coverage", `${pct}%`);
+  ovSet("emb-coverage-sub", `${fmt(d.embedded)} / ${fmt(d.withImage)} 이미지보유`);
+
+  // Own the top 임베딩 KPI tile too (single coverage number across the page).
+  ovSet("ov-embed", fmt(d.embedded));
+  ovSet("ov-embed-pct", `커버리지 ${pct}% · 이미지보유 ${fmt(d.withImage)}`);
+
+  const statusEl = document.getElementById("emb-status-icon");
+  if (statusEl) {
+    if (d.running) {
+      statusEl.className = "status";
+      statusEl.style.color = "var(--warn)";
+      statusEl.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg> 임베딩 중…`;
+    } else if (d.missing === 0) {
+      statusEl.className = "status ok";
+      statusEl.style.color = "";
+      statusEl.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg> 전체 완료`;
+    } else {
+      statusEl.className = "";
+      statusEl.style.color = "";
+      statusEl.textContent = "";
+    }
+  }
+
+  setEmbButtons(d.running, d.failed, d.missing);
+
+  ovSet("emb-footer", `미임베딩 ${fmt(d.missing)} (대기 ${fmt(d.pending)} · 실패 ${fmt(d.failed)}) · 수동 백필과 동일 코드`);
+}
+
+function setEmbButtons(running, failed, missing) {
+  const retry = document.getElementById("emb-retry-btn");
+  const all = document.getElementById("emb-all-btn");
+  if (retry) {
+    retry.disabled = !!running || !failed;
+    retry.textContent = failed ? `실패분 재임베딩 ${failed.toLocaleString("ko-KR")}` : "실패분 재임베딩";
+  }
+  if (all) {
+    all.disabled = !!running || !missing;
+    all.textContent = running ? "임베딩 중…" : "전체 처리";
+  }
+}
+
+async function loadEmbedding() {
+  // Only flash the spinner on first load; auto-refresh re-renders in place.
+  const dataEl = document.getElementById("embedding-data");
+  if (!dataEl || dataEl.style.display === "none") showEmbeddingLoading();
+  try {
+    const data = await adminFetch("/admin/api/embedding");
+    renderEmbedding(data);
+    if (data.running) startEmbeddingPolling();
+  } catch (err) {
+    if (!dataEl || dataEl.style.display === "none") showEmbeddingError(err.message);
+  }
+}
+
+let _embPoll = null;
+const _EMB_POLL_MAX = 240; // ~20 min safety cap (5s interval)
+
+function startEmbeddingPolling() {
+  if (_embPoll) return;
+  let attempts = 0;
+  _embPoll = setInterval(async () => {
+    if (document.hidden) return;
+    attempts += 1;
+    if (attempts > _EMB_POLL_MAX) {
+      clearInterval(_embPoll);
+      _embPoll = null;
+      return;
+    }
+    try {
+      const data = await adminFetch("/admin/api/embedding");
+      renderEmbedding(data);
+      if (!data.running) {
+        clearInterval(_embPoll);
+        _embPoll = null;
+        toast("임베딩 완료");
+      }
+    } catch (_e) {}
+  }, 5000);
+}
+
+async function onEmbedTrigger(scope) {
+  setEmbButtons(true, 0, 0);
+  try {
+    await adminPost(`/admin/api/embedding/trigger?scope=${scope}`);
+    toast("임베딩 시작됨");
+    startEmbeddingPolling();
+  } catch (err) {
+    toast(err.message);
+    loadEmbedding();
+  }
+}
+
+function wireEmbeddingButtons() {
+  const retry = document.getElementById("emb-retry-btn");
+  if (retry) retry.addEventListener("click", () => onEmbedTrigger("failed"));
+  const all = document.getElementById("emb-all-btn");
+  if (all) all.addEventListener("click", () => onEmbedTrigger("missing"));
+}
+
 function showHistoryLoading() {
   const l = document.getElementById("history-loading");
   const e = document.getElementById("history-error");
@@ -553,14 +698,8 @@ async function loadOverviewCollection() {
     const data = await adminFetch("/admin/api/collection");
     renderCollection(data);
     ovSet("ov-total", data.totalSpots != null ? data.totalSpots.toLocaleString("ko-KR") : "—");
-    const embedded = data.embeddedSpots != null ? data.embeddedSpots : null;
-    ovSet("ov-embed", embedded != null ? embedded.toLocaleString("ko-KR") : "—");
-    if (embedded != null && data.totalSpots) {
-      const pct = Math.round((embedded / data.totalSpots) * 100);
-      ovSet("ov-embed-pct", `커버리지 ${pct}% · 총 ${data.totalSpots.toLocaleString("ko-KR")}`);
-    } else {
-      ovSet("ov-embed-pct", "커버리지 —");
-    }
+    // ov-embed KPI is owned by loadEmbedding() (image-bearing coverage) so the
+    // tile and the 임베딩 현황 card never show two different coverage numbers.
     const run = data.source && data.source.lastRun;
     const status = run ? run.status : null;
     const label = status === "success" ? "성공" : status === "error" ? "실패" : status === "running" ? "실행 중" : "—";
@@ -651,6 +790,7 @@ async function loadOverviewCuration() {
 // Overview aggregates read-only endpoints; each section fails independently.
 function loadOverview() {
   loadOverviewCollection();
+  loadEmbedding();
   loadOverviewHealth();
   loadOverviewHistory();
 }
@@ -669,6 +809,7 @@ window.addEventListener("load", () => {
   if (document.getElementById("overview-page")) {
     loadOverview();
     wireTriggerButton();
+    wireEmbeddingButtons();
     startRefresh(loadOverview, 30000);
   } else if (document.getElementById("collection-loading")) {
     loadCollection();

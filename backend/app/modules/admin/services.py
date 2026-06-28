@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
+from fastapi import BackgroundTasks
 from redis.asyncio import Redis
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -30,6 +32,9 @@ from app.modules.admin.schemas import (
     CurationList,
     CurationListItem,
     CurationUpdate,
+    EmbeddingRecent,
+    EmbeddingStatus,
+    EmbeddingTriggerResult,
     Handpick,
     HandpickList,
     Health,
@@ -48,6 +53,7 @@ from app.modules.admin.schemas import (
     TriggerResult,
 )
 from app.modules.admin.triggers import get_collection_trigger
+from app.modules.images import services as image_services
 from app.modules.spots.services.curations import invalidate_curation_cache
 
 _SOURCE_NAME = "국문 관광정보 서비스"
@@ -56,6 +62,14 @@ _SOURCE_ENDPOINT = "areaBasedSyncList2"
 # Fixed admin actor (A04 single Basic user); no role/user table exists (out of scope).
 _ADMIN_ACTOR = "admin"
 _MAX_HANDPICKS = 8
+
+# Re-embed trigger: a Redis lock doubles as the "running" flag for the status card
+# and the concurrency guard for the button (SET NX). TTL auto-releases a crashed
+# job. The "missing" (full-backlog) scope is capped so a background run never pins
+# the serving process — larger backlogs go through scripts.backfill_embeddings.
+_EMBED_LOCK_KEY = "admin:embed:running"
+_EMBED_LOCK_TTL = 1800  # seconds (30 min)
+_EMBED_TRIGGER_MAX = 2000
 
 _logger = get_logger(__name__)
 
@@ -89,6 +103,112 @@ async def get_collection_status(session: AsyncSession) -> CollectionStatus:
         ),
         # Honest null: no scheduler metadata is wired yet (A01 §2.1 allows it).
         nextScheduledAt=None,
+    )
+
+
+# --- embedding status + re-embed trigger (collection/embedding are separate) ---
+async def get_embedding_status(session: AsyncSession, redis: Redis) -> EmbeddingStatus:
+    """Coverage + failure backlog + "this collection" progress (A01-extension).
+
+    Embedding runs after collection: a spot can have ``first_image_url`` but no
+    ``spot_embeddings`` row. ``embedding_failures`` makes "failed" distinguishable
+    from "not yet attempted". The "recent" view scopes to the latest sync run's
+    start so the operator sees whether today's newly-collected spots are embedded.
+    """
+    totals = await repo.embedding_totals(session)
+    reasons = {r.reason: r.n for r in await repo.embedding_failures_by_reason(session)}
+
+    with_image = totals.with_image
+    missing = totals.missing
+    embedded = with_image - missing
+    failed = totals.failed
+
+    # Scope "this collection" to the latest sync run's start. sync_runs is
+    # pipeline-owned and always present in prod; guard defensively so a DB that
+    # has never been synced degrades to a null window instead of 500ing.
+    since = None
+    recent_target = recent_embedded = 0
+    try:
+        run = await repo.latest_sync_run(session)
+        if run is not None:
+            since = run.started_at
+            window = await repo.embedding_recent_window(session, since)
+            recent_target = window.target
+            recent_embedded = window.embedded
+    except SQLAlchemyError:
+        await session.rollback()
+        since = None
+
+    running = bool(await redis.exists(_EMBED_LOCK_KEY))
+
+    return EmbeddingStatus(
+        totalSpots=totals.total_spots,
+        withImage=with_image,
+        embedded=embedded,
+        missing=missing,
+        failed=failed,
+        pending=max(0, missing - failed),
+        failuresByReason=reasons,
+        recent=EmbeddingRecent(
+            since=since,
+            target=recent_target,
+            embedded=recent_embedded,
+            outstanding=max(0, recent_target - recent_embedded),
+        ),
+        lastComputedAt=totals.last_computed_at,
+        running=running,
+    )
+
+
+async def trigger_embedding(
+    redis: Redis,
+    background_tasks: BackgroundTasks,
+    scope: str = "failed",
+    actor: str = _ADMIN_ACTOR,
+) -> EmbeddingTriggerResult:
+    """Kick an in-process re-embed job (A01-extension; admin-owned action).
+
+    ``scope='failed'`` retries only spots in ``embedding_failures``; ``'missing'``
+    processes the (capped) all-time backlog. A Redis ``SET NX`` lock rejects a
+    second concurrent trigger and marks the status card "running"; the background
+    task releases it on completion. The write itself goes through
+    :mod:`app.modules.images.services` (cross-module via services, never models).
+    """
+    if scope not in ("failed", "missing"):
+        raise AdminValidationFailed(
+            details=[{"field": "scope", "issue": "scope는 failed 또는 missing이어야 합니다."}]
+        )
+
+    acquired = await redis.set(_EMBED_LOCK_KEY, actor, nx=True, ex=_EMBED_LOCK_TTL)
+    if not acquired:
+        _audit_embed(actor, accepted=False, scope=scope, reason="already-running")
+        raise AdminTriggerFailed("이미 임베딩이 진행 중입니다.")
+
+    only_failed = scope == "failed"
+    limit = None if only_failed else _EMBED_TRIGGER_MAX
+    background_tasks.add_task(_run_embed_job, redis, only_failed, limit)
+    _audit_embed(actor, accepted=True, scope=scope, reason=None)
+    return EmbeddingTriggerResult(job=f"embed-{scope}", scope=scope, accepted=True)
+
+
+async def _run_embed_job(redis: Redis, only_failed: bool, limit: int | None) -> None:
+    """Background worker: run the embed job, always releasing the Redis lock."""
+    try:
+        await image_services.run_embedding_job(only_failed=only_failed, limit=limit)
+    except Exception:  # never let a background failure leave the lock dangling
+        _logger.exception("embed.job.error")
+    finally:
+        await redis.delete(_EMBED_LOCK_KEY)
+
+
+def _audit_embed(actor: str, *, accepted: bool, scope: str, reason: str | None) -> None:
+    _logger.info(
+        "embedding.trigger",
+        actor=actor,
+        action="embedding.trigger",
+        scope=scope,
+        result="accepted" if accepted else "failed",
+        reason=reason,
     )
 
 
