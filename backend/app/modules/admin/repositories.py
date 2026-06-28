@@ -43,6 +43,12 @@ async def count_spots(session: AsyncSession) -> int:
     return int(result.scalar_one())
 
 
+async def count_embeddings(session: AsyncSession) -> int:
+    """Spots with a CLIP embedding (spot_embeddings is the vector store)."""
+    result = await session.execute(text("SELECT count(*) FROM spot_embeddings"))
+    return int(result.scalar_one())
+
+
 async def latest_sync_run(session: AsyncSession) -> Row[Any] | None:
     """Newest run (idx_sync_runs_recent, id DESC). ``None`` if never synced."""
     result = await session.execute(

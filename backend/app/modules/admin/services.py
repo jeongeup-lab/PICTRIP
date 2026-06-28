@@ -76,6 +76,7 @@ _logger = get_logger(__name__)
 
 async def get_collection_status(session: AsyncSession) -> CollectionStatus:
     total = await repo.count_spots(session)
+    embedded = await repo.count_embeddings(session)
     row = await repo.latest_sync_run(session)
 
     last_run: LastRun | None = None
@@ -94,6 +95,7 @@ async def get_collection_status(session: AsyncSession) -> CollectionStatus:
 
     return CollectionStatus(
         totalSpots=total,
+        embeddedSpots=embedded,
         source=CollectionSource(
             name=_SOURCE_NAME,
             endpoint=_SOURCE_ENDPOINT,

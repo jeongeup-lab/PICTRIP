@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>PicTrip Admin · 운영 개요</title>
+<title>PicTrip Admin · Overview</title>
 <link rel="stylesheet" href="/admin/assets/admin.css" />
 </head>
 <body>
@@ -52,7 +52,7 @@
         <h1>Overview</h1>
       </div>
 
-      <div class="grid cols-4" style="margin-bottom:18px">
+      <div class="grid cols-5" style="margin-bottom:18px">
         <div class="kpi">
           <div class="ic"><svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.9"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/></svg></div>
           <div class="label">총 관광지</div>
@@ -60,159 +60,112 @@
           <div class="delta" id="ov-total-delta">spots</div>
         </div>
         <div class="kpi">
-          <div class="ic g"><svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg></div>
+          <div class="ic"><svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.9"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg></div>
+          <div class="label">임베딩</div>
+          <div class="val" id="ov-embed">—</div>
+          <div class="delta" id="ov-embed-pct">커버리지 —</div>
+        </div>
+        <div class="kpi">
+          <div class="ic"><svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg></div>
           <div class="label">최근 수집</div>
           <div class="val" id="ov-laststatus">—</div>
           <div class="delta" id="ov-lastrun-meta">—</div>
         </div>
         <div class="kpi">
-          <div class="ic b"><svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.9"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/></svg></div>
+          <div class="ic"><svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.9"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/></svg></div>
           <div class="label">DB 풀</div>
           <div class="val" id="ov-dbpool">—</div>
-          <div class="delta">CT110 · PostgreSQL</div>
+          <div class="delta">CT110 · 최대 연결</div>
         </div>
         <div class="kpi">
-          <div class="ic a"><svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.9"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0 1 14 0v1"/></svg></div>
+          <div class="ic"><svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.9"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0 1 14 0v1"/></svg></div>
           <div class="label">가입 사용자</div>
           <div class="val" id="ov-users">—</div>
           <div class="delta" id="ov-users-new">—</div>
         </div>
       </div>
 
-      <div class="ov-cols">
-        <div class="ov-stack">
-          <section>
-            <div class="sec-h"><h2>수집 현황</h2><span class="x">areaBasedSyncList2 → spots</span></div>
+      <section style="margin-bottom:20px">
+        <div class="sec-h"><h2>수집 현황</h2><span class="x">국문 관광정보 서비스 · areaBasedSyncList2 → spots</span></div>
 
-            <div id="collection-loading" class="src" style="justify-content:center;padding:32px">
-              <span style="color:var(--ink-3);font-size:13px">불러오는 중…</span>
-            </div>
-            <div id="collection-error" style="display:none;background:var(--bad-soft);border:2px solid var(--ink);border-radius:4px;padding:22px 26px">
-              <p style="margin:0 0 12px;color:var(--bad);font-weight:700">데이터를 불러오지 못했습니다.</p>
-              <p id="collection-error-msg" style="margin:0 0 16px;font-size:13px;color:var(--ink-2)"></p>
-              <button class="btn ghost sm" onclick="loadOverview()">다시 시도</button>
-            </div>
-            <div id="collection-data" style="display:none">
-              <div class="src">
-                <div class="cell name">
-                  <div class="title">국문 관광정보 서비스</div>
-                  <div class="ep">areaBasedSyncList2 → spots</div>
-                </div>
-                <div class="cell">
-                  <div class="lbl">실행 시간</div>
-                  <div class="v" id="col-ran-at">—<br><small id="col-ran-rel"></small></div>
-                </div>
-                <div class="cell">
-                  <div class="lbl">추가 / 수정 / 숨김</div>
-                  <div class="v" id="col-changes">—</div>
-                </div>
-                <div class="cell">
-                  <div class="lbl">소요</div>
-                  <div class="v" id="col-duration">—</div>
-                </div>
-                <div class="cell act">
-                  <span class="status" id="col-status-icon"></span>
-                  <button class="btn" id="col-trigger-btn" disabled title="준비 중 (Phase 2)">준비 중</button>
-                </div>
-                <div style="display:none"><span id="col-api-calls"></span></div>
-              </div>
-              <p id="col-footer" style="font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin-top:14px"></p>
-            </div>
-          </section>
-
-          <section>
-            <div class="sec-h"><h2>임베딩 현황</h2><span class="x">CLIP ViT-B/32 → spot_embeddings</span></div>
-
-            <div id="embedding-loading" class="src" style="justify-content:center;padding:32px">
-              <span style="color:var(--ink-3);font-size:13px">불러오는 중…</span>
-            </div>
-            <div id="embedding-error" style="display:none;background:var(--bad-soft);border:2px solid var(--ink);border-radius:4px;padding:22px 26px">
-              <p style="margin:0 0 12px;color:var(--bad);font-weight:700">데이터를 불러오지 못했습니다.</p>
-              <p id="embedding-error-msg" style="margin:0 0 16px;font-size:13px;color:var(--ink-2)"></p>
-              <button class="btn ghost sm" onclick="loadEmbedding()">다시 시도</button>
-            </div>
-            <div id="embedding-data" style="display:none">
-              <div class="src">
-                <div class="cell name">
-                  <div class="title">CLIP 임베딩</div>
-                  <div class="ep">수집과 분리 · 이미지 → 512d 벡터</div>
-                </div>
-                <div class="cell">
-                  <div class="lbl">이번 수집</div>
-                  <div class="v" id="emb-recent">—<br><small id="emb-recent-detail"></small></div>
-                </div>
-                <div class="cell">
-                  <div class="lbl">실패</div>
-                  <div class="v" id="emb-failed">—<br><small id="emb-failed-reasons"></small></div>
-                </div>
-                <div class="cell">
-                  <div class="lbl">백로그 (미임베딩)</div>
-                  <div class="v" id="emb-backlog">—<br><small id="emb-last">—</small></div>
-                </div>
-                <div class="cell act">
-                  <span class="status" id="emb-status-icon"></span>
-                </div>
-              </div>
-              <div class="emb-bar" style="display:flex;align-items:center;gap:12px;margin-top:14px">
-                <p id="emb-footer" style="font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin:0;flex:1"></p>
-                <button class="btn ghost sm" id="emb-retry-btn" disabled>실패분 재임베딩</button>
-                <button class="btn sm" id="emb-all-btn" disabled>전체 처리</button>
-              </div>
-            </div>
-          </section>
-
-          <section>
-            <div class="sec-h"><h2>수집 이력</h2><span class="x">최근 14일</span><a class="x acc" href="/admin/history">전체 보기 →</a></div>
-            <div class="chart" id="ov-hist" title="클릭하면 수집 이력으로 이동" style="cursor:pointer" onclick="location.href='/admin/history'">
-              <div class="col" style="justify-content:center"><span style="color:var(--ink-3);font-size:12px">불러오는 중…</span></div>
-            </div>
-            <div class="chart-legend">
-              <span><i style="background:var(--ink)"></i>성공</span>
-              <span><i style="background:var(--accent)"></i>실패 포함</span>
-            </div>
-          </section>
+        <div id="collection-loading" class="srccard" style="text-align:center">
+          <span style="color:var(--ink-3);font-size:13px">불러오는 중…</span>
+        </div>
+        <div id="collection-error" style="display:none;background:var(--bad-soft);border:1px solid #f3c2c2;border-radius:16px;padding:22px 26px">
+          <p style="margin:0 0 12px;color:var(--bad);font-weight:700">데이터를 불러오지 못했습니다.</p>
+          <p id="collection-error-msg" style="margin:0 0 16px;font-size:13px;color:var(--ink-2)"></p>
+          <button class="btn ghost sm" onclick="loadOverview()">다시 시도</button>
         </div>
 
-        <div class="ov-stack">
-          <section>
-            <div class="sec-h"><h2>서비스 헬스</h2><a class="x acc" href="/admin/health">상세 →</a></div>
-            <div class="card">
-              <div class="hrow">
-                <div class="svc" id="ov-h-api-svc"><span class="dot ok"></span> FastAPI</div>
-                <div class="detail" id="ov-h-api-detail">—</div>
-                <div class="reading" id="ov-h-api-reading"><span class="chip idle">—</span></div>
+        <div id="collection-data" style="display:none">
+          <div class="srccard">
+            <div class="srchead">
+              <div class="srcname">
+                <div class="title">국문 관광정보 서비스</div>
+                <div class="ep">areaBasedSyncList2 → spots</div>
               </div>
-              <div class="hrow">
-                <div class="svc" id="ov-h-db-svc"><span class="dot ok"></span> PostgreSQL</div>
-                <div class="detail" id="ov-h-db-detail">—</div>
-                <div class="reading" id="ov-h-db-reading"><span class="chip idle">—</span></div>
-              </div>
-              <div class="hrow">
-                <div class="svc" id="ov-h-tunnel-svc"><span class="dot warn"></span> Cloudflare 터널</div>
-                <div class="detail" id="ov-h-tunnel-detail">—</div>
-                <div class="reading" id="ov-h-tunnel-reading"><span class="chip idle">—</span></div>
-              </div>
-              <div class="hrow">
-                <div class="svc"><span class="dot ok"></span> 가입자</div>
-                <div class="detail" id="ov-h-users-detail">—</div>
-                <div class="reading" id="ov-h-users-reading">—</div>
-              </div>
+              <span class="status" id="col-status-icon"></span>
+              <button class="btn" id="col-trigger-btn" disabled title="준비 중 (Phase 2)">준비 중</button>
             </div>
-          </section>
-
-          <section>
-            <div class="sec-h"><h2>홈 큐레이션</h2><a class="x acc" href="/admin/curation">편집 →</a></div>
-            <div class="card">
-              <div class="card-b" style="padding:16px">
-                <div id="ov-curation" style="display:flex;gap:10px">
-                  <span style="color:var(--ink-3);font-size:12px">불러오는 중…</span>
-                </div>
-                <p id="ov-curation-meta" style="font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin:14px 0 0"></p>
-              </div>
+            <div class="srcstats">
+              <div class="stat"><div class="l">추가 수집</div><div class="n up" id="col-ins">—</div></div>
+              <div class="stat"><div class="l">수정</div><div class="n" id="col-upd">—</div></div>
+              <div class="stat"><div class="l">숨김</div><div class="n dn" id="col-del">—</div></div>
+              <div class="stat"><div class="l">소요</div><div class="n sm" id="col-duration">—</div></div>
+              <div class="stat"><div class="l">실행 시각</div><div class="n sm" id="col-ran-at">—</div><div class="sub" id="col-ran-rel"></div></div>
             </div>
-          </section>
+            <p id="col-footer" style="font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin:14px 0 0"></p>
+            <span id="col-api-calls" style="display:none"></span>
+          </div>
         </div>
-      </div>
+      </section>
+
+      <section style="margin-bottom:20px">
+        <div class="sec-h"><h2>임베딩 현황</h2><span class="x">CLIP ViT-B/32 → spot_embeddings · 수집과 분리</span></div>
+
+        <div id="embedding-loading" class="srccard" style="text-align:center">
+          <span style="color:var(--ink-3);font-size:13px">불러오는 중…</span>
+        </div>
+        <div id="embedding-error" style="display:none;background:var(--bad-soft);border:1px solid #f3c2c2;border-radius:16px;padding:22px 26px">
+          <p style="margin:0 0 12px;color:var(--bad);font-weight:700">데이터를 불러오지 못했습니다.</p>
+          <p id="embedding-error-msg" style="margin:0 0 16px;font-size:13px;color:var(--ink-2)"></p>
+          <button class="btn ghost sm" onclick="loadEmbedding()">다시 시도</button>
+        </div>
+
+        <div id="embedding-data" style="display:none">
+          <div class="srccard">
+            <div class="srchead">
+              <div class="srcname">
+                <div class="title">CLIP 임베딩</div>
+                <div class="ep">이미지 → 512d 벡터</div>
+              </div>
+              <span class="status" id="emb-status-icon"></span>
+              <button class="btn ghost sm" id="emb-retry-btn" disabled>실패분 재임베딩</button>
+              <button class="btn sm" id="emb-all-btn" disabled>전체 처리</button>
+            </div>
+            <div class="srcstats">
+              <div class="stat"><div class="l">이번 수집</div><div class="n" id="emb-recent">—</div><div class="sub" id="emb-recent-detail"></div></div>
+              <div class="stat"><div class="l">실패</div><div class="n dn" id="emb-failed">—</div><div class="sub" id="emb-failed-reasons"></div></div>
+              <div class="stat"><div class="l">백로그 (미임베딩)</div><div class="n" id="emb-backlog">—</div><div class="sub" id="emb-last"></div></div>
+              <div class="stat"><div class="l">커버리지</div><div class="n" id="emb-coverage">—</div><div class="sub" id="emb-coverage-sub"></div></div>
+            </div>
+            <p id="emb-footer" style="font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin:14px 0 0"></p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="sec-h"><h2>수집 이력</h2><span class="x">최근 14일</span><a class="x acc" href="/admin/history">전체 보기 →</a></div>
+        <div class="card"><div class="card-b">
+          <div class="chart" id="ov-hist" title="클릭하면 수집 이력으로 이동" style="cursor:pointer" onclick="location.href='/admin/history'">
+            <div class="col" style="justify-content:center"><span style="color:var(--ink-3);font-size:12px">불러오는 중…</span></div>
+          </div>
+          <div class="chart-legend">
+            <span><i style="background:var(--ink)"></i>성공</span>
+            <span><i style="background:var(--bad)"></i>실패</span>
+          </div>
+        </div></div>
+      </section>
 
     </div>
   </div>

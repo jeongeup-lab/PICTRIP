@@ -35,12 +35,20 @@ def parse_modifiedtime(v: Any) -> datetime | None:
     return datetime.strptime(s, "%Y%m%d%H%M%S").replace(tzinfo=_KST)
 
 
+def normalize_regn_cd(c: str | None) -> str | None:
+    """KTO returns Sejong's province code as the 5-char '36110'; every other
+    province is 2-char. Normalize to the 2-char province code so it fits
+    regions.ldong_regn_cd (varchar 8) and the composite signgu matches the
+    existing convention (Sejong sigungu = '36' + '36110' = '3636110')."""
+    return c[:2] if c else c
+
+
 def _signgu_composite(raw: dict[str, Any]) -> str | None:
     regn = _blank_to_none(raw.get("lDongRegnCd"))
     signgu = _blank_to_none(raw.get("lDongSignguCd"))
     if regn is None or signgu is None:
         return None
-    return f"{regn}{signgu}"
+    return f"{normalize_regn_cd(regn)}{signgu}"
 
 
 @dataclass
@@ -75,7 +83,7 @@ class KtoSpot:
             zipcode=_blank_to_none(raw.get("zipcode")),
             mapx=_to_decimal(raw.get("mapx")),
             mapy=_to_decimal(raw.get("mapy")),
-            ldong_regn_cd=_blank_to_none(raw.get("lDongRegnCd")),
+            ldong_regn_cd=normalize_regn_cd(_blank_to_none(raw.get("lDongRegnCd"))),
             ldong_signgu_cd=_signgu_composite(raw),
             lcls_systm1=_blank_to_none(raw.get("lclsSystm1")),
             lcls_systm2=_blank_to_none(raw.get("lclsSystm2")),

@@ -49,3 +49,18 @@ def test_missing_signgu_part_yields_none():
     raw = dict(_items()[0])
     raw["lDongSignguCd"] = ""
     assert KtoSpot.from_kto(raw).ldong_signgu_cd is None
+
+
+def test_sejong_regn_normalized():
+    # KTO gives Sejong's province as 5-char '36110'; we store 2-char '36' and
+    # the composite signgu '36' + '36110' = '3636110' (matches existing data).
+    raw = {
+        "contentid": "X1",
+        "contenttypeid": "12",
+        "title": "세종 어딘가",
+        "lDongRegnCd": "36110",
+        "lDongSignguCd": "36110",
+    }
+    spot = KtoSpot.from_kto(raw)
+    assert spot.ldong_regn_cd == "36"
+    assert spot.ldong_signgu_cd == "3636110"

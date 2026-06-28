@@ -129,26 +129,20 @@ function renderCollection(data) {
 
   const ranAtEl = document.getElementById("col-ran-at");
   const ranRelEl = document.getElementById("col-ran-rel");
-  if (ranAtEl && ranRelEl) {
-    const ts = run ? (run.finishedAt || run.ranAt) : null;
-    ranAtEl.childNodes[0].textContent = ts ? fmtDatetime(ts) : "—";
-    ranRelEl.textContent = ts ? relativeTime(ts) : "";
-  }
+  const _ts = run ? run.finishedAt || run.ranAt : null;
+  if (ranAtEl) ranAtEl.textContent = _ts ? fmtDatetime(_ts) : "—";
+  if (ranRelEl) ranRelEl.textContent = _ts ? relativeTime(_ts) : "";
 
   const apiEl = document.getElementById("col-api-calls");
   if (apiEl) apiEl.textContent = run ? (run.apiCalls != null ? run.apiCalls.toLocaleString("ko-KR") : "—") : "—";
 
-  const chEl = document.getElementById("col-changes");
-  if (chEl) {
-    if (run) {
-      const ins = run.inserted != null ? run.inserted.toLocaleString("ko-KR") : "—";
-      const upd = run.updated != null ? run.updated.toLocaleString("ko-KR") : "—";
-      const del = run.softDeleted != null ? run.softDeleted.toLocaleString("ko-KR") : "—";
-      chEl.textContent = `${ins} / ${upd} / ${del}`;
-    } else {
-      chEl.textContent = "—";
-    }
-  }
+  const _num = (v) => (v != null ? v.toLocaleString("ko-KR") : "—");
+  const insEl = document.getElementById("col-ins");
+  if (insEl) insEl.textContent = run ? `+${_num(run.inserted)}` : "—";
+  const updEl = document.getElementById("col-upd");
+  if (updEl) updEl.textContent = run ? _num(run.updated) : "—";
+  const delEl = document.getElementById("col-del");
+  if (delEl) delEl.textContent = run ? _num(run.softDeleted) : "—";
 
   const durEl = document.getElementById("col-duration");
   if (durEl) durEl.textContent = run ? fmtDuration(run.durationSec) : "—";
@@ -266,6 +260,8 @@ function wireTriggerButton() {
 }
 
 // --- 임베딩 현황 (collection/embedding are separate steps) --------------------
+const _EMB_REASON_KO = { download_failed: "다운로드실패", clip_error: "이미지오류" };
+
 function showEmbeddingLoading() {
   const l = document.getElementById("embedding-loading");
   const e = document.getElementById("embedding-error");
@@ -286,8 +282,6 @@ function showEmbeddingError(msg) {
   if (em) em.textContent = msg;
 }
 
-const _EMB_REASON_KO = { download_failed: "다운로드실패", clip_error: "이미지오류" };
-
 function renderEmbedding(d) {
   const l = document.getElementById("embedding-loading");
   const e = document.getElementById("embedding-error");
@@ -299,28 +293,19 @@ function renderEmbedding(d) {
   const fmt = (n) => (n != null ? n.toLocaleString("ko-KR") : "—");
   const rec = d.recent || {};
 
-  const recentEl = document.getElementById("emb-recent");
-  if (recentEl) recentEl.childNodes[0].textContent = `${fmt(rec.target)}건`;
-  const recentDetailEl = document.getElementById("emb-recent-detail");
-  if (recentDetailEl) {
-    const done = rec.embedded != null ? fmt(rec.embedded) : "—";
-    const out = rec.outstanding != null ? fmt(rec.outstanding) : "—";
-    recentDetailEl.textContent = `완료 ${done} · 미완료 ${out}`;
-  }
+  ovSet("emb-recent", `${fmt(rec.target)}건`);
+  ovSet("emb-recent-detail", `완료 ${fmt(rec.embedded)} · 미완료 ${fmt(rec.outstanding)}`);
 
-  const failedEl = document.getElementById("emb-failed");
-  if (failedEl) failedEl.childNodes[0].textContent = fmt(d.failed);
-  const reasonsEl = document.getElementById("emb-failed-reasons");
-  if (reasonsEl) {
-    const by = d.failuresByReason || {};
-    const parts = Object.keys(by).map((k) => `${_EMB_REASON_KO[k] || k} ${by[k]}`);
-    reasonsEl.textContent = parts.join(" · ");
-  }
+  ovSet("emb-failed", fmt(d.failed));
+  const by = d.failuresByReason || {};
+  ovSet("emb-failed-reasons", Object.keys(by).map((k) => `${_EMB_REASON_KO[k] || k} ${by[k]}`).join(" · "));
 
-  const backlogEl = document.getElementById("emb-backlog");
-  if (backlogEl) backlogEl.childNodes[0].textContent = fmt(d.missing);
-  const lastEl = document.getElementById("emb-last");
-  if (lastEl) lastEl.textContent = d.lastComputedAt ? `최근 ${relativeTime(d.lastComputedAt)}` : "기록 없음";
+  ovSet("emb-backlog", fmt(d.missing));
+  ovSet("emb-last", d.lastComputedAt ? `최근 ${relativeTime(d.lastComputedAt)}` : "기록 없음");
+
+  const pct = d.withImage > 0 ? Math.round((d.embedded / d.withImage) * 100) : 0;
+  ovSet("emb-coverage", `${pct}%`);
+  ovSet("emb-coverage-sub", `${fmt(d.embedded)} / ${fmt(d.withImage)} 이미지보유`);
 
   const statusEl = document.getElementById("emb-status-icon");
   if (statusEl) {
@@ -333,7 +318,7 @@ function renderEmbedding(d) {
       statusEl.style.color = "";
       statusEl.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg> 전체 완료`;
     } else {
-      statusEl.className = "status";
+      statusEl.className = "";
       statusEl.style.color = "";
       statusEl.textContent = "";
     }
@@ -341,11 +326,7 @@ function renderEmbedding(d) {
 
   setEmbButtons(d.running, d.failed, d.missing);
 
-  const footEl = document.getElementById("emb-footer");
-  if (footEl) {
-    const pct = d.withImage > 0 ? Math.round((d.embedded / d.withImage) * 100) : 0;
-    footEl.textContent = `커버리지 ${fmt(d.embedded)} / ${fmt(d.withImage)} 이미지보유 (${pct}%) · 미임베딩 ${fmt(d.missing)} (대기 ${fmt(d.pending)} · 실패 ${fmt(d.failed)})`;
-  }
+  ovSet("emb-footer", `미임베딩 ${fmt(d.missing)} (대기 ${fmt(d.pending)} · 실패 ${fmt(d.failed)}) · 수동 백필과 동일 코드`);
 }
 
 function setEmbButtons(running, failed, missing) {
@@ -362,7 +343,7 @@ function setEmbButtons(running, failed, missing) {
 }
 
 async function loadEmbedding() {
-  // Only flash the spinner on the first load; auto-refresh re-renders in place.
+  // Only flash the spinner on first load; auto-refresh re-renders in place.
   const dataEl = document.getElementById("embedding-data");
   if (!dataEl || dataEl.style.display === "none") showEmbeddingLoading();
   try {
@@ -603,9 +584,9 @@ function renderHealth(h) {
 
   const dbPoolEl = document.getElementById("h-db-pool");
   if (dbPoolEl) {
-    const inUse = h.db && h.db.poolInUse != null ? h.db.poolInUse : "—";
+    // Pool max (stable) so this matches the Overview KPI; live in-use is in the row below.
     const size = h.db && h.db.poolSize != null ? h.db.poolSize : "—";
-    dbPoolEl.textContent = `${inUse} / ${size}`;
+    dbPoolEl.textContent = String(size);
   }
 
   const usersTotalEl = document.getElementById("h-users-total");
@@ -713,14 +694,21 @@ async function loadOverviewCollection() {
     const data = await adminFetch("/admin/api/collection");
     renderCollection(data);
     ovSet("ov-total", data.totalSpots != null ? data.totalSpots.toLocaleString("ko-KR") : "—");
+    const embedded = data.embeddedSpots != null ? data.embeddedSpots : null;
+    ovSet("ov-embed", embedded != null ? embedded.toLocaleString("ko-KR") : "—");
+    if (embedded != null && data.totalSpots) {
+      const pct = Math.round((embedded / data.totalSpots) * 100);
+      ovSet("ov-embed-pct", `커버리지 ${pct}% · 총 ${data.totalSpots.toLocaleString("ko-KR")}`);
+    } else {
+      ovSet("ov-embed-pct", "커버리지 —");
+    }
     const run = data.source && data.source.lastRun;
     const status = run ? run.status : null;
     const label = status === "success" ? "성공" : status === "error" ? "실패" : status === "running" ? "실행 중" : "—";
     ovSet("ov-laststatus", label);
     const lsEl = document.getElementById("ov-laststatus");
-    if (lsEl)
-      lsEl.style.color =
-        status === "success" ? "var(--ok)" : status === "error" ? "var(--bad)" : status === "running" ? "var(--warn)" : "";
+    // Normal state stays ink; only problems get colour.
+    if (lsEl) lsEl.style.color = status === "error" ? "var(--bad)" : status === "running" ? "var(--warn)" : "";
     if (run) {
       const ts = run.finishedAt || run.ranAt;
       ovSet("ov-lastrun-meta", `${fmtDuration(run.durationSec)} · ${ts ? relativeTime(ts) : ""}`.trim());
@@ -734,49 +722,20 @@ async function loadOverviewCollection() {
 }
 
 async function loadOverviewHealth() {
+  // Overview only needs the DB-pool + users KPIs; full health lives on /admin/health.
   try {
     const h = await adminFetch("/admin/api/health");
-    if (h.db) {
-      const inUse = h.db.poolInUse != null ? h.db.poolInUse : "—";
-      const size = h.db.poolSize != null ? h.db.poolSize : "—";
-      ovHtml("ov-dbpool", `${inUse}<small> / ${size}</small>`);
-    }
+    if (h.db) ovSet("ov-dbpool", h.db.poolSize != null ? String(h.db.poolSize) : "—");
     if (h.users) {
       ovSet("ov-users", h.users.total != null ? h.users.total.toLocaleString("ko-KR") : "—");
-      ovHtml("ov-users-new", h.users.new7d != null ? `<b>+${h.users.new7d.toLocaleString("ko-KR")}</b> 신규 7일` : "—");
+      ovHtml(
+        "ov-users-new",
+        h.users.new7d != null ? `<b>+${h.users.new7d.toLocaleString("ko-KR")}</b> 신규 7일` : "—",
+      );
     }
-    const ver = h.api && h.api.version ? h.api.version : "—";
-    ovSet("ov-h-api-detail", `${ver} · uptime ${fmtUptime(h.api && h.api.uptimeSec)}`);
-    ovHtml("ov-h-api-reading", `<span class="chip ok">200 OK</span>`);
-
-    const dbOk = h.db && h.db.ok;
-    const spots = h.db && h.db.spots != null ? h.db.spots.toLocaleString("ko-KR") : "—";
-    const inUse = h.db && h.db.poolInUse != null ? h.db.poolInUse : "—";
-    const size = h.db && h.db.poolSize != null ? h.db.poolSize : "—";
-    ovSet("ov-h-db-detail", `CT110 · pool ${inUse}/${size} · ${spots} spots`);
-    ovHtml("ov-h-db-reading", dbOk ? `<span class="chip ok">connected</span>` : `<span class="chip bad">error</span>`);
-    ovHtml("ov-h-db-svc", `<span class="dot ${dbOk ? "ok" : "bad"}"></span> PostgreSQL`);
-
-    const tunnel = h.tunnel;
-    ovSet("ov-h-tunnel-detail", tunnel && tunnel.detail ? tunnel.detail : "미구현 (차기)");
-    if (tunnel == null || tunnel.ok == null) {
-      ovHtml("ov-h-tunnel-reading", `<span class="chip idle">—</span>`);
-      ovHtml("ov-h-tunnel-svc", `<span class="dot warn"></span> Cloudflare 터널`);
-    } else {
-      ovHtml("ov-h-tunnel-reading", tunnel.ok ? `<span class="chip ok">ok</span>` : `<span class="chip bad">error</span>`);
-      ovHtml("ov-h-tunnel-svc", `<span class="dot ${tunnel.ok ? "ok" : "bad"}"></span> Cloudflare 터널`);
-    }
-
-    if (h.users) {
-      const total = h.users.total != null ? h.users.total.toLocaleString("ko-KR") : "—";
-      const del30d = h.users.deleted30d != null ? h.users.deleted30d.toLocaleString("ko-KR") : "—";
-      const active = h.users.active != null ? h.users.active.toLocaleString("ko-KR") : "—";
-      ovSet("ov-h-users-detail", `${total} 가입 · ${del30d} 탈퇴(30d)`);
-      ovSet("ov-h-users-reading", `${active} 활성`);
-    }
-  } catch (err) {
-    ovHtml("ov-h-api-reading", `<span class="chip bad">probe 실패</span>`);
-    ovSet("ov-h-api-detail", err.message);
+  } catch (_err) {
+    ovSet("ov-dbpool", "—");
+    ovSet("ov-users", "—");
   }
 }
 
@@ -790,15 +749,14 @@ async function loadOverviewHistory() {
       el.innerHTML = `<div class="col" style="justify-content:center"><span style="color:var(--ink-3);font-size:12px">기록 없음</span></div>`;
       return;
     }
-    const maxRuns = Math.max(1, ...days.map((d) => d.runs || 0));
     const today = new Date().toISOString().slice(0, 10);
     el.innerHTML = days
       .map((d) => {
         const fail = d.error > 0;
-        const pct = Math.round(30 + ((d.runs || 0) / maxRuns) * 70);
         const md = escapeHtml(d.date.slice(5));
         const cls = `col${fail ? " fail" : ""}${d.date === today ? " today" : ""}`;
-        return `<div class="${cls}" title="${escapeHtml(d.date)} · 성공 ${d.success} / 실패 ${d.error}"><div class="stack" style="height:${pct}%"><div class="seg ins" style="height:100%"></div></div><div class="xlabel">${md}</div></div>`;
+        const cval = fail ? `${d.error}✕` : d.success > 0 ? "✓" : "";
+        return `<div class="${cls}" title="${escapeHtml(d.date)} · 성공 ${d.success} / 실패 ${d.error}"><div class="cval">${cval}</div><div class="stack" style="height:100%"><div class="seg ins" style="height:100%"></div></div><div class="xlabel">${md}</div></div>`;
       })
       .join("");
   } catch (err) {
@@ -837,7 +795,6 @@ function loadOverview() {
   loadEmbedding();
   loadOverviewHealth();
   loadOverviewHistory();
-  loadOverviewCuration();
 }
 
 let _refreshInterval = null;
