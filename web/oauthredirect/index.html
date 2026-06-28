@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>로그인 처리 중 — PicTrip</title>
+  <script>
+    // Kakao OAuth only allows http(s) redirect URIs, so it redirects here.
+    // Forward the OAuth params to the app's custom scheme — that closes the
+    // in-app auth session (ASWebAuthenticationSession / Custom Tabs) and hands
+    // the authorization code back to the app. See mobile oauth-providers.ts.
+    (function () {
+      window.location.replace("pictrip://oauthredirect" + (window.location.search || ""));
+    })();
+  </script>
+  <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",system-ui,sans-serif;
+      color:#111;background:#fff;max-width:480px;margin:0 auto;padding:48px 24px;line-height:1.7;text-align:center}
+    .sub{color:#666;font-size:14px}
+    a{color:#111}
+  </style>
+</head>
+<body>
+  <p>로그인 처리 중…</p>
+  <p class="sub">앱으로 자동 복귀하지 않으면 <a id="manual" href="pictrip://oauthredirect">여기를 눌러</a> 돌아가세요.</p>
+  <script>
+    document.getElementById("manual").href =
+      "pictrip://oauthredirect" + (window.location.search || "");
+  </script>
+</body>
+</html>
