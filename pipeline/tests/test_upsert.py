@@ -68,15 +68,18 @@ def test_newer_wins_guard_blocks_stale(seed_refs):
         {"inserted": 0, "updated": 0, "soft_deleted": 0, "skipped": 0},
     )
     # older modified_time must NOT overwrite
+    stale_counters = {"inserted": 0, "updated": 0, "soft_deleted": 0, "skipped": 0}
     upsert_spots(
         conn,
         [_spot(title="stale", modified_time=datetime(2020, 1, 1, tzinfo=KST))],
         refs,
-        {"inserted": 0, "updated": 0, "soft_deleted": 0, "skipped": 0},
+        stale_counters,
     )
     cur = conn.cursor()
     cur.execute("SELECT title FROM spots WHERE content_id='T1'")
     assert cur.fetchone()[0] == "new"
+    # guard-blocked stale row is counted as skipped, not updated
+    assert stale_counters["skipped"] == 1
 
 
 def test_unknown_fk_codes_nulled(seed_refs):

@@ -14,10 +14,16 @@ def watermark_param(wm: datetime | None) -> str | None:
     return wm.strftime("%Y%m%d") if wm is not None else None
 
 
-def _run(mode: str, modifiedtime: str | None, client: KtoClient, conn) -> None:
+def _run(
+    mode: str,
+    modifiedtime: str | None,
+    client: KtoClient,
+    conn,
+    watermark_from: datetime | None = None,
+) -> None:
     refs = load_ref_codes(conn)
     with record_run(conn, mode) as c:
-        c["watermark_from"] = None  # set below from prior success if daily
+        c["watermark_from"] = watermark_from
         max_seen: datetime | None = None
         page = 1
         while True:
@@ -43,10 +49,10 @@ def sync_daily(mode: str = "daily", client: KtoClient | None = None, conn=None) 
     if owns_conn:
         with connect() as conn:
             wm = last_success_watermark(conn)
-            _run(mode, watermark_param(wm), client, conn)
+            _run(mode, watermark_param(wm), client, conn, watermark_from=wm)
     else:
         wm = last_success_watermark(conn)
-        _run(mode, watermark_param(wm), client, conn)
+        _run(mode, watermark_param(wm), client, conn, watermark_from=wm)
     if owns_client:
         client.close()
 

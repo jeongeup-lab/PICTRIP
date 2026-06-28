@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 from tenacity import (
     retry,
-    retry_if_exception_type,
+    retry_if_exception,
     stop_after_attempt,
     wait_exponential,
 )
@@ -15,6 +15,16 @@ from tenacity import (
 from pictrip_data.config import settings
 
 _OPERATION = "areaBasedSyncList2"
+
+
+def _is_transient(exc: BaseException) -> bool:
+    """Retry only on transient errors: connection/timeout problems, HTTP 429,
+    and 5xx. A non-transient 4xx (e.g. a bad serviceKey) must raise immediately
+    instead of burning retries against the daily quota."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+        return status == 429 or status >= 500
+    return isinstance(exc, httpx.RequestError)
 
 
 class KtoClient:
@@ -30,7 +40,7 @@ class KtoClient:
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=8),
-        retry=retry_if_exception_type((httpx.RequestError, httpx.HTTPStatusError)),
+        retry=retry_if_exception(_is_transient),
         reraise=True,
     )
     def area_based_sync_list(
@@ -56,7 +66,7 @@ class KtoClient:
         body = resp.json().get("response", {}).get("body", {})
         total = int(body.get("totalCount") or 0)
         items = body.get("items")
-        if not items or items == "":
+        if not items:
             return [], total
         item = items.get("item", [])
         return (item if isinstance(item, list) else [item]), total
