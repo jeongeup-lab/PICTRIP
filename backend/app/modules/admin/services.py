@@ -10,7 +10,7 @@ from datetime import UTC, date, datetime
 
 from fastapi import BackgroundTasks
 from redis.asyncio import Redis
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import NoResultFound, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -31,6 +31,7 @@ from app.modules.admin.schemas import (
     CurationDetail,
     CurationList,
     CurationListItem,
+    CurationPreview,
     CurationUpdate,
     EmbeddingRecent,
     EmbeddingStatus,
@@ -47,6 +48,7 @@ from app.modules.admin.schemas import (
     HistoryList,
     HistoryRun,
     LastRun,
+    PreviewSpot,
     SpotSearchItem,
     SpotSearchResult,
     SpotsUpdate,
@@ -54,7 +56,11 @@ from app.modules.admin.schemas import (
 )
 from app.modules.admin.triggers import get_collection_trigger
 from app.modules.images import services as image_services
-from app.modules.spots.services.curations import invalidate_curation_cache
+from app.modules.spots.services.curations import (
+    invalidate_curation_cache,
+    load_curation,
+    resolve_curation_spots,
+)
 
 _SOURCE_NAME = "국문 관광정보 서비스"
 _SOURCE_ENDPOINT = "areaBasedSyncList2"
@@ -421,6 +427,33 @@ async def get_curation_detail(session: AsyncSession, curation_id: int) -> Curati
     if curation is None:
         raise AdminCurationNotFound
     return await _build_detail(session, curation)
+
+
+async def get_curation_preview(
+    session: AsyncSession, redis: Redis, curation_id: int
+) -> CurationPreview:
+    """Resolved display spots (handpicked, else the quality-gate auto-fill pool).
+
+    Reuses the live feed resolver so the editor preview matches what the app
+    actually renders — crucially, it surfaces the auto-filled spots for curations
+    with no handpicks instead of a placeholder.
+    """
+    try:
+        row = await load_curation(session, curation_id)
+    except NoResultFound as exc:
+        raise AdminCurationNotFound from exc
+    spots = await resolve_curation_spots(session, redis, row)
+    return CurationPreview(
+        spots=[
+            PreviewSpot(
+                contentId=s.content_id,
+                name=s.title,
+                category=s.lcls_systm3_nm or s.category,
+                imageUrl=s.first_image_url,
+            )
+            for s in spots
+        ]
+    )
 
 
 async def update_curation(

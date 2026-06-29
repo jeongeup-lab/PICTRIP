@@ -2,7 +2,8 @@
 //
 // 좌측 편성 리스트 · 가운데 실시간 폰 미리보기 · 우측 종류별 인스펙터.
 // 히어로(region)=표지 카드 + 상세 페이지, 무드 레일(mood)=스팟 선반(상세 없음),
-// 에디토리얼(editorial)=상세 전용. 5개 /admin/api/curation* 엔드포인트에 배선.
+// 에디토리얼(editorial)=상세 전용. /admin/api/curation* 엔드포인트에 배선.
+// 미리보기는 /preview(handpick else 품질랭킹 자동충전)로 "앱에 실제로 나갈" 스팟을 보여줌.
 // 공용 헬퍼(escapeHtml, adminFetch)는 먼저 로드되는 admin.js 에서 온다.
 
 // ─── PUT helper (JSend, same-origin session) ─────────────────────────────────
@@ -31,7 +32,7 @@ const CU = {
   heroes: [], rails: [], editorial: [],
   sel: { kind: "hero", idx: 0 },
   view: "home", // 'home' | 'detail'
-  dirty: false, busy: false,
+  busy: false,
   pickerMode: null, searchTimer: null,
 };
 
@@ -40,7 +41,13 @@ const qs = (id) => document.getElementById(id);
 const kindOf = (type) => (type === "region" ? "hero" : type === "mood" ? "rail" : "editorial");
 const arrOf = (kind) => (kind === "hero" ? CU.heroes : kind === "rail" ? CU.rails : CU.editorial);
 const current = () => arrOf(CU.sel.kind)[CU.sel.idx];
+
 function bg(url) { return url ? ` style="background-image:url('${encodeURI(url)}')"` : ""; }
+const NOIMG = `<svg class="noimg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 16-5-5L5 20"/></svg>`;
+// thumbnail element with graceful placeholder when the KTO image URL is missing
+function tmb(cls, url) { return `<div class="${cls}${url ? "" : " noimg"}"${bg(url)}>${url ? "" : NOIMG}</div>`; }
+// spots the phone should display: handpicks (live edits) else resolved auto-fill
+function displaySpots(it) { return it.picks.length ? it.picks : it.previewSpots || []; }
 
 // ─── load ────────────────────────────────────────────────────────────────────
 function mkItem(it, kind) {
@@ -49,7 +56,8 @@ function mkItem(it, kind) {
     isPublished: !!it.isPublished, title: it.title || "", subtitle: it.subtitle || "",
     lead: "", intro: "",
     cover: { contentId: null, name: "", imageUrl: it.coverUrl || null },
-    coverUrl: it.coverUrl || null, picks: [], detailLoaded: false, picksDirty: false,
+    coverUrl: it.coverUrl || null, picks: [], previewSpots: null,
+    detailLoaded: false, previewLoading: false, picksDirty: false,
   };
 }
 function applyDetail(it, d) {
@@ -67,13 +75,25 @@ function applyDetail(it, d) {
   it.detailLoaded = true;
 }
 async function loadDetailInto(it) {
-  const d = await adminFetch(`/admin/api/curations/${it.id}`);
-  applyDetail(it, d);
+  applyDetail(it, await adminFetch(`/admin/api/curations/${it.id}`));
   return it;
 }
 async function ensureDetail(it) {
   if (it && !it.detailLoaded) { try { await loadDetailInto(it); } catch (_) { /* keep list data */ } }
 }
+// fetch the resolved display spots (handpick else auto-fill) for a truthful preview
+async function ensurePreview(it) {
+  if (!it || it.previewSpots !== null || it.previewLoading) return;
+  it.previewLoading = true;
+  try {
+    const d = await adminFetch(`/admin/api/curations/${it.id}/preview`);
+    it.previewSpots = (d.spots || []).map((s) => ({
+      contentId: s.contentId, name: s.name || "", cat: s.category || "스팟", imageUrl: s.imageUrl || null,
+    }));
+  } catch (_) { it.previewSpots = []; }
+  finally { it.previewLoading = false; }
+}
+async function refreshPreview(it) { it.previewSpots = null; await ensurePreview(it); }
 
 async function loadAll() {
   setSaveState("loading");
@@ -82,18 +102,19 @@ async function loadAll() {
     CU.heroes = (list.heroes || []).map((it) => mkItem(it, "hero"));
     CU.rails = (list.rails || []).map((it) => mkItem(it, "rail"));
     CU.editorial = (list.editorial || []).map((it) => mkItem(it, "editorial"));
-    // preload details for home items so the preview shows real spots
-    const home = [...CU.heroes, ...CU.rails];
-    await Promise.all(home.map((it) => loadDetailInto(it).catch(() => {})));
-
     renderCounts();
     renderLists();
+
+    // preload details + previews for the home items so the phone is truthful
+    const home = [...CU.heroes, ...CU.rails];
+    await Promise.all(home.map((it) => loadDetailInto(it).catch(() => {})));
+    await Promise.all(home.map((it) => ensurePreview(it)));
 
     const first = CU.heroes[0] || CU.rails[0] || CU.editorial[0];
     if (!first) { showEmpty(); setSaveState("saved", "큐레이션 없음"); return; }
     CU.sel = { kind: first.kind, idx: 0 };
     CU.view = first.kind === "editorial" ? "detail" : "home";
-    await ensureDetail(current());
+    await ensureDetail(current()); await ensurePreview(current());
     renderScreen(); renderInspector(); updateToggle();
     if (CU.view === "home") scrollPreviewTo(CU.sel.kind, CU.sel.idx);
     setSaveState("saved", "불러옴");
@@ -103,15 +124,14 @@ async function loadAll() {
 }
 
 function showEmpty() {
-  qs("phoneBody").innerHTML = `<div style="padding:60px 20px;text-align:center;color:var(--p-ter)">큐레이션이 없습니다.</div>`;
+  qs("phoneBody").innerHTML = `<div class="phone-msg">큐레이션이 없습니다.</div>`;
   qs("inspBody").innerHTML = `<div class="insp-empty">편집할 큐레이션이 없습니다.</div>`;
 }
 function showLoadError(msg) {
   setSaveState("saved", "오류");
   qs("phoneBody").innerHTML =
-    `<div style="padding:50px 22px;text-align:center"><div style="color:var(--p-ink);font-weight:700;margin-bottom:6px">불러오지 못했습니다</div>` +
-    `<div style="color:var(--p-ter);font-size:13px">${esc(msg)}</div>` +
-    `<button class="add-pick" style="max-width:160px;margin:16px auto 0" id="cuRetry">다시 시도</button></div>`;
+    `<div class="phone-msg"><b>불러오지 못했습니다</b><div class="d">${esc(msg)}</div>` +
+    `<button class="add-pick" style="max-width:160px;margin:14px auto 0" id="cuRetry">다시 시도</button></div>`;
   const r = qs("cuRetry"); if (r) r.addEventListener("click", loadAll);
 }
 
@@ -130,12 +150,12 @@ function slotLabel(it) {
 }
 function slotHtml(it, kind, i) {
   const active = CU.sel.kind === kind && CU.sel.idx === i;
-  const thumb = it.coverUrl || (it.picks[0] && it.picks[0].imageUrl) || null;
+  const thumbUrl = it.coverUrl || (it.picks[0] && it.picks[0].imageUrl) || null;
   const n = it.picks.length;
-  const sub = (n ? `${n} ${kind === "hero" ? "손픽" : "스팟"}` : "auto") + ` · #${it.position}`;
+  const sub = (n ? `${n} ${kind === "hero" ? "손픽" : "스팟"}` : "자동 편성") + ` · #${it.position}`;
   return (
     `<div class="slot${active ? " active" : ""}" data-kind="${kind}" data-idx="${i}">` +
-    `<span class="sthumb"${bg(thumb)}></span>` +
+    tmb("sthumb", thumbUrl) +
     `<span class="smeta"><span class="stitle">${esc(slotLabel(it))}</span><span class="ssub">${esc(sub)}</span></span>` +
     `<span class="sdot ${it.isPublished ? "on" : "off"}" title="${it.isPublished ? "발행됨" : "미발행"}"></span>` +
     `</div>`
@@ -150,17 +170,28 @@ function renderLists() {
 }
 
 // ─── phone preview ───────────────────────────────────────────────────────────
-function autoCardsHtml() {
-  return Array.from({ length: 3 }).map(() =>
-    `<div class="pcard"><div class="pthumb"></div><div class="nm">자동 편성</div><div class="cat">품질 랭킹</div></div>`).join("");
+function spotCardHtml(s) {
+  return `<div class="pcard" data-spot="1">${tmb("pthumb", s.imageUrl)}<div class="nm">${esc(s.name)}</div><div class="cat">${esc(s.cat)}</div></div>`;
 }
+function skeletonCards() {
+  return Array.from({ length: 3 }).map(() =>
+    `<div class="pcard"><div class="pthumb sk"></div><div class="sk line" style="margin-top:8px;width:70%"></div></div>`).join("");
+}
+function railCardsHtml(it) {
+  if (it.picks.length) return it.picks.map(spotCardHtml).join("");
+  if (it.previewSpots === null) return skeletonCards();
+  if (!it.previewSpots.length) return `<div class="rail-empty">표시할 스팟이 없어요</div>`;
+  return it.previewSpots.map(spotCardHtml).join("");
+}
+function isAuto(it) { return !it.picks.length && Array.isArray(it.previewSpots) && it.previewSpots.length > 0; }
+
 function renderScreen() {
   const body = qs("phoneBody");
   qs("stageSub").textContent = CU.view === "home" ? "홈 피드" : "큐레이션 상세";
   body.innerHTML = CU.view === "home" ? homeHTML() : detailHTML(current());
   if (CU.view === "home") {
     body.querySelectorAll(".hero[data-idx]").forEach((el) =>
-      el.addEventListener("click", () => { selectSlot("hero", +el.dataset.idx, "detail"); }));
+      el.addEventListener("click", () => selectSlot("hero", +el.dataset.idx, "detail")));
     body.querySelectorAll(".section[data-idx]").forEach((el) =>
       el.addEventListener("click", () => selectSlot("rail", +el.dataset.idx)));
     body.querySelectorAll(".pcard[data-spot]").forEach((el) =>
@@ -181,7 +212,7 @@ function homeHTML() {
     const sel = CU.sel.kind === "hero" && CU.sel.idx === i;
     return (
       `<div class="hero${h.isPublished ? "" : " is-draft"}" data-idx="${i}">` +
-      `<div class="himg"${bg(h.coverUrl)}></div>` +
+      `<div class="himg${h.coverUrl ? "" : " noimg"}"${bg(h.coverUrl)}>${h.coverUrl ? "" : NOIMG}</div>` +
       `<div class="draft-tag"><span style="width:6px;height:6px;border-radius:50%;background:#fff;display:block"></span>미발행</div>` +
       `<div class="hero-cap"><div class="hero-title">${esc(h.title).replace(/\n/g, "<br>")}</div>` +
       (h.subtitle ? `<div class="hero-sub">${esc(h.subtitle)}</div>` : "") + `</div>` +
@@ -191,17 +222,13 @@ function homeHTML() {
   }).join("");
   const segs = CU.heroes.map((_, i) =>
     `<span class="pseg ${(CU.sel.kind === "hero" ? i === CU.sel.idx : i === 0) ? "active" : ""}"></span>`).join("");
-  const rails = CU.rails.map((r, i) => {
-    const cards = r.picks.length
-      ? r.picks.map((s) => `<div class="pcard" data-spot="1"><div class="pthumb"${bg(s.imageUrl)}></div><div class="nm">${esc(s.name)}</div><div class="cat">${esc(s.cat)}</div></div>`).join("")
-      : autoCardsHtml();
-    return (
-      `<div class="section${r.isPublished ? "" : " is-draft"}${CU.sel.kind === "rail" && CU.sel.idx === i ? " sel-rail" : ""}" data-idx="${i}">` +
-      `<div class="divider"></div><div class="sec-title">${esc(r.title)}</div>` +
-      (r.subtitle ? `<div class="sec-sub">${esc(r.subtitle)}</div>` : "") +
-      `<div class="rail">${cards}</div></div>`
-    );
-  }).join("");
+  const rails = CU.rails.map((r, i) => (
+    `<div class="section${r.isPublished ? "" : " is-draft"}${CU.sel.kind === "rail" && CU.sel.idx === i ? " sel-rail" : ""}" data-idx="${i}">` +
+    `<div class="divider"></div>` +
+    `<div class="sec-title">${esc(r.title)}${isAuto(r) ? `<span class="auto-pill">자동 편성</span>` : ""}</div>` +
+    (r.subtitle ? `<div class="sec-sub">${esc(r.subtitle)}</div>` : "") +
+    `<div class="rail">${railCardsHtml(r)}</div></div>`
+  )).join("");
   return (
     `<div class="topbar-app"><div class="wordmark-app">PicTrip</div></div>` +
     `<div class="hero-track" id="heroTrack">${heroes}</div>` +
@@ -215,22 +242,28 @@ function homeHTML() {
     `</div>`
   );
 }
+function gcardHtml(s) {
+  return `<div class="gcard">${tmb("gimg", s.imageUrl)}<div class="gnm">${esc(s.name)}</div><div class="gcat">${esc(s.cat)}</div></div>`;
+}
+function detailGridHtml(it) {
+  if (it.picks.length) return it.picks.map(gcardHtml).join("");
+  if (it.previewSpots === null) return Array.from({ length: 4 }).map(() => `<div class="gcard"><div class="gimg sk"></div><div class="sk line" style="margin-top:9px;width:65%"></div></div>`).join("");
+  if (!it.previewSpots.length) return `<div class="dgrid-empty">표시할 스팟이 없어요</div>`;
+  return it.previewSpots.map(gcardHtml).join("");
+}
 function detailHTML(it) {
   if (!it) return "";
-  const grid = it.picks.length
-    ? it.picks.map((s) => `<div class="gcard"><div class="gimg"${bg(s.imageUrl)}></div><div class="gnm">${esc(s.name)}</div><div class="gcat">${esc(s.cat)}</div></div>`).join("")
-    : `<div class="dgrid-empty">손픽이 비어 있어요 · 품질 랭킹으로 자동 편성</div>`;
   return (
     `<div class="dnav">` +
     `<div class="nav-btn nav-back"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>` +
     `<div class="nav-btn"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.3 10.7l7.4-4.4M8.3 13.3l7.4 4.4"/></svg></div>` +
     `</div>` +
     `<div class="dtitle">${esc(it.title).replace(/\n/g, "<br>")}</div>` +
-    `<div class="dcover"${bg(it.cover.imageUrl)}></div>` +
+    `<div class="dcover${it.cover.imageUrl ? "" : " noimg"}"${bg(it.cover.imageUrl)}>${it.cover.imageUrl ? "" : NOIMG}</div>` +
     (it.lead ? `<div class="dlead">${esc(it.lead)}</div>` : "") +
     (it.intro ? `<div class="dintro">${esc(it.intro).replace(/\n/g, "<br>")}</div>` : "") +
     `<div class="dchev"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></div>` +
-    `<div class="dgrid">${grid}</div>`
+    `<div class="dgrid">${detailGridHtml(it)}</div>`
   );
 }
 
@@ -239,8 +272,9 @@ async function selectSlot(kind, idx, wanted) {
   CU.sel = { kind, idx };
   if (kind === "rail") CU.view = "home";
   else if (kind === "editorial") CU.view = "detail";
-  else if (wanted) CU.view = wanted; // hero card tap → detail
-  await ensureDetail(current());
+  else if (wanted) CU.view = wanted;
+  const it = current();
+  await ensureDetail(it); await ensurePreview(it);
   renderLists(); renderInspector(); updateToggle(); renderScreen();
   if (CU.view === "home") scrollPreviewTo(kind, idx);
   else document.querySelector(".wcol-stage .wcol-b").scrollTo({ top: 0, behavior: "smooth" });
@@ -267,10 +301,12 @@ function updateToggle() {
 function renderInspector() {
   const it = current();
   if (!it) { qs("inspBody").innerHTML = `<div class="insp-empty">선택된 큐레이션이 없습니다.</div>`; return; }
-  const thumb = it.kind === "rail" ? (it.picks[0] && it.picks[0].imageUrl) : it.cover.imageUrl;
-  qs("inspThumb").style.backgroundImage = thumb ? `url('${encodeURI(thumb)}')` : "";
+  const thumbUrl = it.kind === "rail" ? (it.picks[0] && it.picks[0].imageUrl) : it.cover.imageUrl;
+  const ct = qs("inspThumb");
+  if (thumbUrl) { ct.classList.remove("noimg"); ct.style.backgroundImage = `url('${encodeURI(thumbUrl)}')`; ct.innerHTML = ""; }
+  else { ct.classList.add("noimg"); ct.style.backgroundImage = ""; ct.innerHTML = NOIMG; }
   if (it.kind === "rail") {
-    qs("inspName").textContent = `${it.picks.length}개 스팟`;
+    qs("inspName").textContent = `${it.picks.length || (it.previewSpots ? it.previewSpots.length : 0)}개 스팟${isAuto(it) ? " · 자동" : ""}`;
     qs("inspPath").textContent = `무드 레일 · 슬롯 ${it.position}`;
   } else {
     qs("inspName").textContent = it.cover.name || "표지 미지정";
@@ -279,6 +315,9 @@ function renderInspector() {
   qs("inspBody").innerHTML = it.kind === "rail" ? railInspectorHTML(it) : heroInspectorHTML(it);
   bindInspector(it);
   renderPicks();
+  // footer publish toggle reflects current state
+  const pb = qs("pubToggleBtn");
+  if (pb) { pb.textContent = it.isPublished ? "발행 취소" : "발행"; pb.classList.toggle("danger", it.isPublished); }
 }
 
 function editGroupHTML(it) {
@@ -287,7 +326,7 @@ function editGroupHTML(it) {
   return (
     `<div class="fgroup">` +
     `<div class="fg-label"><svg viewBox="0 0 24 24" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>편성</div>` +
-    `<div class="toggle-row"><div class="tr-meta"><div class="tr-title">발행 상태</div><div class="tr-sub" id="pubSub">${it.isPublished ? "홈 피드에 노출됩니다" : "홈 피드에서 숨겨집니다"}</div></div><div class="switch ${it.isPublished ? "on" : ""}" id="pubSwitch"></div></div>` +
+    `<div class="status-row"><div class="tr-title">발행 상태</div><span class="pub-badge ${it.isPublished ? "on" : "off"}">${it.isPublished ? "발행됨" : "초안"}</span></div>` +
     `<div class="field" style="margin-top:14px"><label>홈 내 위치</label><div class="pos-row"><button class="pos-step" id="posDown">−</button><span class="pos-val" id="posVal">${it.position}</span><button class="pos-step" id="posUp">+</button><span class="pos-suffix">${suffix}</span></div></div>` +
     `</div>`
   );
@@ -296,7 +335,7 @@ function heroInspectorHTML(it) {
   return (
     `<div class="fgroup">` +
     `<div class="fg-label"><svg viewBox="0 0 24 24" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 16-5-5L5 20"/></svg>홈 카드 <span class="tagn">캐러셀</span></div>` +
-    `<div class="cover-card"><span class="cc-img"${bg(it.cover.imageUrl)}></span>` +
+    `<div class="cover-card">${tmb("cc-img", it.cover.imageUrl)}` +
     `<div class="cc-meta"><div class="cc-name">${esc(it.cover.name || "표지 미지정")}</div><div class="cc-sub">${it.cover.contentId ? "contentId " + esc(it.cover.contentId) : "표지 스팟을 선택하세요"}</div></div>` +
     `<button class="mini-btn" data-open-picker="cover">변경</button></div>` +
     `<div class="urlnote"><svg viewBox="0 0 24 24" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>KTO 이미지 URL 참조만 · 다운로드·저장 없음</div>` +
@@ -312,7 +351,7 @@ function heroInspectorHTML(it) {
     `<div class="pick-head" style="margin-top:4px"><span class="lab">손픽 스팟 · 상세 그리드</span><span class="pc" id="pickCount">0 / 8</span></div>` +
     `<div class="picklist" id="pickList"></div>` +
     `<button class="add-pick" data-open-picker="handpick"><svg viewBox="0 0 24 24" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>스팟 추가</button>` +
-    `<div class="hint" style="margin-top:10px">비우면 <b>품질 랭킹</b>으로 자동 채움</div>` +
+    `<div class="hint" style="margin-top:10px">비우면 <b>품질 랭킹</b>으로 자동 채움 (미리보기에 실제 반영)</div>` +
     `</div>` +
 
     editGroupHTML(it)
@@ -331,6 +370,7 @@ function railInspectorHTML(it) {
     `<div class="pick-head"><span class="lab">레일에 노출되는 스팟 순서</span><span class="pc" id="pickCount">0 / 8</span></div>` +
     `<div class="picklist big" id="pickList"></div>` +
     `<button class="add-pick" data-open-picker="handpick"><svg viewBox="0 0 24 24" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>스팟 추가</button>` +
+    `<div class="hint" style="margin-top:10px">비우면 무드 매칭 품질 랭킹으로 자동 편성 (미리보기에 실제 반영)</div>` +
     `</div>` +
 
     editGroupHTML(it)
@@ -342,13 +382,13 @@ function renderPicks() {
   const cnt = qs("pickCount"); if (cnt) cnt.textContent = `${it.picks.length} / 8`;
   const list = qs("pickList"); if (!list) return;
   if (!it.picks.length) {
-    list.innerHTML = `<div class="empty-picks">${it.kind === "hero" ? "손픽이 비어 있어요.<br>품질 랭킹으로 자동 편성됩니다." : "스팟이 비어 있어요."}</div>`;
+    list.innerHTML = `<div class="empty-picks">${it.kind === "hero" ? "손픽이 비어 있어요.<br>품질 랭킹으로 자동 편성됩니다." : "스팟이 비어 있어요.<br>무드 매칭으로 자동 편성됩니다."}</div>`;
     return;
   }
   list.innerHTML = it.picks.map((p, i) =>
     `<div class="pick" data-i="${i}" draggable="true">` +
     `<span class="pgrip"><svg width="9" height="15" viewBox="0 0 9 15" fill="currentColor"><circle cx="2" cy="2" r="1.4"/><circle cx="7" cy="2" r="1.4"/><circle cx="2" cy="7.5" r="1.4"/><circle cx="7" cy="7.5" r="1.4"/><circle cx="2" cy="13" r="1.4"/><circle cx="7" cy="13" r="1.4"/></svg></span>` +
-    `<span class="pnum">${i + 1}</span><span class="pimg"${bg(p.imageUrl)}></span>` +
+    `<span class="pnum">${i + 1}</span>${tmb("pimg", p.imageUrl)}` +
     `<div class="pmeta"><div class="pname">${esc(p.name)}</div><div class="pcat">${esc(p.cat)}</div></div>` +
     `<button class="px" data-rm="${i}"><svg viewBox="0 0 24 24" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>` +
     `</div>`).join("");
@@ -356,7 +396,7 @@ function renderPicks() {
     e.stopPropagation();
     it.picks.splice(+b.dataset.rm, 1);
     it.picksDirty = true; markDirty();
-    renderPicks(); renderScreen(); renderLists(); syncCtx();
+    renderPicks(); renderScreen(); renderLists();
   }));
   wirePickDrag(list, it);
 }
@@ -377,7 +417,6 @@ function wirePickDrag(list, it) {
     });
   });
 }
-function syncCtx() { const it = current(); if (it && it.kind === "rail") qs("inspName").textContent = `${it.picks.length}개 스팟`; }
 
 function bindInspector(it) {
   const map = { fTitle: "title", fSub: "subtitle", fLead: "lead", fIntro: "intro" };
@@ -387,14 +426,6 @@ function bindInspector(it) {
     el.addEventListener("input", (e) => { it[map[id]] = e.target.value; markDirty(); updateCounters(); renderScreen(); });
   });
   updateCounters();
-  const sw = qs("pubSwitch");
-  if (sw) sw.addEventListener("click", () => {
-    it.isPublished = !it.isPublished;
-    sw.classList.toggle("on", it.isPublished);
-    qs("pubSub").textContent = it.isPublished ? "홈 피드에 노출됩니다" : "홈 피드에서 숨겨집니다";
-    markDirty(); renderScreen(); renderLists();
-    wzToast(it.isPublished ? "발행 상태로 전환" : "미발행으로 전환");
-  });
   const up = qs("posUp"), down = qs("posDown");
   if (up) up.addEventListener("click", () => { it.position += 1; qs("posVal").textContent = it.position; markDirty(); });
   if (down) down.addEventListener("click", () => { it.position = Math.max(0, it.position - 1); qs("posVal").textContent = it.position; markDirty(); });
@@ -445,6 +476,9 @@ function positionFocusRing() {
   ring.querySelector(".rtag").textContent = CU.sel.kind === "hero" ? "편집 중 · 히어로" : "편집 중 · 레일";
   ring.classList.add("show");
 }
+document.querySelector(".wcol-stage .wcol-b") &&
+  document.querySelector(".wcol-stage .wcol-b").addEventListener("scroll", positionFocusRing, { passive: true });
+window.addEventListener("resize", positionFocusRing);
 
 // ─── save ────────────────────────────────────────────────────────────────────
 function nowLabel() {
@@ -459,11 +493,11 @@ function setSaveState(kind, label) {
   else if (kind === "dirty") t.textContent = "편집 중";
   else t.textContent = label || "저장됨";
 }
-function markDirty() { CU.dirty = true; setSaveState("dirty"); }
-function clearDirty(label) { CU.dirty = false; setSaveState("saved", label); }
+function markDirty() { setSaveState("dirty"); }
+function clearDirty(label) { setSaveState("saved", label); }
 function setBusy(on) {
   CU.busy = on;
-  ["saveBtn", "toDraft", "publishBtn", "revertBtn"].forEach((id) => { const b = qs(id); if (b) b.disabled = on; });
+  ["tempSave", "pubToggleBtn", "revertBtn"].forEach((id) => { const b = qs(id); if (b) b.disabled = on; });
 }
 function clearFieldErrors() {
   document.querySelectorAll(".field-err").forEach((el) => el.remove());
@@ -471,7 +505,6 @@ function clearFieldErrors() {
 }
 function showValidationErrors(err) {
   clearFieldErrors();
-  const map = { title: "제목", subtitle: "부제", lead: "리드문", intro: "인트로", position: "위치" };
   const idMap = { title: "fTitle", subtitle: "fSub", lead: "fLead", intro: "fIntro" };
   (err.details || []).forEach((det) => {
     const key = (det.field || "").split(".").pop();
@@ -511,6 +544,7 @@ async function saveCuration(publishOverride, label) {
       }
       it.picksDirty = false;
     }
+    await refreshPreview(it); // auto-fill may have changed (cache invalidated on save)
     clearDirty(`${label} · ${nowLabel()}`);
     renderLists(); renderScreen(); renderInspector(); updateToggle();
     wzToast(label, it.title || "");
@@ -525,8 +559,8 @@ async function saveCuration(publishOverride, label) {
 async function revertCurrent() {
   const it = current(); if (!it) return;
   try {
-    await loadDetailInto(it); it.picksDirty = false;
-    clearDirty("되돌림"); renderLists(); renderScreen(); renderInspector();
+    await loadDetailInto(it); it.picksDirty = false; await refreshPreview(it);
+    clearDirty("편집 취소됨"); renderLists(); renderScreen(); renderInspector();
     wzToast("서버 상태로 되돌림", "");
   } catch (err) { wzToast("되돌리기 실패", err.message || ""); }
 }
@@ -535,17 +569,17 @@ async function revertCurrent() {
 function pickedIds() { const it = current(); return new Set((it ? it.picks : []).map((p) => p.contentId)); }
 function openPicker(mode) {
   CU.pickerMode = mode;
-  const bg2 = qs("pickermodal"); if (!bg2) return;
-  const h3 = bg2.querySelector(".mh-titles h3"); const sub = bg2.querySelector(".mh-titles .mh-sub");
+  const m = qs("pickermodal"); if (!m) return;
+  const h3 = m.querySelector(".mh-titles h3"); const sub = m.querySelector(".mh-titles .mh-sub");
   if (h3) h3.textContent = mode === "cover" ? "표지 스팟 선택" : "스팟 추가";
   if (sub) sub.textContent = mode === "cover" ? "이 큐레이션의 표지로 쓸 관광지를 검색합니다" : "손픽 스팟에 넣을 관광지를 검색해 추가합니다";
-  const results = bg2.querySelector(".results");
+  const results = m.querySelector(".results");
   if (results) results.innerHTML = `<div class="estate"><div class="d">검색어를 입력하세요.</div></div>`;
-  bg2.classList.add("show");
-  const inp = bg2.querySelector(".search input");
+  m.classList.add("show");
+  const inp = m.querySelector(".search input");
   if (inp) { inp.value = ""; setTimeout(() => inp.focus(), 60); }
 }
-function closePicker() { const bg2 = qs("pickermodal"); if (bg2) bg2.classList.remove("show"); }
+function closePicker() { const m = qs("pickermodal"); if (m) m.classList.remove("show"); }
 
 function activeRegionParam() {
   const chip = document.querySelector("#pickermodal .fchip.on");
@@ -554,9 +588,13 @@ function activeRegionParam() {
   const regionChips = ["제주", "부산", "강원", "서울", "경기", "경주", "전주", "강릉", "여수"];
   return regionChips.includes(label) ? label : "";
 }
+function searchSkeleton() {
+  return Array.from({ length: 6 }).map(() =>
+    `<div class="rspot"><div class="thumb sk"></div><div class="meta"><div class="sk line"></div><div class="sk line" style="width:50%;margin-top:6px"></div></div></div>`).join("");
+}
 async function runSpotSearch(q) {
   const results = document.querySelector("#pickermodal .results"); if (!results) return;
-  results.innerHTML = `<div class="estate"><div class="d">검색 중…</div></div>`;
+  results.innerHTML = searchSkeleton();
   try {
     const region = activeRegionParam();
     const url = `/admin/api/spots/search?q=${encodeURIComponent(q)}` + (region ? `&region=${encodeURIComponent(region)}` : "");
@@ -573,11 +611,12 @@ function renderSearchResults(spots) {
   results.innerHTML = spots.map((s) => {
     const region = s.regionName || s.regionCd || "";
     const already = CU.pickerMode === "handpick" && picked.has(s.contentId);
-    const subParts = [region, s.category, `contentId ${esc(s.contentId)}`].filter(Boolean);
+    const subParts = [region, s.category, `#${esc(s.contentId)}`].filter(Boolean);
+    const img = s.imageUrl || "";
     return (
-      `<div class="rspot${already ? " added" : ""}" data-content-id="${esc(s.contentId)}" data-name="${esc(s.name || "")}" data-img="${esc(s.imageUrl || "")}" data-region="${esc(region)}" data-cat="${esc(s.category || "")}">` +
-      `<span class="thumb"${bg(s.imageUrl)}>${s.imageUrl ? "" : `<svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/></svg>`}</span>` +
-      `<span class="meta"><span class="nm">${esc(s.name || "")}</span><span class="sub">${subParts.join(" · ")}</span></span>` +
+      `<div class="rspot${already ? " added" : ""}" data-content-id="${esc(s.contentId)}" data-name="${esc(s.name || "")}" data-img="${esc(img)}" data-region="${esc(region)}" data-cat="${esc(s.category || "")}">` +
+      `<div class="thumb${img ? "" : " noimg"}"${bg(img)}>${img ? "" : `<svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/></svg>`}</div>` +
+      `<div class="meta"><div class="nm">${esc(s.name || "")}</div><div class="sub">${subParts.join(" · ")}</div></div>` +
       `<button class="btn ghost add" type="button">` + (already ? `<svg class="bi chk" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>추가됨` : "추가") + `</button>`
     );
   }).join("");
@@ -586,7 +625,7 @@ function renderSearchResults(spots) {
 // ─── global wiring ───────────────────────────────────────────────────────────
 let wzToastTimer;
 function wzToast(msg, sub) {
-  const t = qs("toast"); if (!t) { if (window.toast) toast(msg, sub || ""); return; }
+  const t = qs("toast"); if (!t) { if (typeof toast === "function") toast(msg, sub || ""); return; }
   qs("toastMsg").textContent = sub ? `${msg} · ${sub}` : msg;
   t.classList.add("show"); clearTimeout(wzToastTimer);
   wzToastTimer = setTimeout(() => t.classList.remove("show"), 2200);
@@ -621,38 +660,33 @@ document.addEventListener("click", (e) => {
 });
 
 (function wirePicker() {
-  const bg2 = qs("pickermodal"); if (!bg2) return;
-  bg2.addEventListener("click", (e) => { if (e.target === bg2) closePicker(); });
-  bg2.querySelectorAll(".x").forEach((x) => x.addEventListener("click", closePicker));
+  const m = qs("pickermodal"); if (!m) return;
+  m.addEventListener("click", (e) => { if (e.target === m) closePicker(); });
+  m.querySelectorAll(".x").forEach((x) => x.addEventListener("click", closePicker));
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closePicker(); });
-  const chips = bg2.querySelectorAll(".fchip");
+  const chips = m.querySelectorAll(".fchip");
   chips.forEach((c) => c.addEventListener("click", () => {
     chips.forEach((x) => x.classList.remove("on")); c.classList.add("on");
-    const inp = bg2.querySelector(".search input"); if (inp && inp.value.trim()) runSpotSearch(inp.value.trim());
+    const inp = m.querySelector(".search input"); if (inp && inp.value.trim()) runSpotSearch(inp.value.trim());
   }));
-  const inp = bg2.querySelector(".search input");
+  const inp = m.querySelector(".search input");
   if (inp) inp.addEventListener("input", () => {
     clearTimeout(CU.searchTimer);
     const q = inp.value.trim();
-    if (!q) { const r = bg2.querySelector(".results"); if (r) r.innerHTML = `<div class="estate"><div class="d">검색어를 입력하세요.</div></div>`; return; }
+    if (!q) { const r = m.querySelector(".results"); if (r) r.innerHTML = `<div class="estate"><div class="d">검색어를 입력하세요.</div></div>`; return; }
     CU.searchTimer = setTimeout(() => runSpotSearch(q), 250);
   });
 })();
 
 window.addEventListener("load", () => {
   if (!document.querySelector(".cu-page")) return;
-  qs("saveBtn").addEventListener("click", () => saveCuration(true, "저장 후 발행됨"));
-  qs("toDraft").addEventListener("click", () => saveCuration(false, "초안으로 전환됨"));
-  qs("publishBtn").addEventListener("click", () => {
-    if (!current()) return;
-    if (!window.confirm("현재 편집 중인 큐레이션을 발행합니다. 계속할까요?")) return;
-    saveCuration(true, "발행됨");
+  qs("tempSave").addEventListener("click", () => saveCuration(null, "임시저장됨"));
+  qs("pubToggleBtn").addEventListener("click", () => {
+    const it = current(); if (!it) return;
+    saveCuration(!it.isPublished, it.isPublished ? "발행 취소됨" : "발행됨");
   });
   qs("revertBtn").addEventListener("click", revertCurrent);
   document.querySelectorAll("#viewToggle button").forEach((b) =>
     b.addEventListener("click", () => { if (b.classList.contains("disabled")) { wzToast("이 종류는 해당 화면이 없어요"); return; } setView(b.dataset.view); }));
-  const stageScroll = document.querySelector(".wcol-stage .wcol-b");
-  if (stageScroll) stageScroll.addEventListener("scroll", positionFocusRing, { passive: true });
-  window.addEventListener("resize", positionFocusRing);
   loadAll();
 });

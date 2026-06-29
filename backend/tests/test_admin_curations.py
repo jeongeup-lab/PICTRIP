@@ -260,6 +260,32 @@ async def test_detail_missing_404(db_session, client, seed) -> None:
     assert r.json()["error"]["code"] == "ADMIN_CURATION_NOT_FOUND"
 
 
+# --- preview (resolved display spots: handpick else auto-fill) ----------------
+async def test_preview_resolves_handpicks(db_session, client, seed) -> None:
+    _override(db_session, seed)
+    try:
+        r = await client.get("/admin/api/curations/700/preview", headers=_AUTH)
+    finally:
+        app.dependency_overrides.clear()
+    assert r.status_code == 200
+    spots = r.json()["data"]["spots"]
+    # handpicks resolve in their stored order, hydrated with name/image
+    assert [s["contentId"] for s in spots] == ["sp-2", "sp-0", "sp-1"]
+    assert all({"contentId", "name", "category", "imageUrl"} == s.keys() for s in spots)
+    assert spots[0]["name"] == "t-sp-2"
+    assert spots[0]["imageUrl"] == "http://kto/i.jpg"
+
+
+async def test_preview_missing_404(db_session, client, seed) -> None:
+    _override(db_session, seed)
+    try:
+        r = await client.get("/admin/api/curations/99999/preview", headers=_AUTH)
+    finally:
+        app.dependency_overrides.clear()
+    assert r.status_code == 404
+    assert r.json()["error"]["code"] == "ADMIN_CURATION_NOT_FOUND"
+
+
 # --- ADM-013: update ---------------------------------------------------------
 async def test_update_happy_path(db_session, client, seed) -> None:
     _override(db_session, seed)

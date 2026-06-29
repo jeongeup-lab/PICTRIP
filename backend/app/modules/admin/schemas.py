@@ -220,6 +220,31 @@ class CurationDetail(BaseModel):
     handpicks: list[Handpick]
 
 
+class PreviewSpot(BaseModel):
+    """One resolved display spot for the editor preview (handpick or auto-fill)."""
+
+    contentId: str
+    name: str
+    category: str | None
+    imageUrl: str | None
+
+    @field_validator("imageUrl")
+    @classmethod
+    def _upgrade_image(cls, v: str | None) -> str | None:
+        return https_kto_image(v)
+
+
+class CurationPreview(BaseModel):
+    """GET /admin/api/curations/{id}/preview — spots the app would actually show.
+
+    Handpicked spots if any, else the quality-gate auto-fill pool (the same
+    resolver the live home feed uses) so the editor can preview empty curations
+    truthfully instead of showing placeholders.
+    """
+
+    spots: list[PreviewSpot]
+
+
 class CurationUpdate(BaseModel):
     """PUT /admin/api/curations/{id} body — only copy/cover/publish/position.
 
