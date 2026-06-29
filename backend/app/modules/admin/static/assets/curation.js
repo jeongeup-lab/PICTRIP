@@ -57,7 +57,7 @@ function mkItem(it, kind) {
     lead: "", intro: "",
     cover: { contentId: null, name: "", imageUrl: it.coverUrl || null },
     coverUrl: it.coverUrl || null, picks: [], previewSpots: null,
-    detailLoaded: false, previewLoading: false, picksDirty: false,
+    detailLoaded: false, previewLoading: false, picksDirty: false, dirty: false,
   };
 }
 function applyDetail(it, d) {
@@ -109,6 +109,7 @@ async function loadAll() {
     const home = [...CU.heroes, ...CU.rails];
     await Promise.all(home.map((it) => loadDetailInto(it).catch(() => {})));
     await Promise.all(home.map((it) => ensurePreview(it)));
+    renderLists(); // re-render now that covers/handpicks/auto-fill thumbnails resolved
 
     const first = CU.heroes[0] || CU.rails[0] || CU.editorial[0];
     if (!first) { showEmpty(); setSaveState("saved", "큐레이션 없음"); return; }
@@ -150,7 +151,11 @@ function slotLabel(it) {
 }
 function slotHtml(it, kind, i) {
   const active = CU.sel.kind === kind && CU.sel.idx === i;
-  const thumbUrl = it.coverUrl || (it.picks[0] && it.picks[0].imageUrl) || null;
+  const thumbUrl =
+    it.coverUrl ||
+    (it.picks[0] && it.picks[0].imageUrl) ||
+    (it.previewSpots && it.previewSpots[0] && it.previewSpots[0].imageUrl) ||
+    null;
   const n = it.picks.length;
   const sub = (n ? `${n} ${kind === "hero" ? "손픽" : "스팟"}` : "자동 편성") + ` · #${it.position}`;
   return (
@@ -315,9 +320,9 @@ function renderInspector() {
   qs("inspBody").innerHTML = it.kind === "rail" ? railInspectorHTML(it) : heroInspectorHTML(it);
   bindInspector(it);
   renderPicks();
-  // footer publish toggle reflects current state
-  const pb = qs("pubToggleBtn");
-  if (pb) { pb.textContent = it.isPublished ? "발행 취소" : "발행"; pb.classList.toggle("danger", it.isPublished); }
+  // footer save reflects this curation's unsaved state
+  updateSaveBtn();
+  setSaveState(it.dirty ? "dirty" : "saved", it.dirty ? undefined : "저장됨");
 }
 
 function editGroupHTML(it) {
@@ -326,8 +331,8 @@ function editGroupHTML(it) {
   return (
     `<div class="fgroup">` +
     `<div class="fg-label"><svg viewBox="0 0 24 24" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>편성</div>` +
-    `<div class="status-row"><div class="tr-title">발행 상태</div><span class="pub-badge ${it.isPublished ? "on" : "off"}">${it.isPublished ? "발행됨" : "초안"}</span></div>` +
-    `<div class="field" style="margin-top:14px"><label>홈 내 위치</label><div class="pos-row"><button class="pos-step" id="posDown">−</button><span class="pos-val" id="posVal">${it.position}</span><button class="pos-step" id="posUp">+</button><span class="pos-suffix">${suffix}</span></div></div>` +
+    `<div class="toggle-row"><div class="tr-meta"><div class="tr-title">발행 상태</div><div class="tr-sub" id="pubSub">${it.isPublished ? "홈 피드에 노출됩니다" : "홈 피드에서 숨겨집니다 (초안)"}</div></div><div class="switch ${it.isPublished ? "on" : ""}" id="pubSwitch" role="switch" tabindex="0" aria-checked="${it.isPublished ? "true" : "false"}"></div></div>` +
+    `<div class="field" style="margin-top:14px"><label>홈 내 위치</label><div class="pos-row"><button class="pos-step" id="posDown">−</button><span class="pos-val" id="posVal">${it.position}</span><button class="pos-step" id="posUp">+</button><span class="pos-suffix">${suffix}</span></div><div class="hint" style="margin-top:8px">순서는 저장 후 반영됩니다</div></div>` +
     `</div>`
   );
 }
@@ -429,6 +434,19 @@ function bindInspector(it) {
   const up = qs("posUp"), down = qs("posDown");
   if (up) up.addEventListener("click", () => { it.position += 1; qs("posVal").textContent = it.position; markDirty(); });
   if (down) down.addEventListener("click", () => { it.position = Math.max(0, it.position - 1); qs("posVal").textContent = it.position; markDirty(); });
+  const sw = qs("pubSwitch");
+  if (sw) {
+    const toggle = () => {
+      it.isPublished = !it.isPublished;
+      sw.classList.toggle("on", it.isPublished);
+      sw.setAttribute("aria-checked", it.isPublished ? "true" : "false");
+      const ps = qs("pubSub");
+      if (ps) ps.textContent = it.isPublished ? "홈 피드에 노출됩니다" : "홈 피드에서 숨겨집니다 (초안)";
+      markDirty(); renderScreen(); renderLists();
+    };
+    sw.addEventListener("click", toggle);
+    sw.addEventListener("keydown", (e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(); } });
+  }
   const pd = qs("previewDetail"); if (pd) pd.addEventListener("click", () => setView("detail"));
 }
 function updateCounters() {
@@ -493,11 +511,17 @@ function setSaveState(kind, label) {
   else if (kind === "dirty") t.textContent = "편집 중";
   else t.textContent = label || "저장됨";
 }
-function markDirty() { setSaveState("dirty"); }
-function clearDirty(label) { setSaveState("saved", label); }
+function markDirty() { const it = current(); if (it) it.dirty = true; setSaveState("dirty"); updateSaveBtn(); }
+function clearDirty(label) { const it = current(); if (it) it.dirty = false; setSaveState("saved", label); updateSaveBtn(); }
+function updateSaveBtn() {
+  const it = current(); const dirty = !!(it && it.dirty);
+  const b = qs("saveBtn"); if (b) b.disabled = !dirty || CU.busy;
+  const r = qs("revertBtn"); if (r) r.disabled = !dirty || CU.busy;
+}
 function setBusy(on) {
   CU.busy = on;
-  ["tempSave", "pubToggleBtn", "revertBtn"].forEach((id) => { const b = qs(id); if (b) b.disabled = on; });
+  ["saveBtn", "revertBtn"].forEach((id) => { const b = qs(id); if (b) b.disabled = on; });
+  if (!on) updateSaveBtn();
 }
 function clearFieldErrors() {
   document.querySelectorAll(".field-err").forEach((el) => el.remove());
@@ -523,15 +547,15 @@ function showValidationErrors(err) {
   });
   wzToast("입력값을 확인하세요", err.message || "");
 }
-async function saveCuration(publishOverride, label) {
+async function saveCuration() {
   const it = current();
-  if (!it || CU.busy) return;
+  if (!it || CU.busy || !it.dirty) return;
   setBusy(true); clearFieldErrors();
   try {
     const payload = {
       title: it.title || "", subtitle: it.subtitle || null, lead: it.lead || null, intro: it.intro || null,
       coverSpotId: it.cover.contentId || null,
-      isPublished: publishOverride != null ? publishOverride : it.isPublished,
+      isPublished: it.isPublished,
       position: it.position | 0,
     };
     const d = await adminFetchJSON(`/admin/api/curations/${it.id}`, "PUT", payload);
@@ -545,9 +569,9 @@ async function saveCuration(publishOverride, label) {
       it.picksDirty = false;
     }
     await refreshPreview(it); // auto-fill may have changed (cache invalidated on save)
-    clearDirty(`${label} · ${nowLabel()}`);
+    clearDirty(`저장됨 · ${nowLabel()}`);
     renderLists(); renderScreen(); renderInspector(); updateToggle();
-    wzToast(label, it.title || "");
+    wzToast(`저장됨 · ${it.isPublished ? "발행" : "비공개"}`, it.title || "");
   } catch (err) {
     if (err.status === 422 || err.code === "ADMIN_VALIDATION") showValidationErrors(err);
     else if (err.status === 404 || err.code === "ADMIN_CURATION_NOT_FOUND") wzToast("큐레이션을 찾을 수 없습니다", err.message);
@@ -680,12 +704,12 @@ document.addEventListener("click", (e) => {
 
 window.addEventListener("load", () => {
   if (!document.querySelector(".cu-page")) return;
-  qs("tempSave").addEventListener("click", () => saveCuration(null, "임시저장됨"));
-  qs("pubToggleBtn").addEventListener("click", () => {
-    const it = current(); if (!it) return;
-    saveCuration(!it.isPublished, it.isPublished ? "발행 취소됨" : "발행됨");
+  qs("saveBtn").addEventListener("click", () => saveCuration());
+  qs("revertBtn").addEventListener("click", () => {
+    const it = current();
+    if (it && it.dirty && !window.confirm("저장하지 않은 변경사항을 되돌릴까요?")) return;
+    revertCurrent();
   });
-  qs("revertBtn").addEventListener("click", revertCurrent);
   document.querySelectorAll("#viewToggle button").forEach((b) =>
     b.addEventListener("click", () => { if (b.classList.contains("disabled")) { wzToast("이 종류는 해당 화면이 없어요"); return; } setView(b.dataset.view); }));
   loadAll();
