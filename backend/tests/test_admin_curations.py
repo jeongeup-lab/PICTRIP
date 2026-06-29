@@ -559,3 +559,55 @@ async def test_auth_required(db_session, client, seed, method, path, body) -> No
         app.dependency_overrides.clear()
     assert r.status_code == 401
     assert r.json()["error"]["code"] == "ADMIN_UNAUTHORIZED"
+
+
+# --- KTO image http->https upgrade (admin HTML CSP blocks http: images) -------
+# The admin console serves its HTML with CSP ``img-src 'self' data: https:``,
+# so a raw KTO ``http://`` firstimage URL would be blocked and render blank.
+# The admin DTOs upgrade the transport for the KTO host (same URL, no download),
+# mirroring the map/spots schemas. Pure-schema test — no DB needed.
+def test_admin_image_urls_upgrade_kto_http_to_https() -> None:
+    from app.modules.admin.schemas import (
+        CoverSpot,
+        CurationListItem,
+        Handpick,
+        SpotSearchItem,
+    )
+
+    kto = "http://tong.visitkorea.or.kr/cms/126508_image2.jpg"
+    https = "https://tong.visitkorea.or.kr/cms/126508_image2.jpg"
+    other = "http://example.test/i.jpg"  # non-KTO host: left untouched
+
+    assert (
+        CurationListItem(
+            id=1,
+            type="region",
+            slug="jeju",
+            title="제주",
+            subtitle=None,
+            coverUrl=kto,
+            isPublished=True,
+            position=0,
+        ).coverUrl
+        == https
+    )
+    assert CoverSpot(contentId="1", name="n", imageUrl=kto).imageUrl == https
+    assert (
+        Handpick(contentId="1", name="n", category=None, imageUrl=kto, position=0).imageUrl == https
+    )
+
+    search = SpotSearchItem(contentId="1", name="n", regionCd=None, regionName=None, imageUrl=kto)
+    assert search.imageUrl == https
+    # non-KTO host and None pass through unchanged
+    assert (
+        SpotSearchItem(
+            contentId="1", name="n", regionCd=None, regionName=None, imageUrl=other
+        ).imageUrl
+        == other
+    )
+    assert (
+        SpotSearchItem(
+            contentId="1", name="n", regionCd=None, regionName=None, imageUrl=None
+        ).imageUrl
+        is None
+    )
