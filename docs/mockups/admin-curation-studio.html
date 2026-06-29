@@ -215,6 +215,13 @@
   .cardprev .cp-title { color:#fff; font-weight: 800; font-size: 18px; line-height: 21px; letter-spacing: -0.4px; white-space: pre-line; }
   .cardprev .cp-sub { color: rgba(255,255,255,.92); font-size: 11.5px; margin-top: 4px; }
   .cardprev .cp-change { position: absolute; top: 10px; right: 10px; z-index: 2; border: 0; background: rgba(255,255,255,.92); color: var(--ink); font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: 8px; box-shadow: var(--shadow); }
+  .cover-card { display: flex; align-items: center; gap: 11px; padding: 9px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+  .cover-card img { width: 54px; height: 54px; border-radius: 10px; object-fit: cover; flex: none; border: 1px solid var(--line); }
+  .cover-card .cc-meta { flex: 1; min-width: 0; }
+  .cover-card .cc-name { font-size: 13px; font-weight: 700; }
+  .cover-card .cc-sub { font-size: 11px; color: var(--ink-3); font-family: var(--mono); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mini-btn { border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2); font-size: 12px; font-weight: 600; padding: 6px 11px; border-radius: 8px; flex: none; }
+  .mini-btn:hover { color: var(--ink); }
   .urlnote { display: flex; gap: 8px; align-items: flex-start; background: var(--surface-2); border: 1px dashed var(--line); border-radius: 10px; padding: 8px 10px; font-size: 10.5px; color: var(--ink-3); font-family: var(--mono); line-height: 1.5; margin-top: 8px; }
   .urlnote svg { width: 13px; height: 13px; stroke: var(--ink-3); fill: none; stroke-width: 1.8; flex: none; margin-top: 1px; }
   .detail-cta { width: 100%; margin-bottom: 13px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font-size: 12px; font-weight: 600; padding: 9px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 7px; }
@@ -342,7 +349,7 @@
         </section>
 
         <section class="col col-insp">
-          <div class="col-h"><h2 id="inspTitle">제주</h2><span class="tbadge hero" id="inspType">지역 히어로</span></div>
+          <div class="col-h"><h2>슬롯 편집</h2></div>
           <div class="insp-ctx"><img id="inspThumb" src="" alt="" /><div><div class="nm" id="inspName">성산일출봉</div><div class="pth" id="inspPath">/curations/jeju · 슬롯 1</div></div></div>
           <div class="col-b" id="inspBody"></div>
           <div class="insp-foot"><button class="draft-btn" id="toDraft">초안으로</button><button class="save-btn" id="saveBtn">저장 후 발행</button></div>
@@ -495,8 +502,6 @@ function updateToggle(){
 /* ════════ 인스펙터 (종류별) ════════ */
 function renderInspector(){
   const it=current(), isHero=sel.kind==='hero';
-  qs('inspTitle').textContent=it.region;
-  const tb=qs('inspType'); tb.textContent=isHero?'지역 히어로':'무드 레일'; tb.className='tbadge '+(isHero?'hero':'rail');
   qs('crumbCur').textContent=it.region;
   qs('inspThumb').src=img(isHero?it.cover.seed:(it.picks[0]?.seed||it.id),80);
   if(isHero){qs('inspName').textContent=it.cover.name;qs('inspPath').textContent=`/curations/${it.slug} · 슬롯 ${sel.idx+1}`;}
@@ -509,14 +514,12 @@ function renderInspector(){
 
 function heroInspectorHTML(it){
   return `
-    <div class="kindnote hero"><svg viewBox="0 0 24 24" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m21 15-5-5L5 21"/></svg><div><b>지역 히어로</b> — 홈 상단 캐러셀의 큰 표지 카드. 탭하면 <b>상세 페이지</b>가 열려요. 표지·제목·부제 + 상세 카피·스팟을 편집합니다.</div></div>
-
     <div class="fgroup">
       <div class="fg-label"><svg viewBox="0 0 24 24" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 16-5-5L5 20"/></svg>홈 카드 <span class="tagn">캐러셀</span></div>
-      <div class="cardprev">
-        <img src="${heroImg(it.cover.seed)}" alt=""/>
-        <button class="cp-change">표지 변경</button>
-        <div class="cp-cap"><div class="cp-title" id="cpTitle">${esc(it.title)}</div><div class="cp-sub" id="cpSub">${esc(it.subtitle)}</div></div>
+      <div class="cover-card">
+        <img src="${img(it.cover.seed,120)}" alt=""/>
+        <div class="cc-meta"><div class="cc-name">${esc(it.cover.name)}</div><div class="cc-sub">표지 · ${esc(it.cover.cat)} · ${esc(it.region)}</div></div>
+        <button class="mini-btn" id="coverChange">변경</button>
       </div>
       <div class="urlnote"><svg viewBox="0 0 24 24" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>표지: ${esc(it.cover.name)} · KTO URL 참조만, 다운로드 없음</div>
       <div class="field" style="margin-top:13px"><label>제목 <span class="counter" id="cTitle">0</span></label><textarea class="ta title" id="fTitle" rows="2"></textarea><div class="hint">표지 위 오버레이 · 줄바꿈 그대로 노출</div></div>
@@ -539,18 +542,10 @@ function heroInspectorHTML(it){
 
 function railInspectorHTML(it){
   return `
-    <div class="kindnote rail"><svg viewBox="0 0 24 24" stroke-linecap="round"><path d="M4 7h16M4 12h10M4 17h16"/></svg><div><b>무드 레일</b> — 홈 하단 가로 스크롤 선반. 표지·상세 페이지가 <b>없고</b>, 스팟을 탭하면 각 <b>스팟 상세(/spots)</b>로 이동해요. 제목·부제 + 스팟 편성만 다룹니다.</div></div>
-
     <div class="fgroup">
       <div class="fg-label"><svg viewBox="0 0 24 24" stroke-linejoin="round"><path d="M4 5h16v4H4zM7 13h10M7 17h6"/></svg>레일 헤더</div>
       <div class="field"><label>섹션 제목 <span class="counter" id="cTitle">0</span></label><input class="inp title" id="fTitle" placeholder="예) 바다 보러 갈까요" /><div class="hint">홈에 굵게 노출되는 섹션 타이틀</div></div>
       <div class="field"><label>부제 <span class="counter" id="cSub">0</span></label><input class="inp" id="fSub" placeholder="섹션 아래 회색 한 줄" /></div>
-    </div>
-
-    <div class="fgroup">
-      <div class="fg-label"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 9 9c0-1-3-1-3-3s3-2 3-3a9 9 0 0 0-9-3z"/><circle cx="8.5" cy="10" r="1"/><circle cx="15" cy="9" r="1"/></svg>무드 매칭</div>
-      <div class="moodchips" id="moodChips">${MOODS.map(m=>`<button class="mchip ${m===it.mood?'on':''}" data-mood="${m}">${m}</button>`).join('')}</div>
-      <div class="hint" style="margin-top:9px">스팟을 비우면 이 무드로 <b>자동 편성</b> (spot_moods 매칭)</div>
     </div>
 
     <div class="fgroup primary">
@@ -558,7 +553,6 @@ function railInspectorHTML(it){
       <div class="pick-head"><span class="lab">레일에 노출되는 스팟 순서</span><span class="pc" id="pickCount">0 / 8</span></div>
       <div class="picklist big" id="pickList"></div>
       <button class="add-pick" id="addPick"><svg viewBox="0 0 24 24" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>스팟 추가</button>
-      <div class="hint" style="margin-top:10px">드래그로 순서 변경 · 비우면 무드 매칭으로 자동 채움</div>
     </div>
 
     ${editGroupHTML(it,'/ 3 무드 중')}`;
@@ -578,7 +572,7 @@ function renderPicks(){
   const it=current();
   qs('pickCount').textContent=`${it.picks.length} / 8`;
   const list=qs('pickList');
-  if(!it.picks.length){list.innerHTML=`<div class="empty-picks">${sel.kind==='hero'?'손픽이 비어 있어요.<br>지역 품질 랭킹으로 자동 편성됩니다.':'스팟이 비어 있어요.<br>무드 매칭으로 자동 편성됩니다.'}</div>`;return;}
+  if(!it.picks.length){list.innerHTML=`<div class="empty-picks">${sel.kind==='hero'?'손픽이 비어 있어요.<br>지역 품질 랭킹으로 자동 편성됩니다.':'스팟이 비어 있어요.'}</div>`;return;}
   list.innerHTML=it.picks.map((p,i)=>`
     <div class="pick" data-i="${i}" draggable="true">
       <span class="grip"><svg width="9" height="15" viewBox="0 0 9 15" fill="currentColor"><circle cx="2" cy="2" r="1.4"/><circle cx="7" cy="2" r="1.4"/><circle cx="2" cy="7.5" r="1.4"/><circle cx="7" cy="7.5" r="1.4"/><circle cx="2" cy="13" r="1.4"/><circle cx="7" cy="13" r="1.4"/></svg></span>
@@ -617,8 +611,7 @@ function bindInspector(isHero){
   qs('posDown').addEventListener('click',()=>movePos(-1));
   qs('addPick').addEventListener('click',()=>{const it=current();if(it.picks.length>=8){toast('최대 8개까지 가능합니다');return;}const n=it.picks.length+1;it.picks.push({name:`새 스팟 ${n}`,cat:'관광지',seed:`${it.id}-new-${n}-${Math.floor(performance.now())}`});markDirty();renderPicks();renderScreen();renderLists();syncCtx();});
   qs('previewDetail')?.addEventListener('click',()=>setView('detail'));
-  document.querySelectorAll('#moodChips .mchip').forEach(b=>b.addEventListener('click',()=>{current().mood=b.dataset.mood;document.querySelectorAll('#moodChips .mchip').forEach(x=>x.classList.toggle('on',x===b));markDirty();toast(`무드: ${b.dataset.mood}`);}));
-  document.querySelector('.cp-change')?.addEventListener('click',()=>toast('표지 스팟 선택 (스팟 피커 모달)'));
+  qs('coverChange')?.addEventListener('click',()=>toast('표지 스팟 선택 (스팟 피커 모달)'));
 }
 function movePos(d){const kind=sel.kind,arr=kind==='hero'?state.heroes:state.rails,to=sel.idx+d;if(to<0||to>=arr.length)return;const[m]=arr.splice(sel.idx,1);arr.splice(to,0,m);sel.idx=to;markDirty();renderScreen();renderLists();renderInspector();updateToggle();if(view==='home')scrollPreviewTo(kind,to);}
 
@@ -633,14 +626,28 @@ function scrollPreviewTo(kind,idx){
 function positionFocusRing(){
   const ring=qs('focusRing');
   if(view!=='home'){ring.classList.remove('show');return;}
-  let target=sel.kind==='hero'?document.querySelector('.hero[data-idx="'+sel.idx+'"]'):document.querySelector('.section[data-idx="'+sel.idx+'"]');
-  if(!target){ring.classList.remove('show');return;}
-  const phone=qs('phone'),pr=phone.getBoundingClientRect(),tr=target.getBoundingClientRect();
-  let top=tr.top-pr.top,height=tr.height;
-  if(top<0){height+=top;top=0;}
-  if(top+height>pr.height)height=pr.height-top;
+  const phone=qs('phone'); if(!phone){ring.classList.remove('show');return;}
+  const pr=phone.getBoundingClientRect();
+  let top,bottom;
+  if(sel.kind==='hero'){
+    const h=document.querySelector('.hero[data-idx="'+sel.idx+'"]');
+    if(!h){ring.classList.remove('show');return;}
+    const r=h.getBoundingClientRect();
+    top=r.top-pr.top+5; bottom=r.bottom-pr.top-5;   // 이미지 안쪽으로 hug
+  } else {
+    const sec=document.querySelector('.section[data-idx="'+sel.idx+'"]');
+    if(!sec){ring.classList.remove('show');return;}
+    const t=sec.querySelector('.sec-title')||sec, rail=sec.querySelector('.rail')||sec;
+    top=t.getBoundingClientRect().top-pr.top-10;     // 제목 위~
+    bottom=rail.getBoundingClientRect().bottom-pr.top+10; // ~카드 아래
+  }
+  if(top<0)top=0;
+  if(bottom>pr.height)bottom=pr.height;
+  const height=bottom-top;
   if(height<24){ring.classList.remove('show');return;}
-  ring.style.top=top+'px';ring.style.height=height+'px';ring.querySelector('.tag').textContent=sel.kind==='hero'?'편집 중 · 히어로':'편집 중 · 레일';ring.classList.add('show');
+  ring.style.top=top+'px';ring.style.height=height+'px';
+  ring.querySelector('.tag').textContent=sel.kind==='hero'?'편집 중 · 히어로':'편집 중 · 레일';
+  ring.classList.add('show');
 }
 document.querySelector('.col-stage .col-b').addEventListener('scroll',positionFocusRing,{passive:true});
 window.addEventListener('resize',positionFocusRing);
