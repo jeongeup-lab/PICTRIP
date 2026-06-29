@@ -135,6 +135,17 @@ function renderPreview() {
   const indWrap = $(".pv-ind");
   if (heroesWrap) {
     heroesWrap.innerHTML = CU.list.heroes.map(heroCardHtml).join("");
+    // apply each hero's cover image as the .img background (preserve scrim/title
+    // children — so don't reuse setThumbImage, which clears innerHTML)
+    $$(".pv-hero", heroesWrap).forEach((card, i) => {
+      const url = CU.list.heroes[i] && CU.list.heroes[i].coverUrl;
+      const img = card.querySelector(".img");
+      if (url && img) {
+        img.style.backgroundImage = `url("${encodeURI(url)}")`;
+        img.style.backgroundSize = "cover";
+        img.style.backgroundPosition = "center";
+      }
+    });
     if (indWrap) {
       indWrap.innerHTML = CU.list.heroes
         .map((_, i) => (i === 0 ? `<i class="on"></i>` : `<i></i>`))
