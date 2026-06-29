@@ -459,3 +459,7 @@
 /* 검색 결과 placeholder(모달 — .wz 밖이라 별도 처리) */
 #pickermodal .rspot .thumb.noimg { display: grid; place-items: center; }
 #pickermodal .rspot .thumb svg { width: 34%; height: 34%; stroke: var(--ink-3); fill: none; stroke-width: 1.4; opacity: .6; }
+
+/* 저장/되돌리기: 변경 없을 때 비활성 */
+.wz .insp-foot .save-btn:disabled { background: var(--surface-2); color: var(--ink-3); box-shadow: none; cursor: default; }
+.wz .insp-foot .draft-btn:disabled { opacity: .45; cursor: default; }
