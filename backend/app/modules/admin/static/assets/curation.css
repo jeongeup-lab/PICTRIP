@@ -434,3 +434,28 @@
 .wz-toast svg { width: 16px; height: 16px; stroke: #6ee7b7; fill: none; stroke-width: 2.4; }
 
 @media (max-width: 1240px) { .editor { grid-template-columns: 212px minmax(360px,1fr) 320px; } }
+
+/* ── 이미지 폴백 / 상태 / 발행 UX ── */
+.wz .noimg { display: grid; place-items: center; color: var(--ink-3); }
+.wz .noimg .noimg-ic { width: 32%; height: 32%; max-width: 34px; max-height: 34px; opacity: .5; }
+.wz .hero .himg.noimg { background: var(--p-inset); }
+.wz .hero .himg.noimg .noimg-ic { color: rgba(255,255,255,.7); }
+.wz .dcover.noimg { background: var(--p-inset); }
+.wz .rail-empty { padding: 16px 18px; color: var(--p-ter); font-size: 13px; }
+.wz .auto-pill { display: inline-block; vertical-align: middle; position: relative; top: -3px; margin-left: 8px;
+  font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: 0; color: var(--accent-ink);
+  background: var(--accent-soft); border-radius: 999px; padding: 2px 8px; }
+.wz .phone-msg { padding: 60px 22px; text-align: center; color: var(--p-ter); font-size: 13px; }
+.wz .phone-msg b { color: var(--p-ink); display: block; margin-bottom: 6px; font-size: 14px; }
+
+.wz .status-row { display: flex; align-items: center; gap: 12px; }
+.wz .status-row .tr-title { flex: 1; font-size: 13px; font-weight: 600; }
+.wz .pub-badge { font-family: var(--mono); font-size: 11px; font-weight: 700; padding: 3px 11px; border-radius: 999px; }
+.wz .pub-badge.on { color: var(--ok); background: var(--ok-soft); }
+.wz .pub-badge.off { color: var(--warn); background: var(--warn-soft); }
+.wz .insp-foot .save-btn.danger { background: var(--surface); color: var(--bad); border: 1px solid var(--line); box-shadow: none; }
+.wz .insp-foot .save-btn.danger:hover { background: var(--bad-soft); }
+
+/* 검색 결과 placeholder(모달 — .wz 밖이라 별도 처리) */
+#pickermodal .rspot .thumb.noimg { display: grid; place-items: center; }
+#pickermodal .rspot .thumb svg { width: 34%; height: 34%; stroke: var(--ink-3); fill: none; stroke-width: 1.4; opacity: .6; }

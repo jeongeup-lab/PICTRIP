@@ -185,6 +185,14 @@ async def api_curation_detail(_: AdminAuth, db: DbSession, curation_id: int) -> 
     return ok(await services.get_curation_detail(db, curation_id))
 
 
+@router.get("/api/curations/{curation_id}/preview")
+async def api_curation_preview(
+    _: AdminAuth, db: DbSession, redis: RedisDep, curation_id: int
+) -> dict[str, Any]:
+    """Resolved display spots (handpick else quality-gate auto-fill) — truthful preview."""
+    return ok(await services.get_curation_preview(db, redis, curation_id))
+
+
 @router.put("/api/curations/{curation_id}")
 async def api_curation_update(
     _: AdminAuth, db: DbSession, redis: RedisDep, curation_id: int, body: CurationUpdate
