@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from app.core.kto_images import https_kto_image
 
 
 # --- GET /admin/api/collection -------------------------------------------------
@@ -160,6 +162,13 @@ class CurationListItem(BaseModel):
     isPublished: bool
     position: int
 
+    # KTO firstimage URLs arrive as http://; the admin HTML CSP only allows
+    # https: images, so upgrade the transport (same URL, no download).
+    @field_validator("coverUrl")
+    @classmethod
+    def _upgrade_cover(cls, v: str | None) -> str | None:
+        return https_kto_image(v)
+
 
 class CurationList(BaseModel):
     """GET /admin/api/curations — grouped by type, each ordered by position."""
@@ -174,6 +183,11 @@ class CoverSpot(BaseModel):
     name: str
     imageUrl: str | None
 
+    @field_validator("imageUrl")
+    @classmethod
+    def _upgrade_image(cls, v: str | None) -> str | None:
+        return https_kto_image(v)
+
 
 class Handpick(BaseModel):
     contentId: str
@@ -181,6 +195,11 @@ class Handpick(BaseModel):
     category: str | None
     imageUrl: str | None
     position: int
+
+    @field_validator("imageUrl")
+    @classmethod
+    def _upgrade_image(cls, v: str | None) -> str | None:
+        return https_kto_image(v)
 
 
 class CurationDetail(BaseModel):
@@ -234,6 +253,11 @@ class SpotSearchItem(BaseModel):
     regionCd: str | None
     regionName: str | None
     imageUrl: str | None
+
+    @field_validator("imageUrl")
+    @classmethod
+    def _upgrade_image(cls, v: str | None) -> str | None:
+        return https_kto_image(v)
 
 
 class SpotSearchResult(BaseModel):
