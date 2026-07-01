@@ -12,12 +12,24 @@ interface Props {
   onTranslate?: (v: Animated.Value) => void;
 }
 
-const H = Dimensions.get("window").height;
+export const H = Dimensions.get("window").height;
+
+// Collapsed ("peek") reveal budget — how many px of the sheet stay on-screen so
+// the user still sees the drag handle + category chips + exactly ONE NearbyCard
+// sitting above the tab bar. Derived from the actual component heights, NOT a
+// screen ratio, so one card is always visible regardless of device height.
+const HANDLE_ZONE_PX = 30; // handleZone: paddingTop 10 + grabber 4 + margin 10 + paddingBottom 6
+const CHIPS_PX = 46; // CategoryChips: chip 34 + paddingVertical 6+6
+const CARD_PX = 112; // NearbyCard: image 92 + paddingVertical 10+10
+const TAB_BAR_PX = 83; // iOS tab content 49 + typical safe-area inset ~34 (card must clear it)
+const PEEK_MARGIN_PX = 12;
+export const PEEK_VISIBLE_PX = HANDLE_ZONE_PX + CHIPS_PX + CARD_PX + TAB_BAR_PX + PEEK_MARGIN_PX;
+
 // translateY from the top of the sheet container; smaller = taller sheet.
 // Exported so the map screen can anchor the search pill + recenter FAB to the
 // sheet's top edge (see map.tsx fallback initial value).
 export const SHEET_SNAP_Y: Record<Snap, number> = {
-  peek: H * 0.88,
+  peek: H - PEEK_VISIBLE_PX,
   half: H * 0.42,
   full: H * 0.08,
 };

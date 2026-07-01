@@ -1,9 +1,11 @@
 import { create } from "zustand";
 import { type Bounds, type LatLng, bboxFromCenter } from "@/features/map/lib/geo";
+import { clipBoundsToVisible } from "@/features/map/lib/visible-bounds";
 import type { AnchorSource } from "@/features/map/lib/region-label";
 import type { NearbyCategory } from "@/features/map/lib/nearby-categories";
 import type { RegionLabel } from "@/lib/api-types";
 import { shouldShowSearchHere } from "@/features/map/lib/search-here";
+import { SHEET_SNAP_Y, H as SCREEN_H } from "@/features/map/components/MapBottomSheet";
 import { RADIUS_M } from "@/constants/map";
 
 type Snap = "peek" | "half" | "full";
@@ -63,8 +65,14 @@ export const useMapStore = create<MapState>((set, get) => ({
       lastQueryCenter: center,
       viewportCenter: center,
       // Real viewport bbox if the map reported one (pan→search), else a square
-      // ±RADIUS_M box around the new center (GPS/region anchors).
-      queryBounds: bounds ?? bboxFromCenter(center, RADIUS_M),
+      // ±RADIUS_M box around the new center (GPS/region anchors). Either way the
+      // bottom sheet covers the lower part of the screen, so clip the south edge
+      // to the current snap's top so we never query (and pin) spots the panel hides.
+      queryBounds: clipBoundsToVisible(
+        bounds ?? bboxFromCenter(center, RADIUS_M),
+        SHEET_SNAP_Y[s.snap],
+        SCREEN_H,
+      ),
     })),
 
   setLabel: (label) => set({ label }),

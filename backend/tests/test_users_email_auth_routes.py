@@ -82,7 +82,9 @@ async def test_signup_returns_token_pair_and_sets_email(client):
     assert data["accessToken"]
     assert data["refreshToken"]
     assert data["user"]["email"] == email
-    assert data["user"]["displayName"] == "Nina"
+    # Signup always assigns a generated random nickname, ignoring the supplied name.
+    assert data["user"]["displayName"]
+    assert data["user"]["displayName"] != "Nina"
 
 
 async def test_signup_duplicate_active_email_returns_409(client):

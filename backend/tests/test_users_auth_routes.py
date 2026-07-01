@@ -133,7 +133,9 @@ async def test_users_me_returns_profile(client, patched_verify):
     resp = await client.get("/v1/users/me", headers={"Authorization": f"Bearer {access}"})
     assert resp.status_code == 200
     body = resp.json()["data"]
-    assert body["displayName"] == "T"
+    # OAuth signup assigns a generated random nickname, not the provider name claim.
+    assert body["displayName"]
+    assert body["displayName"] != "T"
     assert "avatarUrl" in body
     assert "name" not in body and "profileImageUrl" not in body
 

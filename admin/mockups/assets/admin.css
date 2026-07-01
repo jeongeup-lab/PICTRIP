@@ -272,3 +272,22 @@ td .strong { color: var(--ink); font-weight: 600; } .miss { color: var(--bad); }
 @media (max-width: 680px) {
   .cols-2, .cols-3, .cols-4, .cols-5, .srcstats { grid-template-columns: 1fr; }
 }
+
+/* Mobile: collapse the fixed sidebar into a horizontal top bar so the content
+   uses the full viewport width; nav items scroll/wrap and never eat 250px. */
+@media (max-width: 760px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar { position: static; top: auto; height: auto; width: auto;
+    flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px;
+    padding: 10px 16px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .sb-brand { padding: 0; margin-right: 4px; }
+  .sb-group { display: none; }
+  .nav-item { margin-bottom: 0; white-space: nowrap; padding: 8px 12px; }
+  .sb-foot { margin-top: 0; margin-left: auto; }
+  .topbar { padding: 0 16px; }
+  .content { padding: 20px 16px 48px; max-width: none; }
+  /* Wide data blocks scroll horizontally instead of overflowing the page. */
+  table { display: block; overflow-x: auto; }
+  .src { overflow-x: auto; }
+  .hrow { flex-wrap: wrap; }
+}

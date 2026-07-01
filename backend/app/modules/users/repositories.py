@@ -9,6 +9,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.nickname import generate_nickname
 from app.modules.users.models import User, UserAuthProvider, UserConsent
 
 
@@ -33,15 +34,15 @@ async def get_active_user_by_email(session: AsyncSession, email: str) -> User | 
     )
 
 
-async def create_email_user(
-    session: AsyncSession, *, email: str, name: str | None, password_hash: str
-) -> User:
+async def create_email_user(session: AsyncSession, *, email: str, password_hash: str) -> User:
     """Insert a User + its 'email' provider link inside a savepoint.
 
+    The display name is a generated random Korean nickname — signup never adopts
+    a caller-supplied name (product decision: everyone starts with a fresh alias).
     Raises ``IntegrityError`` if a concurrent insert wins the partial-unique email
     index / provider UNIQUE constraint; the caller maps that to a 409."""
     async with session.begin_nested():
-        user = User(email=email, name=name, password_hash=password_hash)
+        user = User(email=email, name=generate_nickname(), password_hash=password_hash)
         session.add(user)
         await session.flush()
         session.add(UserAuthProvider(user_id=user.id, provider="email", provider_user_id=email))
@@ -55,7 +56,6 @@ async def get_or_create_user_via_provider(
     provider: str,
     provider_user_id: str,
     email: str | None,
-    name: str | None,
     picture: str | None,
 ) -> User:
     existing = await find_auth_provider(
@@ -76,9 +76,12 @@ async def get_or_create_user_via_provider(
     if user_email is not None and await get_active_user_by_email(session, user_email) is not None:
         user_email = None
 
+    # A brand-new account always gets a generated random Korean nickname — the
+    # provider's name claim is deliberately ignored (returning users below keep
+    # whatever name they already have).
     try:
         async with session.begin_nested():
-            user = User(email=user_email, name=name, profile_image_url=picture)
+            user = User(email=user_email, name=generate_nickname(), profile_image_url=picture)
             session.add(user)
             await session.flush()
             session.add(
@@ -100,7 +103,7 @@ async def get_or_create_user_via_provider(
             # Not a provider race → it was the email index. Re-insert without the
             # conflicting profile email.
             async with session.begin_nested():
-                user = User(email=None, name=name, profile_image_url=picture)
+                user = User(email=None, name=generate_nickname(), profile_image_url=picture)
                 session.add(user)
                 await session.flush()
                 session.add(
