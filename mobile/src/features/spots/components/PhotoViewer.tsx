@@ -57,7 +57,9 @@ export function PhotoViewer({ visible, images, initialIndex = 0, onClose }: Phot
             <View style={[styles.page, { width, height }]}>
               <RemoteImage
                 uri={item}
-                style={{ width, height: height * 0.8, resizeMode: "contain" }}
+                cropBanner={false}
+                resizeMode="contain"
+                style={{ width, height }}
               />
             </View>
           )}

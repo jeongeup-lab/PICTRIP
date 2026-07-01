@@ -65,7 +65,6 @@ async def authenticate_with_oauth(
         provider=provider,
         provider_user_id=claims.sub,
         email=claims.email,
-        name=claims.name,
         picture=claims.picture,
     )
     await session.commit()
@@ -94,7 +93,7 @@ async def signup_with_email(session: AsyncSession, body: EmailSignupIn) -> Token
 
     try:
         user = await repo.create_email_user(
-            session, email=email, name=body.name, password_hash=hash_password(body.password)
+            session, email=email, password_hash=hash_password(body.password)
         )
     except IntegrityError as e:
         raise EmailAlreadyRegistered() from e

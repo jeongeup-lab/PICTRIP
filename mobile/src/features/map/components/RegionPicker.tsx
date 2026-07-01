@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
   panes: { flex: 1, flexDirection: "row", minHeight: 0 },
 
   left: {
-    width: 96,
+    width: 72,
     backgroundColor: colors.inset,
     borderRightWidth: 1,
     borderRightColor: HAIR,

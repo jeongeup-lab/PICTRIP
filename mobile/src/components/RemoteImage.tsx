@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { Image, View, type StyleProp, type ImageStyle, type ViewStyle } from "react-native";
+import {
+  Image,
+  View,
+  type StyleProp,
+  type ImageStyle,
+  type ViewStyle,
+  type ImageResizeMode,
+} from "react-native";
 import { colors } from "@/constants/theme";
 
 interface RemoteImageProps {
@@ -12,6 +19,12 @@ interface RemoteImageProps {
    * that frame the image themselves (spot-detail hero) or letterbox it (PhotoViewer).
    */
   cropBanner?: boolean;
+  /**
+   * Image `resizeMode`. Only honoured when `cropBanner` is false (the crop path
+   * needs its own oversized "cover"). Use "contain" to letterbox (PhotoViewer);
+   * defaults to RN's "cover".
+   */
+  resizeMode?: ImageResizeMode;
 }
 
 // KTO watermark band is roughly the bottom ~12% of the source frame. The image is
@@ -19,7 +32,13 @@ interface RemoteImageProps {
 // falls below the visible edge. Heuristic — band height varies per image.
 const BANNER_FRACTION = 0.12;
 
-export function RemoteImage({ uri, style, radius = 0, cropBanner = true }: RemoteImageProps) {
+export function RemoteImage({
+  uri,
+  style,
+  radius = 0,
+  cropBanner = true,
+  resizeMode,
+}: RemoteImageProps) {
   const [failed, setFailed] = useState(false);
   if (!uri || failed) {
     return (
@@ -36,6 +55,7 @@ export function RemoteImage({ uri, style, radius = 0, cropBanner = true }: Remot
       <Image
         source={{ uri }}
         onError={() => setFailed(true)}
+        resizeMode={resizeMode}
         style={[{ borderRadius: radius }, style]}
       />
     );

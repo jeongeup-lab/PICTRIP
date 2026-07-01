@@ -24,15 +24,35 @@ from app.modules.users.services import (
 
 @pytest.mark.asyncio
 async def test_authenticate_with_oauth_new_signup_creates_user(db_session: AsyncSession) -> None:
+    # The provider name claim is discarded: a new account gets a generated random
+    # Korean nickname instead.
     fake_claims = OidcClaims(sub="kakao-user-1", email=None, name="Hong", picture=None)
     with patch(
         "app.modules.users.services.verify_oauth_id_token",
         AsyncMock(return_value=fake_claims),
     ):
         pair = await authenticate_with_oauth(db_session, "kakao", OAuthLoginIn(idToken="x"))
-    assert pair.user.displayName == "Hong"
+    assert pair.user.displayName
+    assert pair.user.displayName != "Hong"
     rows = (await db_session.scalars(select(User))).all()
     assert len(rows) == 1
+
+
+@pytest.mark.asyncio
+async def test_authenticate_with_oauth_returning_user_name_unchanged(
+    db_session: AsyncSession,
+) -> None:
+    # A returning OAuth login must NOT re-roll the nickname — the create-branch is
+    # skipped, so the name stored on first login is preserved.
+    fake_claims = OidcClaims(sub="kakao-user-keep", email=None, name="Ignored", picture=None)
+    with patch(
+        "app.modules.users.services.verify_oauth_id_token",
+        AsyncMock(return_value=fake_claims),
+    ):
+        first = await authenticate_with_oauth(db_session, "kakao", OAuthLoginIn(idToken="x"))
+        second = await authenticate_with_oauth(db_session, "kakao", OAuthLoginIn(idToken="x"))
+    assert first.user.displayName
+    assert second.user.displayName == first.user.displayName
 
 
 @pytest.mark.asyncio
