@@ -9,10 +9,10 @@ export function htmlToPlainText(input: string): string {
   let text = input
     // line-break / block-close tags become newlines
     .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/(?:p|div|li)>/gi, "\n")
-    // strip every remaining tag
-    .replace(/<[^>]*>/g, "");
+    .replace(/<\/(?:p|div|li)>/gi, "\n");
 
+  // strip every remaining tag
+  text = stripTags(text);
   text = decodeEntities(text);
 
   return (
@@ -21,6 +21,19 @@ export function htmlToPlainText(input: string): string {
       .replace(/\n{3,}/g, "\n\n")
       .trim()
   );
+}
+
+// Strip HTML tags to a fixpoint. A single `<[^>]*>` pass can leave a
+// reconstructable tag behind (e.g. "<<b>script>" -> "<script>"), so repeat
+// until the string stops changing — complete, bypass-proof sanitization.
+function stripTags(input: string): string {
+  let text = input;
+  let prev: string;
+  do {
+    prev = text;
+    text = text.replace(/<[^>]*>/g, "");
+  } while (text !== prev);
+  return text;
 }
 
 function decodeEntities(input: string): string {

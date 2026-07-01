@@ -21,8 +21,17 @@ function unescapeEntities(s: string): string {
     .replace(/&(?:amp|lt|gt|quot|apos|#39|nbsp);/g, (m) => NAMED_ENTITIES[m] ?? m);
 }
 
+// Strip HTML tags to a fixpoint. A single `<[^>]*>` pass can leave a
+// reconstructable tag behind (e.g. "<<a>a href>"), so repeat until the string
+// stops changing — complete, bypass-proof sanitization.
 function stripTags(s: string): string {
-  return s.replace(/<[^>]*>/g, "");
+  let text = s;
+  let prev: string;
+  do {
+    prev = text;
+    text = text.replace(/<[^>]*>/g, "");
+  } while (text !== prev);
+  return text;
 }
 
 function ensureScheme(url: string): string {

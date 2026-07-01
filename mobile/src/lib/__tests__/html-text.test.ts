@@ -18,6 +18,15 @@ describe("htmlToPlainText", () => {
     expect(htmlToPlainText('<a href="x">link</a> <b>bold</b>')).toBe("link bold");
   });
 
+  it("strips nested tags cleanly", () => {
+    expect(htmlToPlainText("<p>a<b>c</b></p>")).toBe("ac");
+    expect(htmlToPlainText("<div><span>x</span></div>")).toBe("x");
+  });
+
+  it("terminates on malformed unbalanced brackets (fixpoint loop, no hang)", () => {
+    expect(htmlToPlainText("<a<b<c")).toBe("<a<b<c");
+  });
+
   it("decodes common named and numeric entities", () => {
     expect(htmlToPlainText("Tom &amp; Jerry")).toBe("Tom & Jerry");
     expect(htmlToPlainText("&lt;tag&gt; &quot;q&quot; &#39;a&#39;")).toBe("<tag> \"q\" 'a'");
