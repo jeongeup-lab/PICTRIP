@@ -8,7 +8,7 @@ from collections.abc import Awaitable, Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.types import ASGIApp
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.core.logging import get_logger, set_trace_id
 from app.core.time import kst_now, seconds_until_kst_midnight
@@ -89,3 +89,38 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
         elif path == self._regions_tree:
             response.headers["Cache-Control"] = "public, s-maxage=86400"
         return response
+
+
+class ApiV1CompatMiddleware:
+    """TEMPORARY compat shim (2026-07) — remove after the fixed mobile build ships.
+
+    The v0.4.1 TestFlight build baked the API base WITHOUT the ``/v1`` prefix
+    (``env.ts`` fallback did not include it), so every request from installed
+    builds hits a bare path (``/home/feed``, ``/map/nearby``, ...) and 404s.
+    This rewrites those bare top-level API paths to their ``/v1`` equivalent so
+    already-installed builds keep working until users update.
+
+    Pure-ASGI (mutates ``scope['path']`` before routing). Scoped to the exact
+    first-segments the API exposes so ``/admin``, ``/health``, ``/docs``,
+    ``/.well-known`` and already-prefixed ``/v1/*`` requests pass through
+    untouched.
+    """
+
+    # First path segment of every route mounted under the /v1 prefix.
+    _SEGMENTS = frozenset({"auth", "users", "taste", "curations", "home", "spots", "map", "meta"})
+
+    def __init__(self, app: ASGIApp, prefix: str) -> None:
+        self.app = app
+        self._prefix = prefix
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http":
+            path: str = scope.get("path", "")
+            first = path.lstrip("/").split("/", 1)[0]
+            if first in self._SEGMENTS:
+                scope = dict(scope)
+                scope["path"] = self._prefix + path
+                raw_path = scope.get("raw_path")
+                if raw_path is not None:
+                    scope["raw_path"] = self._prefix.encode() + raw_path
+        await self.app(scope, receive, send)
