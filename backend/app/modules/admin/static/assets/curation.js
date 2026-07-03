@@ -645,7 +645,8 @@ function renderSearchResults(spots) {
       `<div class="rspot${already ? " added" : ""}" data-content-id="${esc(s.contentId)}" data-name="${esc(s.name || "")}" data-img="${esc(img)}" data-region="${esc(region)}" data-cat="${esc(s.category || "")}">` +
       `<div class="thumb${img ? "" : " noimg"}"${bg(img)}>${img ? "" : `<svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/></svg>`}</div>` +
       `<div class="meta"><div class="nm">${esc(s.name || "")}</div><div class="sub">${subParts.join(" · ")}</div></div>` +
-      `<button class="btn ghost add" type="button">` + (already ? `<svg class="bi chk" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>추가됨` : "추가") + `</button>`
+      `<button class="btn ghost add" type="button">` + (already ? `<svg class="bi chk" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>추가됨` : "추가") + `</button>` +
+      `</div>` // close .rspot — without this each card nests inside the previous one (grid collapses to 1 column)
     );
   }).join("");
 }
