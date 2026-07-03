@@ -42,7 +42,7 @@ const kindOf = (type) => (type === "region" ? "hero" : type === "mood" ? "rail" 
 const arrOf = (kind) => (kind === "hero" ? CU.heroes : kind === "rail" ? CU.rails : CU.editorial);
 const current = () => arrOf(CU.sel.kind)[CU.sel.idx];
 
-function bg(url) { return url ? ` style="background-image:url('${encodeURI(url)}')"` : ""; }
+function bg(url) { return url ? ` style="background-image:url('${encodeURI(url).replace(/'/g, "%27")}')"` : ""; }
 const NOIMG = `<svg class="noimg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 16-5-5L5 20"/></svg>`;
 // thumbnail element with graceful placeholder when the KTO image URL is missing
 function tmb(cls, url) { return `<div class="${cls}${url ? "" : " noimg"}"${bg(url)}>${url ? "" : NOIMG}</div>`; }
@@ -308,7 +308,7 @@ function renderInspector() {
   if (!it) { qs("inspBody").innerHTML = `<div class="insp-empty">선택된 큐레이션이 없습니다.</div>`; return; }
   const thumbUrl = it.kind === "rail" ? (it.picks[0] && it.picks[0].imageUrl) : it.cover.imageUrl;
   const ct = qs("inspThumb");
-  if (thumbUrl) { ct.classList.remove("noimg"); ct.style.backgroundImage = `url('${encodeURI(thumbUrl)}')`; ct.innerHTML = ""; }
+  if (thumbUrl) { ct.classList.remove("noimg"); ct.style.backgroundImage = `url('${encodeURI(thumbUrl).replace(/'/g, "%27")}')`; ct.innerHTML = ""; }
   else { ct.classList.add("noimg"); ct.style.backgroundImage = ""; ct.innerHTML = NOIMG; }
   if (it.kind === "rail") {
     qs("inspName").textContent = `${it.picks.length || (it.previewSpots ? it.previewSpots.length : 0)}개 스팟${isAuto(it) ? " · 자동" : ""}`;
@@ -559,10 +559,14 @@ async function saveCuration() {
       position: it.position | 0,
     };
     const d = await adminFetchJSON(`/admin/api/curations/${it.id}`, "PUT", payload);
+    // Capture the edited handpick IDs BEFORE applyDetail runs: applyDetail overwrites
+    // it.picks with d.handpicks, which is the server's PRE-edit set (the /spots PUT
+    // below hasn't persisted the edit yet). Reading it.picks after would re-send the
+    // old order and silently discard the admin's add/remove/reorder.
+    const editedIds = it.picksDirty ? it.picks.map((p) => p.contentId).filter(Boolean) : null;
     applyDetail(it, d);
     if (it.picksDirty) {
-      const ids = it.picks.map((p) => p.contentId).filter(Boolean);
-      const res = await adminFetchJSON(`/admin/api/curations/${it.id}/spots`, "PUT", { spotIds: ids });
+      const res = await adminFetchJSON(`/admin/api/curations/${it.id}/spots`, "PUT", { spotIds: editedIds });
       if (res && res.handpicks) {
         it.picks = res.handpicks.map((h) => ({ contentId: h.contentId, name: h.name || "", cat: h.category || "스팟", imageUrl: h.imageUrl || null }));
       }
