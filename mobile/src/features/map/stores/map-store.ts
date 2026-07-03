@@ -64,15 +64,15 @@ export const useMapStore = create<MapState>((set, get) => ({
       gpsCoords: gps !== undefined ? gps : s.gpsCoords,
       lastQueryCenter: center,
       viewportCenter: center,
-      // Real viewport bbox if the map reported one (pan→search), else a square
-      // ±RADIUS_M box around the new center (GPS/region anchors). Either way the
-      // bottom sheet covers the lower part of the screen, so clip the south edge
-      // to the current snap's top so we never query (and pin) spots the panel hides.
-      queryBounds: clipBoundsToVisible(
-        bounds ?? bboxFromCenter(center, RADIUS_M),
-        SHEET_SNAP_Y[s.snap],
-        SCREEN_H,
-      ),
+      // Clip ONLY the real reported viewport (pan→search): the bottom sheet hides
+      // the lower part of what the user actually sees, so we don't want to query
+      // (and pin) spots behind the panel. The synthetic ±RADIUS_M box used for
+      // GPS/region anchors is centered on the *user*, not the viewport — clipping
+      // it by a screen-pixel fraction would push the query bbox north of the user
+      // and silently drop the nearest (and all southern) spots on the default load.
+      queryBounds: bounds
+        ? clipBoundsToVisible(bounds, SHEET_SNAP_Y[s.snap], SCREEN_H)
+        : bboxFromCenter(center, RADIUS_M),
     })),
 
   setLabel: (label) => set({ label }),

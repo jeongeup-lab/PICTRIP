@@ -1,9 +1,34 @@
 import { useMapStore } from "@/features/map/stores/map-store";
+import { bboxFromCenter } from "@/features/map/lib/geo";
+import { RADIUS_M } from "@/constants/map";
 
 const seoul = { lat: 37.5666, lng: 126.9784 };
 
 describe("map-store", () => {
   beforeEach(() => useMapStore.getState().reset());
+
+  it("GPS/region anchor keeps the user centered in the ±radius query box (not clipped north)", () => {
+    // Regression: the synthetic ±RADIUS_M box is centered on the user, so it must
+    // NOT be run through clipBoundsToVisible (that would push the south edge north
+    // of the user and drop the nearest/southern spots on the default nearby load).
+    useMapStore.getState().setAnchor(seoul, "gps", seoul);
+    const qb = useMapStore.getState().queryBounds!;
+    expect(qb).toEqual(bboxFromCenter(seoul, RADIUS_M));
+    expect(qb.sw.lat).toBeLessThan(seoul.lat); // user is inside the box…
+    expect(qb.ne.lat).toBeGreaterThan(seoul.lat);
+    expect(qb.ne.lat - seoul.lat).toBeCloseTo(seoul.lat - qb.sw.lat, 9); // …and symmetric
+  });
+
+  it("pan→search DOES clip the real viewport bbox south edge to the sheet top", () => {
+    const vp = { lat: 37.58, lng: 126.9784 };
+    const bounds = { sw: { lat: 37.55, lng: 126.95 }, ne: { lat: 37.61, lng: 127.0 } };
+    useMapStore.getState().setAnchor(seoul, "gps", seoul);
+    useMapStore.getState().onViewportChange(vp, bounds);
+    useMapStore.getState().searchHere();
+    const qb = useMapStore.getState().queryBounds!;
+    expect(qb.sw.lat).toBeGreaterThan(bounds.sw.lat); // south edge raised (panel-hidden strip excluded)
+    expect(qb.ne.lat).toBe(bounds.ne.lat); // north edge untouched
+  });
 
   it("setAnchor sets center, source, and lastQueryCenter; pill hidden", () => {
     useMapStore.getState().setAnchor(seoul, "gps", seoul);

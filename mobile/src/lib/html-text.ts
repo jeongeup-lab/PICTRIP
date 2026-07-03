@@ -52,5 +52,7 @@ function decodeEntities(input: string): string {
 
 function codePoint(code: string): string {
   const n = Number(code);
-  return Number.isFinite(n) && n > 0 ? String.fromCodePoint(n) : "";
+  // Guard the valid Unicode range: String.fromCodePoint throws RangeError for
+  // n > 0x10FFFF, and untrusted KTO overview text can carry e.g. "&#99999999999;".
+  return Number.isFinite(n) && n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : "";
 }

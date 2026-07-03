@@ -38,6 +38,14 @@ describe("htmlToPlainText", () => {
     expect(htmlToPlainText("&amp;lt;")).toBe("&lt;");
   });
 
+  it("does not throw on out-of-range numeric entities (drops them)", () => {
+    // String.fromCodePoint throws RangeError above 0x10FFFF; untrusted KTO text
+    // can carry huge numeric entities. Guard drops them instead of crashing render.
+    expect(htmlToPlainText("a&#99999999999;b")).toBe("ab");
+    expect(htmlToPlainText("x&#1114112;y")).toBe("xy"); // 0x110000, one past the max
+    expect(htmlToPlainText("ok&#1114111;")).toBe("ok\u{10FFFF}"); // 0x10FFFF still decodes
+  });
+
   it("collapses 3+ newlines to a paragraph break and trims", () => {
     expect(htmlToPlainText("  a<br><br><br><br>b  ")).toBe("a\n\nb");
   });
