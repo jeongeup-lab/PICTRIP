@@ -1,6 +1,9 @@
 /* PicTrip admin — shared "Lumen" styles (modern SaaS, light) */
-@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
-@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap");
+/* Fonts intentionally NOT @imported: the admin CSP is style-src 'self' 'unsafe-inline',
+   which blocks external stylesheets (jsdelivr/Google Fonts) and logs a console error on
+   every page. The font stacks below fall back to system-ui / ui-monospace, which is fine
+   for an internal console. To restore Pretendard/Jakarta, self-host the woff2 under
+   /admin/assets and add @font-face (same-origin, CSP-clean) — do NOT re-add remote @import. */
 
 :root {
   --bg:#fafafa; --surface:#ffffff; --surface-2:#f4f4f5;
