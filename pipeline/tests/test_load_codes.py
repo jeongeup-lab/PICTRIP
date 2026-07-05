@@ -1,4 +1,5 @@
 import httpx
+import pytest
 
 from pictrip_data.kto.client import KtoClient
 from pictrip_data.master.load_codes import load_codes
@@ -80,7 +81,58 @@ def _cleanup_codes(conn):
     conn.commit()
 
 
-def test_load_codes_upserts_and_is_idempotent(db_conn):
+@pytest.fixture
+def seed_codes_guard(db_conn):
+    """Snapshot the real code rows these tests delete, and restore them after.
+
+    The fixtures use REAL sido codes ('11','26','36'), which exist in a shared,
+    Alembic-migrated pictrip_test as the backend's 17-sido regions seed. Without
+    this guard the trailing _cleanup_codes permanently strips those seed rows,
+    breaking the backend suite's regions-seed asserts on the next local run
+    (CI is unaffected — each job gets a fresh DB).
+    """
+    cur = db_conn.cursor()
+    cur.execute(
+        "SELECT ldong_regn_cd, ldong_regn_nm FROM regions WHERE ldong_regn_cd IN ('11','26','36')"
+    )
+    regions = cur.fetchall()
+    cur.execute(
+        "SELECT ldong_signgu_cd, ldong_regn_cd, ldong_signgu_nm FROM sigungus "
+        "WHERE ldong_regn_cd IN ('11','26','36')"
+    )
+    sigungus = cur.fetchall()
+    cur.execute(
+        "SELECT lcls_systm3_cd, lcls_systm3_nm, lcls_systm2_cd, lcls_systm1_cd, "
+        "lcls_systm2_nm, lcls_systm1_nm FROM lcls_systm_codes "
+        "WHERE lcls_systm3_cd IN ('AC010100','AC020100')"
+    )
+    lcls = cur.fetchall()
+    yield
+    _cleanup_codes(db_conn)
+    cur = db_conn.cursor()
+    for row in regions:
+        cur.execute(
+            "INSERT INTO regions (ldong_regn_cd, ldong_regn_nm) VALUES (%s, %s) "
+            "ON CONFLICT DO NOTHING",
+            row,
+        )
+    for row in sigungus:
+        cur.execute(
+            "INSERT INTO sigungus (ldong_signgu_cd, ldong_regn_cd, ldong_signgu_nm) "
+            "VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
+            row,
+        )
+    for row in lcls:
+        cur.execute(
+            "INSERT INTO lcls_systm_codes (lcls_systm3_cd, lcls_systm3_nm, lcls_systm2_cd, "
+            "lcls_systm1_cd, lcls_systm2_nm, lcls_systm1_nm) "
+            "VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING",
+            row,
+        )
+    db_conn.commit()
+
+
+def test_load_codes_upserts_and_is_idempotent(db_conn, seed_codes_guard):
     _cleanup_codes(db_conn)
     fake = FakeClient()
     try:
@@ -165,7 +217,7 @@ def test_client_call_single_item_wrapped_to_list():
     assert client.call("lclsSystmCode2") == [LCLS_ROWS[0]]
 
 
-def test_load_codes_normalizes_sejong(db_conn):
+def test_load_codes_normalizes_sejong(db_conn, seed_codes_guard):
     _cleanup_codes(db_conn)
     load_codes(client=FakeClient(), conn=db_conn)
     cur = db_conn.cursor()
