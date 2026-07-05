@@ -62,7 +62,8 @@ Backend module layout (uniform per domain):
 app/modules/<code>/
 ├── routes.py    HTTP I/O only — no DB, no business logic
 ├── services.py  business logic + transaction boundaries
-├── repositories.py  (spots, admin only) DB queries; SQLAlchemy lives here
+├── repositories.py  (map · users · images · admin) DB queries; spots keeps
+│                    its queries in services/ submodules instead
 ├── models.py    SQLAlchemy ORM — no business methods
 └── schemas.py   Pydantic DTOs — no ORM imports
 ```

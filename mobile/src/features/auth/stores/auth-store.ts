@@ -3,6 +3,7 @@ import { bareClient } from "@/lib/bare-client";
 import type { TokenPair, User } from "@/lib/api-types";
 import { getRefreshToken, setRefreshToken, clearRefreshToken } from "@/lib/storage";
 import { AppError } from "@/lib/app-error";
+import { registerAuthSession } from "@/lib/auth-session";
 import { getIdToken, type Provider } from "@/features/auth/usecases/oauth-providers";
 import { recordConsentSnapshot } from "@/features/auth/usecases/record-consent";
 import {
@@ -130,3 +131,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ accessToken: "dev-access-token", user, isAuthenticated: true });
   },
 }));
+
+// api-client (lib) reads the session through this seam instead of importing
+// the auth feature — registered at module init (the entry route imports this
+// store before any authed request fires).
+registerAuthSession({
+  getAccessToken: () => useAuthStore.getState().accessToken,
+  refresh: () => useAuthStore.getState().refresh(),
+  clear: () => useAuthStore.getState().clear(),
+});

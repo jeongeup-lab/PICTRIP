@@ -2,12 +2,30 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from datetime import datetime
+
+from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.spots.models import LclsSystmCode, Region, Sigungu, Spot
 from app.modules.spots.services.nearby import derive_category
 from app.modules.spots.services.rows import SpotCardRow
+
+
+def image_bearing_spots_stmt(*, since: datetime | None = None) -> Select[tuple[str, str | None]]:
+    """(content_id, first_image_url) selectable for spots with a non-empty image URL.
+
+    Cross-module contract for the images embedding job: images composes its own
+    embedding/failure filters against this selectable (as a subquery) so Spot ORM
+    knowledge stays inside spots. ``since`` scopes to spots synced at or after it.
+    """
+    stmt = select(Spot.content_id, Spot.first_image_url).where(
+        Spot.first_image_url.is_not(None),
+        Spot.first_image_url != "",
+    )
+    if since is not None:
+        stmt = stmt.where(Spot.synced_at >= since)
+    return stmt
 
 
 async def load_region_meta(

@@ -7,13 +7,11 @@ from typing import Any
 from fastapi import APIRouter, Query, status
 
 from app.core.db import DbSession
-from app.core.exceptions import ValidationFailed
 from app.core.redis import RedisDep
 from app.core.schemas import ok
-from app.modules.map.schemas import NearbySpotCard, RegionLabel, RegionNode
+from app.modules.map.schemas import RegionLabel, RegionNode
 from app.modules.map.services import (
-    nearby_spots,
-    nearby_spots_bbox,
+    nearby_cards,
     regions_tree,
     reverse_geocode,
 )
@@ -41,39 +39,18 @@ async def nearby(
     ne_lat: float | None = Query(default=None, ge=-90, le=90),
     ne_lng: float | None = Query(default=None, ge=-180, le=180),
 ) -> dict[str, Any]:
-    bbox = (sw_lat, sw_lng, ne_lat, ne_lng)
-    if all(v is not None for v in bbox):
-        rows = await nearby_spots_bbox(
-            session,
-            sw_lat=sw_lat,  # type: ignore[arg-type]
-            sw_lng=sw_lng,  # type: ignore[arg-type]
-            ne_lat=ne_lat,  # type: ignore[arg-type]
-            ne_lng=ne_lng,  # type: ignore[arg-type]
-            category=category,
-        )
-    elif lat is not None and lng is not None:
-        rows = await nearby_spots(session, lat=lat, lng=lng, radius=radius, category=category)
-    else:
-        raise ValidationFailed("Provide either a bbox (sw_lat/sw_lng/ne_lat/ne_lng) or lat+lng.")
-    return ok(
-        [
-            NearbySpotCard(
-                contentId=r.content_id,
-                title=r.title,
-                firstImageUrl=r.first_image_url,
-                addr1=r.addr1,
-                mapx=r.mapx,
-                mapy=r.mapy,
-                dist=r.dist,
-                category=r.category,
-                categoryGroup=r.category_group,
-                regionName=r.region_name,
-                sigunguName=r.sigungu_name,
-                overview=r.overview,
-            )
-            for r in rows
-        ]
+    cards = await nearby_cards(
+        session,
+        lat=lat,
+        lng=lng,
+        radius=radius,
+        category=category,
+        sw_lat=sw_lat,
+        sw_lng=sw_lng,
+        ne_lat=ne_lat,
+        ne_lng=ne_lng,
     )
+    return ok(cards)
 
 
 @router.get("/map/region", summary="현위치 행정구역 라벨 (Kakao coord2regioncode)")

@@ -8,7 +8,7 @@ import { API_BASE } from "@/constants/env";
 import type { Envelope } from "@/lib/api-types";
 import { unwrapData, envelopeToError } from "@/lib/jsend";
 import { AppError } from "@/lib/app-error";
-import { useAuthStore } from "@/features/auth/stores/auth-store";
+import { getAuthSession } from "@/lib/auth-session";
 
 type RetriableConfig = InternalAxiosRequestConfig & { _retried?: boolean };
 
@@ -24,11 +24,12 @@ export async function handleResponseError(
   }
   const appError = envelopeToError(error.response.data, error.response.status);
   const config = error.config as RetriableConfig | undefined;
+  const session = getAuthSession();
 
-  if (appError.code === "AUTH_TOKEN_EXPIRED" && config && !config._retried) {
+  if (appError.code === "AUTH_TOKEN_EXPIRED" && session && config && !config._retried) {
     config._retried = true;
     try {
-      const newToken = await useAuthStore.getState().refresh();
+      const newToken = await session.refresh();
       config.headers.set("Authorization", `Bearer ${newToken}`);
       return retry(config);
     } catch {
@@ -40,7 +41,7 @@ export async function handleResponseError(
   // error. (AUTH_TOKEN_EXPIRED is handled above via refresh; GUEST_FORBIDDEN
   // has no session to clear.) clear() is fire-and-forget — we throw next.
   if (appError.code === "AUTH_TOKEN_INVALID" || appError.code === "AUTH_SESSION_REVOKED") {
-    void useAuthStore.getState().clear();
+    void session?.clear();
   }
   throw appError;
 }
@@ -54,7 +55,7 @@ export const api = axiosCreate({
 });
 
 api.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().accessToken;
+  const token = getAuthSession()?.getAccessToken() ?? null;
   if (token) {
     config.headers.set("Authorization", `Bearer ${token}`);
   }

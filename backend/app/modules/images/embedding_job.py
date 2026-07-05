@@ -75,27 +75,24 @@ async def collect_targets(
     after that time (the "this collection" scope). ``limit`` caps the batch so the
     serving process is never pinned by a huge backlog.
     """
-    # Imported lazily: a module-level spots.models import would re-enter
-    # images.services (which re-exports this module) → circular import.
-    from app.modules.spots.models import Spot
+    # Imported lazily: spots.services (via curations) imports images.services,
+    # which re-exports this module → a module-level import would be circular.
+    from app.modules.spots.services import image_bearing_spots_stmt
 
+    spots = image_bearing_spots_stmt(since=since).subquery()
     has_embedding = select(SpotEmbedding.content_id).where(
-        SpotEmbedding.content_id == Spot.content_id
+        SpotEmbedding.content_id == spots.c.content_id
     )
     stmt = (
-        select(Spot.content_id, Spot.first_image_url)
-        .where(Spot.first_image_url.is_not(None))
-        .where(Spot.first_image_url != "")
+        select(spots.c.content_id, spots.c.first_image_url)
         .where(~has_embedding.exists())
-        .order_by(Spot.content_id)
+        .order_by(spots.c.content_id)
     )
     if only_failed:
         has_failure = select(EmbeddingFailure.content_id).where(
-            EmbeddingFailure.content_id == Spot.content_id
+            EmbeddingFailure.content_id == spots.c.content_id
         )
         stmt = stmt.where(has_failure.exists())
-    if since is not None:
-        stmt = stmt.where(Spot.synced_at >= since)
     if limit:
         stmt = stmt.limit(limit)
     rows = (await session.execute(stmt)).all()
