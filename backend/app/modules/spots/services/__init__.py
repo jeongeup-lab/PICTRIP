@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.modules.spots.services import curations, feed
 from app.modules.spots.services.cards import (
+    image_bearing_spots_stmt,
     load_active_spot_cards_by_ids,
     load_region_meta,
     load_spot_cards_by_ids,
@@ -36,6 +37,7 @@ __all__ = [
     "feed",
     "find_nearby_spots",
     "find_nearby_spots_bbox",
+    "image_bearing_spots_stmt",
     "list_saved_spots",
     "load_active_spot_cards_by_ids",
     "load_region_meta",

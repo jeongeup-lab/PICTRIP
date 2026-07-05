@@ -1,17 +1,11 @@
 import { AxiosError, AxiosHeaders, type InternalAxiosRequestConfig } from "axios";
 import type { Envelope } from "@/lib/api-types";
 import { AppError } from "@/lib/app-error";
+import { registerAuthSession } from "@/lib/auth-session";
 import { handleResponseError } from "@/lib/api-client";
 
 const refresh = jest.fn();
 const clear = jest.fn();
-// `mock`-prefixed so the hoisted jest.mock factory may reference it.
-const mockGetState = jest.fn(() => ({ accessToken: "old", refresh, clear }));
-
-// jest.mock is hoisted above the imports by babel-plugin-jest-hoist.
-jest.mock("@/features/auth/stores/auth-store", () => ({
-  useAuthStore: { getState: () => mockGetState() },
-}));
 
 type RetriableConfig = InternalAxiosRequestConfig & { _retried?: boolean };
 
@@ -48,7 +42,7 @@ function networkError(): AxiosError<Envelope<unknown>> {
 describe("handleResponseError (401 refresh-retry interceptor)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockGetState.mockReturnValue({ accessToken: "old", refresh, clear });
+    registerAuthSession({ getAccessToken: () => "old", refresh, clear });
   });
 
   it("refreshes once and retries with the new bearer on AUTH_TOKEN_EXPIRED", async () => {

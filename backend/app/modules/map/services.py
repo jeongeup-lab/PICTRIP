@@ -8,10 +8,11 @@ from typing import Any
 from redis.asyncio import Redis
 
 from app.core.db import AsyncSession
+from app.core.exceptions import ValidationFailed
 from app.core.logging import get_logger
 from app.modules.map import repositories as repo
 from app.modules.map.kakao_local import kakao_local_get
-from app.modules.map.schemas import RegionLabel
+from app.modules.map.schemas import NearbySpotCard, RegionLabel
 from app.modules.spots.services import (
     NearbyCategory,
     NearbySpotRow,
@@ -78,6 +79,46 @@ async def nearby_spots_bbox(
         category=category,
     )
     return await _enrich(session, rows)
+
+
+async def nearby_cards(
+    session: AsyncSession,
+    *,
+    lat: float | None,
+    lng: float | None,
+    radius: int,
+    category: NearbyCategory | None,
+    sw_lat: float | None,
+    sw_lng: float | None,
+    ne_lat: float | None,
+    ne_lng: float | None,
+) -> list[NearbySpotCard]:
+    """/map/nearby entry: bbox (all four corners) beats center+radius; neither → 422."""
+    if sw_lat is not None and sw_lng is not None and ne_lat is not None and ne_lng is not None:
+        rows = await nearby_spots_bbox(
+            session, sw_lat=sw_lat, sw_lng=sw_lng, ne_lat=ne_lat, ne_lng=ne_lng, category=category
+        )
+    elif lat is not None and lng is not None:
+        rows = await nearby_spots(session, lat=lat, lng=lng, radius=radius, category=category)
+    else:
+        raise ValidationFailed("Provide either a bbox (sw_lat/sw_lng/ne_lat/ne_lng) or lat+lng.")
+    return [
+        NearbySpotCard(
+            contentId=r.content_id,
+            title=r.title,
+            firstImageUrl=r.first_image_url,
+            addr1=r.addr1,
+            mapx=r.mapx,
+            mapy=r.mapy,
+            dist=r.dist,
+            category=r.category,
+            categoryGroup=r.category_group,
+            regionName=r.region_name,
+            sigunguName=r.sigungu_name,
+            overview=r.overview,
+        )
+        for r in rows
+    ]
 
 
 def _to_region_label(payload: dict[str, Any]) -> RegionLabel | None:
