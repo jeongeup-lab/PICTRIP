@@ -127,6 +127,23 @@ Mobile layers: `src/app` (thin Expo Router screens) · `src/features/<domain>`
   `expo-symbols`. Map = KakaoWebMap (WebView + JS SDK), never `@react-native-kakao/map`.
 - **DO NOT add `sync_runs` to backend Alembic** — pipeline owns it.
 
+## Review guidelines
+
+Automated PR review (Codex GitHub connector reads this section via the
+`AGENTS.md` symlink). Comment in Korean; flag only real problems inline and
+skip minor style nits. Focus on:
+
+- Correctness bugs and clear logic errors.
+- Module-boundary violations: `routes.py` importing DB/models/sqlalchemy, or
+  cross-module access to another module's `models` instead of its `services.py`.
+- Monorepo invariants: `sync_runs` is pipeline-owned (never in backend Alembic),
+  backend/pipeline stay separate Python projects, admin `static/` must be a
+  byte-identical copy of `admin/mockups/`.
+- JSend envelope (`ok()`/`err()`) and `AppError` subclasses — mobile must branch
+  on `err.code`, never `err.message`.
+- KTO compliance (see Prohibitions): no image downloads/storage, no persisted
+  user uploads, `overview` text verbatim, no secrets in code.
+
 ## Workflow
 
 - Branch off `main`; short-lived, merge same-day. Commit/push only when asked.

@@ -2,6 +2,11 @@ name: backend-ci
 on:
   pull_request:
     paths: ["backend/**", ".github/workflows/backend-ci.yml"]
+# Successive pushes to the same PR cancel the in-flight run — only the latest
+# commit's result matters here (deploy workflows keep cancel-in-progress: false).
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
 defaults:
   run:
     working-directory: backend
