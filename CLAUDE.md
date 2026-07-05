@@ -71,6 +71,11 @@ app/modules/<code>/
 - Cross-module reads go through the other module's `services.py`, never `models`.
 - `admin` is the exception: read-only cross-module aggregates via its own
   `repositories.py`, plus scoped writes to `curations`/`curation_spots` only.
+- `app/core/` admission rule: infrastructure plumbing (db, redis, auth,
+  middleware, logging, envelope, errors) or utilities imported by **2+ modules**
+  (`embedding`, `passwords`, `kto_images`, `time`). Single-consumer code lives
+  inside its module (e.g. `users/oidc.py`, `spots/kto_client.py`,
+  `map/kakao_local.py`) — don't park it in core.
 
 Mobile layers: `src/app` (thin Expo Router screens) · `src/features/<domain>`
 (api/queries/stores/usecases/components) · `src/lib` · `src/components` · `src/constants` · `src/hooks`.

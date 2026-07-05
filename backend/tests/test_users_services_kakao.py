@@ -11,8 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AuthSessionRevoked, AuthTokenInvalid
-from app.core.oidc import OidcClaims
 from app.modules.users.models import User, UserAuthProvider
+from app.modules.users.oidc import OidcClaims
 from app.modules.users.schemas import OAuthLoginIn
 from app.modules.users.services import (
     authenticate_with_oauth,

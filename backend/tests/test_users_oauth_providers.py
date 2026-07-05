@@ -1,4 +1,4 @@
-"""Provider-agnostic OIDC verification (app.core.oidc).
+"""Provider-agnostic OIDC verification (app.modules.users.oidc).
 
 Reuses the RSA `kakao_signing_key` fixture (conftest) to mint Google id_tokens
 signed by a fake JWKS, served via httpx_mock at the Google certs URL.
@@ -17,7 +17,7 @@ from app.core.exceptions import (
     OAuthProviderUnavailable,
     ValidationFailed,
 )
-from app.core.oidc import _jwks_caches, verify_oauth_id_token
+from app.modules.users.oidc import _jwks_caches, verify_oauth_id_token
 
 _GOOGLE_CERTS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 

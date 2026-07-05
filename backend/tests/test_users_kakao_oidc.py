@@ -1,7 +1,7 @@
 import pytest
 
 from app.core.exceptions import OAuthProviderUnavailable
-from app.core.kakao_oidc import _jwks_cache, get_jwks
+from app.modules.users.kakao_oidc import _jwks_cache, get_jwks
 
 
 @pytest.fixture(autouse=True)
@@ -56,7 +56,7 @@ async def test_get_jwks_serves_stale_on_error(httpx_mock, kakao_signing_key):
 # ---------------------------------------------------------------------------
 
 from app.core.exceptions import OAuthIdTokenInvalid  # noqa: E402
-from app.core.kakao_oidc import KakaoClaims, verify_id_token  # noqa: E402
+from app.modules.users.kakao_oidc import KakaoClaims, verify_id_token  # noqa: E402
 from tests.conftest import make_kakao_id_token  # noqa: E402 — plain helper, not a fixture
 
 

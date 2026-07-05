@@ -22,7 +22,7 @@ from app.core.exceptions import (
     OAuthProviderUnavailable,
     ValidationFailed,
 )
-from app.core.kakao_oidc import verify_id_token as _verify_kakao
+from app.modules.users.kakao_oidc import verify_id_token as _verify_kakao
 
 log = logging.getLogger("app.auth.oidc")
 

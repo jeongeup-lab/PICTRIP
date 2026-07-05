@@ -8,9 +8,9 @@ from typing import Any
 from redis.asyncio import Redis
 
 from app.core.db import AsyncSession
-from app.core.kakao_local import kakao_local_get
 from app.core.logging import get_logger
 from app.modules.map import repositories as repo
+from app.modules.map.kakao_local import kakao_local_get
 from app.modules.map.schemas import RegionLabel
 from app.modules.spots.services import (
     NearbyCategory,

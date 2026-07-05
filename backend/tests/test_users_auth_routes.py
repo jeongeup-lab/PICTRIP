@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.config import settings
-from app.core.oidc import OidcClaims
 from app.main import app
+from app.modules.users.oidc import OidcClaims
 
 
 @pytest.fixture
