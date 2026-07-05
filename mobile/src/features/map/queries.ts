@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Bounds, LatLng } from "@/features/map/lib/geo";
 import type { NearbyCategory } from "@/features/map/lib/nearby-categories";
-import { getNearby, getRegionLabel, getRegionsTree } from "@/features/map/api";
+import { getNearby, getRegionLabel } from "@/features/map/api";
 
 /** Nearby spots inside the current query bbox + category. Disabled until a bbox exists. */
 export function useNearbyMap(bounds: Bounds | null, category: NearbyCategory | null) {
@@ -25,14 +25,5 @@ export function useRegionLabel(center: LatLng | null, enabled: boolean) {
     queryKey: ["region-label", center?.lat, center?.lng],
     queryFn: () => getRegionLabel(center!.lat, center!.lng),
     enabled: enabled && center != null,
-  });
-}
-
-/** Static 시도/시군구 tree — cached long (rarely changes). */
-export function useRegionsTree() {
-  return useQuery({
-    queryKey: ["regions-tree"],
-    queryFn: getRegionsTree,
-    staleTime: 24 * 60 * 60 * 1000,
   });
 }

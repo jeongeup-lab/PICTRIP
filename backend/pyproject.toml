@@ -29,11 +29,8 @@ dependencies = [
     "transformers>=4.45.0",
     "torch>=2.4.0",
     "pillow>=10.4.0",
-    "numpy>=2.1.0",
     # Crypto
     "cryptography>=48.0.1",
-    # LLM
-    "anthropic>=0.39.0",
     # Observability
     "structlog>=24.4.0",
     "sentry-sdk[fastapi]>=2.16.0",

@@ -23,7 +23,6 @@ class Settings(BaseSettings):
     ENVIRONMENT: Environment = "local"
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"
-    APP_NAME: str = "pictrip-backend"
 
     # --- API ---
     API_V1_PREFIX: str = "/v1"
@@ -74,14 +73,9 @@ class Settings(BaseSettings):
     # Both Kakao keys are valid id_token `aud`: native SDK uses NATIVE_APP_KEY, web/server uses REST_API_KEY.
     KAKAO_REST_API_KEY: str = ""
     KAKAO_NATIVE_APP_KEY: str = ""
-    KAKAO_CLIENT_SECRET: str = ""
     GOOGLE_OAUTH_CLIENT_ID_IOS: str = ""
     GOOGLE_OAUTH_CLIENT_ID_ANDROID: str = ""
     GOOGLE_OAUTH_CLIENT_ID_WEB: str = ""
-    APPLE_TEAM_ID: str = ""
-    APPLE_SERVICES_ID: str = ""
-    APPLE_KEY_ID: str = ""
-    APPLE_PRIVATE_KEY: str = ""
 
     # --- Kakao OIDC ---
     KAKAO_JWKS_URL: str = "https://kauth.kakao.com/.well-known/jwks.json"
@@ -117,9 +111,6 @@ class Settings(BaseSettings):
         self.GOOGLE_CLIENT_IDS = merged
         return self
 
-    # --- Refresh rotation ---
-    AUTH_REFRESH_GRACE_SECONDS: int = 5
-
     # --- KTO ---
     KTO_SERVICE_KEY: str = ""
     KTO_BASE_URL_KOR: str = "http://apis.data.go.kr/B551011/KorService2"
@@ -127,11 +118,6 @@ class Settings(BaseSettings):
     KTO_BASE_URL_CNCTR: str = "https://apis.data.go.kr/B551011/TatsCnctrRateService"
     KTO_BASE_URL_DATALAB: str = "https://apis.data.go.kr/B551011/DataLabService"
     KTO_MOBILE_APP: str = "PicTrip"
-
-    # --- LLM ---
-    ANTHROPIC_API_KEY: str = ""
-    ANTHROPIC_MODEL: str = "claude-haiku-4-5-20251001"
-    ANTHROPIC_REASON_CACHE_TTL_DAYS: int = 30
 
     # --- Embedding ---
     CLIP_MODEL_NAME: str = "openai/clip-vit-base-patch32"

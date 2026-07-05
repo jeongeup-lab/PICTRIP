@@ -106,12 +106,6 @@ class OAuthProviderUnavailable(AppError):
     message = "소셜 로그인 제공자 응답을 받지 못했습니다."
 
 
-class LlmApiUnavailable(AppError):
-    code = "LLM_API_UNAVAILABLE"
-    http_status = 502
-    message = "추천 설명을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요."
-
-
 class OAuthIdTokenInvalid(AppError):
     code = "OAUTH_ID_TOKEN_INVALID"
     http_status = 401
