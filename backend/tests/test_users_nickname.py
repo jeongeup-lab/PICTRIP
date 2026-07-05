@@ -1,10 +1,10 @@
-"""Unit tests for the random Korean nickname generator (app.core.nickname)."""
+"""Unit tests for the random Korean nickname generator (app.modules.users.nickname)."""
 
 from __future__ import annotations
 
 import random
 
-from app.core.nickname import generate_nickname
+from app.modules.users.nickname import generate_nickname
 
 
 def test_generate_nickname_non_empty_and_fits_column() -> None:

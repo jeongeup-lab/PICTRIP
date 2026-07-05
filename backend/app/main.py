@@ -17,7 +17,6 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.config import settings
 from app.core.error_handlers import register_error_handlers
-from app.core.kto_client import KtoClient
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import (
     ApiV1CompatMiddleware,
@@ -31,6 +30,7 @@ from app.modules.admin import router as admin_router
 from app.modules.images import router as images_router
 from app.modules.map import router as map_router
 from app.modules.spots import router as spots_router
+from app.modules.spots.kto_client import KtoClient
 from app.modules.system import router as system_router
 from app.modules.taste import router as taste_router
 from app.modules.users import router as users_router

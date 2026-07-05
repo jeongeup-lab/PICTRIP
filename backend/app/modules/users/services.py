@@ -18,10 +18,10 @@ from app.core.exceptions import (
     EmailAlreadyRegistered,
     InvalidCredentials,
 )
-from app.core.oidc import verify_oauth_id_token
 from app.core.passwords import hash_password, verify_password
 from app.modules.users import repositories as repo
 from app.modules.users.models import User
+from app.modules.users.oidc import verify_oauth_id_token
 from app.modules.users.schemas import (
     ConsentIn,
     ConsentOut,

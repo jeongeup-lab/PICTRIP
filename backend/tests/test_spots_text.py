@@ -1,10 +1,10 @@
-"""Unit tests for KTO scalar-field cleaning helpers (app.core.text)."""
+"""Unit tests for KTO scalar-field cleaning helpers (app.modules.spots.text)."""
 
 from __future__ import annotations
 
 import pytest
 
-from app.core.text import clean_homepage
+from app.modules.spots.text import clean_homepage
 
 
 @pytest.mark.parametrize(

@@ -16,8 +16,8 @@ from redis.asyncio import Redis, from_url
 
 from app.config import settings
 from app.core.db import async_session_factory
-from app.core.kto_client import KtoClient
 from app.core.logging import get_logger
+from app.modules.spots.kto_client import KtoClient
 from app.modules.spots.services import curations as curation_svc
 from app.modules.spots.services.detail import load_spot_detail
 

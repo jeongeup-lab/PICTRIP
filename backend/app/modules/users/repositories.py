@@ -9,8 +9,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.nickname import generate_nickname
 from app.modules.users.models import User, UserAuthProvider, UserConsent
+from app.modules.users.nickname import generate_nickname
 
 
 async def find_auth_provider(
