@@ -1,5 +1,5 @@
 import { api } from "@/lib/api-client";
-import { getNearby, getRegionLabel, getRegionsTree } from "@/features/map/api";
+import { getNearby, getRegionLabel } from "@/features/map/api";
 
 jest.mock("@/lib/api-client", () => ({ api: { get: jest.fn() } }));
 
@@ -29,11 +29,5 @@ describe("map api", () => {
     const r = await getRegionLabel(37.5, 127);
     expect(api.get).toHaveBeenCalledWith("/map/region", { params: { lat: 37.5, lng: 127 } });
     expect(r.label).toBe("서울 중구");
-  });
-
-  it("getRegionsTree calls the tree endpoint", async () => {
-    (api.get as jest.Mock).mockResolvedValue([]);
-    await getRegionsTree();
-    expect(api.get).toHaveBeenCalledWith("/map/regions-tree");
   });
 });

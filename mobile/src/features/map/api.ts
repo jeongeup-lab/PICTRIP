@@ -1,5 +1,5 @@
 import { api } from "@/lib/api-client";
-import type { NearbySpot, RegionLabel, RegionNode } from "@/lib/api-types";
+import type { NearbySpot, RegionLabel } from "@/lib/api-types";
 import type { Bounds } from "@/features/map/lib/geo";
 import type { NearbyCategory } from "@/features/map/lib/nearby-categories";
 
@@ -23,9 +23,4 @@ export async function getNearby(
 /** Reverse-geocoded region label for the header (Kakao coord2regioncode). */
 export async function getRegionLabel(lat: number, lng: number): Promise<RegionLabel> {
   return (await api.get("/map/region", { params: { lat, lng } })) as unknown as RegionLabel;
-}
-
-/** 17 시도 → 시군구 tree with runtime-AVG centroids (static; cache-friendly). */
-export async function getRegionsTree(): Promise<RegionNode[]> {
-  return (await api.get("/map/regions-tree")) as unknown as RegionNode[];
 }

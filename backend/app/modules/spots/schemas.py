@@ -7,22 +7,6 @@ from pydantic import BaseModel, field_validator
 from app.core.kto_images import https_kto_image
 
 
-class MoodOut(BaseModel):
-    code: str
-    name: str
-    emoji: str
-    sortOrder: int
-    spotsCount: int = 0
-
-
-class RegionOut(BaseModel):
-    """A sido for the home region filter. code is the legal-dong sido code.
-    "Nationwide" (전국) is client-side (omit the param) and not in this list."""
-
-    code: str
-    name: str
-
-
 class SpotCard(BaseModel):
     contentId: str
     title: str
@@ -37,31 +21,6 @@ class SpotCard(BaseModel):
     @classmethod
     def _upgrade_first_image(cls, v: str | None) -> str | None:
         return https_kto_image(v)
-
-
-class SimilarNeighbor(SpotCard):
-    distance: float
-
-
-class SimilarQuery(SpotCard):
-    """The spot the user picked. Same shape as SpotCard so the map can center on it."""
-
-
-class SimilarResult(BaseModel):
-    query: SimilarQuery
-    neighbors: list[SimilarNeighbor]
-
-
-class RelatedSpot(BaseModel):
-    """KTO TarRlteTar entry (ADR-0005/0015). Name-keyed, no image, so it's a text
-    chip; contentId is set only when the name matches an active spot (deep-link)."""
-
-    name: str
-    category: str | None = None
-    regionName: str | None = None
-    address: str | None = None
-    rank: int | None = None
-    contentId: str | None = None
 
 
 class HomeHero(BaseModel):

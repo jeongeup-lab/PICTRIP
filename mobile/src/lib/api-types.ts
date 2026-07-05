@@ -133,19 +133,6 @@ export interface Centroid {
   lng: number;
 }
 
-export interface SigunguNode {
-  sigunguCode: string;
-  sigunguName: string;
-  centroid: Centroid;
-}
-
-export interface RegionNode {
-  regionCode: string;
-  regionName: string;
-  centroid: Centroid;
-  sigungus: SigunguNode[];
-}
-
 export interface User {
   id: number;
   displayName: string | null;

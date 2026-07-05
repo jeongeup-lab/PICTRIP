@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.modules.spots.schemas import SimilarQuery, SpotCard, SpotImageOut
+from app.modules.spots.schemas import SpotCard, SpotImageOut
 
 
 @pytest.mark.parametrize(
@@ -33,15 +33,6 @@ from app.modules.spots.schemas import SimilarQuery, SpotCard, SpotImageOut
 def test_spot_card_first_image_url_https_upgrade(raw: str | None, expected: str | None) -> None:
     card = SpotCard(contentId="1", title="t", firstImageUrl=raw)
     assert card.firstImageUrl == expected
-
-
-def test_similar_query_first_image_url_https_upgrade() -> None:
-    q = SimilarQuery(
-        contentId="1",
-        title="t",
-        firstImageUrl="http://tong.visitkorea.or.kr/a.jpg",
-    )
-    assert q.firstImageUrl == "https://tong.visitkorea.or.kr/a.jpg"
 
 
 def test_spot_image_out_https_upgrade() -> None:

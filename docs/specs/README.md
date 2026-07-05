@@ -38,4 +38,4 @@
 ## admin/ — 운영 어드민
 | 파일 | 스코프 |
 |---|---|
-| [`A01-admin-console.md`](admin/A01-admin-console.md) | 관리자 콘솔 설계 (데이터 수집 운영 어드민) |
+| [`A01-admin-console.md`](../../admin/specs/A01-admin-console.md) | 관리자 콘솔 설계 (데이터 수집 운영 어드민) |

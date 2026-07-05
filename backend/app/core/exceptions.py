@@ -70,12 +70,6 @@ class DuplicateResource(AppError):
     message = "이미 존재하는 리소스입니다."
 
 
-class Max5Moods(AppError):
-    code = "MAX_5_MOODS"
-    http_status = 422
-    message = "관심 무드는 최대 5개까지 선택할 수 있습니다."
-
-
 class ImageInvalid(AppError):
     code = "IMAGE_INVALID"
     http_status = 422
@@ -104,12 +98,6 @@ class OAuthProviderUnavailable(AppError):
     code = "OAUTH_PROVIDER_UNAVAILABLE"
     http_status = 502
     message = "소셜 로그인 제공자 응답을 받지 못했습니다."
-
-
-class LlmApiUnavailable(AppError):
-    code = "LLM_API_UNAVAILABLE"
-    http_status = 502
-    message = "추천 설명을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요."
 
 
 class OAuthIdTokenInvalid(AppError):
@@ -149,12 +137,6 @@ class AdminUnauthorized(AppError):
     message = "관리자 인증이 필요합니다."
     # No WWW-Authenticate: the console uses a login page + signed-cookie session,
     # not HTTP Basic, so the browser must not pop its native auth dialog.
-
-
-class AdminLocked(AppError):
-    code = "ADMIN_LOCKED"
-    http_status = 503
-    message = "관리자 콘솔이 잠겨 있습니다."
 
 
 class AdminHistoryNotFound(AppError):
