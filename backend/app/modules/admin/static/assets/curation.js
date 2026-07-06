@@ -1,23 +1,30 @@
-// PicTrip ADMIN — 홈 큐레이션 WYSIWYG 편집기 (live fetch wiring)
+// PicTrip ADMIN — 홈 큐레이션 편성 보드 (live fetch wiring)
 //
-// 좌측 편성 리스트 · 가운데 실시간 폰 미리보기 · 우측 종류별 인스펙터.
-// 히어로(region)=표지 카드 + 상세 페이지, 무드 레일(mood)=스팟 선반(상세 없음),
-// 에디토리얼(editorial)=상세 전용. /admin/api/curation* 엔드포인트에 배선.
-// 미리보기는 /preview(handpick else 품질랭킹 자동충전)로 "앱에 실제로 나갈" 스팟을 보여줌.
-// 공용 헬퍼(escapeHtml, adminFetch)는 먼저 로드되는 admin.js 에서 온다.
+// 보드가 곧 미리보기: 히어로 6장은 앱 홈과 동일 렌더의 카드 갤러리, 무드 레일은
+// 와이드 로우. 카드 클릭 → 우측 슬라이드오버에서 카피·표지·손픽·발행·순서 편집.
+// 모든 동적 마크업은 <template> 클론 + DOM 프로퍼티 대입(innerHTML에 서버 문자열
+// 삽입 없음 → XSS/CSS-injection 표면 제거). 공용 헬퍼(adminFetch)는 admin.js.
+//
+// API: GET /admin/api/curations · GET/PUT /admin/api/curations/{id}
+//      PUT /admin/api/curations/{id}/spots · GET /admin/api/curations/{id}/preview
+//      GET /admin/api/spots/search?q=&region=   (region = ldong_regn_cd)
 
-// ─── PUT helper (JSend, same-origin session) ─────────────────────────────────
-async function adminFetchJSON(path, method, body) {
-  const res = await fetch(path, {
-    method,
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+// ─── fetch (JSend, 세션 만료 시 로그인으로) ──────────────────────────────────
+async function cuFetch(path, method, body) {
+  const opts = { method: method || "GET", credentials: "same-origin" };
+  if (body !== undefined) {
+    opts.headers = { "Content-Type": "application/json" };
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(path, opts);
+  if (res.status === 401) {
+    location.href = "/admin/login";
+    throw new Error("세션이 만료되었습니다");
+  }
   let json = null;
   try { json = await res.json(); } catch (_) { /* non-JSON */ }
   if (!res.ok || (json && json.error)) {
-    const e = json && json.error ? json.error : {};
+    const e = (json && json.error) || {};
     const err = new Error(e.message || `HTTP ${res.status} ${res.statusText}`);
     err.code = e.code || null;
     err.details = e.details || null;
@@ -29,688 +36,756 @@ async function adminFetchJSON(path, method, body) {
 
 // ─── state ───────────────────────────────────────────────────────────────────
 const CU = {
-  heroes: [], rails: [], editorial: [],
-  sel: { kind: "hero", idx: 0 },
-  view: "home", // 'home' | 'detail'
+  hero: [], rail: [], editorial: [],
+  open: null,          // 슬라이드오버에 열린 item
   busy: false,
-  pickerMode: null, searchTimer: null,
+  pickerMode: null,    // 'picks' | 'cover'
+  searchTimer: null, searchSeq: 0,
+  dragging: null,      // 보드 카드 드래그 중인 item
 };
-
-const esc = (s) => (typeof escapeHtml === "function" ? escapeHtml(s) : String(s == null ? "" : s));
 const qs = (id) => document.getElementById(id);
-const kindOf = (type) => (type === "region" ? "hero" : type === "mood" ? "rail" : "editorial");
-const arrOf = (kind) => (kind === "hero" ? CU.heroes : kind === "rail" ? CU.rails : CU.editorial);
-const current = () => arrOf(CU.sel.kind)[CU.sel.idx];
+const KIND_LABEL = { hero: "지역 히어로", rail: "무드 레일", editorial: "에디토리얼" };
+const groupOf = (it) => CU[it.kind];
+const allItems = () => [...CU.hero, ...CU.rail, ...CU.editorial];
+const dirtyItems = () => allItems().filter((it) => it.dirty);
 
-function bg(url) { return url ? ` style="background-image:url('${encodeURI(url)}')"` : ""; }
-const NOIMG = `<svg class="noimg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 16-5-5L5 20"/></svg>`;
-// thumbnail element with graceful placeholder when the KTO image URL is missing
-function tmb(cls, url) { return `<div class="${cls}${url ? "" : " noimg"}"${bg(url)}>${url ? "" : NOIMG}</div>`; }
-// spots the phone should display: handpicks (live edits) else resolved auto-fill
-function displaySpots(it) { return it.picks.length ? it.picks : it.previewSpots || []; }
-
-// ─── load ────────────────────────────────────────────────────────────────────
-function mkItem(it, kind) {
+function mkItem(d, kind) {
   return {
-    id: it.id, type: it.type, kind, slug: it.slug || "", position: it.position || 0,
-    isPublished: !!it.isPublished, title: it.title || "", subtitle: it.subtitle || "",
+    id: d.id, type: d.type, kind, slug: d.slug || "", position: d.position || 0,
+    isPublished: !!d.isPublished, title: d.title || "", subtitle: d.subtitle || "",
     lead: "", intro: "",
-    cover: { contentId: null, name: "", imageUrl: it.coverUrl || null },
-    coverUrl: it.coverUrl || null, picks: [], previewSpots: null,
-    detailLoaded: false, previewLoading: false, picksDirty: false, dirty: false,
+    cover: { contentId: null, name: "", imageUrl: d.coverUrl || null },
+    picks: [], previewSpots: null,
+    detailLoaded: false, dirty: false, picksDirty: false, savedAt: null,
   };
 }
 function applyDetail(it, d) {
-  it.title = d.title || ""; it.subtitle = d.subtitle || ""; it.lead = d.lead || ""; it.intro = d.intro || "";
+  it.title = d.title || ""; it.subtitle = d.subtitle || "";
+  it.lead = d.lead || ""; it.intro = d.intro || "";
   it.isPublished = !!d.isPublished; it.position = d.position || 0; it.slug = d.slug || it.slug;
-  if (d.coverSpot) {
-    it.cover = { contentId: d.coverSpot.contentId, name: d.coverSpot.name || "", imageUrl: d.coverSpot.imageUrl || null };
-    it.coverUrl = d.coverSpot.imageUrl || it.coverUrl;
-  } else {
-    it.cover = { contentId: null, name: "", imageUrl: it.coverUrl || null };
-  }
+  it.cover = d.coverSpot
+    ? { contentId: d.coverSpot.contentId, name: d.coverSpot.name || "", imageUrl: d.coverSpot.imageUrl || null }
+    : { contentId: null, name: "", imageUrl: it.cover.imageUrl || null };
   it.picks = (d.handpicks || []).map((h) => ({
-    contentId: h.contentId, name: h.name || "", cat: h.category || "스팟", imageUrl: h.imageUrl || null,
+    contentId: h.contentId, name: h.name || "", sub: h.category || "스팟", imageUrl: h.imageUrl || null,
   }));
   it.detailLoaded = true;
 }
-async function loadDetailInto(it) {
-  applyDetail(it, await adminFetch(`/admin/api/curations/${it.id}`));
-  return it;
-}
 async function ensureDetail(it) {
-  if (it && !it.detailLoaded) { try { await loadDetailInto(it); } catch (_) { /* keep list data */ } }
+  if (!it.detailLoaded) applyDetail(it, await cuFetch(`/admin/api/curations/${it.id}`));
 }
-// fetch the resolved display spots (handpick else auto-fill) for a truthful preview
 async function ensurePreview(it) {
-  if (!it || it.previewSpots !== null || it.previewLoading) return;
-  it.previewLoading = true;
+  if (it.previewSpots !== null) return;
   try {
-    const d = await adminFetch(`/admin/api/curations/${it.id}/preview`);
+    const d = await cuFetch(`/admin/api/curations/${it.id}/preview`);
     it.previewSpots = (d.spots || []).map((s) => ({
-      contentId: s.contentId, name: s.name || "", cat: s.category || "스팟", imageUrl: s.imageUrl || null,
+      contentId: s.contentId, name: s.name || "", sub: s.category || "스팟", imageUrl: s.imageUrl || null,
     }));
   } catch (_) { it.previewSpots = []; }
-  finally { it.previewLoading = false; }
 }
 async function refreshPreview(it) { it.previewSpots = null; await ensurePreview(it); }
+// 앱이 실제 표시할 스팟: 손픽(로컬 편집 반영) 있으면 손픽, 없으면 자동충전 풀
+function displaySpots(it) { return it.picks.length ? it.picks : it.previewSpots || []; }
+function coverImageUrl(it) { return it.cover.imageUrl || (displaySpots(it)[0] || {}).imageUrl || null; }
 
-async function loadAll() {
-  setSaveState("loading");
-  try {
-    const list = await adminFetch("/admin/api/curations");
-    CU.heroes = (list.heroes || []).map((it) => mkItem(it, "hero"));
-    CU.rails = (list.rails || []).map((it) => mkItem(it, "rail"));
-    CU.editorial = (list.editorial || []).map((it) => mkItem(it, "editorial"));
-    renderCounts();
-    renderLists();
-
-    // preload details + previews for the home items so the phone is truthful
-    const home = [...CU.heroes, ...CU.rails];
-    await Promise.all(home.map((it) => loadDetailInto(it).catch(() => {})));
-    await Promise.all(home.map((it) => ensurePreview(it)));
-    renderLists(); // re-render now that covers/handpicks/auto-fill thumbnails resolved
-
-    const first = CU.heroes[0] || CU.rails[0] || CU.editorial[0];
-    if (!first) { showEmpty(); setSaveState("saved", "큐레이션 없음"); return; }
-    CU.sel = { kind: first.kind, idx: 0 };
-    CU.view = first.kind === "editorial" ? "detail" : "home";
-    await ensureDetail(current()); await ensurePreview(current());
-    renderScreen(); renderInspector(); updateToggle();
-    if (CU.view === "home") scrollPreviewTo(CU.sel.kind, CU.sel.idx);
-    setSaveState("saved", "불러옴");
-  } catch (err) {
-    showLoadError(err.message);
-  }
+// ─── 공용 렌더 유틸 (템플릿 클론 + 프로퍼티 대입만) ──────────────────────────
+function setImg(scope, url) {
+  const img = scope.querySelector("img");
+  const ph = scope.querySelector(".phx");
+  if (url) { img.src = url; img.hidden = false; if (ph) ph.hidden = true; }
+  else { img.removeAttribute("src"); img.hidden = true; if (ph) ph.hidden = false; }
 }
-
-function showEmpty() {
-  qs("phoneBody").innerHTML = `<div class="phone-msg">큐레이션이 없습니다.</div>`;
-  qs("inspBody").innerHTML = `<div class="insp-empty">편집할 큐레이션이 없습니다.</div>`;
+function toastOk(msg) { showToast(qs("toast"), qs("toast-msg"), msg); }
+function toastErr(msg) { showToast(qs("toast-error"), qs("toast-error-msg"), msg); }
+function showToast(el, msgEl, msg) {
+  msgEl.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove("show"), 2600);
 }
-function showLoadError(msg) {
-  setSaveState("saved", "오류");
-  qs("phoneBody").innerHTML =
-    `<div class="phone-msg"><b>불러오지 못했습니다</b><div class="d">${esc(msg)}</div>` +
-    `<button class="add-pick" style="max-width:160px;margin:14px auto 0" id="cuRetry">다시 시도</button></div>`;
-  const r = qs("cuRetry"); if (r) r.addEventListener("click", loadAll);
-}
-
-// ─── counts + left list ──────────────────────────────────────────────────────
-function renderCounts() {
-  qs("heroCount").textContent = CU.heroes.length;
-  qs("railCount").textContent = CU.rails.length;
-  qs("listCount").textContent = `히어로 ${CU.heroes.length} · 레일 ${CU.rails.length}`;
-  const edWrap = qs("editorialWrap");
-  if (CU.editorial.length) { edWrap.style.display = ""; qs("edCount").textContent = CU.editorial.length; }
-  else edWrap.style.display = "none";
-}
-function slotLabel(it) {
-  if (it.kind === "rail") return it.title || it.slug || "무드 레일";
-  return it.slug || (it.title || "").split("\n")[0] || "(제목 없음)";
-}
-function slotHtml(it, kind, i) {
-  const active = CU.sel.kind === kind && CU.sel.idx === i;
-  const thumbUrl =
-    it.coverUrl ||
-    (it.picks[0] && it.picks[0].imageUrl) ||
-    (it.previewSpots && it.previewSpots[0] && it.previewSpots[0].imageUrl) ||
-    null;
-  const n = it.picks.length;
-  const sub = (n ? `${n} ${kind === "hero" ? "손픽" : "스팟"}` : "자동 편성") + ` · #${it.position}`;
-  return (
-    `<div class="slot${active ? " active" : ""}" data-kind="${kind}" data-idx="${i}">` +
-    tmb("sthumb", thumbUrl) +
-    `<span class="smeta"><span class="stitle">${esc(slotLabel(it))}</span><span class="ssub">${esc(sub)}</span></span>` +
-    `<span class="sdot ${it.isPublished ? "on" : "off"}" title="${it.isPublished ? "발행됨" : "미발행"}"></span>` +
-    `</div>`
-  );
-}
-function renderLists() {
-  qs("heroList").innerHTML = CU.heroes.map((it, i) => slotHtml(it, "hero", i)).join("");
-  qs("railList").innerHTML = CU.rails.map((it, i) => slotHtml(it, "rail", i)).join("");
-  qs("editorialList").innerHTML = CU.editorial.map((it, i) => slotHtml(it, "editorial", i)).join("");
-  document.querySelectorAll(".wcol-list .slot").forEach((el) =>
-    el.addEventListener("click", () => selectSlot(el.dataset.kind, +el.dataset.idx)));
-}
-
-// ─── phone preview ───────────────────────────────────────────────────────────
-function spotCardHtml(s) {
-  return `<div class="pcard" data-spot="1">${tmb("pthumb", s.imageUrl)}<div class="nm">${esc(s.name)}</div><div class="cat">${esc(s.cat)}</div></div>`;
-}
-function skeletonCards() {
-  return Array.from({ length: 3 }).map(() =>
-    `<div class="pcard"><div class="pthumb sk"></div><div class="sk line" style="margin-top:8px;width:70%"></div></div>`).join("");
-}
-function railCardsHtml(it) {
-  if (it.picks.length) return it.picks.map(spotCardHtml).join("");
-  if (it.previewSpots === null) return skeletonCards();
-  if (!it.previewSpots.length) return `<div class="rail-empty">표시할 스팟이 없어요</div>`;
-  return it.previewSpots.map(spotCardHtml).join("");
-}
-function isAuto(it) { return !it.picks.length && Array.isArray(it.previewSpots) && it.previewSpots.length > 0; }
-
-function renderScreen() {
-  const body = qs("phoneBody");
-  qs("stageSub").textContent = CU.view === "home" ? "홈 피드" : "큐레이션 상세";
-  body.innerHTML = CU.view === "home" ? homeHTML() : detailHTML(current());
-  if (CU.view === "home") {
-    body.querySelectorAll(".hero[data-idx]").forEach((el) =>
-      el.addEventListener("click", () => selectSlot("hero", +el.dataset.idx, "detail")));
-    body.querySelectorAll(".section[data-idx]").forEach((el) =>
-      el.addEventListener("click", () => selectSlot("rail", +el.dataset.idx)));
-    body.querySelectorAll(".pcard[data-spot]").forEach((el) =>
-      el.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const sec = el.closest(".section");
-        if (sec) selectSlot("rail", +sec.dataset.idx);
-        wzToast("이 스팟은 앱에서 스팟 상세(/spots)로 이동해요");
-      }));
-  } else {
-    const back = body.querySelector(".nav-back");
-    if (back) back.addEventListener("click", () => setView("home"));
-  }
-  positionFocusRing();
-}
-function homeHTML() {
-  const heroes = CU.heroes.map((h, i) => {
-    const sel = CU.sel.kind === "hero" && CU.sel.idx === i;
-    return (
-      `<div class="hero${h.isPublished ? "" : " is-draft"}" data-idx="${i}">` +
-      `<div class="himg${h.coverUrl ? "" : " noimg"}"${bg(h.coverUrl)}>${h.coverUrl ? "" : NOIMG}</div>` +
-      `<div class="draft-tag"><span style="width:6px;height:6px;border-radius:50%;background:#fff;display:block"></span>미발행</div>` +
-      `<div class="hero-cap"><div class="hero-title">${esc(h.title).replace(/\n/g, "<br>")}</div>` +
-      (h.subtitle ? `<div class="hero-sub">${esc(h.subtitle)}</div>` : "") + `</div>` +
-      (sel ? `<div class="hero-tapcue"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>탭하면 상세</div>` : "") +
-      `</div>`
-    );
-  }).join("");
-  const segs = CU.heroes.map((_, i) =>
-    `<span class="pseg ${(CU.sel.kind === "hero" ? i === CU.sel.idx : i === 0) ? "active" : ""}"></span>`).join("");
-  const rails = CU.rails.map((r, i) => (
-    `<div class="section${r.isPublished ? "" : " is-draft"}${CU.sel.kind === "rail" && CU.sel.idx === i ? " sel-rail" : ""}" data-idx="${i}">` +
-    `<div class="divider"></div>` +
-    `<div class="sec-title">${esc(r.title)}${isAuto(r) ? `<span class="auto-pill">자동 편성</span>` : ""}</div>` +
-    (r.subtitle ? `<div class="sec-sub">${esc(r.subtitle)}</div>` : "") +
-    `<div class="rail">${railCardsHtml(r)}</div></div>`
-  )).join("");
-  return (
-    `<div class="topbar-app"><div class="wordmark-app">PicTrip</div></div>` +
-    `<div class="hero-track" id="heroTrack">${heroes}</div>` +
-    `<div class="pagebar">${segs}</div>` +
-    `<div id="railSections">${rails}</div>` +
-    `<div class="tabbar">` +
-    `<div class="tab active"><svg width="23" height="23" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3 3 10v10a1 1 0 0 0 1 1h5v-6h6v6h5a1 1 0 0 0 1-1V10z"/></svg><span class="tlabel">홈</span></div>` +
-    `<div class="tab"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg><span class="tlabel">지도</span></div>` +
-    `<div class="tab"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.5-2.2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg><span class="tlabel">사진</span></div>` +
-    `<div class="tab"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M5 21c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><span class="tlabel">마이</span></div>` +
-    `</div>`
-  );
-}
-function gcardHtml(s) {
-  return `<div class="gcard">${tmb("gimg", s.imageUrl)}<div class="gnm">${esc(s.name)}</div><div class="gcat">${esc(s.cat)}</div></div>`;
-}
-function detailGridHtml(it) {
-  if (it.picks.length) return it.picks.map(gcardHtml).join("");
-  if (it.previewSpots === null) return Array.from({ length: 4 }).map(() => `<div class="gcard"><div class="gimg sk"></div><div class="sk line" style="margin-top:9px;width:65%"></div></div>`).join("");
-  if (!it.previewSpots.length) return `<div class="dgrid-empty">표시할 스팟이 없어요</div>`;
-  return it.previewSpots.map(gcardHtml).join("");
-}
-function detailHTML(it) {
-  if (!it) return "";
-  return (
-    `<div class="dnav">` +
-    `<div class="nav-btn nav-back"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>` +
-    `<div class="nav-btn"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.3 10.7l7.4-4.4M8.3 13.3l7.4 4.4"/></svg></div>` +
-    `</div>` +
-    `<div class="dtitle">${esc(it.title).replace(/\n/g, "<br>")}</div>` +
-    `<div class="dcover${it.cover.imageUrl ? "" : " noimg"}"${bg(it.cover.imageUrl)}>${it.cover.imageUrl ? "" : NOIMG}</div>` +
-    (it.lead ? `<div class="dlead">${esc(it.lead)}</div>` : "") +
-    (it.intro ? `<div class="dintro">${esc(it.intro).replace(/\n/g, "<br>")}</div>` : "") +
-    `<div class="dchev"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></div>` +
-    `<div class="dgrid">${detailGridHtml(it)}</div>`
-  );
-}
-
-// ─── selection / view ────────────────────────────────────────────────────────
-async function selectSlot(kind, idx, wanted) {
-  CU.sel = { kind, idx };
-  if (kind === "rail") CU.view = "home";
-  else if (kind === "editorial") CU.view = "detail";
-  else if (wanted) CU.view = wanted;
-  const it = current();
-  await ensureDetail(it); await ensurePreview(it);
-  renderLists(); renderInspector(); updateToggle(); renderScreen();
-  if (CU.view === "home") scrollPreviewTo(kind, idx);
-  else document.querySelector(".wcol-stage .wcol-b").scrollTo({ top: 0, behavior: "smooth" });
-}
-function setView(v) {
-  const kind = CU.sel.kind;
-  if (v === "detail" && kind === "rail") { wzToast("무드 레일은 상세 화면이 없어요"); return; }
-  if (v === "home" && kind === "editorial") { wzToast("에디토리얼은 홈에 노출되지 않아요"); return; }
-  CU.view = v; updateToggle(); renderScreen();
-  if (v === "home") scrollPreviewTo(kind, CU.sel.idx);
-  else document.querySelector(".wcol-stage .wcol-b").scrollTo({ top: 0, behavior: "smooth" });
-}
-function updateToggle() {
-  const kind = CU.sel.kind;
-  document.querySelectorAll("#viewToggle button").forEach((b) => {
-    const v = b.dataset.view;
-    b.classList.toggle("on", v === CU.view);
-    const disabled = (v === "detail" && kind === "rail") || (v === "home" && kind === "editorial");
-    b.classList.toggle("disabled", disabled);
-  });
-}
-
-// ─── inspector ───────────────────────────────────────────────────────────────
-function renderInspector() {
-  const it = current();
-  if (!it) { qs("inspBody").innerHTML = `<div class="insp-empty">선택된 큐레이션이 없습니다.</div>`; return; }
-  const thumbUrl = it.kind === "rail" ? (it.picks[0] && it.picks[0].imageUrl) : it.cover.imageUrl;
-  const ct = qs("inspThumb");
-  if (thumbUrl) { ct.classList.remove("noimg"); ct.style.backgroundImage = `url('${encodeURI(thumbUrl)}')`; ct.innerHTML = ""; }
-  else { ct.classList.add("noimg"); ct.style.backgroundImage = ""; ct.innerHTML = NOIMG; }
-  if (it.kind === "rail") {
-    qs("inspName").textContent = `${it.picks.length || (it.previewSpots ? it.previewSpots.length : 0)}개 스팟${isAuto(it) ? " · 자동" : ""}`;
-    qs("inspPath").textContent = `무드 레일 · 슬롯 ${it.position}`;
-  } else {
-    qs("inspName").textContent = it.cover.name || "표지 미지정";
-    qs("inspPath").textContent = `/curations/${it.slug || ""} · 슬롯 ${it.position}`;
-  }
-  qs("inspBody").innerHTML = it.kind === "rail" ? railInspectorHTML(it) : heroInspectorHTML(it);
-  bindInspector(it);
-  renderPicks();
-  // footer save reflects this curation's unsaved state
-  updateSaveBtn();
-  setSaveState(it.dirty ? "dirty" : "saved", it.dirty ? undefined : "저장됨");
-}
-
-function editGroupHTML(it) {
-  const n = arrOf(it.kind).length;
-  const suffix = it.kind === "hero" ? `/ ${n} 지역 중` : it.kind === "rail" ? `/ ${n} 무드 중` : `/ ${n} 에디토리얼`;
-  return (
-    `<div class="fgroup">` +
-    `<div class="fg-label"><svg viewBox="0 0 24 24" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>편성</div>` +
-    `<div class="toggle-row"><div class="tr-meta"><div class="tr-title">발행 상태</div><div class="tr-sub" id="pubSub">${it.isPublished ? "홈 피드에 노출됩니다" : "홈 피드에서 숨겨집니다 (초안)"}</div></div><div class="switch ${it.isPublished ? "on" : ""}" id="pubSwitch" role="switch" tabindex="0" aria-checked="${it.isPublished ? "true" : "false"}"></div></div>` +
-    `<div class="field" style="margin-top:14px"><label>홈 내 위치</label><div class="pos-row"><button class="pos-step" id="posDown">−</button><span class="pos-val" id="posVal">${it.position}</span><button class="pos-step" id="posUp">+</button><span class="pos-suffix">${suffix}</span></div><div class="hint" style="margin-top:8px">순서는 저장 후 반영됩니다</div></div>` +
-    `</div>`
-  );
-}
-function heroInspectorHTML(it) {
-  return (
-    `<div class="fgroup">` +
-    `<div class="fg-label"><svg viewBox="0 0 24 24" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 16-5-5L5 20"/></svg>홈 카드 <span class="tagn">캐러셀</span></div>` +
-    `<div class="cover-card">${tmb("cc-img", it.cover.imageUrl)}` +
-    `<div class="cc-meta"><div class="cc-name">${esc(it.cover.name || "표지 미지정")}</div><div class="cc-sub">${it.cover.contentId ? "contentId " + esc(it.cover.contentId) : "표지 스팟을 선택하세요"}</div></div>` +
-    `<button class="mini-btn" data-open-picker="cover">변경</button></div>` +
-    `<div class="urlnote"><svg viewBox="0 0 24 24" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>KTO 이미지 URL 참조만 · 다운로드·저장 없음</div>` +
-    `<div class="field" style="margin-top:13px"><label>제목 <span class="counter" id="cTitle">0</span></label><textarea class="ta title" id="fTitle" rows="2"></textarea><div class="hint">표지 위 오버레이 · 줄바꿈 그대로 노출</div></div>` +
-    `<div class="field"><label>부제 <span class="counter" id="cSub">0</span></label><input class="inp" id="fSub" placeholder="표지 아래 한 줄" /></div>` +
-    `</div>` +
-
-    `<div class="fgroup">` +
-    `<div class="fg-label"><svg viewBox="0 0 24 24" stroke-linejoin="round"><path d="M7 4h7l4 4v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M13 4v5h5"/></svg>상세 페이지 <span class="tagn">탭 시</span></div>` +
-    `<button class="detail-cta" id="previewDetail"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>상세 화면 미리보기</button>` +
-    `<div class="field"><label>리드문 <span class="counter" id="cLead">0</span></label><input class="inp" id="fLead" placeholder="상세 중앙 한 줄" /></div>` +
-    `<div class="field"><label>인트로 <span class="counter" id="cIntro">0</span></label><textarea class="ta" id="fIntro" rows="3" placeholder="상세 에디토리얼 문단"></textarea></div>` +
-    `<div class="pick-head" style="margin-top:4px"><span class="lab">손픽 스팟 · 상세 그리드</span><span class="pc" id="pickCount">0 / 8</span></div>` +
-    `<div class="picklist" id="pickList"></div>` +
-    `<button class="add-pick" data-open-picker="handpick"><svg viewBox="0 0 24 24" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>스팟 추가</button>` +
-    `<div class="hint" style="margin-top:10px">비우면 <b>품질 랭킹</b>으로 자동 채움 (미리보기에 실제 반영)</div>` +
-    `</div>` +
-
-    editGroupHTML(it)
-  );
-}
-function railInspectorHTML(it) {
-  return (
-    `<div class="fgroup">` +
-    `<div class="fg-label"><svg viewBox="0 0 24 24" stroke-linejoin="round"><path d="M4 5h16v4H4zM7 13h10M7 17h6"/></svg>레일 헤더</div>` +
-    `<div class="field"><label>섹션 제목 <span class="counter" id="cTitle">0</span></label><input class="inp title" id="fTitle" placeholder="예) 바다 보러 갈까요" /><div class="hint">홈에 굵게 노출되는 섹션 타이틀</div></div>` +
-    `<div class="field"><label>부제 <span class="counter" id="cSub">0</span></label><input class="inp" id="fSub" placeholder="섹션 아래 회색 한 줄" /></div>` +
-    `</div>` +
-
-    `<div class="fgroup primary">` +
-    `<div class="fg-label"><svg viewBox="0 0 24 24" stroke-linejoin="round"><rect x="3" y="4" width="6" height="16" rx="1.5"/><rect x="11" y="4" width="6" height="16" rx="1.5"/><path d="M20 4v16"/></svg>스팟 편성 <span class="tagn">주 편집</span></div>` +
-    `<div class="pick-head"><span class="lab">레일에 노출되는 스팟 순서</span><span class="pc" id="pickCount">0 / 8</span></div>` +
-    `<div class="picklist big" id="pickList"></div>` +
-    `<button class="add-pick" data-open-picker="handpick"><svg viewBox="0 0 24 24" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>스팟 추가</button>` +
-    `<div class="hint" style="margin-top:10px">비우면 무드 매칭 품질 랭킹으로 자동 편성 (미리보기에 실제 반영)</div>` +
-    `</div>` +
-
-    editGroupHTML(it)
-  );
-}
-
-function renderPicks() {
-  const it = current();
-  const cnt = qs("pickCount"); if (cnt) cnt.textContent = `${it.picks.length} / 8`;
-  const list = qs("pickList"); if (!list) return;
-  if (!it.picks.length) {
-    list.innerHTML = `<div class="empty-picks">${it.kind === "hero" ? "손픽이 비어 있어요.<br>품질 랭킹으로 자동 편성됩니다." : "스팟이 비어 있어요.<br>무드 매칭으로 자동 편성됩니다."}</div>`;
-    return;
-  }
-  list.innerHTML = it.picks.map((p, i) =>
-    `<div class="pick" data-i="${i}" draggable="true">` +
-    `<span class="pgrip"><svg width="9" height="15" viewBox="0 0 9 15" fill="currentColor"><circle cx="2" cy="2" r="1.4"/><circle cx="7" cy="2" r="1.4"/><circle cx="2" cy="7.5" r="1.4"/><circle cx="7" cy="7.5" r="1.4"/><circle cx="2" cy="13" r="1.4"/><circle cx="7" cy="13" r="1.4"/></svg></span>` +
-    `<span class="pnum">${i + 1}</span>${tmb("pimg", p.imageUrl)}` +
-    `<div class="pmeta"><div class="pname">${esc(p.name)}</div><div class="pcat">${esc(p.cat)}</div></div>` +
-    `<button class="px" data-rm="${i}"><svg viewBox="0 0 24 24" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>` +
-    `</div>`).join("");
-  list.querySelectorAll(".px").forEach((b) => b.addEventListener("click", (e) => {
-    e.stopPropagation();
-    it.picks.splice(+b.dataset.rm, 1);
-    it.picksDirty = true; markDirty();
-    renderPicks(); renderScreen(); renderLists();
-  }));
-  wirePickDrag(list, it);
-}
-function wirePickDrag(list, it) {
-  let drag = null;
-  list.querySelectorAll(".pick").forEach((el) => {
-    el.addEventListener("dragstart", (e) => { drag = el; el.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; });
-    el.addEventListener("dragend", () => { el.classList.remove("dragging"); list.querySelectorAll(".pick").forEach((p) => p.classList.remove("drag-over")); drag = null; });
-    el.addEventListener("dragover", (e) => { e.preventDefault(); if (drag && drag !== el) el.classList.add("drag-over"); });
-    el.addEventListener("dragleave", () => el.classList.remove("drag-over"));
-    el.addEventListener("drop", (e) => {
-      e.preventDefault();
-      if (!drag || drag === el) return;
-      const from = +drag.dataset.i, to = +el.dataset.i;
-      const [m] = it.picks.splice(from, 1); it.picks.splice(to, 0, m);
-      it.picksDirty = true; markDirty();
-      renderPicks(); renderScreen(); renderLists();
-    });
-  });
-}
-
-function bindInspector(it) {
-  const map = { fTitle: "title", fSub: "subtitle", fLead: "lead", fIntro: "intro" };
-  Object.keys(map).forEach((id) => {
-    const el = qs(id); if (!el) return;
-    el.value = it[map[id]] || "";
-    el.addEventListener("input", (e) => { it[map[id]] = e.target.value; markDirty(); updateCounters(); renderScreen(); });
-  });
-  updateCounters();
-  const up = qs("posUp"), down = qs("posDown");
-  if (up) up.addEventListener("click", () => { it.position += 1; qs("posVal").textContent = it.position; markDirty(); });
-  if (down) down.addEventListener("click", () => { it.position = Math.max(0, it.position - 1); qs("posVal").textContent = it.position; markDirty(); });
-  const sw = qs("pubSwitch");
-  if (sw) {
-    const toggle = () => {
-      it.isPublished = !it.isPublished;
-      sw.classList.toggle("on", it.isPublished);
-      sw.setAttribute("aria-checked", it.isPublished ? "true" : "false");
-      const ps = qs("pubSub");
-      if (ps) ps.textContent = it.isPublished ? "홈 피드에 노출됩니다" : "홈 피드에서 숨겨집니다 (초안)";
-      markDirty(); renderScreen(); renderLists();
-    };
-    sw.addEventListener("click", toggle);
-    sw.addEventListener("keydown", (e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(); } });
-  }
-  const pd = qs("previewDetail"); if (pd) pd.addEventListener("click", () => setView("detail"));
-}
-function updateCounters() {
-  [["fTitle", "cTitle"], ["fSub", "cSub"], ["fLead", "cLead"], ["fIntro", "cIntro"]].forEach(([a, b]) => {
-    const ea = qs(a), eb = qs(b); if (ea && eb) eb.textContent = (ea.value || "").length;
-  });
-}
-
-// ─── focus ring / scroll ─────────────────────────────────────────────────────
-function scrollPreviewTo(kind, idx) {
-  if (CU.view !== "home") return;
-  const scroll = document.querySelector(".wcol-stage .wcol-b");
-  if (!scroll) return;
-  if (kind === "hero") {
-    const track = qs("heroTrack"); const hero = track && track.children[idx];
-    if (hero) track.scrollTo({ left: hero.offsetLeft, behavior: "smooth" });
-    scroll.scrollTo({ top: 0, behavior: "smooth" });
-  } else if (kind === "rail") {
-    const sec = qs("railSections") && qs("railSections").children[idx];
-    if (sec) scroll.scrollTo({ top: Math.max(0, sec.offsetTop + qs("phoneBody").offsetTop - 100), behavior: "smooth" });
-  }
-  setTimeout(positionFocusRing, 360);
-}
-function positionFocusRing() {
-  const ring = qs("focusRing");
-  if (CU.view !== "home") { ring.classList.remove("show"); return; }
-  const phone = qs("phone"); if (!phone) { ring.classList.remove("show"); return; }
-  const pr = phone.getBoundingClientRect();
-  let top, bottom;
-  if (CU.sel.kind === "hero") {
-    const h = document.querySelector('.hero[data-idx="' + CU.sel.idx + '"]');
-    if (!h) { ring.classList.remove("show"); return; }
-    const r = h.getBoundingClientRect(); top = r.top - pr.top + 5; bottom = r.bottom - pr.top - 5;
-  } else if (CU.sel.kind === "rail") {
-    const sec = document.querySelector('.section[data-idx="' + CU.sel.idx + '"]');
-    if (!sec) { ring.classList.remove("show"); return; }
-    const t = sec.querySelector(".sec-title") || sec, rail = sec.querySelector(".rail") || sec;
-    top = t.getBoundingClientRect().top - pr.top - 10; bottom = rail.getBoundingClientRect().bottom - pr.top + 10;
-  } else { ring.classList.remove("show"); return; }
-  if (top < 0) top = 0;
-  if (bottom > pr.height) bottom = pr.height;
-  const height = bottom - top;
-  if (height < 24) { ring.classList.remove("show"); return; }
-  ring.style.top = top + "px"; ring.style.height = height + "px";
-  ring.querySelector(".rtag").textContent = CU.sel.kind === "hero" ? "편집 중 · 히어로" : "편집 중 · 레일";
-  ring.classList.add("show");
-}
-document.querySelector(".wcol-stage .wcol-b") &&
-  document.querySelector(".wcol-stage .wcol-b").addEventListener("scroll", positionFocusRing, { passive: true });
-window.addEventListener("resize", positionFocusRing);
-
-// ─── save ────────────────────────────────────────────────────────────────────
 function nowLabel() {
   const d = new Date(); const p = (n) => String(n).padStart(2, "0");
-  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
 }
-function setSaveState(kind, label) {
-  const el = qs("saveState"); if (!el) return;
-  el.classList.toggle("dirty", kind === "dirty");
-  const t = el.querySelector(".txt");
-  if (kind === "loading") t.textContent = "불러오는 중…";
-  else if (kind === "dirty") t.textContent = "편집 중";
-  else t.textContent = label || "저장됨";
+
+// ─── 보드 렌더 ───────────────────────────────────────────────────────────────
+function renderBoard() {
+  CU.hero.sort((a, b) => a.position - b.position);
+  CU.rail.sort((a, b) => a.position - b.position);
+  CU.editorial.sort((a, b) => a.position - b.position);
+
+  qs("hero-caption").textContent = `캐러셀 · ${CU.hero.length}장 · 홈 상단`;
+  qs("rail-caption").textContent = `가로 스크롤 레일 · ${CU.rail.length}개 · 히어로 아래`;
+  const edSec = qs("board-editorial-sec");
+  edSec.hidden = false;
+  qs("editorial-caption").textContent = `${CU.editorial.length}개`;
+  qs("editorial-empty").hidden = CU.editorial.length > 0;
+
+  const heroes = qs("board-heroes");
+  heroes.replaceChildren(...CU.hero.map(heroCardEl));
+  const rails = qs("board-rails");
+  rails.replaceChildren(...CU.rail.map(railRowEl));
+  const eds = qs("board-editorial");
+  eds.replaceChildren(...CU.editorial.map(railRowEl));
+
+  updateGlobalDirty();
 }
-function markDirty() { const it = current(); if (it) it.dirty = true; setSaveState("dirty"); updateSaveBtn(); }
-function clearDirty(label) { const it = current(); if (it) it.dirty = false; setSaveState("saved", label); updateSaveBtn(); }
-function updateSaveBtn() {
-  const it = current(); const dirty = !!(it && it.dirty);
-  const b = qs("saveBtn"); if (b) b.disabled = !dirty || CU.busy;
-  const r = qs("revertBtn"); if (r) r.disabled = !dirty || CU.busy;
+function heroCardEl(it) {
+  const el = qs("tpl-hero-card").content.firstElementChild.cloneNode(true);
+  el.dataset.slotId = it.slug || String(it.id);
+  const card = el.querySelector(".hcard");
+  card.classList.toggle("off", !it.isPublished);
+  card.classList.toggle("sel", CU.open === it);
+  card.setAttribute("aria-label", `${KIND_LABEL.hero} 편집 — ${it.title.split("\n").join(" ")}${it.isPublished ? "" : " (비공개)"}`);
+  setImg(card, coverImageUrl(it));
+  card.querySelector(".phx").hidden = !!coverImageUrl(it);
+  card.querySelector("[data-pos]").textContent = `#${it.position}`;
+  card.querySelector(".offbadge").hidden = it.isPublished;
+  card.querySelector("[data-t]").textContent = it.title;
+  card.querySelector("[data-s]").textContent = it.subtitle || "";
+  el.querySelector(".st").classList.toggle("off", !it.isPublished);
+  el.querySelector("[data-slug]").textContent = it.slug;
+  el.querySelector(".m").hidden = !it.dirty;
+  wireBoardItem(el, card, it);
+  return el;
 }
-function setBusy(on) {
-  CU.busy = on;
-  ["saveBtn", "revertBtn"].forEach((id) => { const b = qs(id); if (b) b.disabled = on; });
-  if (!on) updateSaveBtn();
+function railRowEl(it) {
+  const el = qs("tpl-rail-row").content.firstElementChild.cloneNode(true);
+  el.dataset.slotId = it.slug || String(it.id);
+  el.dataset.kind = it.kind;
+  el.classList.toggle("sel", CU.open === it);
+  el.setAttribute("aria-label", `${KIND_LABEL[it.kind]} 편집 — ${it.title.split("\n").join(" ")}`);
+  el.querySelector("[data-pos]").textContent = `#${it.position}`;
+  const stack = el.querySelector("[data-stack]");
+  const spots = displaySpots(it);
+  stack.replaceChildren(...spots.slice(0, 3).map((s) => {
+    const sp = document.createElement("span");
+    if (s.imageUrl) { const im = document.createElement("img"); im.src = s.imageUrl; im.alt = ""; sp.appendChild(im); }
+    return sp;
+  }));
+  if (spots.length > 3) {
+    const more = document.createElement("span");
+    more.className = "more"; more.textContent = `+${spots.length - 3}`;
+    stack.appendChild(more);
+  }
+  el.querySelector("[data-t]").textContent = it.title.split("\n").join(" ");
+  el.querySelector("[data-s]").textContent = [it.subtitle, it.slug].filter(Boolean).join(" · ");
+  const chip = el.querySelector("[data-chip]");
+  if (it.dirty) { chip.className = "chip dirtyc"; chip.textContent = "수정됨 · 저장 안 됨"; }
+  else if (!it.picks.length) { chip.className = "chip auto"; chip.textContent = "자동충전 · 품질랭킹"; }
+  else if (it.picks.length >= 8) { chip.className = "chip full"; chip.textContent = "손픽 8 / 8"; }
+  else { chip.className = "chip hand"; chip.textContent = `손픽 ${it.picks.length} / 8`; }
+  const tgl = el.querySelector(".tglwrap input");
+  tgl.checked = it.isPublished;
+  tgl.setAttribute("aria-label", `${it.title.split("\n").join(" ")} — 홈에 발행`);
+  tgl.addEventListener("click", (e) => e.stopPropagation());
+  tgl.addEventListener("change", () => inlinePublishToggle(it, tgl));
+  wireBoardItem(el, el, it);
+  return el;
+}
+function wireBoardItem(root, clickable, it) {
+  const open = (e) => {
+    if (e.target.closest("[data-stop]")) return;
+    openDrawer(it);
+  };
+  clickable.addEventListener("click", open);
+  clickable.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(e); }
+  });
+  // 보드 드래그 = 순서 교환 (두 큐레이션의 position swap, 저장 즉시)
+  root.addEventListener("dragstart", (e) => {
+    if (it.dirty) { e.preventDefault(); toastErr("저장 안 된 변경이 있어 순서를 바꿀 수 없어요"); return; }
+    CU.dragging = it;
+    e.dataTransfer.effectAllowed = "move";
+  });
+  root.addEventListener("dragend", () => { CU.dragging = null; clearDragOver(); });
+  root.addEventListener("dragover", (e) => {
+    if (!CU.dragging || CU.dragging === it || CU.dragging.kind !== it.kind) return;
+    e.preventDefault();
+    root.classList.add("drag-over");
+  });
+  root.addEventListener("dragleave", () => root.classList.remove("drag-over"));
+  root.addEventListener("drop", (e) => {
+    e.preventDefault();
+    root.classList.remove("drag-over");
+    if (CU.dragging && CU.dragging !== it && CU.dragging.kind === it.kind) swapPositions(CU.dragging, it);
+  });
+}
+function clearDragOver() {
+  document.querySelectorAll(".drag-over").forEach((el) => el.classList.remove("drag-over"));
+}
+function updateGlobalDirty() {
+  const n = dirtyItems().length;
+  qs("global-dirty").hidden = n === 0;
+  qs("global-dirty-n").textContent = n;
+}
+
+// 발행 인라인 토글 (보드에서 즉시 저장 — 로컬 미저장 편집이 있으면 거부)
+async function inlinePublishToggle(it, tgl) {
+  if (it.dirty) {
+    tgl.checked = it.isPublished;
+    toastErr("저장 안 된 변경이 있어요 — 편집 패널에서 저장하세요");
+    openDrawer(it);
+    return;
+  }
+  const next = tgl.checked;
+  try {
+    await ensureDetail(it);
+    const d = await cuFetch(`/admin/api/curations/${it.id}`, "PUT", { ...putPayload(it), isPublished: next });
+    applyDetail(it, d);
+    renderBoard();
+    if (CU.open === it) fillDrawer(it);
+    toastOk(`${next ? "발행" : "비공개"} 전환 · ${it.title.split("\n").join(" ")}`);
+  } catch (err) {
+    tgl.checked = it.isPublished;
+    toastErr(`발행 전환 실패 · ${err.message}`);
+  }
+}
+
+// 보드 드래그: 두 항목 position 교환 (둘 다 clean 전제)
+async function swapPositions(a, b) {
+  if (b.dirty) { toastErr("상대 항목에 저장 안 된 변경이 있어요"); return; }
+  CU.busy = true;
+  try {
+    await ensureDetail(a); await ensureDetail(b);
+    const pa = a.position, pb = b.position;
+    const da = await cuFetch(`/admin/api/curations/${a.id}`, "PUT", { ...putPayload(a), position: pb });
+    const db = await cuFetch(`/admin/api/curations/${b.id}`, "PUT", { ...putPayload(b), position: pa });
+    applyDetail(a, da); applyDetail(b, db);
+    renderBoard();
+    if (CU.open) fillDrawer(CU.open);
+    toastOk(`순서 변경 · #${pa} ↔ #${pb}`);
+  } catch (err) {
+    toastErr(`순서 변경 실패 · ${err.message}`);
+    loadAll(); // 부분 반영됐을 수 있으니 서버 상태로 리로드
+  } finally {
+    CU.busy = false;
+  }
+}
+
+// ─── load ────────────────────────────────────────────────────────────────────
+async function loadAll() {
+  qs("board-skeleton").hidden = false;
+  qs("board-content").hidden = true;
+  qs("board-error").hidden = true;
+  try {
+    const list = await cuFetch("/admin/api/curations");
+    CU.hero = (list.heroes || []).map((d) => mkItem(d, "hero"));
+    CU.rail = (list.rails || []).map((d) => mkItem(d, "rail"));
+    CU.editorial = (list.editorial || []).map((d) => mkItem(d, "editorial"));
+    CU.open = null;
+    document.body.classList.remove("drawer-open");
+    qs("board-skeleton").hidden = true;
+    qs("board-content").hidden = false;
+    renderBoard();
+    // 상세+프리뷰를 미리 채워 레일 스택/자동충전 썸네일을 정확히
+    await Promise.all(allItems().map((it) => ensureDetail(it).catch(() => {})));
+    await Promise.all(allItems().map((it) => ensurePreview(it)));
+    renderBoard();
+  } catch (err) {
+    qs("board-skeleton").hidden = true;
+    qs("board-content").hidden = true;
+    qs("board-error").hidden = false;
+    qs("board-error-detail").textContent = `GET /admin/api/curations · ${err.message}`;
+  }
+}
+
+// ─── 슬라이드오버 ────────────────────────────────────────────────────────────
+function putPayload(it) {
+  return {
+    title: it.title || "",
+    subtitle: it.subtitle || null,
+    lead: it.lead || null,
+    intro: it.intro || null,
+    coverSpotId: it.cover.contentId || null,
+    isPublished: it.isPublished,
+    position: it.position | 0,
+  };
+}
+async function openDrawer(it) {
+  if (CU.open && CU.open !== it && CU.open.dirty) {
+    confirmDiscard(CU.open, () => { discardEdits(CU.open); openDrawer(it); });
+    return;
+  }
+  CU.open = it;
+  document.body.classList.add("drawer-open");
+  try { await ensureDetail(it); } catch (_) { /* 목록 값으로 표시 */ }
+  ensurePreview(it).then(() => { if (CU.open === it) updateMiniPreview(it); });
+  fillDrawer(it);
+  renderBoard();
+}
+function closeDrawer() {
+  if (CU.open && CU.open.dirty) {
+    confirmDiscard(CU.open, () => { discardEdits(CU.open); reallyCloseDrawer(); });
+    return;
+  }
+  reallyCloseDrawer();
+}
+function reallyCloseDrawer() {
+  CU.open = null;
+  document.body.classList.remove("drawer-open");
+  renderBoard();
+}
+function discardEdits(it) {
+  it.detailLoaded = false; it.dirty = false; it.picksDirty = false;
+  // 서버 상태 재적용은 다음 openDrawer/렌더 시 ensureDetail이 수행
+}
+
+function fillDrawer(it) {
+  const isHero = it.kind === "hero", isRail = it.kind === "rail";
+  qs("so-kind").textContent = KIND_LABEL[it.kind];
+  qs("so-pos-chip").textContent = `position #${it.position}`;
+  qs("so-slug").textContent = it.slug || `id ${it.id}`;
+  qs("so-heading").textContent = it.title.split("\n").join(" ") || "(제목 없음)";
+  const st = qs("so-status");
+  st.textContent = it.isPublished ? "발행됨" : "비공개";
+  st.className = `chip ${it.isPublished ? "pub" : "unpub"}`;
+  qs("so-lastsaved").hidden = !it.savedAt;
+  if (it.savedAt) qs("so-lastsaved").textContent = `이 세션에서 저장 ${it.savedAt}`;
+
+  // kind별 표시 전환
+  qs("so-cover-sec").hidden = isRail;
+  qs("so-lead-fld").hidden = isRail;
+  qs("so-intro-fld").hidden = isRail;
+  qs("so-title-label").textContent = isRail ? "섹션 제목" : "제목";
+  qs("so-title-help").textContent = isRail
+    ? "홈에 굵게 노출되는 섹션 타이틀"
+    : "줄바꿈(\\n) 보존 · 표지 이미지 위에 그대로 오버레이 · 권장 24자";
+  qs("so-picks-label").textContent = isHero ? "손픽 스팟 · 상세 그리드" : isRail ? "레일 스팟 편성" : "손픽 스팟";
+  qs("so-autonote-txt").textContent = isRail
+    ? "비우면 무드 매칭 품질 랭킹으로 자동 편성 · 미리보기에 실제 반영"
+    : "비우면 품질 랭킹으로 자동 충전 · 미리보기에 실제 반영";
+  qs("so-pos-hint").textContent = `· ${KIND_LABEL[it.kind]} ${groupOf(it).length}개 중`;
+
+  // 프리뷰 탭: 레일=홈만, 에디토리얼=상세만
+  const tabs = document.querySelectorAll("#so-preview .mini-tabs button");
+  tabs.forEach((b) => {
+    b.disabled = (b.dataset.m === "detail" && isRail) || (b.dataset.m === "home" && it.kind === "editorial");
+  });
+  setPreviewTab(it.kind === "editorial" ? "detail" : "home");
+
+  // 폼 값
+  qs("so-title").value = it.title;
+  qs("so-subtitle").value = it.subtitle;
+  qs("so-lead").value = it.lead;
+  qs("so-intro").value = it.intro;
+  qs("so-publish").checked = it.isPublished;
+  qs("so-pos-value").textContent = it.position;
+  updateCounters();
+  clearFieldErrors();
+  renderCover(it);
+  renderPicks(it);
+  updateMiniPreview(it);
+
+  const ep = `PUT /admin/api/curations/${it.id}`;
+  qs("so-endpoint-dirty").textContent = ep;
+  qs("so-endpoint-clean").textContent = ep;
+  updateSaveState(it);
+}
+function updateSaveState(it) {
+  const dirty = !!it.dirty;
+  qs("so-dirty-chip").hidden = !dirty;
+  qs("so-state-dirty").hidden = !dirty;
+  qs("so-state-clean").hidden = dirty;
+  qs("so-save").disabled = !dirty || CU.busy;
+  qs("so-revert").disabled = !dirty || CU.busy;
+  updateGlobalDirty();
+}
+function markDirty() {
+  const it = CU.open; if (!it) return;
+  it.dirty = true;
+  updateSaveState(it);
+}
+
+function renderCover(it) {
+  setImg(qs("so-cover").querySelector(".cimg"), it.cover.imageUrl);
+  qs("so-cover-name").textContent = it.cover.name || "표지 미지정";
+  qs("so-cover-sub").textContent = it.cover.contentId ? `contentId ${it.cover.contentId}` : "표지 스팟을 선택하세요";
+  qs("so-cover-kto").textContent = it.cover.contentId
+    ? `KTO #${it.cover.contentId} · 이미지 URL 참조만 · 다운로드 없음`
+    : "KTO 이미지 URL 참조만 · 다운로드 없음";
+}
+
+function renderPicks(it) {
+  qs("so-picks-count").textContent = `${it.picks.length} / 8`;
+  const wrap = qs("so-picks");
+  const empty = qs("so-picks-empty");
+  empty.hidden = it.picks.length > 0;
+  qs("so-picks-empty-p").innerHTML = it.kind === "rail"
+    ? "지금은 전부 무드 매칭 품질 랭킹으로 자동 편성됩니다.<br>직접 고르려면 아래에서 스팟을 검색해 추가하세요."
+    : "지금은 전부 품질 랭킹 상위 스팟으로 자동 충전됩니다.<br>직접 고르려면 아래에서 스팟을 검색해 추가하세요.";
+  wrap.replaceChildren(...it.picks.map((p, i) => {
+    const el = qs("tpl-pick-item").content.firstElementChild.cloneNode(true);
+    el.dataset.spotId = p.contentId;
+    el.dataset.i = i;
+    el.querySelector("[data-no]").textContent = i + 1;
+    setImg(el.querySelector(".pim"), p.imageUrl);
+    el.querySelector("[data-t]").textContent = p.name;
+    el.querySelector("[data-s]").textContent = `${p.sub || "스팟"} · #${p.contentId}`;
+    const rm = el.querySelector(".rm");
+    rm.setAttribute("aria-label", `${p.name} 제거`);
+    rm.addEventListener("click", (e) => {
+      e.stopPropagation();
+      it.picks.splice(i, 1);
+      it.picksDirty = true; markDirty();
+      renderPicks(it); updateMiniPreview(it); renderBoard();
+    });
+    wirePickDrag(el, it);
+    return el;
+  }));
+}
+function wirePickDrag(el, it) {
+  el.addEventListener("dragstart", (e) => {
+    el.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", el.dataset.i);
+    e.stopPropagation();
+  });
+  el.addEventListener("dragend", () => {
+    el.classList.remove("dragging");
+    qs("so-picks").querySelectorAll(".pick").forEach((p) => p.classList.remove("drag-over"));
+  });
+  el.addEventListener("dragover", (e) => { e.preventDefault(); e.stopPropagation(); el.classList.add("drag-over"); });
+  el.addEventListener("dragleave", () => el.classList.remove("drag-over"));
+  el.addEventListener("drop", (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const from = +e.dataTransfer.getData("text/plain"), to = +el.dataset.i;
+    if (Number.isNaN(from) || from === to) return;
+    const [m] = it.picks.splice(from, 1);
+    it.picks.splice(to, 0, m);
+    it.picksDirty = true; markDirty();
+    renderPicks(it); updateMiniPreview(it); renderBoard();
+  });
+}
+
+// ─── 미니 프리뷰 (실데이터 렌더) ─────────────────────────────────────────────
+function setPreviewTab(m) {
+  document.querySelectorAll("#so-preview .mini-tabs button").forEach((b) => {
+    const on = b.dataset.m === m;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  qs("so-preview").classList.toggle("detail", m === "detail");
+}
+function miniSpotEl(s, cls) {
+  const el = qs("tpl-mini-spot").content.firstElementChild.cloneNode(true);
+  if (cls) el.classList.add(cls);
+  setImg(el, s ? s.imageUrl : null);
+  return el;
+}
+function updateMiniPreview(it) {
+  const isRail = it.kind === "rail";
+  qs("mp-card").hidden = isRail;
+  qs("mp-rail").hidden = !isRail;
+  if (isRail) {
+    qs("mp-rail-title").textContent = it.title.split("\n").join(" ");
+    qs("mp-rail-subtitle").textContent = it.subtitle || "";
+    const spots = displaySpots(it);
+    qs("mp-rail-empty").hidden = spots.length > 0;
+    qs("mp-rail-spots").replaceChildren(...spots.slice(0, 4).map((s) => miniSpotEl(s)));
+  } else {
+    setImg(qs("mp-card"), coverImageUrl(it));
+    qs("mp-card-title").textContent = it.title;
+    qs("mp-card-subtitle").textContent = it.subtitle || "";
+  }
+  // 상세 탭
+  setImg(qs("mp-detail").querySelector(".mh2"), coverImageUrl(it));
+  qs("mp-detail-title").textContent = it.title;
+  qs("mp-detail-lead").textContent = it.lead || "";
+  const grid = displaySpots(it).slice(0, 4);
+  qs("mp-detail-grid").replaceChildren(...grid.map((s) => miniSpotEl(s)));
+  qs("mp-cap").textContent = it.picks.length
+    ? "실제 앱과 동일 렌더 · 손픽 순서 그대로"
+    : "실제 앱과 동일 렌더 · 자동충전 풀 반영";
+}
+
+// ─── 카운터 / 검증 오류 ──────────────────────────────────────────────────────
+function updateCounters() {
+  document.querySelectorAll("#slideover [data-max]").forEach((f) => {
+    const c = document.querySelector(`[data-cnt-for="${f.id}"]`);
+    if (!c) return;
+    const max = +f.dataset.max, len = (f.value || "").length;
+    c.textContent = `${len} / ${max}`;
+    c.classList.toggle("over", len > max);
+  });
 }
 function clearFieldErrors() {
-  document.querySelectorAll(".field-err").forEach((el) => el.remove());
-  document.querySelectorAll(".field.has-err").forEach((el) => el.classList.remove("has-err"));
+  document.querySelectorAll("#slideover .fld.err").forEach((el) => el.classList.remove("err"));
+  document.querySelectorAll("#slideover .emsg[data-err-for]").forEach((el) => { el.hidden = true; el.textContent = ""; });
+  document.querySelectorAll("#slideover [aria-invalid]").forEach((el) => el.removeAttribute("aria-invalid"));
 }
 function showValidationErrors(err) {
   clearFieldErrors();
-  const idMap = { title: "fTitle", subtitle: "fSub", lead: "fLead", intro: "fIntro" };
+  const inputs = { title: "so-title", subtitle: "so-subtitle", lead: "so-lead", intro: "so-intro" };
+  let shown = false;
   (err.details || []).forEach((det) => {
     const key = (det.field || "").split(".").pop();
-    const inputId = idMap[key];
-    if (inputId && qs(inputId)) {
-      const field = qs(inputId).closest(".field");
-      if (field) {
-        field.classList.add("has-err");
-        const m = document.createElement("div"); m.className = "field-err";
-        m.textContent = det.issue || det.message || "입력값을 확인하세요";
-        field.appendChild(m);
-      }
-    } else if (key === "coverSpotId" || key === "spotIds") {
-      wzToast((key === "coverSpotId" ? "표지 스팟" : "손픽 스팟") + " 오류", det.issue || det.message || "");
+    const slot = document.querySelector(`#slideover .emsg[data-err-for="${key}"]`);
+    if (slot) {
+      slot.textContent = det.issue || det.message || "입력값을 확인하세요";
+      slot.hidden = false;
+      shown = true;
+    }
+    if (inputs[key]) {
+      const input = qs(inputs[key]);
+      input.setAttribute("aria-invalid", "true");
+      const fld = input.closest(".fld");
+      if (fld) fld.classList.add("err");
     }
   });
-  wzToast("입력값을 확인하세요", err.message || "");
+  toastErr(shown ? "입력값을 확인하세요 — 필드 오류 표시됨" : (err.message || "검증에 실패했습니다"));
+}
+
+// ─── 저장 / 되돌리기 ─────────────────────────────────────────────────────────
+function setSaving(on) {
+  CU.busy = on;
+  const b = qs("so-save");
+  b.querySelector("[data-save-label]").hidden = on;
+  b.querySelector("[data-save-saving]").hidden = !on;
+  b.disabled = on || !(CU.open && CU.open.dirty);
+  qs("so-revert").disabled = on || !(CU.open && CU.open.dirty);
 }
 async function saveCuration() {
-  const it = current();
+  const it = CU.open;
   if (!it || CU.busy || !it.dirty) return;
-  setBusy(true); clearFieldErrors();
+  setSaving(true); clearFieldErrors();
   try {
-    const payload = {
-      title: it.title || "", subtitle: it.subtitle || null, lead: it.lead || null, intro: it.intro || null,
-      coverSpotId: it.cover.contentId || null,
-      isPublished: it.isPublished,
-      position: it.position | 0,
-    };
-    const d = await adminFetchJSON(`/admin/api/curations/${it.id}`, "PUT", payload);
+    // applyDetail이 로컬 손픽을 서버 응답(구 값)으로 덮어쓰기 전에 목표 스팟을 확보
+    const wantSpots = it.picksDirty ? it.picks.map((p) => p.contentId).filter(Boolean) : null;
+    const d = await cuFetch(`/admin/api/curations/${it.id}`, "PUT", putPayload(it));
     applyDetail(it, d);
-    if (it.picksDirty) {
-      const ids = it.picks.map((p) => p.contentId).filter(Boolean);
-      const res = await adminFetchJSON(`/admin/api/curations/${it.id}/spots`, "PUT", { spotIds: ids });
+    if (wantSpots !== null) {
+      const res = await cuFetch(`/admin/api/curations/${it.id}/spots`, "PUT", { spotIds: wantSpots });
       if (res && res.handpicks) {
-        it.picks = res.handpicks.map((h) => ({ contentId: h.contentId, name: h.name || "", cat: h.category || "스팟", imageUrl: h.imageUrl || null }));
+        it.picks = res.handpicks.map((h) => ({
+          contentId: h.contentId, name: h.name || "", sub: h.category || "스팟", imageUrl: h.imageUrl || null,
+        }));
       }
       it.picksDirty = false;
     }
-    await refreshPreview(it); // auto-fill may have changed (cache invalidated on save)
-    clearDirty(`저장됨 · ${nowLabel()}`);
-    renderLists(); renderScreen(); renderInspector(); updateToggle();
-    wzToast(`저장됨 · ${it.isPublished ? "발행" : "비공개"}`, it.title || "");
+    await refreshPreview(it); // 발행/손픽 변경으로 자동충전 결과가 달라질 수 있음
+    it.dirty = false;
+    it.savedAt = nowLabel();
+    fillDrawer(it); renderBoard();
+    toastOk(`저장됨 · ${it.isPublished ? "발행" : "비공개"} · /home/feed 반영`);
   } catch (err) {
     if (err.status === 422 || err.code === "ADMIN_VALIDATION") showValidationErrors(err);
-    else if (err.status === 404 || err.code === "ADMIN_CURATION_NOT_FOUND") wzToast("큐레이션을 찾을 수 없습니다", err.message);
-    else wzToast("저장 실패", err.message || "");
+    else if (err.status === 404) toastErr(`큐레이션을 찾을 수 없습니다 · ${err.message}`);
+    else toastErr(`저장 실패 · ${err.message}`);
   } finally {
-    setBusy(false);
+    setSaving(false);
+    if (CU.open) updateSaveState(CU.open);
   }
 }
 async function revertCurrent() {
-  const it = current(); if (!it) return;
-  try {
-    await loadDetailInto(it); it.picksDirty = false; await refreshPreview(it);
-    clearDirty("편집 취소됨"); renderLists(); renderScreen(); renderInspector();
-    wzToast("서버 상태로 되돌림", "");
-  } catch (err) { wzToast("되돌리기 실패", err.message || ""); }
+  const it = CU.open; if (!it) return;
+  confirmDiscard(it, async () => {
+    try {
+      it.detailLoaded = false;
+      await ensureDetail(it);
+      it.dirty = false; it.picksDirty = false;
+      await refreshPreview(it);
+      fillDrawer(it); renderBoard();
+      toastOk("서버 상태로 되돌렸습니다");
+    } catch (err) {
+      toastErr(`되돌리기 실패 · ${err.message}`);
+    }
+  });
 }
 
-// ─── spot picker modal (cover + handpick) ────────────────────────────────────
-function pickedIds() { const it = current(); return new Set((it ? it.picks : []).map((p) => p.contentId)); }
+// ─── 미저장 확인 다이얼로그 ──────────────────────────────────────────────────
+let confirmAction = null;
+function confirmDiscard(it, onDiscard) {
+  qs("confirm-desc").innerHTML = "";
+  const b = document.createElement("b");
+  b.textContent = it.title.split("\n").join(" ") || it.slug;
+  qs("confirm-desc").append(b, "에 저장하지 않은 수정이 있습니다.", document.createElement("br"), "버리면 변경 내용이 사라집니다.");
+  confirmAction = onDiscard;
+  qs("confirm-discard").classList.add("show");
+  qs("confirm-stay").focus();
+}
+function closeConfirm() { qs("confirm-discard").classList.remove("show"); confirmAction = null; }
+
+// ─── 스팟 피커 ───────────────────────────────────────────────────────────────
+function pickerRegion() {
+  const on = document.querySelector("#picker-filters .fchip.on");
+  return on ? on.dataset.region || "" : "";
+}
 function openPicker(mode) {
   CU.pickerMode = mode;
-  const m = qs("pickermodal"); if (!m) return;
-  const h3 = m.querySelector(".mh-titles h3"); const sub = m.querySelector(".mh-titles .mh-sub");
-  if (h3) h3.textContent = mode === "cover" ? "표지 스팟 선택" : "스팟 추가";
-  if (sub) sub.textContent = mode === "cover" ? "이 큐레이션의 표지로 쓸 관광지를 검색합니다" : "손픽 스팟에 넣을 관광지를 검색해 추가합니다";
-  const results = m.querySelector(".results");
-  if (results) results.innerHTML = `<div class="estate"><div class="d">검색어를 입력하세요.</div></div>`;
+  const m = qs("pickermodal");
+  m.dataset.mode = mode;
+  m.classList.toggle("mode-cover", mode === "cover");
   m.classList.add("show");
-  const inp = m.querySelector(".search input");
-  if (inp) { inp.value = ""; setTimeout(() => inp.focus(), 60); }
+  const inp = qs("picker-search");
+  inp.value = "";
+  qs("picker-count").textContent = "";
+  document.querySelectorAll("#picker-filters .fchip").forEach((c, i) => c.classList.toggle("on", i === 0));
+  showPickerState("prompt");
+  setTimeout(() => inp.focus(), 60);
 }
-function closePicker() { const m = qs("pickermodal"); if (m) m.classList.remove("show"); }
-
-function activeRegionParam() {
-  const chip = document.querySelector("#pickermodal .fchip.on");
-  if (!chip) return "";
-  const label = chip.textContent.trim();
-  const regionChips = ["제주", "부산", "강원", "서울", "경기", "경주", "전주", "강릉", "여수"];
-  return regionChips.includes(label) ? label : "";
+function closePicker() { qs("pickermodal").classList.remove("show"); CU.pickerMode = null; }
+function showPickerState(state) {
+  qs("picker-results").hidden = state !== "results";
+  qs("picker-empty-prompt").hidden = state !== "prompt";
+  qs("picker-empty-none").hidden = state !== "none";
+  qs("picker-error").hidden = state !== "error";
 }
-function searchSkeleton() {
-  return Array.from({ length: 6 }).map(() =>
-    `<div class="rspot"><div class="thumb sk"></div><div class="meta"><div class="sk line"></div><div class="sk line" style="width:50%;margin-top:6px"></div></div></div>`).join("");
+function searchSkeletonCards() {
+  return Array.from({ length: 8 }).map(() => {
+    const el = document.createElement("div");
+    el.className = "pcard";
+    const pi = document.createElement("div");
+    pi.className = "pi skel sk-thumb";
+    el.appendChild(pi);
+    return el;
+  });
 }
-async function runSpotSearch(q) {
-  const results = document.querySelector("#pickermodal .results"); if (!results) return;
-  results.innerHTML = searchSkeleton();
+async function runSpotSearch() {
+  const q = qs("picker-search").value.trim();
+  if (!q) { qs("picker-count").textContent = ""; showPickerState("prompt"); return; }
+  const seq = ++CU.searchSeq; // 늦게 도착한 이전 응답이 최신 결과를 덮지 않도록
+  showPickerState("results");
+  qs("picker-results").replaceChildren(...searchSkeletonCards());
   try {
-    const region = activeRegionParam();
+    const region = pickerRegion();
     const url = `/admin/api/spots/search?q=${encodeURIComponent(q)}` + (region ? `&region=${encodeURIComponent(region)}` : "");
-    const data = await adminFetch(url);
+    const data = await cuFetch(url);
+    if (seq !== CU.searchSeq) return; // stale
     renderSearchResults(data.spots || []);
   } catch (err) {
-    results.innerHTML = `<div class="estate"><div class="d">${esc(err.message)}</div></div>`;
+    if (seq !== CU.searchSeq) return;
+    showPickerState("error");
+    qs("picker-error-detail").textContent = err.message;
   }
 }
 function renderSearchResults(spots) {
-  const results = document.querySelector("#pickermodal .results"); if (!results) return;
-  if (!spots.length) { results.innerHTML = `<div class="estate"><div class="d">검색 결과가 없습니다.</div></div>`; return; }
-  const picked = pickedIds();
-  results.innerHTML = spots.map((s) => {
-    const region = s.regionName || s.regionCd || "";
-    const already = CU.pickerMode === "handpick" && picked.has(s.contentId);
-    const subParts = [region, s.category, `#${esc(s.contentId)}`].filter(Boolean);
-    const img = s.imageUrl || "";
-    return (
-      `<div class="rspot${already ? " added" : ""}" data-content-id="${esc(s.contentId)}" data-name="${esc(s.name || "")}" data-img="${esc(img)}" data-region="${esc(region)}" data-cat="${esc(s.category || "")}">` +
-      `<div class="thumb${img ? "" : " noimg"}"${bg(img)}>${img ? "" : `<svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/></svg>`}</div>` +
-      `<div class="meta"><div class="nm">${esc(s.name || "")}</div><div class="sub">${subParts.join(" · ")}</div></div>` +
-      `<button class="btn ghost add" type="button">` + (already ? `<svg class="bi chk" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>추가됨` : "추가") + `</button>`
-    );
-  }).join("");
+  qs("picker-count").textContent = `${spots.length}건`;
+  if (!spots.length) { showPickerState("none"); return; }
+  showPickerState("results");
+  const it = CU.open;
+  const picked = new Set((it ? it.picks : []).map((p) => p.contentId));
+  qs("picker-results").replaceChildren(...spots.map((s) => {
+    const el = qs("tpl-picker-card").content.firstElementChild.cloneNode(true);
+    el.dataset.spotId = s.contentId;
+    const already = CU.pickerMode === "picks" && picked.has(s.contentId);
+    el.classList.toggle("added", already);
+    setImg(el.querySelector(".pi"), s.imageUrl);
+    el.querySelector("[data-t]").textContent = s.name || "";
+    el.querySelector("[data-s]").textContent = `${s.regionName || s.regionCd || ""} · #${s.contentId}`;
+    const add = el.querySelector(".add");
+    if (already) add.querySelector("[data-mode-picks]").textContent = "추가됨";
+    add.addEventListener("click", (e) => {
+      e.stopPropagation();
+      pickSpot(s, el, add);
+    });
+    return el;
+  }));
 }
-
-// ─── global wiring ───────────────────────────────────────────────────────────
-let wzToastTimer;
-function wzToast(msg, sub) {
-  const t = qs("toast"); if (!t) { if (typeof toast === "function") toast(msg, sub || ""); return; }
-  qs("toastMsg").textContent = sub ? `${msg} · ${sub}` : msg;
-  t.classList.add("show"); clearTimeout(wzToastTimer);
-  wzToastTimer = setTimeout(() => t.classList.remove("show"), 2200);
-}
-
-document.addEventListener("click", (e) => {
-  const trig = e.target.closest("[data-open-picker]");
-  if (trig) { e.preventDefault(); openPicker(trig.dataset.openPicker); return; }
-
-  const addBtn = e.target.closest("#pickermodal .rspot .add");
-  if (addBtn) {
-    const row = addBtn.closest(".rspot");
-    const contentId = row.dataset.contentId, name = row.dataset.name;
-    const img = row.dataset.img || null, cat = row.dataset.cat || "스팟";
-    const it = current();
-    if (CU.pickerMode === "cover") {
-      it.cover = { contentId, name, imageUrl: img }; markDirty();
-      renderInspector(); renderScreen(); renderLists(); closePicker(); wzToast("표지 스팟 설정", name);
-      return;
-    }
-    if (row.classList.contains("added")) return;
-    if (it.picks.some((p) => p.contentId === contentId)) { wzToast("이미 추가된 스팟입니다", name); return; }
-    if (it.picks.length >= 8) { wzToast("손픽은 최대 8개입니다", ""); return; }
-    it.picks.push({ contentId, name, cat, imageUrl: img });
-    it.picksDirty = true; markDirty();
-    renderInspector(); renderScreen(); renderLists();
-    row.classList.add("added");
-    addBtn.innerHTML = `<svg class="bi chk" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>추가됨`;
-    wzToast("스팟 추가", name);
+function pickSpot(s, cardEl, addBtn) {
+  const it = CU.open; if (!it) return;
+  const spot = { contentId: s.contentId, name: s.name || "", sub: s.regionName || "스팟", imageUrl: s.imageUrl || null };
+  if (CU.pickerMode === "cover") {
+    it.cover = { contentId: spot.contentId, name: spot.name, imageUrl: spot.imageUrl };
+    markDirty();
+    renderCover(it); updateMiniPreview(it); renderBoard();
+    closePicker();
+    toastOk(`표지 스팟 설정 · ${spot.name}`);
     return;
   }
-});
+  if (cardEl.classList.contains("added")) return;
+  if (it.picks.some((p) => p.contentId === spot.contentId)) { toastErr("이미 추가된 스팟입니다"); return; }
+  if (it.picks.length >= 8) { toastErr("손픽은 최대 8개입니다"); return; }
+  it.picks.push(spot);
+  it.picksDirty = true; markDirty();
+  renderPicks(it); updateMiniPreview(it); renderBoard();
+  cardEl.classList.add("added");
+  addBtn.querySelector("[data-mode-picks]").textContent = "추가됨";
+  toastOk(`스팟 추가 · ${spot.name}`);
+}
 
-(function wirePicker() {
-  const m = qs("pickermodal"); if (!m) return;
-  m.addEventListener("click", (e) => { if (e.target === m) closePicker(); });
-  m.querySelectorAll(".x").forEach((x) => x.addEventListener("click", closePicker));
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closePicker(); });
-  const chips = m.querySelectorAll(".fchip");
-  chips.forEach((c) => c.addEventListener("click", () => {
-    chips.forEach((x) => x.classList.remove("on")); c.classList.add("on");
-    const inp = m.querySelector(".search input"); if (inp && inp.value.trim()) runSpotSearch(inp.value.trim());
-  }));
-  const inp = m.querySelector(".search input");
-  if (inp) inp.addEventListener("input", () => {
-    clearTimeout(CU.searchTimer);
-    const q = inp.value.trim();
-    if (!q) { const r = m.querySelector(".results"); if (r) r.innerHTML = `<div class="estate"><div class="d">검색어를 입력하세요.</div></div>`; return; }
-    CU.searchTimer = setTimeout(() => runSpotSearch(q), 250);
+// ─── 폼 바인딩 / 전역 배선 ───────────────────────────────────────────────────
+function wireForm() {
+  const fields = { "so-title": "title", "so-subtitle": "subtitle", "so-lead": "lead", "so-intro": "intro" };
+  Object.entries(fields).forEach(([id, key]) => {
+    qs(id).addEventListener("input", (e) => {
+      const it = CU.open; if (!it) return;
+      it[key] = e.target.value;
+      markDirty(); updateCounters(); updateMiniPreview(it); renderBoard();
+      if (key === "title") qs("so-heading").textContent = it.title.split("\n").join(" ") || "(제목 없음)";
+    });
   });
-})();
+  qs("so-publish").addEventListener("change", (e) => {
+    const it = CU.open; if (!it) return;
+    it.isPublished = e.target.checked;
+    markDirty(); renderBoard();
+    const st = qs("so-status");
+    st.textContent = it.isPublished ? "발행됨" : "비공개";
+    st.className = `chip ${it.isPublished ? "pub" : "unpub"}`;
+  });
+  qs("so-pos-dec").addEventListener("click", () => stepPosition(-1));
+  qs("so-pos-inc").addEventListener("click", () => stepPosition(1));
+  qs("so-save").addEventListener("click", saveCuration);
+  qs("so-revert").addEventListener("click", revertCurrent);
+  qs("so-close").addEventListener("click", closeDrawer);
+
+  document.querySelectorAll("#so-preview .mini-tabs button").forEach((b) =>
+    b.addEventListener("click", () => { if (!b.disabled) setPreviewTab(b.dataset.m); }));
+}
+function stepPosition(delta) {
+  const it = CU.open; if (!it) return;
+  const max = Math.max(0, groupOf(it).length - 1);
+  const next = Math.min(max, Math.max(0, it.position + delta));
+  if (next === it.position) return;
+  it.position = next;
+  qs("so-pos-value").textContent = next;
+  qs("so-pos-chip").textContent = `position #${next}`;
+  markDirty();
+}
+function wirePicker() {
+  document.querySelectorAll("[data-open-picker]").forEach((b) =>
+    b.addEventListener("click", () => openPicker(b.dataset.pickerMode || "picks")));
+  document.querySelectorAll("[data-close-picker]").forEach((b) => b.addEventListener("click", closePicker));
+  qs("pickermodal").addEventListener("click", (e) => { if (e.target === qs("pickermodal")) closePicker(); });
+  qs("picker-search").addEventListener("input", () => {
+    clearTimeout(CU.searchTimer);
+    const q = qs("picker-search").value.trim();
+    if (!q) { CU.searchSeq++; qs("picker-count").textContent = ""; showPickerState("prompt"); return; }
+    CU.searchTimer = setTimeout(runSpotSearch, 280);
+  });
+  document.querySelectorAll("#picker-filters .fchip").forEach((c) =>
+    c.addEventListener("click", () => {
+      document.querySelectorAll("#picker-filters .fchip").forEach((x) => x.classList.remove("on"));
+      c.classList.add("on");
+      if (qs("picker-search").value.trim()) runSpotSearch();
+    }));
+}
+function wireGlobal() {
+  qs("board-retry").addEventListener("click", loadAll);
+  qs("confirm-stay").addEventListener("click", closeConfirm);
+  qs("confirm-discard-btn").addEventListener("click", () => {
+    const act = confirmAction;
+    closeConfirm();
+    if (act) act();
+  });
+  qs("confirm-discard").addEventListener("click", (e) => { if (e.target === qs("confirm-discard")) closeConfirm(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (qs("pickermodal").classList.contains("show")) closePicker();
+    else if (qs("confirm-discard").classList.contains("show")) closeConfirm();
+    else if (document.body.classList.contains("drawer-open")) closeDrawer();
+  });
+  // 저장 안 된 편집이 있으면 페이지 이탈 경고
+  window.addEventListener("beforeunload", (e) => {
+    if (dirtyItems().length) { e.preventDefault(); e.returnValue = ""; }
+  });
+  document.querySelectorAll("#slideover [data-max]").forEach((f) => f.addEventListener("input", updateCounters));
+}
 
 window.addEventListener("load", () => {
   if (!document.querySelector(".cu-page")) return;
-  qs("saveBtn").addEventListener("click", () => saveCuration());
-  qs("revertBtn").addEventListener("click", () => {
-    const it = current();
-    if (it && it.dirty && !window.confirm("저장하지 않은 변경사항을 되돌릴까요?")) return;
-    revertCurrent();
-  });
-  document.querySelectorAll("#viewToggle button").forEach((b) =>
-    b.addEventListener("click", () => { if (b.classList.contains("disabled")) { wzToast("이 종류는 해당 화면이 없어요"); return; } setView(b.dataset.view); }));
+  wireForm();
+  wirePicker();
+  wireGlobal();
   loadAll();
 });
