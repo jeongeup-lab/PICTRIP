@@ -1,9 +1,15 @@
 <!doctype html>
+<!--
+  홈 큐레이션 편성 보드 — C안(App Store 피처링 보드 + 슬라이드오버) + B안 폼 밀도.
+  보드가 곧 미리보기: 히어로 6장은 앱 홈과 동일 렌더의 카드 갤러리, 무드 레일은
+  와이드 로우. 카드 클릭 → 우측 슬라이드오버에서 카피·표지·손픽·발행 편집.
+  동적 마크업은 전부 <template> 클론 + DOM 프로퍼티 대입(assets/curation.js).
+-->
 <html lang="ko">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>PicTrip Admin · 홈 큐레이션 편집기</title>
+<title>PicTrip Admin · 홈 큐레이션 편성 보드</title>
 <link rel="stylesheet" href="/admin/assets/admin.css" />
 <link rel="stylesheet" href="/admin/assets/curation.css" />
 </head>
@@ -43,103 +49,297 @@
     <div class="topbar">
       <div class="crumb"><span>콘텐츠</span><span class="sep">/</span><b>홈 큐레이션</b></div>
       <div class="spacer"></div>
-      <div class="savestate" id="saveState"><span class="d"></span><span class="txt">불러오는 중…</span></div>
+      <span class="gdirty" id="global-dirty" hidden><span class="d"></span><span id="global-dirty-n">1</span>개 수정됨 · 저장 안 됨</span>
       <div class="env-pill"><span class="dot ok"></span> <b>prod</b> · /home/feed</div>
       <div class="clock" id="clock">--:--:--</div>
     </div>
 
     <div class="content">
-      <div class="wz">
-        <div class="wz-head">
-          <div class="wz-titles">
-            <div class="wz-eyebrow">Home · Curation</div>
-            <h1>홈 큐레이션 편집</h1>
+
+      <div class="cu-head">
+        <div>
+          <div class="eyebrow">Home · Curation Board</div>
+          <h1>홈 편성 보드</h1>
+          <p>보드가 곧 미리보기입니다 — 카드는 실제 앱 홈 피드와 동일한 렌더 · 노출 순서 그대로</p>
+        </div>
+        <span class="sp"></span>
+        <div class="legend"><span class="pub"><i></i>발행 중</span><span class="off"><i></i>비공개</span><span>카드 드래그 = 순서 변경</span></div>
+      </div>
+
+      <!-- 목록 로드 에러 -->
+      <div class="errbanner" id="board-error" role="alert" hidden>
+        <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16" r=".7" fill="currentColor" stroke="none"/></svg>
+        <span>큐레이션 목록을 불러오지 못했습니다 <small id="board-error-detail"></small></span>
+        <button class="btn" id="board-retry" type="button">다시 시도</button>
+      </div>
+
+      <!-- 보드 로딩 스켈레톤 -->
+      <div id="board-skeleton" aria-hidden="true">
+        <section class="board-sec">
+          <div class="bs-h"><h2>지역 히어로</h2><span class="x">불러오는 중…</span></div>
+          <div class="herostrip">
+            <div class="hwrap"><div class="skel sk-card"></div><div class="skel sk-line"></div></div>
+            <div class="hwrap"><div class="skel sk-card"></div><div class="skel sk-line"></div></div>
+            <div class="hwrap"><div class="skel sk-card"></div><div class="skel sk-line"></div></div>
+            <div class="hwrap"><div class="skel sk-card"></div><div class="skel sk-line"></div></div>
+            <div class="hwrap"><div class="skel sk-card"></div><div class="skel sk-line"></div></div>
+            <div class="hwrap"><div class="skel sk-card"></div><div class="skel sk-line"></div></div>
           </div>
-          <p class="wz-desc">히어로(지역)와 무드 레일은 성격이 달라 편집 방식이 나뉩니다 · 편집 즉시 가운데 실제 화면에 반영</p>
-          <div class="wz-spacer"></div>
-        </div>
-
-        <div class="editor">
-          <!-- 좌측: 홈 편성 -->
-          <section class="wcol wcol-list">
-            <div class="wcol-h"><h2>홈 편성</h2><span class="wsub" id="listCount">— · —</span></div>
-            <div class="wcol-b" id="listBody">
-              <div class="group-label">지역 히어로 <span class="count" id="heroCount">0</span></div>
-              <div id="heroList"></div>
-              <div class="group-label">무드 레일 <span class="count" id="railCount">0</span></div>
-              <div id="railList"></div>
-              <div id="editorialWrap" style="display:none">
-                <div class="group-label">에디토리얼 <span class="count" id="edCount">0</span></div>
-                <div id="editorialList"></div>
-              </div>
-            </div>
-          </section>
-
-          <!-- 중앙: 실시간 미리보기 -->
-          <section class="wcol wcol-stage">
-            <div class="wcol-h"><h2>실시간 미리보기</h2><span class="wsub" id="stageSub">홈 피드</span></div>
-            <div class="wcol-b">
-              <div class="stage-bar">
-                <span class="live-pill"><span class="pulse"></span>실제 앱과 동일</span>
-                <div class="seg-toggle" id="viewToggle">
-                  <button data-view="home" class="on">홈</button>
-                  <button data-view="detail">상세</button>
-                </div>
-              </div>
-              <div class="phone-pad">
-                <div class="phone" id="phone">
-                  <div class="statusbar"><span>9:41</span><span class="icons">
-                    <svg width="17" height="11" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="3" width="2.5" height="6" rx="1"/><rect x="4" y="1.5" width="2.5" height="7.5" rx="1"/><rect x="8" y="0" width="2.5" height="9" rx="1"/></svg>
-                    <svg width="23" height="11" viewBox="0 0 24 12" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="1" y="1.5" width="19" height="9" rx="2.5"/><rect x="2.5" y="3" width="14" height="6" rx="1" fill="currentColor"/><rect x="21" y="4" width="2" height="4" rx="1" fill="currentColor"/></svg>
-                  </span></div>
-                  <div id="phoneBody"></div>
-                  <div class="focus-ring" id="focusRing"><span class="rtag">편집 중</span></div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <!-- 우측: 슬롯 편집 -->
-          <section class="wcol wcol-insp">
-            <div class="wcol-h"><h2>슬롯 편집</h2></div>
-            <div class="insp-ctx"><span class="ctx-thumb pthumb" id="inspThumb"></span><div><div class="nm" id="inspName">—</div><div class="pth" id="inspPath">—</div></div></div>
-            <div class="wcol-b" id="inspBody"></div>
-            <div class="insp-foot"><button class="draft-btn" id="revertBtn">되돌리기</button><button class="save-btn" id="saveBtn">변경사항 저장</button></div>
-          </section>
-        </div>
+        </section>
+        <section class="board-sec">
+          <div class="bs-h"><h2>무드 레일</h2><span class="x">불러오는 중…</span></div>
+          <div class="skel sk-row"></div>
+          <div class="skel sk-row"></div>
+          <div class="skel sk-row"></div>
+        </section>
       </div>
+
+      <div id="board-content" hidden>
+        <section class="board-sec">
+          <div class="bs-h"><h2>지역 히어로</h2><span class="x" id="hero-caption">캐러셀 · 홈 상단</span><span class="hint"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>카드를 클릭해 편집</span></div>
+          <div class="herostrip" id="board-heroes"></div>
+        </section>
+
+        <section class="board-sec">
+          <div class="bs-h"><h2>무드 레일</h2><span class="x" id="rail-caption">가로 스크롤 레일 · 히어로 아래</span></div>
+          <div id="board-rails"></div>
+        </section>
+
+        <section class="board-sec" id="board-editorial-sec" hidden>
+          <div class="bs-h"><h2>에디토리얼</h2><span class="x" id="editorial-caption">0개</span></div>
+          <div id="board-editorial"></div>
+          <div class="edempty" id="editorial-empty" hidden>에디토리얼 큐레이션 없음 · 시드 스크립트로 관리됩니다</div>
+        </section>
+      </div>
+
     </div>
   </div>
 </div>
 
-<!-- 스팟 피커 모달 (기존 마크업/스타일 재사용) -->
-<div class="modal-bg" id="pickermodal">
-  <div class="modal picker">
+<!-- 슬라이드오버 편집 패널 -->
+<aside class="drawer" id="slideover" role="dialog" aria-modal="true" aria-labelledby="so-heading">
+  <div class="dw-h">
+    <div class="dw-hh">
+      <div class="eyebrow"><span id="so-kind">지역 히어로</span> <span class="pchip" id="so-pos-chip">position #0</span> <span class="pchip" id="so-slug">—</span></div>
+      <h2 id="so-heading">—</h2>
+      <div class="dw-meta">
+        <span class="chip pub" id="so-status">발행됨</span>
+        <span class="chip dirtyc" id="so-dirty-chip" hidden>수정됨 · 저장 안 됨</span>
+        <span class="lastsave" id="so-lastsaved" hidden></span>
+      </div>
+    </div>
+    <button class="x" id="so-close" type="button" aria-label="편집 패널 닫기"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <div class="dw-b">
+    <div class="mini" id="so-preview">
+      <div class="mini-tabs" role="tablist" aria-label="프리뷰 전환">
+        <button class="on" data-m="home" role="tab" aria-selected="true" type="button">홈 카드</button>
+        <button data-m="detail" role="tab" aria-selected="false" type="button">상세</button>
+      </div>
+      <div class="mini-stage">
+        <!-- 히어로 홈 카드 -->
+        <div class="minicard" id="mp-card">
+          <img id="mp-card-img" src="" alt="" hidden><span class="phx" id="mp-card-ph"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 16-5-5L5 20"/></svg></span>
+          <div class="grad"></div>
+          <div class="txt"><h3 id="mp-card-title"></h3><p id="mp-card-subtitle"></p></div>
+        </div>
+        <!-- 무드 레일 -->
+        <div class="minirail" id="mp-rail" hidden>
+          <b id="mp-rail-title"></b>
+          <small id="mp-rail-subtitle"></small>
+          <div class="mr-row" id="mp-rail-spots"></div>
+          <span class="mr-empty" id="mp-rail-empty" hidden>표시할 스팟이 없어요</span>
+        </div>
+        <!-- 상세 페이지 -->
+        <div class="minidetail" id="mp-detail">
+          <div class="mh2"><img id="mp-detail-img" src="" alt="" hidden><div class="grad"></div><h3 id="mp-detail-title"></h3></div>
+          <div class="bd">
+            <div class="l" id="mp-detail-lead"></div>
+            <div class="g" id="mp-detail-grid"></div>
+          </div>
+        </div>
+      </div>
+      <div class="mini-cap" id="mp-cap">실제 앱과 동일 렌더 · 편집 즉시 반영</div>
+    </div>
+
+    <div class="fs" id="so-cover-sec">
+      <div class="fs-t">표지 스팟</div>
+      <div class="cover" id="so-cover">
+        <span class="cimg"><img id="so-cover-img" src="" alt="" hidden><span class="phx" id="so-cover-ph"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 16-5-5L5 20"/></svg></span></span>
+        <span class="cm"><b id="so-cover-name">표지 미지정</b><small id="so-cover-sub">표지 스팟을 선택하세요</small><span class="kto" id="so-cover-kto">KTO 이미지 URL 참조만 · 다운로드 없음</span></span>
+        <button class="btn-s" id="so-cover-change" type="button" data-open-picker data-picker-mode="cover">변경</button>
+      </div>
+      <div class="emsg" data-err-for="coverSpotId" hidden></div>
+    </div>
+
+    <div class="fs">
+      <div class="fs-t" id="so-copy-label">카피</div>
+      <div class="fld" data-fld="title">
+        <label for="so-title"><span id="so-title-label">제목</span> <span class="req" aria-hidden="true">*</span><span class="cnt" data-cnt-for="so-title">0 / 24</span></label>
+        <textarea id="so-title" rows="2" data-max="24" required></textarea>
+        <div class="help" id="so-title-help">줄바꿈(\n) 보존 · 표지 이미지 위에 그대로 오버레이 · 권장 24자</div>
+        <div class="emsg" data-err-for="title" hidden></div>
+      </div>
+      <div class="fld" data-fld="subtitle">
+        <label for="so-subtitle">부제 <span class="cnt" data-cnt-for="so-subtitle">0 / 28</span></label>
+        <input id="so-subtitle" data-max="28" />
+        <div class="help" id="so-subtitle-help">표지 아래 한 줄 · 권장 28자</div>
+        <div class="emsg" data-err-for="subtitle" hidden></div>
+      </div>
+      <div class="fld" data-fld="lead" id="so-lead-fld">
+        <label for="so-lead">리드문 <span class="cnt" data-cnt-for="so-lead">0 / 40</span></label>
+        <input id="so-lead" data-max="40" />
+        <div class="help">상세 페이지 중앙 한 줄 · 권장 40자</div>
+        <div class="emsg" data-err-for="lead" hidden></div>
+      </div>
+      <div class="fld" data-fld="intro" id="so-intro-fld">
+        <label for="so-intro">인트로 <span class="cnt" data-cnt-for="so-intro">0 / 120</span></label>
+        <textarea id="so-intro" rows="3" data-max="120"></textarea>
+        <div class="help">상세 에디토리얼 문단 · 권장 120자</div>
+        <div class="emsg" data-err-for="intro" hidden></div>
+      </div>
+    </div>
+
+    <div class="fs">
+      <div class="fs-t"><span id="so-picks-label">손픽 스팟</span> <span class="r" id="so-picks-count">0 / 8</span></div>
+      <div id="so-picks"></div>
+      <div class="pickempty" id="so-picks-empty" hidden>
+        <span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg></span>
+        <b>손픽 스팟이 없습니다</b>
+        <p id="so-picks-empty-p">지금은 전부 품질 랭킹 상위 스팟으로 자동 충전됩니다.<br>직접 고르려면 아래에서 스팟을 검색해 추가하세요.</p>
+      </div>
+      <button class="addpick" id="so-addpick" type="button" data-open-picker data-picker-mode="picks"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>스팟 검색해 추가</button>
+      <div class="autonote" id="so-autonote"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16" r=".7" fill="currentColor" stroke="none"/></svg><span id="so-autonote-txt">비우면 품질 랭킹으로 자동 충전 · 미리보기에 실제 반영</span></div>
+      <div class="emsg" data-err-for="spotIds" hidden></div>
+    </div>
+
+    <div class="fs">
+      <div class="fs-t">편성</div>
+      <div class="togglerow">
+        <span class="tl"><b>홈에 발행</b><small>끄면 홈 피드에서 즉시 제외 · GET /home/feed 반영</small></span>
+        <label class="tglwrap"><input type="checkbox" id="so-publish" aria-label="홈에 발행"><span class="tgl" aria-hidden="true"></span></label>
+      </div>
+      <div class="posrow">
+        <span class="pl">홈 내 노출 순서 <span class="ph" id="so-pos-hint"></span></span>
+        <span class="stepper"><button id="so-pos-dec" type="button" aria-label="순서 앞으로">−</button><span class="v" id="so-pos-value">0</span><button id="so-pos-inc" type="button" aria-label="순서 뒤로">+</button></span>
+      </div>
+      <div class="emsg" data-err-for="position" hidden></div>
+    </div>
+  </div>
+  <div class="dw-f">
+    <span class="state" id="so-state-dirty" hidden><span class="d"></span>수정됨 · 저장 안 됨<small class="ep" id="so-endpoint-dirty"></small></span>
+    <span class="state clean" id="so-state-clean"><span class="d"></span>모든 변경사항 저장됨<small class="ep" id="so-endpoint-clean"></small></span>
+    <span class="sp"></span>
+    <button class="btn ghost-danger" id="so-revert" type="button" disabled>되돌리기</button>
+    <button class="btn solid" id="so-save" type="button" disabled>
+      <span data-save-label>변경사항 저장</span>
+      <span data-save-saving hidden><span class="spin" aria-hidden="true"></span>저장 중…</span>
+    </button>
+  </div>
+</aside>
+
+<!-- 스팟 피커 — data-mode="picks"(손픽 추가) / "cover"(표지 변경) -->
+<div class="modal-bg" id="pickermodal" data-mode="picks">
+  <div class="picker" role="dialog" aria-modal="true" aria-labelledby="picker-title">
     <div class="mh">
-      <div class="mh-titles"><h3>스팟 추가</h3><span class="mh-sub">손픽 스팟에 넣을 관광지를 검색해 추가합니다</span></div>
-      <span class="x" role="button" aria-label="닫기">×</span>
-    </div>
-    <div class="mb">
-      <div class="picker-top">
-        <div class="search">
-          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-          <input class="inp" placeholder="스팟 이름 또는 지역으로 검색…" />
-        </div>
-        <div class="filters">
-          <span class="fchip on">전체</span><span class="fchip">제주</span><span class="fchip">부산</span><span class="fchip">강원</span><span class="fchip">자연</span><span class="fchip">해변</span><span class="fchip">카페</span>
-        </div>
+      <div>
+        <h3 id="picker-title"><span data-mode-picks>스팟 추가</span><span data-mode-cover>표지 스팟 변경</span></h3>
+        <p><span data-mode-picks>GET /admin/api/spots/search</span><span data-mode-cover>선택한 스팟의 KTO 이미지가 표지가 됩니다 · URL 참조만</span></p>
       </div>
-      <div class="results"><div class="estate"><div class="d">검색어를 입력하세요.</div></div></div>
+      <button class="x" type="button" data-close-picker aria-label="피커 닫기"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </div>
-    <div class="mf">
-      <span class="mf-note"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16" r=".6" fill="currentColor" stroke="none"/></svg> KTO 이미지 URL만 참조 · 다운로드 없음</span>
-      <div class="spacer" style="flex:1"></div>
-      <button class="btn ghost x" type="button">닫기</button>
+    <div class="ptop">
+      <div class="psearch"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg><input id="picker-search" placeholder="스팟 이름 또는 지역으로 검색" aria-label="스팟 검색"><span class="n" id="picker-count"></span></div>
+      <div class="fchips" id="picker-filters">
+        <button class="fchip on" type="button" data-region="">전체</button>
+        <button class="fchip" type="button" data-region="11">서울</button>
+        <button class="fchip" type="button" data-region="26">부산</button>
+        <button class="fchip" type="button" data-region="51">강원</button>
+        <button class="fchip" type="button" data-region="52">전북</button>
+        <button class="fchip" type="button" data-region="46">전남</button>
+        <button class="fchip" type="button" data-region="47">경북</button>
+        <button class="fchip" type="button" data-region="50">제주</button>
+      </div>
+    </div>
+    <div class="pres" id="picker-results" hidden></div>
+    <div class="pstate" id="picker-empty-prompt">
+      <span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></span>
+      <b>검색어를 입력하세요</b>
+      <p>스팟 이름 또는 지역으로 검색할 수 있습니다</p>
+    </div>
+    <div class="pstate" id="picker-empty-none" hidden>
+      <span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/><path d="M8.5 11h5"/></svg></span>
+      <b>검색 결과가 없습니다</b>
+      <p>다른 검색어나 지역 필터를 시도해 보세요</p>
+    </div>
+    <div class="pstate err" id="picker-error" hidden>
+      <span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16" r=".7" fill="currentColor" stroke="none"/></svg></span>
+      <b>검색에 실패했습니다</b>
+      <p id="picker-error-detail"></p>
+    </div>
+    <div class="mf"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16" r=".7" fill="currentColor" stroke="none"/></svg>KTO 이미지 URL만 참조 · 다운로드 없음<button class="btn" type="button" data-close-picker>닫기</button></div>
+  </div>
+</div>
+
+<!-- 미저장 변경 확인 -->
+<div class="modal-bg" id="confirm-discard">
+  <div class="confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-desc">
+    <h3 id="confirm-title">저장하지 않은 변경사항이 있습니다</h3>
+    <p id="confirm-desc"></p>
+    <div class="row">
+      <button class="btn" id="confirm-stay" type="button">계속 편집</button>
+      <button class="btn danger" id="confirm-discard-btn" type="button">변경사항 버리기</button>
     </div>
   </div>
 </div>
 
-<div class="wz-toast" id="toast"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg><span id="toastMsg">저장되었습니다</span></div>
+<!-- 토스트 -->
+<div class="cu-toast" id="toast" role="status"><svg class="i" viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></svg><span id="toast-msg">저장되었습니다</span></div>
+<div class="cu-toast err" id="toast-error" role="alert"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16" r=".7" fill="currentColor" stroke="none"/></svg><span id="toast-error-msg">실패했습니다</span></div>
+
+<!-- ============ 반복 단위 템플릿 ============ -->
+<template id="tpl-hero-card">
+  <div class="hwrap" data-kind="hero" draggable="true">
+    <div class="hcard" role="button" tabindex="0" data-edit>
+      <img class="himg" src="" alt="" hidden><span class="phx" hidden><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 16-5-5L5 20"/></svg></span>
+      <div class="grad"></div>
+      <span class="pos" data-pos></span>
+      <span class="grab" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></svg></span>
+      <span class="offbadge" hidden>비공개</span>
+      <div class="txt"><h3 data-t></h3><p data-s></p></div>
+    </div>
+    <div class="hmeta"><span class="st"></span><b data-slug></b><span class="m" hidden>수정됨</span></div>
+  </div>
+</template>
+<template id="tpl-rail-row">
+  <div class="railrow" role="button" tabindex="0" data-kind="rail" draggable="true">
+    <span class="grab" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></svg></span>
+    <span class="pos" data-pos></span>
+    <span class="stack" data-stack></span>
+    <span class="rm"><b data-t></b><small data-s></small></span>
+    <span class="chip hand" data-chip></span>
+    <label class="tglwrap" data-stop><input type="checkbox" aria-label="홈에 발행"><span class="tglmini" aria-hidden="true"></span></label>
+    <span class="chev" aria-hidden="true">›</span>
+  </div>
+</template>
+<template id="tpl-pick-item">
+  <div class="pick" draggable="true">
+    <span class="grab" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></svg></span>
+    <span class="no" data-no></span>
+    <span class="pim"><img src="" alt="" hidden><span class="phx" hidden><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 16-5-5L5 20"/></svg></span></span>
+    <span class="pm"><b data-t></b><small data-s></small></span>
+    <button class="rm" type="button" aria-label="제거"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+</template>
+<template id="tpl-picker-card">
+  <div class="pcard">
+    <div class="pi"><img src="" alt="" hidden><span class="phx" hidden><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 16-5-5L5 20"/></svg></span><button class="add" type="button"><span data-mode-picks>추가</span><span data-mode-cover>선택</span></button></div>
+    <div class="pt"><b data-t></b><small data-s></small></div>
+  </div>
+</template>
+<template id="tpl-mini-spot">
+  <span class="mspot"><img src="" alt="" hidden><span class="phx" hidden><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 16-5-5L5 20"/></svg></span></span>
+</template>
 
 <script src="/admin/assets/admin.js"></script>
 <script src="/admin/assets/curation.js"></script>
