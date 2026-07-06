@@ -2,6 +2,9 @@ name: pipeline-ci
 on:
   pull_request:
     paths: ["pipeline/**", ".github/workflows/pipeline-ci.yml"]
+concurrency:
+  group: pipeline-ci-${{ github.ref }}
+  cancel-in-progress: true
 defaults:
   run:
     working-directory: pipeline
