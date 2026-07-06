@@ -11,5 +11,5 @@ Setup (when porting/initializing):
 Conventions:
 - Autogenerate misses partial indexes (`WHERE show_flag = 1`) and named CHECK
   constraints — **review the SQL** and hand-write them.
-- Forward-only / expand→contract (see `docs/specs/platform/S10-reconcile.md`).
+- Forward-only / expand→contract (see `docs/specs/S10-reconcile.md`).
 - Run with `POSTGRES_DB=pictrip_test`.

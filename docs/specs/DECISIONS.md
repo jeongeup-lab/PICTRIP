@@ -15,7 +15,7 @@
   `enhancements`·`admin`, nn=제로패딩). 끝나면 이 파일의 **결정 로그**에
   한 줄 추가하고 커밋한다.
 - 입력 SSOT: 디자인=`docs/mockups/`(무채색 16화면, `index.html` 갤러리),
-  제약=`CLAUDE.md`(루트), 브리프=`docs/specs/_context/design-brief.md`.
+  제약=`CLAUDE.md`(루트), 브리프=`docs/specs/S00-design-brief.md`.
 
 ## 잠긴 결정 (이미 사용자 승인 — 재논의 금지, 세부만 설계)
 

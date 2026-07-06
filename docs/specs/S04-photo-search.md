@@ -1,7 +1,7 @@
 # S4 — 사진 검색 플로우 (08·09·10)
 
 > 입력: `docs/mockups/08-photo-select.html` · `09-analyzing.html` · `10-result.html`,
-> `docs/specs/_context/session-context.md`(잠긴 결정·제약), `CLAUDE.md`(루트).
+> `docs/specs/DECISIONS.md`(잠긴 결정·제약), `CLAUDE.md`(루트).
 > 설계 원칙: 화면/UX/네비/API 형태는 백지에서 이상적으로. DB·인프라는 후속 세션에서 reconcile.
 > 무채색(잉크/그레이, 로즈 금지).
 

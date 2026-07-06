@@ -5,8 +5,8 @@ Contest — 1차 deadline **2026-09-21 16:00 KST**.
 
 Monorepo with 5 deploy units + docs (`AGENTS.md` is a symlink to this file).
 Design SSOT is `docs/mockups/` (16 monochrome screens). Full specs in
-`docs/specs/` (read order S01 → S12); `docs/specs/_context/session-context.md`
-holds the locked decisions.
+`docs/specs/` (flat, stable IDs `S00`–`S12`, sort order = read order);
+`docs/specs/DECISIONS.md` holds the locked decisions.
 
 ## Repo layout
 
