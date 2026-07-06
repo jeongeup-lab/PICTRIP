@@ -218,7 +218,7 @@
 | nearby 카드 세분 `lcls_systm3_nm` 라벨이 현 응답에 없음 | S3·S5·S7 §6 이미 인지 | Stage A 직렬화에 추가(이미 계획). **충돌 아님, 추적용 재확인**. |
 | 동의버전(`terms_version`) 수명주기: 최초 set 시점·약관 갱신 시 재동의 정책 미확정 | S1·S6·S9 §3.6 | "최초 로그인=가입시점 현행 버전" 명문화 + 약관 갱신 시 재동의 여부 결정(S1 보강). |
 | 아바타 URL 404 폴백 미명시 | S6·S9 §3.4 | "URL 404/널 → 모노그램 폴백" 클라 규칙 1줄 추가. |
-| `regions-tree` centroid는 컬럼 아닌 런타임 AVG인데 schema-docs에 주석 없음 | schema-docs(미추적) | schema-docs에 "centroid=런타임 AVG, 컬럼 없음" reconcile 노트. |
+| `regions-tree` centroid는 컬럼 아닌 런타임 AVG인데 schema-docs에 주석 없음 | schema-docs(미추적) | ~~schema-docs reconcile 노트~~ (schema-docs는 2026-07-06 리포에서 삭제 — 해당 없음). |
 | `onboarding_seen` 플래그 set 시점(08 push 전/후) 미명시 | S1 | "CTA 탭 시 08 push **전**에 set" 1줄. |
 | 0-스팟 레일 처리(랜덤 실패 후 <3) | S2 | "<3이면 레일 생략(밀도 안정)" 규칙 명시. |
 | 사진검색 0건 vs 백엔드 현 `PhotoSearchResult` 형 | S4·S9 §4.1 이미 reconcile | 0-length 배열을 에러로 오인 말 것(S10 구현 주의). |

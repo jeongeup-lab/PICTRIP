@@ -2,7 +2,7 @@
 <!-- 무엇을 / 왜. 1~3줄. -->
 
 ## 관련 스펙 / 이슈
-<!-- 예: docs/specs/screens/S03-spot-detail.md · A01 ADM-014 · #12 -->
+<!-- 예: docs/specs/S03-spot-detail.md · A01 ADM-014 · #12 -->
 
 ## 변경 단위
 <!-- 해당 항목을 [x] 로 체크 (최소 1개) -->
