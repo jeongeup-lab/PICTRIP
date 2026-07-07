@@ -1,0 +1,25 @@
+name: backend-oidc-logs
+# Ops runbook: dump recent OIDC verification log lines from the live api
+# container on CT112 — the only way to see WHY a real device's social login
+# was rejected (oidc[provider] lines carry the rejection reason; no tokens or
+# PII are logged). Read-only.
+on:
+  workflow_dispatch:
+    inputs:
+      since:
+        description: "docker logs --since window (e.g. 48h, 30m)"
+        type: string
+        default: "48h"
+jobs:
+  logs:
+    runs-on: [self-hosted, ct112]
+    steps:
+      - run: |
+          cid="$(docker ps -q --filter "publish=8000" | head -n1)"
+          if [ -z "$cid" ]; then echo "api container not found on :8000"; exit 1; fi
+          echo "=== oidc verification lines (last $SINCE) ==="
+          docker logs --since "$SINCE" "$cid" 2>&1 | grep -E "oidc\[" | tail -100 || echo "(none)"
+          echo "=== /auth/oauth request lines (last $SINCE) ==="
+          docker logs --since "$SINCE" "$cid" 2>&1 | grep -E "auth/oauth" | tail -100 || echo "(none)"
+        env:
+          SINCE: ${{ inputs.since }}
