@@ -1,0 +1,28 @@
+name: backend-backfill-nicknames
+# One-off ops runbook: run scripts/backfill_nicknames.py inside the live api
+# container on CT112 (the only host with a route to the CT110 DB). Dry run by
+# default — dispatch again with `write: true` after checking the count.
+on:
+  workflow_dispatch:
+    inputs:
+      write:
+        description: "Actually write (unchecked = dry-run count only)"
+        type: boolean
+        default: false
+jobs:
+  backfill:
+    runs-on: [self-hosted, ct112]
+    steps:
+      # Exec into the running compose api container (name api-host[-_]api[-_]N,
+      # the one publishing :8000) instead of spawning a new one — it already
+      # has the image, /app/.env mount, and DB route.
+      - run: |
+          cid="$(docker ps -q --filter "publish=8000" | head -n1)"
+          if [ -z "$cid" ]; then echo "api container not found on :8000"; exit 1; fi
+          if [ "$WRITE" = "true" ]; then
+            docker exec "$cid" python -m scripts.backfill_nicknames
+          else
+            docker exec "$cid" python -m scripts.backfill_nicknames --dry-run
+          fi
+        env:
+          WRITE: ${{ inputs.write }}
