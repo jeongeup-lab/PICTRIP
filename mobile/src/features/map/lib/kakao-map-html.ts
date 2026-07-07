@@ -52,7 +52,7 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true): string {
     return '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
   }
   function post(type, payload){ if(window.ReactNativeWebView){ window.ReactNativeWebView.postMessage(JSON.stringify({type:type,payload:payload||{}})); } }
-  function fail(msg, human){ document.getElementById('msg').textContent = human; post('error',{message:msg}); }
+  function fail(msg, human, detail){ document.getElementById('msg').textContent = human; post('error',{message:msg, detail:detail||''}); }
   function clearPins(){ pins.forEach(function(o){ o.setMap(null); }); pins = []; }
   function setCenter(lat,lng){ if(map){ map.setCenter(new kakao.maps.LatLng(lat,lng)); } }
   function setPins(spots){
@@ -87,7 +87,7 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true): string {
       ${gestures}
       document.getElementById('msg').textContent='';
       post('ready');
-    }catch(e){ fail('init-failed','지도를 표시할 수 없어요'); }
+    }catch(e){ fail('init-failed','지도를 표시할 수 없어요', String(e && e.message || e)); }
   }
   // Load the SDK dynamically so a domain-rejected / network failure surfaces
   // (a synchronous <script src> would fail silently → blank map).
@@ -96,7 +96,12 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true): string {
     if(!key){ fail('missing-js-key','KAKAO_JS_KEY 미설정 — .env에 EXPO_PUBLIC_KAKAO_JS_KEY 추가 필요'); return; }
     var s = document.createElement('script');
     s.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=' + key + '&autoload=false&libraries=clusterer,services';
-    s.onerror = function(){ fail('sdk-load-failed','지도 SDK를 불러오지 못했어요'); };
+    s.onerror = function(){
+      // <script> onerror carries no reason — re-probe with fetch to surface the
+      // HTTP status (or network error) in the RN error overlay.
+      fetch(s.src).then(function(r){ fail('sdk-load-failed','지도 SDK를 불러오지 못했어요','HTTP '+r.status); })
+        .catch(function(e){ fail('sdk-load-failed','지도 SDK를 불러오지 못했어요',String(e)); });
+    };
     s.onload = function(){
       if(!window.kakao || !kakao.maps){ fail('sdk-invalid','지도 SDK 초기화에 실패했어요'); return; }
       kakao.maps.load(initMap);
