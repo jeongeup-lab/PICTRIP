@@ -25,12 +25,26 @@ export async function requestPermission(): Promise<PermStatus> {
   return toStatus(status);
 }
 
-/** Best-effort current GPS fix; null on failure. */
+// getCurrentPositionAsync has no timeout of its own — a slow first fix (iOS
+// cold start indoors) can hang tens of seconds, keeping the primer/"위치 확인 중"
+// on screen. Cap the wait and fall back to the OS's last known position.
+const GPS_TIMEOUT_MS = 8000;
+
+/** Best-effort current GPS fix; last-known position on timeout, null on failure. */
 export async function getCurrentCoords(): Promise<Coords | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const pos = await Location.getCurrentPositionAsync();
-    return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    const pos = await Promise.race([
+      Location.getCurrentPositionAsync(),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), GPS_TIMEOUT_MS);
+      }),
+    ]);
+    const fix = pos ?? (await Location.getLastKnownPositionAsync());
+    return fix ? { lat: fix.coords.latitude, lng: fix.coords.longitude } : null;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }

@@ -61,4 +61,63 @@ describe("map-store", () => {
     expect(useMapStore.getState().category).toBe("cafe");
     expect(useMapStore.getState().center).toEqual(seoul);
   });
+
+  // Regression (e4a3800): the ±RADIUS_M fallback square is not screen-aligned;
+  // clipping it by a screen fraction cut a distance band that excluded the
+  // anchor itself. Center-derived anchors must query the square unclipped.
+  it("GPS anchor queryBounds contains the anchor center", () => {
+    useMapStore.getState().setAnchor(seoul, "gps", seoul);
+    const qb = useMapStore.getState().queryBounds!;
+    expect(qb.sw.lat).toBeLessThan(seoul.lat);
+    expect(qb.ne.lat).toBeGreaterThan(seoul.lat);
+  });
+
+  it("searchHere clips the real viewport bbox south edge to the sheet top", () => {
+    const vpBounds = { sw: { lat: 37.5, lng: 126.9 }, ne: { lat: 37.66, lng: 127.05 } };
+    useMapStore.getState().setAnchor(seoul, "gps", seoul);
+    useMapStore.getState().onViewportChange({ lat: 37.58, lng: 126.9784 }, vpBounds);
+    useMapStore.getState().searchHere();
+    const qb = useMapStore.getState().queryBounds!;
+    expect(qb.ne).toEqual(vpBounds.ne); // north/lng edges untouched
+    expect(qb.sw.lng).toBe(vpBounds.sw.lng);
+    expect(qb.sw.lat).toBeGreaterThan(vpBounds.sw.lat); // south edge raised
+  });
+
+  // Regression (e4a3800): queryBounds was clipped once at search time and
+  // frozen — collapsing the sheet left the newly revealed strip unqueried.
+  it("setSnap re-clips the pan-search bbox (peek reveals more map than half)", () => {
+    const vpBounds = { sw: { lat: 37.5, lng: 126.9 }, ne: { lat: 37.66, lng: 127.05 } };
+    useMapStore.getState().setAnchor(seoul, "gps", seoul);
+    useMapStore.getState().onViewportChange({ lat: 37.58, lng: 126.9784 }, vpBounds);
+    useMapStore.getState().searchHere(); // snap = half
+    const atHalf = useMapStore.getState().queryBounds!.sw.lat;
+    useMapStore.getState().setSnap("peek");
+    const atPeek = useMapStore.getState().queryBounds!.sw.lat;
+    expect(atPeek).toBeLessThan(atHalf); // lower sheet → deeper visible band
+  });
+
+  it("setSnap leaves a center-derived queryBounds unchanged", () => {
+    useMapStore.getState().setAnchor(seoul, "gps", seoul);
+    const before = useMapStore.getState().queryBounds;
+    useMapStore.getState().setSnap("peek");
+    expect(useMapStore.getState().queryBounds).toEqual(before);
+  });
+
+  // Regression (Codex review): applying a region while the detail panel was
+  // open left selectedSpotId set — the panel kept covering the new region's list.
+  it("a new anchor closes an open spot-detail selection", () => {
+    useMapStore.getState().setAnchor(seoul, "gps", seoul);
+    useMapStore.getState().selectSpot("12345");
+    useMapStore.getState().applyRegion({ lat: 35.1, lng: 129.0 });
+    expect(useMapStore.getState().selectedSpotId).toBeNull();
+  });
+
+  it("setGpsCoords fills the blue-dot coords without moving the anchor", () => {
+    useMapStore.getState().setAnchor(seoul, "pan", null);
+    useMapStore.getState().setGpsCoords({ lat: 35.1, lng: 129.0 });
+    const s = useMapStore.getState();
+    expect(s.gpsCoords).toEqual({ lat: 35.1, lng: 129.0 });
+    expect(s.center).toEqual(seoul);
+    expect(s.anchorSource).toBe("pan");
+  });
 });

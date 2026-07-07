@@ -16,7 +16,8 @@ import { useMapStore } from "@/features/map/stores/map-store";
 import { useMapInit } from "@/features/map/hooks/use-map-init";
 import { useNearbyMap, useRegionLabel } from "@/features/map/queries";
 import { prefetchSpot } from "@/features/spots/queries";
-import { formatHeaderLabel } from "@/features/map/lib/region-label";
+import { SpotDetailSheet } from "@/features/spots/components/SpotDetailSheet";
+import { formatHeaderLabel, NEAR_ME_LABEL } from "@/features/map/lib/region-label";
 import { mapListPaddingBottom } from "@/features/map/lib/list-padding";
 import { NEARBY_CAP } from "@/constants/map";
 import { colors, spacing } from "@/constants/theme";
@@ -57,7 +58,11 @@ export default function MapTab() {
 
   useEffect(() => {
     if (label.data) s.setLabel(label.data);
-  }, [label.data]); // eslint-disable-line react-hooks/exhaustive-deps
+    // /map/region fail-opens to ok(null) (backend degrades on Kakao Local
+    // errors) and React Query caches that null as a SUCCESS — without a
+    // fallback the header would show "위치 확인 중" forever.
+    else if (label.isSuccess) s.setLabel(NEAR_ME_LABEL);
+  }, [label.data, label.isSuccess]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (perm === "undetermined" || perm === "denied") {
     return (
@@ -69,15 +74,19 @@ export default function MapTab() {
     );
   }
 
+  const detailOpen = s.selectedSpotId != null;
+
   return (
-    <View style={styles.root}>
+    <View style={styles.root} onLayout={(e) => s.setMapViewH(e.nativeEvent.layout.height)}>
       <KakaoWebMap
         center={s.center}
         pins={spots}
         userLocation={s.gpsCoords}
         onPinTap={(id) => {
+          // Warm the detail cache, then swap the list sheet for the detail panel
+          // (S05 §1.3's scroll+highlight behavior was replaced by this panel).
+          prefetchSpot(id);
           s.selectSpot(id);
-          s.setSnap("half");
         }}
         onViewportChange={(c, bounds) => s.onViewportChange(c, bounds)}
       />
@@ -91,7 +100,7 @@ export default function MapTab() {
         </Pressable>
       </View>
 
-      {s.pillVisible() ? (
+      {!detailOpen && s.pillVisible() ? (
         <Animated.View
           style={[styles.pill, { transform: [{ translateY: pillTranslateY }] }]}
           pointerEvents="box-none"
@@ -99,61 +108,76 @@ export default function MapTab() {
           <SearchHerePill onPress={() => s.searchHere()} />
         </Animated.View>
       ) : null}
-      <Animated.View
-        style={[styles.fab, { transform: [{ translateY: fabTranslateY }] }]}
-        pointerEvents="box-none"
-      >
-        <RecenterFab onPress={recenter} />
-      </Animated.View>
+      {!detailOpen ? (
+        <Animated.View
+          style={[styles.fab, { transform: [{ translateY: fabTranslateY }] }]}
+          pointerEvents="box-none"
+        >
+          <RecenterFab onPress={recenter} />
+        </Animated.View>
+      ) : null}
 
-      <MapBottomSheet
-        snap={s.snap}
-        onSnapChange={s.setSnap}
-        onTranslate={handleTranslate}
-        headerExtra={<CategoryChips value={s.category} onChange={s.setCategory} />}
-      >
-        {nearby.isLoading ? (
-          <View style={[styles.list, { paddingBottom: listPaddingBottom }]}>
-            {[0, 1, 2].map((i) => (
-              <Skeleton
-                key={i}
-                height={92}
-                style={{ marginHorizontal: spacing.lg, marginBottom: spacing.sm }}
-                radius={14}
-              />
-            ))}
-          </View>
-        ) : nearby.isError ? (
-          <View style={[styles.center, { paddingBottom: listPaddingBottom }]}>
-            <Text style={styles.dim}>주변 정보를 불러오지 못했어요</Text>
-            <Pressable style={styles.retry} onPress={() => nearby.refetch()}>
-              <Text style={styles.retryText}>다시 시도</Text>
-            </Pressable>
-          </View>
-        ) : spots.length === 0 ? (
-          <View style={[styles.center, { paddingBottom: listPaddingBottom }]}>
-            <Text style={styles.dim}>이 주변엔 아직 추천 스팟이 없어요</Text>
-            <Text style={styles.dimSub}>
-              지도를 옮겨 &apos;이 지역에서 검색&apos;을 누르거나, 다른 지역을 선택해 보세요
-            </Text>
-          </View>
-        ) : (
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: listPaddingBottom }}
-          >
-            {spots.map((spot) => (
-              <NearbyCard
-                key={spot.contentId}
-                spot={spot}
-                selected={spot.contentId === s.selectedSpotId}
-                onPressIn={() => prefetchSpot(spot.contentId)}
-                onPress={() => router.push(`/spots/${spot.contentId}`)}
-              />
-            ))}
-          </ScrollView>
-        )}
-      </MapBottomSheet>
+      {detailOpen ? null : (
+        <MapBottomSheet
+          snap={s.snap}
+          onSnapChange={s.setSnap}
+          onTranslate={handleTranslate}
+          headerExtra={<CategoryChips value={s.category} onChange={s.setCategory} />}
+        >
+          {nearby.isLoading ? (
+            <View style={[styles.list, { paddingBottom: listPaddingBottom }]}>
+              {[0, 1, 2].map((i) => (
+                <Skeleton
+                  key={i}
+                  height={92}
+                  style={{ marginHorizontal: spacing.lg, marginBottom: spacing.sm }}
+                  radius={14}
+                />
+              ))}
+            </View>
+          ) : nearby.isError ? (
+            <View style={[styles.center, { paddingBottom: listPaddingBottom }]}>
+              <Text style={styles.dim}>주변 정보를 불러오지 못했어요</Text>
+              <Pressable style={styles.retry} onPress={() => nearby.refetch()}>
+                <Text style={styles.retryText}>다시 시도</Text>
+              </Pressable>
+            </View>
+          ) : spots.length === 0 ? (
+            <View style={[styles.center, { paddingBottom: listPaddingBottom }]}>
+              <Text style={styles.dim}>이 주변엔 아직 추천 스팟이 없어요</Text>
+              <Text style={styles.dimSub}>
+                지도를 옮겨 &apos;이 지역에서 검색&apos;을 누르거나, 다른 지역을 선택해 보세요
+              </Text>
+            </View>
+          ) : (
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: listPaddingBottom }}
+            >
+              {spots.map((spot) => (
+                <NearbyCard
+                  key={spot.contentId}
+                  spot={spot}
+                  onPressIn={() => prefetchSpot(spot.contentId)}
+                  onPress={() => router.push(`/spots/${spot.contentId}`)}
+                />
+              ))}
+            </ScrollView>
+          )}
+        </MapBottomSheet>
+      )}
+
+      {s.selectedSpotId != null ? (
+        <SpotDetailSheet
+          // Remount per spot: the sheet's internal state (save toggle, snap,
+          // measured hero height) must not leak from the previous spot, and a
+          // fresh mount replays the rise animation for the new pin.
+          key={s.selectedSpotId}
+          contentId={s.selectedSpotId}
+          tabBarHeight={tabBarHeight}
+          onClose={() => s.selectSpot(null)}
+        />
+      ) : null}
 
       <RegionPicker
         visible={pickerOpen}
