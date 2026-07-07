@@ -166,8 +166,7 @@ skip minor style nits. Focus on:
 - Merging to `dev` deploys automatically: backend → CT112 (api.pictrip.org),
   mobile → EAS OTA (JS-only; native changes are silently skipped by the
   fingerprint guard), pipeline → CT111. **There is no staging — a dev merge is
-  live.** `dev-notify.yml` announces every dev merge to Discord
-  (`DISCORD_WEBHOOK_URL` secret).
+  live.**
 - `main` is the release marker: dev → main PR at milestones. `v*` tags
   (TestFlight builds via mobile-deploy) are cut from main; web (CF Pages)
   also builds from main.
