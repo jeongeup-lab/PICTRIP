@@ -23,10 +23,12 @@ const REDIRECT_PATH = "oauthredirect";
 const KAKAO_REDIRECT_URI = "https://pictrip.org/oauthredirect";
 const APP_RETURN_URL = "pictrip://oauthredirect";
 
-function providerError(): never {
+function providerError(detail?: string): never {
+  // The failing stage is surfaced in the message — device-side OAuth failures
+  // never reach the backend, so the screen is the only place to read them.
   throw new AppError(
     "OAUTH_PROVIDER_UNAVAILABLE",
-    "로그인에 실패했어요. 잠시 후 다시 시도해 주세요.",
+    `로그인에 실패했어요. 잠시 후 다시 시도해 주세요.${detail ? ` (${detail})` : ""}`,
     502,
   );
 }
@@ -95,20 +97,27 @@ async function kakaoLogin(): Promise<OAuthOutcome> {
   });
   const authUrl = await request.makeAuthUrlAsync(discovery);
   const result = await WebBrowser.openAuthSessionAsync(authUrl, APP_RETURN_URL);
-  if (result.type !== "success") return "canceled";
+  if (result.type === "cancel" || result.type === "dismiss") return "canceled";
+  if (result.type !== "success") return providerError(`session:${result.type}`);
   const params = parseQueryParams(result.url);
-  if (params.state !== request.state) return providerError(); // CSRF guard
-  if (!params.code) return "canceled";
-  const token = await AuthSession.exchangeCodeAsync(
-    {
-      clientId,
-      code: params.code,
-      redirectUri: KAKAO_REDIRECT_URI,
-      extraParams: { code_verifier: request.codeVerifier ?? "" },
-    },
-    discovery,
-  );
-  if (!token.idToken) return providerError();
+  if (params.error) return providerError(`kakao:${params.error}`);
+  if (params.state !== request.state) return providerError("state-mismatch"); // CSRF guard
+  if (!params.code) return providerError("no-code");
+  let token: AuthSession.TokenResponse;
+  try {
+    token = await AuthSession.exchangeCodeAsync(
+      {
+        clientId,
+        code: params.code,
+        redirectUri: KAKAO_REDIRECT_URI,
+        extraParams: { code_verifier: request.codeVerifier ?? "" },
+      },
+      discovery,
+    );
+  } catch (e) {
+    return providerError(`exchange:${e instanceof Error ? e.message : String(e)}`);
+  }
+  if (!token.idToken) return providerError("no-id-token");
   return { idToken: token.idToken, nonce };
 }
 
@@ -137,17 +146,25 @@ async function webOidcLogin(cfg: OidcConfig): Promise<OAuthOutcome> {
     extraParams: { nonce },
   });
   const result = await request.promptAsync(discovery);
-  if (result.type !== "success" || !result.params.code) return "canceled";
-  const token = await AuthSession.exchangeCodeAsync(
-    {
-      clientId: cfg.clientId,
-      code: result.params.code,
-      redirectUri,
-      extraParams: { code_verifier: request.codeVerifier ?? "" },
-    },
-    discovery,
-  );
-  if (!token.idToken) return providerError();
+  if (result.type === "cancel" || result.type === "dismiss") return "canceled";
+  if (result.type !== "success") return providerError(`session:${result.type}`);
+  if (result.params.error) return providerError(`provider:${result.params.error}`);
+  if (!result.params.code) return providerError("no-code");
+  let token: AuthSession.TokenResponse;
+  try {
+    token = await AuthSession.exchangeCodeAsync(
+      {
+        clientId: cfg.clientId,
+        code: result.params.code,
+        redirectUri,
+        extraParams: { code_verifier: request.codeVerifier ?? "" },
+      },
+      discovery,
+    );
+  } catch (e) {
+    return providerError(`exchange:${e instanceof Error ? e.message : String(e)}`);
+  }
+  if (!token.idToken) return providerError("no-id-token");
   return { idToken: token.idToken, nonce };
 }
 
