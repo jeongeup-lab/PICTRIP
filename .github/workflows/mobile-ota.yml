@@ -44,6 +44,18 @@ jobs:
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
+      # EXPO_PUBLIC_* values are inlined into the JS bundle at export time, and
+      # eas.json build.*.env applies only to `eas build` — `eas update` bundles
+      # locally with the runner's env. Without this step the OTA ships empty
+      # keys (Kakao map/login, Google login all dead) and overwrites working
+      # store builds. Update branch names match eas.json build profile names.
+      - name: Load EXPO_PUBLIC_* from eas.json build env
+        run: >
+          jq -r --arg p "$UPDATE_BRANCH"
+          '.build[$p].env | to_entries[] | "\(.key)=\(.value)"'
+          eas.json >> "$GITHUB_ENV"
+        env:
+          UPDATE_BRANCH: ${{ inputs.branch || 'production' }}
       # env indirection keeps commit messages (quotes, backticks) out of the
       # shell command line. Push events fall back to the merge commit message.
       - run: eas update --branch "$UPDATE_BRANCH" --message "$UPDATE_MESSAGE" --non-interactive
