@@ -1,4 +1,4 @@
-# CD for the pictrip-data pipeline. On push to main touching pipeline/**, the
+# CD for the pictrip-data pipeline. On push to dev touching pipeline/**, the
 # self-hosted runner on CT111 syncs the repo's pipeline/ into /opt/pictrip-pipeline,
 # re-resolves deps, and restarts the dashboard. The 04:00 KST sync timer
 # (pictrip-sync-v2, oneshot) picks up new code on its next fire. .env (secrets)
@@ -7,7 +7,7 @@ name: pipeline-deploy
 
 on:
   push:
-    branches: [main]
+    branches: [dev]
     paths: ["pipeline/**", ".github/workflows/pipeline-deploy.yml"]
   workflow_dispatch:
 

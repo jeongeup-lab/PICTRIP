@@ -5,14 +5,13 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from redis.asyncio import Redis
-from sqlalchemy.exc import IntegrityError
 
 from app.core.auth import (
     deny_refresh,
     mint_token_pair,
     refresh_tokens,
 )
-from app.core.db import AsyncSession
+from app.core.db import AsyncSession, IntegrityError
 from app.core.exceptions import (
     AuthTokenInvalid,
     EmailAlreadyRegistered,
