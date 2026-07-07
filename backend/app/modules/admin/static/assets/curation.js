@@ -190,10 +190,14 @@ function wireBoardItem(root, clickable, it) {
   };
   clickable.addEventListener("click", open);
   clickable.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(e); }
+    if (e.key !== "Enter" && e.key !== " ") return;
+    // 행 내부 컨트롤(발행 토글 등)의 네이티브 키 동작을 삼키지 않는다
+    if (e.target.closest("[data-stop]")) return;
+    e.preventDefault(); open(e);
   });
   // 보드 드래그 = 순서 교환 (두 큐레이션의 position swap, 저장 즉시)
   root.addEventListener("dragstart", (e) => {
+    if (CU.busy) { e.preventDefault(); return; }
     if (it.dirty) { e.preventDefault(); toastErr("저장 안 된 변경이 있어 순서를 바꿀 수 없어요"); return; }
     CU.dragging = it;
     e.dataTransfer.effectAllowed = "move";
@@ -208,6 +212,7 @@ function wireBoardItem(root, clickable, it) {
   root.addEventListener("drop", (e) => {
     e.preventDefault();
     root.classList.remove("drag-over");
+    if (CU.busy) return;
     if (CU.dragging && CU.dragging !== it && CU.dragging.kind === it.kind) swapPositions(CU.dragging, it);
   });
 }
@@ -222,6 +227,7 @@ function updateGlobalDirty() {
 
 // 발행 인라인 토글 (보드에서 즉시 저장 — 로컬 미저장 편집이 있으면 거부)
 async function inlinePublishToggle(it, tgl) {
+  if (CU.busy) { tgl.checked = it.isPublished; return; }
   if (it.dirty) {
     tgl.checked = it.isPublished;
     toastErr("저장 안 된 변경이 있어요 — 편집 패널에서 저장하세요");
@@ -229,6 +235,7 @@ async function inlinePublishToggle(it, tgl) {
     return;
   }
   const next = tgl.checked;
+  CU.busy = true;
   try {
     await ensureDetail(it);
     const d = await cuFetch(`/admin/api/curations/${it.id}`, "PUT", { ...putPayload(it), isPublished: next });
@@ -239,6 +246,8 @@ async function inlinePublishToggle(it, tgl) {
   } catch (err) {
     tgl.checked = it.isPublished;
     toastErr(`발행 전환 실패 · ${err.message}`);
+  } finally {
+    CU.busy = false;
   }
 }
 
@@ -310,6 +319,7 @@ async function openDrawer(it) {
   CU.open = it;
   document.body.classList.add("drawer-open");
   try { await ensureDetail(it); } catch (_) { /* 목록 값으로 표시 */ }
+  if (CU.open !== it) return; // fetch 중 다른 카드로 전환됨 — 늦은 응답이 폼을 덮지 않게
   ensurePreview(it).then(() => { if (CU.open === it) updateMiniPreview(it); });
   fillDrawer(it);
   renderBoard();
@@ -328,7 +338,11 @@ function reallyCloseDrawer() {
 }
 function discardEdits(it) {
   it.detailLoaded = false; it.dirty = false; it.picksDirty = false;
-  // 서버 상태 재적용은 다음 openDrawer/렌더 시 ensureDetail이 수행
+  // renderBoard는 ensureDetail을 호출하지 않으므로 여기서 서버 상태를 즉시 재적용
+  // (안 하면 버린 편집이 저장된 것처럼 보드에 남는다)
+  ensureDetail(it)
+    .then(() => { renderBoard(); if (CU.open === it) fillDrawer(it); })
+    .catch(() => { /* 재조회 실패 시 기존 표시 유지 */ });
 }
 
 function fillDrawer(it) {
@@ -355,7 +369,7 @@ function fillDrawer(it) {
   qs("so-autonote-txt").textContent = isRail
     ? "비우면 무드 매칭 품질 랭킹으로 자동 편성 · 미리보기에 실제 반영"
     : "비우면 품질 랭킹으로 자동 충전 · 미리보기에 실제 반영";
-  qs("so-pos-hint").textContent = `· ${KIND_LABEL[it.kind]} ${groupOf(it).length}개 중`;
+  qs("so-pos-hint").textContent = `· ${KIND_LABEL[it.kind]} ${groupOf(it).length}개 중 · 이웃과 교환 · 즉시 저장`;
 
   // 프리뷰 탭: 레일=홈만, 에디토리얼=상세만
   const tabs = document.querySelectorAll("#so-preview .mini-tabs button");
@@ -552,10 +566,19 @@ async function saveCuration() {
   try {
     // applyDetail이 로컬 손픽을 서버 응답(구 값)으로 덮어쓰기 전에 목표 스팟을 확보
     const wantSpots = it.picksDirty ? it.picks.map((p) => p.contentId).filter(Boolean) : null;
+    const localPicks = it.picks;
     const d = await cuFetch(`/admin/api/curations/${it.id}`, "PUT", putPayload(it));
     applyDetail(it, d);
     if (wantSpots !== null) {
-      const res = await cuFetch(`/admin/api/curations/${it.id}/spots`, "PUT", { spotIds: wantSpots });
+      let res;
+      try {
+        res = await cuFetch(`/admin/api/curations/${it.id}/spots`, "PUT", { spotIds: wantSpots });
+      } catch (err) {
+        // spots PUT 실패: applyDetail이 덮어쓴 픽을 사용자 편집본으로 복원해
+        // 화면과 상태를 일치시키고, 재시도가 옛 목록을 저장하지 않게 한다
+        it.picks = localPicks;
+        throw err;
+      }
       if (res && res.handpicks) {
         it.picks = res.handpicks.map((h) => ({
           contentId: h.contentId, name: h.name || "", sub: h.category || "스팟", imageUrl: h.imageUrl || null,
@@ -563,7 +586,8 @@ async function saveCuration() {
       }
       it.picksDirty = false;
     }
-    await refreshPreview(it); // 발행/손픽 변경으로 자동충전 결과가 달라질 수 있음
+    // 자동충전 항목만 재조회 — 손픽이 있는 동안 previewSpots는 어떤 표시 경로에서도 안 읽힘
+    if (!it.picks.length) await refreshPreview(it);
     it.dirty = false;
     it.savedAt = nowLabel();
     fillDrawer(it); renderBoard();
@@ -732,15 +756,15 @@ function wireForm() {
   document.querySelectorAll("#so-preview .mini-tabs button").forEach((b) =>
     b.addEventListener("click", () => { if (!b.disabled) setPreviewTab(b.dataset.m); }));
 }
-function stepPosition(delta) {
-  const it = CU.open; if (!it) return;
-  const max = Math.max(0, groupOf(it).length - 1);
-  const next = Math.min(max, Math.max(0, it.position + delta));
-  if (next === it.position) return;
-  it.position = next;
-  qs("so-pos-value").textContent = next;
-  qs("so-pos-chip").textContent = `position #${next}`;
-  markDirty();
+// 순서 변경 = 정렬상 이웃과 position 교환 (드래그와 동일하게 swapPositions 재사용, 즉시 저장).
+// 단독 대입은 형제와 position이 중복돼 보드/피드 정렬이 깨지므로 swap만 허용한다.
+async function stepPosition(delta) {
+  const it = CU.open; if (!it || CU.busy) return;
+  if (it.dirty) { toastErr("저장 안 된 변경이 있어요 — 저장 후 순서를 바꿀 수 있어요"); return; }
+  const group = [...groupOf(it)].sort((a, b) => a.position - b.position);
+  const neighbor = group[group.indexOf(it) + delta];
+  if (!neighbor) return;
+  await swapPositions(it, neighbor); // 성공 시 fillDrawer가 position 표시 갱신
 }
 function wirePicker() {
   document.querySelectorAll("[data-open-picker]").forEach((b) =>
