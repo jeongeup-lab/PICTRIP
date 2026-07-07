@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import { SocialButton } from "@/features/auth/components/SocialButton";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import type { Provider } from "@/features/auth/usecases/oauth-providers";
+import { AppError } from "@/lib/app-error";
 import { colors, spacing } from "@/constants/theme";
 
 interface Props {
@@ -63,9 +64,11 @@ export function LoginCard({ variant, onSuccess, onCancel, onEmailPress }: Props)
       const res = await loginWithOAuth(provider);
       if (res === "success") onSuccess();
       else onCancel?.(); // canceled = silent (S01)
-    } catch {
+    } catch (e) {
       // provider/backend failure — inline error, buttons re-enabled (S01 §3).
-      setError("잠시 후 다시 시도해 주세요.");
+      // AppError messages carry the failing stage (device failures never reach
+      // backend logs, so the screen is the only diagnostic surface).
+      setError(e instanceof AppError ? e.message : "잠시 후 다시 시도해 주세요.");
     } finally {
       setPending(null);
     }

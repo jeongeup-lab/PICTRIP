@@ -111,7 +111,9 @@ export function KakaoWebMap({
         onReady?.();
       } else if (m.type === "error") {
         ready.current = false;
-        setLoadError(ERROR_MESSAGES[String(m.payload?.message)] ?? "지도를 불러오지 못했어요");
+        const human = ERROR_MESSAGES[String(m.payload?.message)] ?? "지도를 불러오지 못했어요";
+        const detail = m.payload?.detail ? `\n(${String(m.payload.detail)})` : "";
+        setLoadError(human + detail);
       } else if (m.type === "pin_tap" && m.payload) {
         onPinTap(String(m.payload.contentId));
       } else if (m.type === "center_changed" && m.payload) {
