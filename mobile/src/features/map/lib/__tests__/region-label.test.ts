@@ -1,4 +1,4 @@
-import { formatHeaderLabel } from "@/features/map/lib/region-label";
+import { formatHeaderLabel, NEAR_ME_LABEL } from "@/features/map/lib/region-label";
 import type { RegionLabel } from "@/lib/api-types";
 
 const seoul: RegionLabel = { sido: "서울", sigungu: "중구", dong: "명동", label: "서울 중구 명동" };
@@ -16,5 +16,11 @@ describe("formatHeaderLabel", () => {
   });
   it("shows a placeholder when label is null", () => {
     expect(formatHeaderLabel("gps", null)).toBe("위치 확인 중");
+  });
+  // /map/region fail-opens to ok(null); the fallback must resolve to a real
+  // header string, not the endless "위치 확인 중" placeholder.
+  it("formats the near-me fallback for every anchor source", () => {
+    expect(formatHeaderLabel("gps", NEAR_ME_LABEL)).toBe("현위치 · 내 주변");
+    expect(formatHeaderLabel("pan", NEAR_ME_LABEL)).toBe("내 주변");
   });
 });
