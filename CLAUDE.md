@@ -24,7 +24,7 @@ holds the locked decisions.
 
 ```bash
 # Backend (cd backend) — run all before pushing
-uv run ruff check . && uv run ruff format --check . && uv run mypy app && uv run pytest
+uv run ruff check . && uv run ruff format --check . && uv run mypy app && uv run lint-imports && uv run pytest
 
 # Mobile (cd mobile) — run all before pushing
 npm run lint && npm run typecheck && npm run format:check && npm test
@@ -35,6 +35,8 @@ uv run ruff check . && uv run pytest
 
 - Run backend `pytest`/`alembic` with `POSTGRES_DB=pictrip_test` (live `pictrip`
   rows break global-count asserts).
+- Run local `pytest` with `NO_COLOR=1` — an inherited `FORCE_COLOR` injects ANSI
+  codes into captured logs and breaks the admin log asserts.
 - New migration: `uv run alembic revision --autogenerate -m "..."`, then **review
   the SQL** (autogenerate misses indexes/CHECK constraints), then `alembic upgrade head`.
 
@@ -80,6 +82,10 @@ app/modules/<code>/
 
 Mobile layers: `src/app` (thin Expo Router screens) · `src/features/<domain>`
 (api/queries/stores/usecases/components) · `src/lib` · `src/components` · `src/constants` · `src/hooks`.
+
+Both sets of boundary rules are CI-enforced: backend via import-linter
+(`uv run lint-imports`, contracts in `backend/pyproject.toml`), mobile via
+ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
 
 ## Monorepo boundaries (invariants)
 
@@ -152,6 +158,21 @@ skip minor style nits. Focus on:
 
 ## Workflow
 
-- Branch off `main`; short-lived, merge same-day. Commit/push only when asked.
+- Default branch is `dev`. Branch off `dev`; short-lived, merge same-day.
+  Commit/push only when asked.
+- PR flow: feature branch → PR to `dev` → address Codex review → **rebase
+  merge** (the only enabled merge method — keep PR commits clean, no WIP/fixup
+  noise).
+- Merging to `dev` deploys automatically: backend → CT112 (api.pictrip.org),
+  mobile → EAS OTA (JS-only; native changes are silently skipped by the
+  fingerprint guard), pipeline → CT111. **There is no staging — a dev merge is
+  live.** `dev-notify.yml` announces every dev merge to Discord
+  (`DISCORD_WEBHOOK_URL` secret).
+- `main` is the release marker: dev → main PR at milestones. `v*` tags
+  (TestFlight builds via mobile-deploy) are cut from main; web (CF Pages)
+  also builds from main.
+- PR body must follow `.github/pull_request_template.md` — `## 요약` / `## 변경
+  단위` / `## 핵심 결정` / `## 검증` sections, with ≥1 checked box in 변경 단위
+  and 검증 — or the required `template` check fails.
 - Record load-bearing decisions in the PR description.
 - Verify against current code before asserting a fact — these docs drift.

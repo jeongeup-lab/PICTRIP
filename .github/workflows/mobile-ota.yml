@@ -1,10 +1,15 @@
 name: mobile-ota
-# JS-only over-the-air update (EAS Update). Use for changes that DON'T touch
-# native code — they ship to installed apps without a store build or review.
-# Native changes (new module, permission, SDK bump) still need mobile-deploy.yml.
-# The fingerprint runtimeVersion guards delivery: an OTA only lands on builds
-# whose native fingerprint matches, so an accidental native change can't ship here.
+# JS-only over-the-air update (EAS Update). Runs automatically on every merge
+# to dev that touches mobile/ — installed TestFlight apps pick it up within
+# minutes, no store build or review. Native changes (new module, permission,
+# SDK bump) still need mobile-deploy.yml (v* tag, cut from main): the
+# fingerprint runtimeVersion guards delivery — an OTA only lands on builds
+# whose native fingerprint matches, so an accidental native change can't ship
+# here (it is silently skipped; cut a tag build to deliver it).
 on:
+  push:
+    branches: [dev]
+    paths: ["mobile/**", ".github/workflows/mobile-ota.yml"]
   workflow_dispatch:
     inputs:
       branch:
@@ -16,6 +21,10 @@ on:
         description: "Update message"
         type: string
         required: true
+# Publish in order; never cancel an update mid-publish.
+concurrency:
+  group: mobile-ota
+  cancel-in-progress: false
 defaults:
   run:
     working-directory: mobile
@@ -35,4 +44,9 @@ jobs:
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
-      - run: eas update --branch "${{ inputs.branch }}" --message "${{ inputs.message }}" --non-interactive
+      # env indirection keeps commit messages (quotes, backticks) out of the
+      # shell command line. Push events fall back to the merge commit message.
+      - run: eas update --branch "$UPDATE_BRANCH" --message "$UPDATE_MESSAGE" --non-interactive
+        env:
+          UPDATE_BRANCH: ${{ inputs.branch || 'production' }}
+          UPDATE_MESSAGE: ${{ inputs.message || github.event.head_commit.message }}

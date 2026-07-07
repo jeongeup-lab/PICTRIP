@@ -132,6 +132,7 @@ source_modules = [
     "app.modules.images.routes",
     "app.modules.map.routes",
     "app.modules.system.routes",
+    "app.modules.admin.routes",
 ]
 forbidden_modules = [
     "sqlalchemy",
@@ -154,6 +155,7 @@ source_modules = [
     "app.modules.images.routes",
     "app.modules.map.routes",
     "app.modules.system.routes",
+    "app.modules.admin.routes",
 ]
 forbidden_modules = [
     "app.modules.users.models",
@@ -162,6 +164,7 @@ forbidden_modules = [
     "app.modules.images.models",
     "app.modules.map.models",
     "app.modules.system.models",
+    "app.modules.admin.models",
 ]
 # Routes -> services -> models is fine (services is the documented seam).
 allow_indirect_imports = true
@@ -176,7 +179,8 @@ source_modules = [
     "app.modules.spots.schemas",
     "app.modules.images.schemas",
     "app.modules.map.schemas",
-    "app.modules.system.schemas",
+    # system has no schemas.py (removed as dead code) — re-add if it returns.
+    "app.modules.admin.schemas",
 ]
 forbidden_modules = [
     "sqlalchemy",
@@ -197,6 +201,7 @@ source_modules = [
     "app.modules.images.services",
     "app.modules.map.services",
     "app.modules.system.services",
+    "app.modules.admin.services",
 ]
 forbidden_modules = [
     "app.modules.users.models",
@@ -205,6 +210,7 @@ forbidden_modules = [
     "app.modules.images.models",
     "app.modules.map.models",
     "app.modules.system.models",
+    "app.modules.admin.models",
 ]
 ignore_imports = [
     "app.modules.users.services -> app.modules.users.models",
@@ -219,12 +225,22 @@ ignore_imports = [
     # IMG seam: services re-exports the repository, which holds own-module ORM.
     "app.modules.images.services -> app.modules.images.repositories",
     "app.modules.images.repositories -> app.modules.images.models",
+    # IMG seam: embedding_job is images-internal and holds own-module ORM; other
+    # modules reach it only through images.services, which is the allowed seam.
+    "app.modules.images.services -> app.modules.images.embedding_job",
+    "app.modules.images.embedding_job -> app.modules.images.models",
     # spots services는 focused submodule로 분리돼 있다(rows/cards/.../nearby).
     # services 패키지 → submodule → spots.models 체인을 끊어, map.services가
     # 허용된 seam(map.services -> spots.services)으로만 spots를 읽는 것이 위반으로
     # 잡히지 않게 한다. spots 내부의 직접 spots.models import는 의도된 것(#22).
     "app.modules.spots.services -> app.modules.spots.services.*",
     "app.modules.spots.services.* -> app.modules.spots.models",
+    # ADM seam: own-module ORM via its repository, plus the documented
+    # exception — admin writes curations/curation_spots (spots.models) only.
+    "app.modules.admin.services -> app.modules.admin.models",
+    "app.modules.admin.services -> app.modules.admin.repositories",
+    "app.modules.admin.repositories -> app.modules.admin.models",
+    "app.modules.admin.repositories -> app.modules.spots.models",
 ]
 # Most services are still placeholders that don't import their own models yet.
 # Allow these ignores to be inactive until the services get implemented.

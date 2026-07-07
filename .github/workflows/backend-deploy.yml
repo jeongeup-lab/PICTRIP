@@ -1,7 +1,9 @@
 name: backend-deploy
+# Continuous deploy from dev — merging to dev IS the deploy (no staging env).
+# main is the release marker only; use workflow_dispatch for emergency deploys.
 on:
   push:
-    branches: [main]
+    branches: [dev]
     paths: ["backend/**", ".github/workflows/backend-deploy.yml"]
   workflow_dispatch:
 
@@ -41,6 +43,7 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy app
+      - run: uv run lint-imports
       - run: uv run alembic upgrade head
         env:
           POSTGRES_DB: pictrip_test

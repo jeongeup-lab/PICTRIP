@@ -6,6 +6,7 @@ from collections.abc import AsyncGenerator
 from typing import Annotated
 
 from fastapi import Depends
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -16,8 +17,9 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.config import settings
 
-# AsyncSession re-exported so services type their session param without importing sqlalchemy (ADR-0002).
-__all__ = ["AsyncSession", "Base", "DbSession", "engine", "get_db"]
+# AsyncSession/IntegrityError re-exported so services type their session param and
+# catch constraint races at the transaction boundary without importing sqlalchemy (ADR-0002).
+__all__ = ["AsyncSession", "Base", "DbSession", "IntegrityError", "engine", "get_db"]
 
 
 class Base(DeclarativeBase):
