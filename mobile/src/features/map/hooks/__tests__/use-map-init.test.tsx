@@ -74,6 +74,34 @@ describe("useMapInit", () => {
     expect(loc.getCurrentCoords).not.toHaveBeenCalled();
   });
 
+  // Regression (a9cfe09): the re-entry short-circuit skipped the GPS branch
+  // entirely, so a center without gpsCoords (skip/aborted fix) left the blue
+  // dot missing forever — even after granting permission in Settings.
+  it("re-entry with center but no gpsCoords backfills the dot without moving the map", async () => {
+    (loc.getPermissionStatus as jest.Mock).mockResolvedValue("granted");
+    (loc.getCurrentCoords as jest.Mock).mockResolvedValue(gps);
+    await act(async () => {
+      useMapStore.getState().setAnchor(SEOUL_CITY_HALL, "pan", null); // skipToSeoul leftover
+    });
+    const { api } = await mount();
+    expect(api().perm).toBe("ready");
+    const st = useMapStore.getState();
+    expect(st.gpsCoords).toEqual(gps); // blue dot backfilled
+    expect(st.center).toEqual(SEOUL_CITY_HALL); // map not recentered
+    expect(st.anchorSource).toBe("pan");
+  });
+
+  it("re-entry without gpsCoords does not fetch GPS when permission is denied", async () => {
+    (loc.getPermissionStatus as jest.Mock).mockResolvedValue("denied");
+    await act(async () => {
+      useMapStore.getState().setAnchor(SEOUL_CITY_HALL, "pan", null);
+    });
+    const { api } = await mount();
+    expect(api().perm).toBe("ready"); // Seoul fallback keeps working
+    expect(loc.getCurrentCoords).not.toHaveBeenCalled();
+    expect(useMapStore.getState().gpsCoords).toBeNull();
+  });
+
   it("allow() prompts and anchors GPS on grant", async () => {
     (loc.getPermissionStatus as jest.Mock).mockResolvedValue("undetermined");
     (loc.requestPermission as jest.Mock).mockResolvedValue("granted");

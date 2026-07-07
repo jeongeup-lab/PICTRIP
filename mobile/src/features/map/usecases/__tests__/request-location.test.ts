@@ -9,6 +9,7 @@ jest.mock("expo-location", () => ({
   getForegroundPermissionsAsync: jest.fn(),
   requestForegroundPermissionsAsync: jest.fn(),
   getCurrentPositionAsync: jest.fn(),
+  getLastKnownPositionAsync: jest.fn(),
 }));
 
 describe("request-location", () => {
@@ -39,5 +40,29 @@ describe("request-location", () => {
   it("getCurrentCoords returns null when the fix throws", async () => {
     (Location.getCurrentPositionAsync as jest.Mock).mockRejectedValue(new Error("timeout"));
     expect(await getCurrentCoords()).toBeNull();
+  });
+
+  // Regression: getCurrentPositionAsync has no timeout — a hanging first fix
+  // froze the primer/"위치 확인 중" indefinitely.
+  it("getCurrentCoords falls back to the last known position after the timeout", async () => {
+    jest.useFakeTimers();
+    (Location.getCurrentPositionAsync as jest.Mock).mockReturnValue(new Promise(() => {}));
+    (Location.getLastKnownPositionAsync as jest.Mock).mockResolvedValue({
+      coords: { latitude: 35.1, longitude: 129.0 },
+    });
+    const p = getCurrentCoords();
+    await jest.advanceTimersByTimeAsync(8000);
+    expect(await p).toEqual({ lat: 35.1, lng: 129.0 });
+    jest.useRealTimers();
+  });
+
+  it("getCurrentCoords returns null when the timeout fires and no last position exists", async () => {
+    jest.useFakeTimers();
+    (Location.getCurrentPositionAsync as jest.Mock).mockReturnValue(new Promise(() => {}));
+    (Location.getLastKnownPositionAsync as jest.Mock).mockResolvedValue(null);
+    const p = getCurrentCoords();
+    await jest.advanceTimersByTimeAsync(8000);
+    expect(await p).toBeNull();
+    jest.useRealTimers();
   });
 });

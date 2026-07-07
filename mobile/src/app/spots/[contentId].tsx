@@ -1,19 +1,16 @@
 import { useState } from "react";
 import { ScrollView, View, Text, Pressable, Share, StyleSheet } from "react-native";
-import Svg, { Defs, LinearGradient, Stop, Rect } from "react-native-svg";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSpot } from "@/features/spots/queries";
 import { useSaveOptimistic } from "@/features/saved/hooks/use-save-optimistic";
 import { Icon } from "@/components/Icon";
-import { RemoteImage } from "@/components/RemoteImage";
 import { Skeleton } from "@/components/Skeleton";
 import { IntroSection } from "@/features/spots/components/IntroSection";
-import { Gallery } from "@/features/spots/components/Gallery";
+import { SpotHero, HeroNavButton } from "@/features/spots/components/SpotHero";
 import { PhotoViewer } from "@/features/spots/components/PhotoViewer";
 import { LocationSection } from "@/features/spots/components/LocationSection";
 import { VisitSection } from "@/features/spots/components/VisitSection";
 import { NearbyRail } from "@/features/spots/components/NearbyRail";
-import { firstSentence } from "@/features/spots/lib/overview";
 import { colors, spacing } from "@/constants/theme";
 
 export default function SpotScreen() {
@@ -37,13 +34,6 @@ export default function SpotScreen() {
   const onViewAll = () => {
     if (galleryImages.length > 0) setGalleryOpen(true);
   };
-
-  const subline = data
-    ? [data.category, [data.regionName, data.sigunguName].filter(Boolean).join(" ")]
-        .filter(Boolean)
-        .join(" · ")
-    : "";
-  const lead = firstSentence(data?.overview ?? null);
 
   if (isError && !data) {
     return (
@@ -70,52 +60,21 @@ export default function SpotScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 36 }}
       >
-        {/* Hero */}
-        <View style={styles.hero}>
-          <RemoteImage
-            uri={data?.firstImageUrl ?? null}
-            style={styles.heroImage}
-            cropBanner={false}
-          />
-          <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
-            <Defs>
-              <LinearGradient id="heroScrim" x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0" stopColor="#141216" stopOpacity={0.5} />
-                <Stop offset="1" stopColor="#141216" stopOpacity={0.62} />
-              </LinearGradient>
-            </Defs>
-            <Rect x="0" y="0" width="100%" height="100%" fill="url(#heroScrim)" />
-          </Svg>
-
-          <View style={styles.nav}>
-            <Pressable style={styles.obtn} onPress={() => router.back()} hitSlop={6}>
-              <Icon name="chevron-left" size={22} color={colors.onImage} />
-            </Pressable>
-            <Pressable style={styles.obtn} onPress={onToggleSave} hitSlop={6}>
-              <Icon
-                name={saved ? "bookmark-fill" : "bookmark"}
-                size={22}
-                color={colors.onImage}
+        <SpotHero
+          data={data}
+          navTopPadding={62}
+          onViewAll={onViewAll}
+          nav={
+            <>
+              <HeroNavButton icon="chevron-left" onPress={() => router.back()} />
+              <HeroNavButton
+                icon={saved ? "bookmark-fill" : "bookmark"}
+                onPress={onToggleSave}
                 strokeWidth={1.8}
               />
-            </Pressable>
-          </View>
-
-          {data ? (
-            <>
-              <Text style={styles.title}>{data.title}</Text>
-              {subline ? <Text style={styles.subline}>{subline}</Text> : null}
-              {lead ? <Text style={styles.desc}>{lead}</Text> : null}
-              <Gallery
-                images={data.images}
-                firstImageUrl={data.firstImageUrl}
-                onViewAll={onViewAll}
-              />
             </>
-          ) : (
-            <View style={styles.heroSkeleton} />
-          )}
-        </View>
+          }
+        />
 
         {isLoading || !data ? (
           <View style={{ padding: spacing.lg, gap: spacing.md }}>
@@ -142,49 +101,6 @@ export default function SpotScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  hero: { backgroundColor: colors.sec, paddingBottom: 22, overflow: "hidden" },
-  // Push the KTO image down past the hero's bottom edge so its embedded
-  // "한국관광공사" watermark (baked into the bottom-right of the source) is clipped.
-  heroImage: { position: "absolute", left: 0, right: 0, top: 0, bottom: -56 },
-  nav: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 14,
-    paddingTop: 62,
-  },
-  obtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.control,
-  },
-  title: {
-    textAlign: "center",
-    fontSize: 30,
-    fontWeight: "800",
-    letterSpacing: -0.6,
-    color: colors.onImage,
-    marginTop: 26,
-    paddingHorizontal: 24,
-  },
-  subline: {
-    textAlign: "center",
-    color: colors.onDim,
-    fontSize: 16,
-    fontWeight: "600",
-    marginTop: 12,
-  },
-  desc: {
-    textAlign: "center",
-    fontSize: 15,
-    lineHeight: 24,
-    color: colors.onImage,
-    marginTop: 18,
-    marginHorizontal: 26,
-  },
-  heroSkeleton: { height: 300 },
   errNav: { flexDirection: "row", paddingHorizontal: 14, paddingTop: 62 },
   errBack: {
     width: 44,

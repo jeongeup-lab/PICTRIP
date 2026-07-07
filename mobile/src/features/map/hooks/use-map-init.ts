@@ -47,6 +47,14 @@ export function useMapInit(): UseMapInit {
       // GPS re-fetch, no primer flash, no stale-center flash).
       if (s.center != null) {
         setPerm("ready");
+        // center without gpsCoords = a previous entry skipped or aborted the
+        // GPS fix (e.g. "나중에 할게요"); without this backfill the blue dot
+        // would stay missing forever, even after granting permission in
+        // Settings. Fills gpsCoords only — never moves the map.
+        if (s.gpsCoords == null && (await getPermissionStatus()) === "granted") {
+          const c = await getCurrentCoords();
+          if (c) s.setGpsCoords(c);
+        }
         return;
       }
       const status = await getPermissionStatus();
