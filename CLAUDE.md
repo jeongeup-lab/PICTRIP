@@ -173,5 +173,10 @@ skip minor style nits. Focus on:
 - PR body must follow `.github/pull_request_template.md` — `## 요약` / `## 변경
   단위` / `## 핵심 결정` / `## 검증` sections, with ≥1 checked box in 변경 단위
   and 검증 — or the required `template` check fails.
+- PR body style — write for skimming:
+  - 요약 = 불릿 2~4개, 각 1~2줄, 사실 하나씩. 문단으로 시작하지 않기.
+  - 괄호 중첩·긴 인과 서사 문장 금지 — 문장을 끊고, 결론 먼저.
+  - 구체 예시·숫자를 붙이기 (`70s → 0.2s`, `예: "통영 중앙로 100"`).
+  - 핵심 결정 = **결정 볼드 1줄** + 근거 1~2문장. 문단 금지.
 - Record load-bearing decisions in the PR description.
 - Verify against current code before asserting a fact — these docs drift.
