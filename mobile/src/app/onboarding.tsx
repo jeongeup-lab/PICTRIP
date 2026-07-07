@@ -9,7 +9,7 @@ import {
   type NativeSyntheticEvent,
   type NativeScrollEvent,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { setOnboardingSeen } from "@/lib/storage";
 import { Icon } from "@/components/Icon";
@@ -45,6 +45,7 @@ const SLIDES = [
 
 export default function Onboarding() {
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
 
@@ -59,7 +60,11 @@ export default function Onboarding() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
-      <Pressable style={styles.skip} onPress={finish} hitSlop={8}>
+      <Pressable
+        style={[styles.skip, { top: insets.top + spacing.lg }]}
+        onPress={finish}
+        hitSlop={8}
+      >
         <Text style={styles.skipText}>건너뛰기</Text>
       </Pressable>
 
@@ -101,9 +106,10 @@ export default function Onboarding() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.inset },
+  // Absolute children ignore SafeAreaView's inset padding, so `top` must add
+  // insets.top itself (set inline) or the button lands under the notch.
   skip: {
     position: "absolute",
-    top: spacing.lg,
     right: spacing.lg,
     zIndex: 9,
     padding: spacing.xs,
