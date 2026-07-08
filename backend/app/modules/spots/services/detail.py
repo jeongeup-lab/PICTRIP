@@ -221,16 +221,27 @@ async def _persist_detail(
     )
     await session.execute(detail_stmt)
 
-    for order, (origin, small) in enumerate(images):
+    if images:
+        # One multi-row upsert instead of a per-image round trip (a 20-image spot
+        # was ~20 sequential writes on every cold refresh). excluded.* applies each
+        # row's own proposed value on conflict.
         img_stmt = pg_insert(SpotImage).values(
-            content_id=content_id,
-            origin_image_url=origin,
-            small_image_url=small,
-            sort_order=order,
+            [
+                {
+                    "content_id": content_id,
+                    "origin_image_url": origin,
+                    "small_image_url": small,
+                    "sort_order": order,
+                }
+                for order, (origin, small) in enumerate(images)
+            ]
         )
         img_stmt = img_stmt.on_conflict_do_update(
             index_elements=["content_id", "sort_order"],
-            set_={"origin_image_url": origin, "small_image_url": small},
+            set_={
+                "origin_image_url": img_stmt.excluded.origin_image_url,
+                "small_image_url": img_stmt.excluded.small_image_url,
+            },
         )
         await session.execute(img_stmt)
 
@@ -326,20 +337,34 @@ async def _read_cached_detail(
     return detail, existing_images
 
 
+# Wall-clock ceiling for the user-facing KTO detail fetch. Each kto.call already
+# retries 3x with exponential backoff on a 10s timeout, so one flaky endpoint can
+# stall the gather for ~30s. This caps it: on timeout we raise KtoApiUnavailable
+# and fall back to the stale/unavailable path rather than making the user wait.
+_KTO_DETAIL_BUDGET = 8.0
+
+
 async def _fetch_kto_detail(
     kto: KtoClient, content_id: str, content_type_id: int
 ) -> tuple[str | None, str | None, str | None, list[tuple[str, str | None]], dict[str, Any]]:
-    """Fetch + parse the 3 KTO detail endpoints concurrently. Propagates KtoApiUnavailable."""
-    common_items, image_items, intro_items = await asyncio.gather(
-        kto.call(KtoService.KOR, "detailCommon2", contentId=content_id),
-        kto.call(KtoService.KOR, "detailImage2", contentId=content_id, imageYN="Y"),
-        kto.call(
-            KtoService.KOR,
-            "detailIntro2",
-            contentId=content_id,
-            contentTypeId=content_type_id,
-        ),
-    )
+    """Fetch + parse the 3 KTO detail endpoints concurrently, under a wall-clock
+    budget. Propagates KtoApiUnavailable (also on budget timeout)."""
+    try:
+        common_items, image_items, intro_items = await asyncio.wait_for(
+            asyncio.gather(
+                kto.call(KtoService.KOR, "detailCommon2", contentId=content_id),
+                kto.call(KtoService.KOR, "detailImage2", contentId=content_id, imageYN="Y"),
+                kto.call(
+                    KtoService.KOR,
+                    "detailIntro2",
+                    contentId=content_id,
+                    contentTypeId=content_type_id,
+                ),
+            ),
+            timeout=_KTO_DETAIL_BUDGET,
+        )
+    except TimeoutError as exc:
+        raise KtoApiUnavailable("KTO detail fetch exceeded budget") from exc
 
     common = common_items[0] if common_items else {}
     overview = verbatim(common.get("overview"))
