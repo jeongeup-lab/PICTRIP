@@ -1,4 +1,5 @@
-import { View, Text, Pressable, Linking, StyleSheet } from "react-native";
+import { useEffect, useState } from "react";
+import { View, Text, Pressable, Linking, InteractionManager, StyleSheet } from "react-native";
 import type { SpotDetail, NearbySpot } from "@/lib/api-types";
 import { Icon } from "@/components/Icon";
 import type { IconName } from "@/components/Icon";
@@ -37,6 +38,15 @@ function InfoRow({
 }
 
 export function LocationSection({ spot }: { spot: SpotDetail }) {
+  // Defer the WKWebView boot (create + remote Kakao SDK fetch + kakao.maps.load)
+  // until the nav transition settles, so it doesn't jank the page becoming
+  // interactive. The map fills into its fixed-height box a moment later.
+  const [mapReady, setMapReady] = useState(false);
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => setMapReady(true));
+    return () => task.cancel();
+  }, []);
+
   const address = [spot.addr1, spot.addr2].filter(Boolean).join(" ");
   const q = encodeURIComponent(spot.title);
   const lat = spot.mapy;
@@ -77,13 +87,15 @@ export function LocationSection({ spot }: { spot: SpotDetail }) {
         // Non-interactive: pass touches to the page ScrollView (avoids a WKWebView
         // dead zone that swallows touchmove and blocks scroll over the map).
         <View style={styles.map} pointerEvents="none">
-          <KakaoWebMap
-            center={{ lat, lng }}
-            pins={[pin]}
-            userLocation={null}
-            interactive={false}
-            onPinTap={() => {}}
-          />
+          {mapReady ? (
+            <KakaoWebMap
+              center={{ lat, lng }}
+              pins={[pin]}
+              userLocation={null}
+              interactive={false}
+              onPinTap={() => {}}
+            />
+          ) : null}
         </View>
       ) : (
         <View style={[styles.map, styles.mapPlaceholder]}>

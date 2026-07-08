@@ -83,7 +83,7 @@ export default function CurationScreen() {
                       key={spot.contentId}
                       spot={spot}
                       width={cardWidth}
-                      onPressIn={() => prefetchSpot(spot.contentId)}
+                      onPressIn={() => prefetchSpot(spot)}
                       onPress={() => router.push(`/spots/${spot.contentId}`)}
                     />
                   ))}
