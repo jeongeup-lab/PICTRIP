@@ -12,14 +12,15 @@ from datetime import date as date_type
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, BackgroundTasks, Form, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, Query, Request
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
 from app.core.db import DbSession
+from app.core.ratelimit import rate_limit
 from app.core.redis import RedisDep
 from app.core.schemas import ok
 from app.modules.admin import services
-from app.modules.admin.schemas import CurationUpdate, SpotsUpdate
+from app.modules.admin.schemas import CurationUpdate, PositionsUpdate, SpotsUpdate
 from app.modules.admin.security import SESSION_KEY, AdminAuth, authenticate
 
 _STATIC_DIR = Path(__file__).parent / "static"
@@ -58,7 +59,10 @@ async def admin_login_page(request: Request) -> Response:
     return _page("login.html")
 
 
-@router.post("/login")
+@router.post(
+    "/login",
+    dependencies=[Depends(rate_limit(bucket="admin_login", limit=5, window_seconds=60))],
+)
 async def admin_login_submit(
     request: Request,
     db: DbSession,
@@ -175,8 +179,18 @@ async def api_health(_: AdminAuth, db: DbSession) -> dict[str, Any]:
 # --- Curation editor (A01 §7 / ADM-012~015) — admin's scoped write surface ----
 @router.get("/api/curations")
 async def api_curations_list(_: AdminAuth, db: DbSession) -> dict[str, Any]:
-    """CurationList — heroes/rails/editorial grouped, each by position (ADM-012)."""
+    """CurationList — heroes/rails grouped, each by position (ADM-012)."""
     return ok(await services.list_curations(db))
+
+
+# Declared BEFORE the /api/curations/{curation_id} routes: "positions" must
+# never be captured by the int path param.
+@router.put("/api/curations/positions")
+async def api_curation_positions(
+    _: AdminAuth, db: DbSession, body: PositionsUpdate
+) -> dict[str, Any]:
+    """Atomic per-type reorder (position = array index) + audit; returns the board."""
+    return ok(await services.update_curation_positions(db, body))
 
 
 @router.get("/api/curations/{curation_id}")
@@ -197,7 +211,7 @@ async def api_curation_preview(
 async def api_curation_update(
     _: AdminAuth, db: DbSession, redis: RedisDep, curation_id: int, body: CurationUpdate
 ) -> dict[str, Any]:
-    """Edit copy/cover/publish/position; on-publish cache DEL + audit (ADM-013/016)."""
+    """Edit copy/cover/position; on-write cache DEL + audit (ADM-013/016)."""
     return ok(await services.update_curation(db, redis, curation_id, body))
 
 
@@ -213,8 +227,16 @@ async def api_curation_spots(
 async def api_spots_search(
     _: AdminAuth,
     db: DbSession,
-    q: str = Query(..., min_length=1),
+    q: str | None = Query(None),
     region: str | None = Query(None),
+    sigungu: str | None = Query(None),
+    category: str | None = Query(None),
+    offset: int = Query(0, ge=0),
 ) -> dict[str, Any]:
-    """Admin-only spot picker — trgm ILIKE title/addr1, show_flag=1, ≤20 (ADM-015)."""
-    return ok(await services.search_spots(db, q, region, limit=20))
+    """Admin-only spot picker — trgm ILIKE title/addr1 (q optional), show_flag=1,
+    region/sigungu/category filters, page of 20 + total/hasMore (ADM-015)."""
+    return ok(
+        await services.search_spots(
+            db, q=q, region=region, sigungu=sigungu, category=category, limit=20, offset=offset
+        )
+    )

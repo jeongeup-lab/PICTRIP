@@ -205,6 +205,10 @@ canonical 카드 `{ contentId, title, firstImageUrl, category }`(camelCase + KTO
 
 ### 6.2 혼잡도(`congestion`) 카드 enrichment 백킹 (D1·S11 §7-A)
 
+> **[철회 — 2026-07-08 (DECISIONS CH2)]** 이하 congestion 서술은 대회 범위에서
+> 제외 — 어떤 엔드포인트도 직렬화하지 않음(`spot_concentration` 자산은 잔존,
+> 재도입 대비).
+
 canonical 카드 선택 필드 `congestion: "low"|"medium"|"high"|null` — **신규 컬럼 없음**,
 보존된 `spot_concentration`을 JOIN해 enrichment:
 

@@ -20,7 +20,7 @@ from app.modules.images.services import spot_has_embedding_clause
 from app.modules.spots.models import Curation, CurationSpot, Spot, SpotDetail, SpotMood
 from app.modules.spots.services.cards import (
     cover_url,
-    load_spot_cards_by_ids,
+    load_active_spot_cards_by_ids,
 )
 from app.modules.spots.services.rows import SpotCardRow
 
@@ -111,17 +111,27 @@ async def list_published_curations(session: AsyncSession, type_: str) -> list[Cu
         await session.execute(
             select(Curation)
             .where(Curation.type == type_, Curation.is_published.is_(True))
-            .order_by(Curation.position)
+            # position ties broken by id — deterministic, matches the admin list.
+            .order_by(Curation.position, Curation.id)
         )
     ).scalars()
     return [_to_row(r) for r in rows]
 
 
 async def _handpicked_ids(session: AsyncSession, curation_id: int) -> list[str]:
+    """Handpicked ids that are still servable — same quality gate as the pool
+    (show_flag=1, non-empty image), so a cache rebuild never picks up a spot
+    hidden after it was handpicked."""
     rows = (
         await session.execute(
             select(CurationSpot.content_id)
-            .where(CurationSpot.curation_id == curation_id)
+            .join(Spot, Spot.content_id == CurationSpot.content_id)
+            .where(
+                CurationSpot.curation_id == curation_id,
+                Spot.show_flag == 1,
+                Spot.first_image_url.isnot(None),
+                Spot.first_image_url != "",
+            )
             .order_by(CurationSpot.position)
         )
     ).scalars()
@@ -139,6 +149,7 @@ async def _pool_ids(session: AsyncSession, curation: CurationRow) -> list[str]:
     stmt = select(Spot.content_id).where(
         Spot.show_flag == 1,
         Spot.first_image_url.isnot(None),
+        Spot.first_image_url != "",
     )
     if curation.type == "region":
         stmt = stmt.where(Spot.ldong_regn_cd == curation.region_cd)
@@ -200,16 +211,18 @@ async def resolve_curation_spots(
     ids = await resolve_curation_ids(session, redis, curation)
     if not ids:
         return []
-    by_id = await load_spot_cards_by_ids(session, ids)
+    # Active-only hydration: even while the day-cache still holds a since-hidden
+    # spot's id, it must not render (the cache lives until KST midnight).
+    by_id = await load_active_spot_cards_by_ids(session, ids)
     # Preserve the resolved order; drop ids that no longer hydrate.
     return [by_id[cid] for cid in ids if cid in by_id]
 
 
 async def invalidate_curation_cache(redis: Redis, curation_id: int) -> None:
-    """Drop the resolved-spots cache for one curation (ADM-016 on-publish DEL).
+    """Drop the resolved-spots cache for one curation (ADM-016 on-write DEL).
 
     Reuses the exact ``resolve_curation_spots`` cache key so an admin edit
-    (publish / cover / handpicks) is reflected on the next /home/feed or
+    (cover / handpicks) is reflected on the next /home/feed or
     /curations/{slug} request, which repopulates from the DB.
     """
     await redis.delete(f"curation:{curation_id}:spots")

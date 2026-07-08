@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.core.kto_images import https_kto_image
 
@@ -159,7 +159,6 @@ class CurationListItem(BaseModel):
     title: str
     subtitle: str | None
     coverUrl: str | None
-    isPublished: bool
     position: int
 
     # KTO firstimage URLs arrive as http://; the admin HTML CSP only allows
@@ -171,11 +170,14 @@ class CurationListItem(BaseModel):
 
 
 class CurationList(BaseModel):
-    """GET /admin/api/curations — grouped by type, each ordered by position."""
+    """GET /admin/api/curations — grouped by type, each ordered by position.
+
+    The board is always the fixed seeded hero 6 + mood rails 3; legacy
+    ``editorial`` rows are ignored (no group for them).
+    """
 
     heroes: list[CurationListItem]  # type='region'
     rails: list[CurationListItem]  # type='mood'
-    editorial: list[CurationListItem]  # type='editorial'
 
 
 class CoverSpot(BaseModel):
@@ -215,7 +217,6 @@ class CurationDetail(BaseModel):
     coverSpot: CoverSpot | None
     regionCd: str | None
     moodId: int | None
-    isPublished: bool
     position: int
     handpicks: list[Handpick]
 
@@ -246,19 +247,34 @@ class CurationPreview(BaseModel):
 
 
 class CurationUpdate(BaseModel):
-    """PUT /admin/api/curations/{id} body — only copy/cover/publish/position.
+    """PUT /admin/api/curations/{id} body — only copy/cover.
 
     type/slug/region_cd/mood_id are NOT editable here (the ck_curation_scope
-    invariant stays satisfied because type/scope are unchanged).
+    invariant stays satisfied because type/scope are unchanged). Ordering moved
+    to the atomic PUT /admin/api/curations/positions. A cached browser copy of
+    the old UI may still send legacy ``isPublished``/``position`` keys, so extra
+    fields must be ignored (never 422, never applied).
     """
+
+    model_config = ConfigDict(extra="ignore")
 
     title: str
     subtitle: str | None = None
     lead: str | None = None
     intro: str | None = None
     coverSpotId: str | None = None
-    isPublished: bool
-    position: int
+
+
+class PositionsUpdate(BaseModel):
+    """PUT /admin/api/curations/positions body — atomic per-type reorder.
+
+    ``orderedIds`` must be a permutation of ALL curation ids of ``type``
+    (validated in the service); position = array index, applied in one
+    transaction.
+    """
+
+    type: str  # "region" | "mood" (validated in the service → ADMIN_VALIDATION)
+    orderedIds: list[int]
 
 
 class SpotsUpdate(BaseModel):
@@ -286,4 +302,8 @@ class SpotSearchItem(BaseModel):
 
 
 class SpotSearchResult(BaseModel):
+    """GET /admin/api/spots/search — one page (20) + pagination meta."""
+
     spots: list[SpotSearchItem]
+    total: int  # all rows matching the filters, not just this page
+    hasMore: bool  # offset + len(spots) < total

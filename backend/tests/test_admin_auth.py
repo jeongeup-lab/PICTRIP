@@ -15,11 +15,13 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
+from fakeredis.aioredis import FakeRedis
 from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
+from app.core.redis import get_redis
 from app.main import app
 
 # Seeded by migration 0016.
@@ -29,8 +31,15 @@ _PASSWORD = "admin"
 
 @pytest.fixture(autouse=True)
 def _use_test_db(db_session: AsyncSession) -> Iterator[None]:
-    """Route every /admin auth lookup through the per-test transaction."""
+    """Route every /admin auth lookup through the per-test transaction.
+
+    Also override Redis with a fresh fakeredis per test so the login
+    rate-limit counter never bleeds across tests (each test logs in well
+    under the 5/min limit).
+    """
+    fake = FakeRedis(decode_responses=True)
     app.dependency_overrides[get_db] = lambda: db_session
+    app.dependency_overrides[get_redis] = lambda: fake
     yield
     app.dependency_overrides.clear()
 
@@ -109,6 +118,17 @@ async def test_no_admin_row_rejects_login(client: AsyncClient, db_session: Async
     resp = await _login(client)
     assert resp.status_code == 303
     assert resp.headers["location"].endswith("/admin/login?error=1")
+
+
+@pytest.mark.asyncio
+async def test_login_rate_limited_after_threshold(client: AsyncClient) -> None:
+    """5/min/IP — the 6th attempt is throttled regardless of credentials."""
+    statuses = [(await _login(client, _USERNAME, "wrong")).status_code for _ in range(6)]
+    assert statuses[:5] == [303] * 5  # under the limit: handler runs (bounce back)
+    assert statuses[5] == 429
+    over = await _login(client, _USERNAME, "wrong")
+    assert over.status_code == 429
+    assert over.json()["error"]["code"] == "RATE_LIMITED"
 
 
 @pytest.mark.asyncio

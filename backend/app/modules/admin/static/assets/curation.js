@@ -1,13 +1,17 @@
 // PicTrip ADMIN — 홈 큐레이션 편성 보드 (live fetch wiring)
 //
-// 보드가 곧 미리보기: 히어로 6장은 앱 홈과 동일 렌더의 카드 갤러리, 무드 레일은
-// 와이드 로우. 카드 클릭 → 우측 슬라이드오버에서 카피·표지·손픽·발행·순서 편집.
+// 히어로 6장은 앱 홈과 동일 렌더의 카드 갤러리, 무드 레일은 와이드 로우.
+// 카드 클릭 → 우측 슬라이드오버에서 카피·표지·손픽 편집.
+// 노출 순서는 보드 카드 드래그로만 변경(positions 엔드포인트, 원자 반영).
 // 모든 동적 마크업은 <template> 클론 + DOM 프로퍼티 대입(innerHTML에 서버 문자열
 // 삽입 없음 → XSS/CSS-injection 표면 제거). 공용 헬퍼(adminFetch)는 admin.js.
 //
 // API: GET /admin/api/curations · GET/PUT /admin/api/curations/{id}
+//      PUT /admin/api/curations/positions (type별 전체 순열 원자 반영)
 //      PUT /admin/api/curations/{id}/spots · GET /admin/api/curations/{id}/preview
-//      GET /admin/api/spots/search?q=&region=   (region = ldong_regn_cd)
+//      GET /admin/api/spots/search?q=&region=&sigungu=&category=&offset=
+//        (q 없이 필터만으로 브라우징 가능 · 페이지 20건 + total/hasMore)
+//      GET /v1/map/regions-tree (공개 API — 시도/시군구 캐스케이드 필터 소스)
 
 // ─── fetch (JSend, 세션 만료 시 로그인으로) ──────────────────────────────────
 async function cuFetch(path, method, body) {
@@ -18,6 +22,7 @@ async function cuFetch(path, method, body) {
   }
   const res = await fetch(path, opts);
   if (res.status === 401) {
+    CU.authRedirect = true; // 로그인 리다이렉트 중 beforeunload 이탈 경고 억제
     location.href = "/admin/login";
     throw new Error("세션이 만료되었습니다");
   }
@@ -36,33 +41,39 @@ async function cuFetch(path, method, body) {
 
 // ─── state ───────────────────────────────────────────────────────────────────
 const CU = {
-  hero: [], rail: [], editorial: [],
+  hero: [], rail: [],
   open: null,          // 슬라이드오버에 열린 item
   busy: false,
   pickerMode: null,    // 'picks' | 'cover'
   searchTimer: null, searchSeq: 0,
+  regionsTree: null,   // GET /map/regions-tree 캐시 (시도→시군구 캐스케이드)
+  pickerFilters: { region: "", sigungu: "", category: "" },
+  pickerSpots: [],     // 누적 페이지 (더 보기 append)
+  pickerTotal: 0, pickerHasMore: false,
   dragging: null,      // 보드 카드 드래그 중인 item
+  authRedirect: false, // 401 → /admin/login 리다이렉트 진행 중
 };
 const qs = (id) => document.getElementById(id);
-const KIND_LABEL = { hero: "지역 히어로", rail: "무드 레일", editorial: "에디토리얼" };
+const KIND_LABEL = { hero: "지역 히어로", rail: "무드 레일" };
 const groupOf = (it) => CU[it.kind];
-const allItems = () => [...CU.hero, ...CU.rail, ...CU.editorial];
+const allItems = () => [...CU.hero, ...CU.rail];
 const dirtyItems = () => allItems().filter((it) => it.dirty);
 
 function mkItem(d, kind) {
   return {
     id: d.id, type: d.type, kind, slug: d.slug || "", position: d.position || 0,
-    isPublished: !!d.isPublished, title: d.title || "", subtitle: d.subtitle || "",
+    title: d.title || "", subtitle: d.subtitle || "",
     lead: "", intro: "",
     cover: { contentId: null, name: "", imageUrl: d.coverUrl || null },
     picks: [], previewSpots: null,
-    detailLoaded: false, dirty: false, picksDirty: false, savedAt: null,
+    detailLoaded: false, detailError: null, pristine: null,
+    dirty: false, picksDirty: false, savedAt: null,
   };
 }
 function applyDetail(it, d) {
   it.title = d.title || ""; it.subtitle = d.subtitle || "";
   it.lead = d.lead || ""; it.intro = d.intro || "";
-  it.isPublished = !!d.isPublished; it.position = d.position || 0; it.slug = d.slug || it.slug;
+  it.position = d.position || 0; it.slug = d.slug || it.slug;
   it.cover = d.coverSpot
     ? { contentId: d.coverSpot.contentId, name: d.coverSpot.name || "", imageUrl: d.coverSpot.imageUrl || null }
     : { contentId: null, name: "", imageUrl: it.cover.imageUrl || null };
@@ -70,6 +81,17 @@ function applyDetail(it, d) {
     contentId: h.contentId, name: h.name || "", sub: h.category || "스팟", imageUrl: h.imageUrl || null,
   }));
   it.detailLoaded = true;
+  it.detailError = null;
+  snapshotPristine(it);
+}
+// discard 롤백용 서버 상태 스냅샷 — detail 로드/저장 성공 직후 갱신
+function snapshotPristine(it) {
+  it.pristine = {
+    title: it.title, subtitle: it.subtitle, lead: it.lead, intro: it.intro,
+    position: it.position,
+    cover: { ...it.cover },
+    picks: it.picks.map((p) => ({ ...p })),
+  };
 }
 async function ensureDetail(it) {
   if (!it.detailLoaded) applyDetail(it, await cuFetch(`/admin/api/curations/${it.id}`));
@@ -92,8 +114,13 @@ function coverImageUrl(it) { return it.cover.imageUrl || (displaySpots(it)[0] ||
 function setImg(scope, url) {
   const img = scope.querySelector("img");
   const ph = scope.querySelector(".phx");
-  if (url) { img.src = url; img.hidden = false; if (ph) ph.hidden = true; }
-  else { img.removeAttribute("src"); img.hidden = true; if (ph) ph.hidden = false; }
+  if (url) {
+    // 로드 실패(만료/차단된 KTO URL 등) 시 이미지를 숨기고 플레이스홀더로 폴백
+    img.onerror = () => { img.hidden = true; img.removeAttribute("src"); if (ph) ph.hidden = false; };
+    img.src = url; img.hidden = false; if (ph) ph.hidden = true;
+  } else {
+    img.onerror = null; img.removeAttribute("src"); img.hidden = true; if (ph) ph.hidden = false;
+  }
 }
 function toastOk(msg) { showToast(qs("toast"), qs("toast-msg"), msg); }
 function toastErr(msg) { showToast(qs("toast-error"), qs("toast-error-msg"), msg); }
@@ -112,21 +139,14 @@ function nowLabel() {
 function renderBoard() {
   CU.hero.sort((a, b) => a.position - b.position);
   CU.rail.sort((a, b) => a.position - b.position);
-  CU.editorial.sort((a, b) => a.position - b.position);
 
   qs("hero-caption").textContent = `캐러셀 · ${CU.hero.length}장 · 홈 상단`;
   qs("rail-caption").textContent = `가로 스크롤 레일 · ${CU.rail.length}개 · 히어로 아래`;
-  const edSec = qs("board-editorial-sec");
-  edSec.hidden = false;
-  qs("editorial-caption").textContent = `${CU.editorial.length}개`;
-  qs("editorial-empty").hidden = CU.editorial.length > 0;
 
   const heroes = qs("board-heroes");
   heroes.replaceChildren(...CU.hero.map(heroCardEl));
   const rails = qs("board-rails");
   rails.replaceChildren(...CU.rail.map(railRowEl));
-  const eds = qs("board-editorial");
-  eds.replaceChildren(...CU.editorial.map(railRowEl));
 
   updateGlobalDirty();
 }
@@ -134,16 +154,13 @@ function heroCardEl(it) {
   const el = qs("tpl-hero-card").content.firstElementChild.cloneNode(true);
   el.dataset.slotId = it.slug || String(it.id);
   const card = el.querySelector(".hcard");
-  card.classList.toggle("off", !it.isPublished);
   card.classList.toggle("sel", CU.open === it);
-  card.setAttribute("aria-label", `${KIND_LABEL.hero} 편집 — ${it.title.split("\n").join(" ")}${it.isPublished ? "" : " (비공개)"}`);
+  card.setAttribute("aria-label", `${KIND_LABEL.hero} 편집 — ${it.title.split("\n").join(" ")}`);
   setImg(card, coverImageUrl(it));
   card.querySelector(".phx").hidden = !!coverImageUrl(it);
   card.querySelector("[data-pos]").textContent = `#${it.position}`;
-  card.querySelector(".offbadge").hidden = it.isPublished;
   card.querySelector("[data-t]").textContent = it.title;
   card.querySelector("[data-s]").textContent = it.subtitle || "";
-  el.querySelector(".st").classList.toggle("off", !it.isPublished);
   el.querySelector("[data-slug]").textContent = it.slug;
   el.querySelector(".m").hidden = !it.dirty;
   wireBoardItem(el, card, it);
@@ -175,25 +192,18 @@ function railRowEl(it) {
   else if (!it.picks.length) { chip.className = "chip auto"; chip.textContent = "자동충전 · 품질랭킹"; }
   else if (it.picks.length >= 8) { chip.className = "chip full"; chip.textContent = "손픽 8 / 8"; }
   else { chip.className = "chip hand"; chip.textContent = `손픽 ${it.picks.length} / 8`; }
-  const tgl = el.querySelector(".tglwrap input");
-  tgl.checked = it.isPublished;
-  tgl.setAttribute("aria-label", `${it.title.split("\n").join(" ")} — 홈에 발행`);
-  tgl.addEventListener("click", (e) => e.stopPropagation());
-  tgl.addEventListener("change", () => inlinePublishToggle(it, tgl));
   wireBoardItem(el, el, it);
   return el;
 }
 function wireBoardItem(root, clickable, it) {
-  const open = (e) => {
-    if (e.target.closest("[data-stop]")) return;
-    openDrawer(it);
-  };
+  const open = () => openDrawer(it);
   clickable.addEventListener("click", open);
   clickable.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(e); }
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
   });
   // 보드 드래그 = 순서 교환 (두 큐레이션의 position swap, 저장 즉시)
   root.addEventListener("dragstart", (e) => {
+    if (CU.busy) { e.preventDefault(); toastErr("처리 중입니다 — 잠시 후 다시 시도하세요"); return; }
     if (it.dirty) { e.preventDefault(); toastErr("저장 안 된 변경이 있어 순서를 바꿀 수 없어요"); return; }
     CU.dragging = it;
     e.dataTransfer.effectAllowed = "move";
@@ -220,47 +230,38 @@ function updateGlobalDirty() {
   qs("global-dirty-n").textContent = n;
 }
 
-// 발행 인라인 토글 (보드에서 즉시 저장 — 로컬 미저장 편집이 있으면 거부)
-async function inlinePublishToggle(it, tgl) {
-  if (it.dirty) {
-    tgl.checked = it.isPublished;
-    toastErr("저장 안 된 변경이 있어요 — 편집 패널에서 저장하세요");
-    openDrawer(it);
-    return;
-  }
-  const next = tgl.checked;
-  try {
-    await ensureDetail(it);
-    const d = await cuFetch(`/admin/api/curations/${it.id}`, "PUT", { ...putPayload(it), isPublished: next });
-    applyDetail(it, d);
-    renderBoard();
-    if (CU.open === it) fillDrawer(it);
-    toastOk(`${next ? "발행" : "비공개"} 전환 · ${it.title.split("\n").join(" ")}`);
-  } catch (err) {
-    tgl.checked = it.isPublished;
-    toastErr(`발행 전환 실패 · ${err.message}`);
-  }
-}
-
-// 보드 드래그: 두 항목 position 교환 (둘 다 clean 전제)
+// 보드 드래그: 두 항목 순서 교환 — 해당 type 전체 순열을 positions 엔드포인트로 원자 반영
 async function swapPositions(a, b) {
+  if (CU.busy) return;
   if (b.dirty) { toastErr("상대 항목에 저장 안 된 변경이 있어요"); return; }
   CU.busy = true;
   try {
-    await ensureDetail(a); await ensureDetail(b);
+    const ordered = groupOf(a).map((x) => x.id); // renderBoard가 position 순 정렬 유지
+    const ia = ordered.indexOf(a.id), ib = ordered.indexOf(b.id);
+    [ordered[ia], ordered[ib]] = [ordered[ib], ordered[ia]];
     const pa = a.position, pb = b.position;
-    const da = await cuFetch(`/admin/api/curations/${a.id}`, "PUT", { ...putPayload(a), position: pb });
-    const db = await cuFetch(`/admin/api/curations/${b.id}`, "PUT", { ...putPayload(b), position: pa });
-    applyDetail(a, da); applyDetail(b, db);
+    const list = await cuFetch("/admin/api/curations/positions", "PUT", { type: a.type, orderedIds: ordered });
+    applyPositions(list);
     renderBoard();
     if (CU.open) fillDrawer(CU.open);
     toastOk(`순서 변경 · #${pa} ↔ #${pb}`);
   } catch (err) {
     toastErr(`순서 변경 실패 · ${err.message}`);
-    loadAll(); // 부분 반영됐을 수 있으니 서버 상태로 리로드
+    loadAll(); // 서버 상태로 리로드
   } finally {
     CU.busy = false;
   }
+}
+// positions 응답(GET /admin/api/curations와 동일 보드)의 position만 기존 아이템에
+// 반영 — 이미 로드된 상세/손픽/프리뷰 상태를 버리지 않는다
+function applyPositions(list) {
+  const pos = new Map();
+  [...(list.heroes || []), ...(list.rails || [])].forEach((d) => pos.set(d.id, d.position));
+  allItems().forEach((it) => {
+    if (!pos.has(it.id)) return;
+    it.position = pos.get(it.id);
+    if (it.pristine) it.pristine.position = it.position;
+  });
 }
 
 // ─── load ────────────────────────────────────────────────────────────────────
@@ -272,7 +273,6 @@ async function loadAll() {
     const list = await cuFetch("/admin/api/curations");
     CU.hero = (list.heroes || []).map((d) => mkItem(d, "hero"));
     CU.rail = (list.rails || []).map((d) => mkItem(d, "rail"));
-    CU.editorial = (list.editorial || []).map((d) => mkItem(d, "editorial"));
     CU.open = null;
     document.body.classList.remove("drawer-open");
     qs("board-skeleton").hidden = true;
@@ -298,8 +298,6 @@ function putPayload(it) {
     lead: it.lead || null,
     intro: it.intro || null,
     coverSpotId: it.cover.contentId || null,
-    isPublished: it.isPublished,
-    position: it.position | 0,
   };
 }
 async function openDrawer(it) {
@@ -309,10 +307,31 @@ async function openDrawer(it) {
   }
   CU.open = it;
   document.body.classList.add("drawer-open");
-  try { await ensureDetail(it); } catch (_) { /* 목록 값으로 표시 */ }
+  // 상세 로드 실패 = 목록 값으로 표시하되 에러+재시도 배너를 띄우고 저장 차단
+  try { await ensureDetail(it); } catch (err) { it.detailError = err.message; }
   ensurePreview(it).then(() => { if (CU.open === it) updateMiniPreview(it); });
   fillDrawer(it);
   renderBoard();
+}
+// 드로어 상세 로드 에러 배너의 "다시 시도" — 요청 중 busy로 이중 클릭 방지
+async function retryDetail() {
+  const it = CU.open; if (!it || CU.busy) return;
+  CU.busy = true;
+  try {
+    await ensureDetail(it);
+    if (CU.open !== it) return; // 로드 대기 중 다른 카드로 전환 → 남의 드로어 덮어쓰기 방지
+    // 미로드 상태에서 만진 편집은 서버 값으로 대체됨 — 플래그도 서버 상태로
+    it.dirty = false; it.picksDirty = false;
+    fillDrawer(it); renderBoard();
+    ensurePreview(it).then(() => { if (CU.open === it) updateMiniPreview(it); });
+  } catch (err) {
+    it.detailError = err.message;
+    fillDrawer(it);
+    toastErr(`상세 로드 실패 · ${err.message}`);
+  } finally {
+    CU.busy = false;
+    if (CU.open) updateSaveState(CU.open);
+  }
 }
 function closeDrawer() {
   if (CU.open && CU.open.dirty) {
@@ -327,8 +346,26 @@ function reallyCloseDrawer() {
   renderBoard();
 }
 function discardEdits(it) {
-  it.detailLoaded = false; it.dirty = false; it.picksDirty = false;
-  // 서버 상태 재적용은 다음 openDrawer/렌더 시 ensureDetail이 수행
+  if (it.pristine) {
+    // 마지막 서버 상태 스냅샷으로 즉시 롤백 (보드에 버린 편집값이 남지 않게)
+    const p = it.pristine;
+    it.title = p.title; it.subtitle = p.subtitle; it.lead = p.lead; it.intro = p.intro;
+    it.position = p.position;
+    it.cover = { ...p.cover };
+    it.picks = p.picks.map((x) => ({ ...x }));
+  } else {
+    // 스냅샷 없음(상세 미로드 상태에서 편집) — 서버 상태 재fetch로 원복
+    it.detailLoaded = false;
+    ensureDetail(it).then(() => {
+      renderBoard();
+      if (CU.open === it) fillDrawer(it);
+    }).catch((err) => {
+      // 재fetch까지 실패 — 침묵하면 버린 값이 남은 이유를 알 수 없다
+      toastErr(`서버 상태로 원복 실패 · ${err.message}`);
+    });
+  }
+  it.dirty = false; it.picksDirty = false;
+  renderBoard();
 }
 
 function fillDrawer(it) {
@@ -337,9 +374,6 @@ function fillDrawer(it) {
   qs("so-pos-chip").textContent = `position #${it.position}`;
   qs("so-slug").textContent = it.slug || `id ${it.id}`;
   qs("so-heading").textContent = it.title.split("\n").join(" ") || "(제목 없음)";
-  const st = qs("so-status");
-  st.textContent = it.isPublished ? "발행됨" : "비공개";
-  st.className = `chip ${it.isPublished ? "pub" : "unpub"}`;
   qs("so-lastsaved").hidden = !it.savedAt;
   if (it.savedAt) qs("so-lastsaved").textContent = `이 세션에서 저장 ${it.savedAt}`;
 
@@ -351,26 +385,29 @@ function fillDrawer(it) {
   qs("so-title-help").textContent = isRail
     ? "홈에 굵게 노출되는 섹션 타이틀"
     : "줄바꿈(\\n) 보존 · 표지 이미지 위에 그대로 오버레이 · 권장 24자";
-  qs("so-picks-label").textContent = isHero ? "손픽 스팟 · 상세 그리드" : isRail ? "레일 스팟 편성" : "손픽 스팟";
+  qs("so-picks-label").textContent = isHero ? "손픽 스팟 · 상세 그리드" : "레일 스팟 편성";
   qs("so-autonote-txt").textContent = isRail
     ? "비우면 무드 매칭 품질 랭킹으로 자동 편성 · 미리보기에 실제 반영"
     : "비우면 품질 랭킹으로 자동 충전 · 미리보기에 실제 반영";
-  qs("so-pos-hint").textContent = `· ${KIND_LABEL[it.kind]} ${groupOf(it).length}개 중`;
 
-  // 프리뷰 탭: 레일=홈만, 에디토리얼=상세만
+  // 상세 로드 에러 배너 (미로드 상태 = 저장 차단)
+  qs("so-detail-error").hidden = it.detailLoaded;
+  qs("so-detail-error-detail").textContent = !it.detailLoaded && it.detailError
+    ? `GET /admin/api/curations/${it.id} · ${it.detailError}`
+    : "";
+
+  // 프리뷰 탭: 레일은 홈 카드만
   const tabs = document.querySelectorAll("#so-preview .mini-tabs button");
   tabs.forEach((b) => {
-    b.disabled = (b.dataset.m === "detail" && isRail) || (b.dataset.m === "home" && it.kind === "editorial");
+    b.disabled = b.dataset.m === "detail" && isRail;
   });
-  setPreviewTab(it.kind === "editorial" ? "detail" : "home");
+  setPreviewTab("home");
 
   // 폼 값
   qs("so-title").value = it.title;
   qs("so-subtitle").value = it.subtitle;
   qs("so-lead").value = it.lead;
   qs("so-intro").value = it.intro;
-  qs("so-publish").checked = it.isPublished;
-  qs("so-pos-value").textContent = it.position;
   updateCounters();
   clearFieldErrors();
   renderCover(it);
@@ -387,7 +424,7 @@ function updateSaveState(it) {
   qs("so-dirty-chip").hidden = !dirty;
   qs("so-state-dirty").hidden = !dirty;
   qs("so-state-clean").hidden = dirty;
-  qs("so-save").disabled = !dirty || CU.busy;
+  qs("so-save").disabled = !dirty || CU.busy || !it.detailLoaded; // 미로드 상세 위 저장 금지
   qs("so-revert").disabled = !dirty || CU.busy;
   updateGlobalDirty();
 }
@@ -494,9 +531,6 @@ function updateMiniPreview(it) {
   qs("mp-detail-lead").textContent = it.lead || "";
   const grid = displaySpots(it).slice(0, 4);
   qs("mp-detail-grid").replaceChildren(...grid.map((s) => miniSpotEl(s)));
-  qs("mp-cap").textContent = it.picks.length
-    ? "실제 앱과 동일 렌더 · 손픽 순서 그대로"
-    : "실제 앱과 동일 렌더 · 자동충전 풀 반영";
 }
 
 // ─── 카운터 / 검증 오류 ──────────────────────────────────────────────────────
@@ -542,16 +576,22 @@ function setSaving(on) {
   const b = qs("so-save");
   b.querySelector("[data-save-label]").hidden = on;
   b.querySelector("[data-save-saving]").hidden = !on;
-  b.disabled = on || !(CU.open && CU.open.dirty);
+  b.disabled = on || !(CU.open && CU.open.dirty && CU.open.detailLoaded);
   qs("so-revert").disabled = on || !(CU.open && CU.open.dirty);
 }
 async function saveCuration() {
   const it = CU.open;
   if (!it || CU.busy || !it.dirty) return;
+  if (!it.detailLoaded) {
+    // 상세 미로드 상태로 PUT하면 빈 lead/intro 등이 서버 값을 덮어씀 — 차단
+    toastErr("상세를 불러오지 못해 저장할 수 없어요 — 다시 시도 후 저장하세요");
+    return;
+  }
   setSaving(true); clearFieldErrors();
+  // applyDetail이 로컬 손픽을 서버 응답(구 값)으로 덮어쓰기 전에 사용자 편집을 스냅샷
+  const wantSpots = it.picksDirty ? it.picks.map((p) => p.contentId).filter(Boolean) : null;
+  const userPicks = it.picksDirty ? it.picks.map((p) => ({ ...p })) : null;
   try {
-    // applyDetail이 로컬 손픽을 서버 응답(구 값)으로 덮어쓰기 전에 목표 스팟을 확보
-    const wantSpots = it.picksDirty ? it.picks.map((p) => p.contentId).filter(Boolean) : null;
     const d = await cuFetch(`/admin/api/curations/${it.id}`, "PUT", putPayload(it));
     applyDetail(it, d);
     if (wantSpots !== null) {
@@ -562,13 +602,24 @@ async function saveCuration() {
         }));
       }
       it.picksDirty = false;
+      snapshotPristine(it); // 손픽까지 반영된 서버 상태로 스냅샷 갱신
     }
-    await refreshPreview(it); // 발행/손픽 변경으로 자동충전 결과가 달라질 수 있음
     it.dirty = false;
     it.savedAt = nowLabel();
     fillDrawer(it); renderBoard();
-    toastOk(`저장됨 · ${it.isPublished ? "발행" : "비공개"} · /home/feed 반영`);
+    toastOk("저장됨 · /home/feed 반영");
+    // 자동충전 결과 갱신은 백그라운드 — 스피너는 PUT 완료 시점에 끝난다
+    refreshPreview(it).then(() => {
+      if (CU.open === it) updateMiniPreview(it);
+      renderBoard();
+    });
   } catch (err) {
+    if (userPicks !== null && it.picksDirty) {
+      // 부분 실패(카피 PUT 성공 후 손픽 PUT 실패): applyDetail이 덮은 서버 구값을
+      // 사용자 편집값으로 복원 — 재시도 저장이 사용자 픽을 다시 전송한다
+      it.picks = userPicks.map((p) => ({ ...p }));
+      renderPicks(it); updateMiniPreview(it); renderBoard();
+    }
     if (err.status === 422 || err.code === "ADMIN_VALIDATION") showValidationErrors(err);
     else if (err.status === 404) toastErr(`큐레이션을 찾을 수 없습니다 · ${err.message}`);
     else toastErr(`저장 실패 · ${err.message}`);
@@ -607,9 +658,52 @@ function confirmDiscard(it, onDiscard) {
 function closeConfirm() { qs("confirm-discard").classList.remove("show"); confirmAction = null; }
 
 // ─── 스팟 피커 ───────────────────────────────────────────────────────────────
-function pickerRegion() {
-  const on = document.querySelector("#picker-filters .fchip.on");
-  return on ? on.dataset.region || "" : "";
+// 시도/시군구 캐스케이드 소스 — 공개 API, 최초 1회 로드 후 세션 캐시
+async function ensureRegionsTree() {
+  if (CU.regionsTree) return CU.regionsTree;
+  CU.regionsTree = await cuFetch("/v1/map/regions-tree");
+  return CU.regionsTree;
+}
+function renderSidoOptions() {
+  const sel = qs("picker-sido");
+  const all = document.createElement("option");
+  all.value = ""; all.textContent = "시도 전체";
+  sel.replaceChildren(all, ...(CU.regionsTree || []).map((r) => {
+    const o = document.createElement("option");
+    o.value = r.regionCode; o.textContent = r.regionName; // 외부 데이터 — textContent만
+    return o;
+  }));
+  sel.value = CU.pickerFilters.region;
+}
+function renderSigunguChips() {
+  const wrap = qs("picker-sigungu");
+  const region = (CU.regionsTree || []).find((r) => r.regionCode === CU.pickerFilters.region);
+  const sigungus = region ? region.sigungus || [] : [];
+  if (!sigungus.length) { wrap.replaceChildren(); wrap.hidden = true; return; }
+  const mkChip = (code, name) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = `fchip${CU.pickerFilters.sigungu === code ? " on" : ""}`;
+    b.textContent = name; // 외부 데이터 — textContent만
+    b.addEventListener("click", () => {
+      CU.pickerFilters.sigungu = code;
+      wrap.querySelectorAll(".fchip").forEach((x) => x.classList.toggle("on", x === b));
+      pickerFilterChanged();
+    });
+    return b;
+  };
+  wrap.replaceChildren(mkChip("", "시군구 전체"), ...sigungus.map((s) => mkChip(s.sigunguCode, s.sigunguName)));
+  wrap.hidden = false;
+}
+function pickerHasFilter() {
+  const f = CU.pickerFilters;
+  return !!(f.region || f.sigungu || f.category);
+}
+// 필터 칩/셀렉트 변경 — 진행 중인 검색 디바운스를 취소하고 즉시 1페이지부터 재검색
+function pickerFilterChanged() {
+  clearTimeout(CU.searchTimer);
+  CU.searchTimer = null;
+  runSpotSearch();
 }
 function openPicker(mode) {
   CU.pickerMode = mode;
@@ -620,8 +714,14 @@ function openPicker(mode) {
   const inp = qs("picker-search");
   inp.value = "";
   qs("picker-count").textContent = "";
-  document.querySelectorAll("#picker-filters .fchip").forEach((c, i) => c.classList.toggle("on", i === 0));
+  CU.pickerFilters = { region: "", sigungu: "", category: "" };
+  CU.pickerSpots = []; CU.pickerTotal = 0; CU.pickerHasMore = false;
+  const sel = qs("picker-sido");
+  sel.value = ""; sel.classList.remove("on");
+  renderSigunguChips();
+  document.querySelectorAll("#picker-cats .fchip").forEach((c) => c.classList.toggle("on", !c.dataset.category));
   showPickerState("prompt");
+  ensureRegionsTree().then(renderSidoOptions).catch(() => { CU.regionsTree = null; }); // 실패 시 "시도 전체"만 — 다음 열기에서 재시도
   setTimeout(() => inp.focus(), 60);
 }
 function closePicker() { qs("pickermodal").classList.remove("show"); CU.pickerMode = null; }
@@ -641,31 +741,62 @@ function searchSkeletonCards() {
     return el;
   });
 }
-async function runSpotSearch() {
+// q 또는 필터 하나라도 있으면 검색(필터만으로 브라우징 가능) · append=true면 다음
+// 페이지를 이어 붙인다(더 보기)
+async function runSpotSearch(append) {
   const q = qs("picker-search").value.trim();
-  if (!q) { qs("picker-count").textContent = ""; showPickerState("prompt"); return; }
+  if (!q && !pickerHasFilter()) {
+    CU.searchSeq++; // 진행 중 응답 무효화
+    qs("picker-count").textContent = "";
+    showPickerState("prompt");
+    return;
+  }
   const seq = ++CU.searchSeq; // 늦게 도착한 이전 응답이 최신 결과를 덮지 않도록
-  showPickerState("results");
-  qs("picker-results").replaceChildren(...searchSkeletonCards());
+  if (!append) {
+    CU.pickerSpots = [];
+    showPickerState("results");
+    qs("picker-results").replaceChildren(...searchSkeletonCards());
+  }
   try {
-    const region = pickerRegion();
-    const url = `/admin/api/spots/search?q=${encodeURIComponent(q)}` + (region ? `&region=${encodeURIComponent(region)}` : "");
-    const data = await cuFetch(url);
+    const f = CU.pickerFilters;
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (f.region) params.set("region", f.region);
+    if (f.sigungu) params.set("sigungu", f.sigungu);
+    if (f.category) params.set("category", f.category);
+    params.set("offset", String(append ? CU.pickerSpots.length : 0));
+    const data = await cuFetch(`/admin/api/spots/search?${params.toString()}`);
     if (seq !== CU.searchSeq) return; // stale
-    renderSearchResults(data.spots || []);
+    CU.pickerSpots = CU.pickerSpots.concat(data.spots || []);
+    CU.pickerTotal = data.total || 0;
+    CU.pickerHasMore = !!data.hasMore;
+    renderSearchResults();
   } catch (err) {
     if (seq !== CU.searchSeq) return;
     showPickerState("error");
     qs("picker-error-detail").textContent = err.message;
   }
 }
-function renderSearchResults(spots) {
-  qs("picker-count").textContent = `${spots.length}건`;
+function loadMoreEl() {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "pmore";
+  b.textContent = `더 보기 (${CU.pickerSpots.length} / ${CU.pickerTotal})`;
+  b.addEventListener("click", () => {
+    b.disabled = true;
+    b.textContent = "불러오는 중…";
+    runSpotSearch(true);
+  });
+  return b;
+}
+function renderSearchResults() {
+  const spots = CU.pickerSpots;
+  qs("picker-count").textContent = `전체 ${CU.pickerTotal}건`;
   if (!spots.length) { showPickerState("none"); return; }
   showPickerState("results");
   const it = CU.open;
   const picked = new Set((it ? it.picks : []).map((p) => p.contentId));
-  qs("picker-results").replaceChildren(...spots.map((s) => {
+  const cards = spots.map((s) => {
     const el = qs("tpl-picker-card").content.firstElementChild.cloneNode(true);
     el.dataset.spotId = s.contentId;
     const already = CU.pickerMode === "picks" && picked.has(s.contentId);
@@ -680,7 +811,9 @@ function renderSearchResults(spots) {
       pickSpot(s, el, add);
     });
     return el;
-  }));
+  });
+  if (CU.pickerHasMore) cards.push(loadMoreEl());
+  qs("picker-results").replaceChildren(...cards);
 }
 function pickSpot(s, cardEl, addBtn) {
   const it = CU.open; if (!it) return;
@@ -715,32 +848,13 @@ function wireForm() {
       if (key === "title") qs("so-heading").textContent = it.title.split("\n").join(" ") || "(제목 없음)";
     });
   });
-  qs("so-publish").addEventListener("change", (e) => {
-    const it = CU.open; if (!it) return;
-    it.isPublished = e.target.checked;
-    markDirty(); renderBoard();
-    const st = qs("so-status");
-    st.textContent = it.isPublished ? "발행됨" : "비공개";
-    st.className = `chip ${it.isPublished ? "pub" : "unpub"}`;
-  });
-  qs("so-pos-dec").addEventListener("click", () => stepPosition(-1));
-  qs("so-pos-inc").addEventListener("click", () => stepPosition(1));
   qs("so-save").addEventListener("click", saveCuration);
   qs("so-revert").addEventListener("click", revertCurrent);
   qs("so-close").addEventListener("click", closeDrawer);
+  qs("so-detail-retry").addEventListener("click", retryDetail);
 
   document.querySelectorAll("#so-preview .mini-tabs button").forEach((b) =>
     b.addEventListener("click", () => { if (!b.disabled) setPreviewTab(b.dataset.m); }));
-}
-function stepPosition(delta) {
-  const it = CU.open; if (!it) return;
-  const max = Math.max(0, groupOf(it).length - 1);
-  const next = Math.min(max, Math.max(0, it.position + delta));
-  if (next === it.position) return;
-  it.position = next;
-  qs("so-pos-value").textContent = next;
-  qs("so-pos-chip").textContent = `position #${next}`;
-  markDirty();
 }
 function wirePicker() {
   document.querySelectorAll("[data-open-picker]").forEach((b) =>
@@ -750,14 +864,26 @@ function wirePicker() {
   qs("picker-search").addEventListener("input", () => {
     clearTimeout(CU.searchTimer);
     const q = qs("picker-search").value.trim();
-    if (!q) { CU.searchSeq++; qs("picker-count").textContent = ""; showPickerState("prompt"); return; }
-    CU.searchTimer = setTimeout(runSpotSearch, 280);
+    if (!q && !pickerHasFilter()) {
+      CU.searchTimer = null;
+      CU.searchSeq++; qs("picker-count").textContent = ""; showPickerState("prompt");
+      return;
+    }
+    CU.searchTimer = setTimeout(() => runSpotSearch(), 280);
   });
-  document.querySelectorAll("#picker-filters .fchip").forEach((c) =>
+  qs("picker-sido").addEventListener("change", () => {
+    const sel = qs("picker-sido");
+    sel.classList.toggle("on", !!sel.value);
+    CU.pickerFilters.region = sel.value;
+    CU.pickerFilters.sigungu = ""; // 시도가 바뀌면 시군구 선택은 무효
+    renderSigunguChips();
+    pickerFilterChanged();
+  });
+  document.querySelectorAll("#picker-cats .fchip").forEach((c) =>
     c.addEventListener("click", () => {
-      document.querySelectorAll("#picker-filters .fchip").forEach((x) => x.classList.remove("on"));
-      c.classList.add("on");
-      if (qs("picker-search").value.trim()) runSpotSearch();
+      document.querySelectorAll("#picker-cats .fchip").forEach((x) => x.classList.toggle("on", x === c));
+      CU.pickerFilters.category = c.dataset.category || "";
+      pickerFilterChanged();
     }));
 }
 function wireGlobal() {
@@ -775,8 +901,9 @@ function wireGlobal() {
     else if (qs("confirm-discard").classList.contains("show")) closeConfirm();
     else if (document.body.classList.contains("drawer-open")) closeDrawer();
   });
-  // 저장 안 된 편집이 있으면 페이지 이탈 경고
+  // 저장 안 된 편집이 있으면 페이지 이탈 경고 (401 로그인 리다이렉트는 예외)
   window.addEventListener("beforeunload", (e) => {
+    if (CU.authRedirect) return;
     if (dirtyItems().length) { e.preventDefault(); e.returnValue = ""; }
   });
   document.querySelectorAll("#slideover [data-max]").forEach((f) => f.addEventListener("input", updateCounters));
