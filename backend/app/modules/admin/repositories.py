@@ -349,14 +349,21 @@ async def admin_spot_search(
     offset: int,
 ) -> tuple[list[Row[Any]], int]:
     """Admin-only picker: trgm ILIKE over title/addr1 (q optional — filters alone
-    allow browsing), scoped show_flag=1. Returns (page rows, total match count).
+    allow browsing). Scoped to exposable spots (show_flag=1 AND non-empty image)
+    so picker results match the cover/handpick save gate (spot_exposable_with_image
+    / exposable_spot_ids) — an imageless spot the admin can't save never shows up.
+    Returns (page rows, total match count).
 
     Uses idx_spots_title_trgm / idx_spots_addr1_trgm (partial WHERE show_flag=1).
     ``%``/``_`` in q are escaped (literal match). Category reuses the
     NearbyCategory SSOT predicate. Ordered by (title, content_id) so offset
     pagination is deterministic.
     """
-    conds = [Spot.show_flag == 1]
+    conds = [
+        Spot.show_flag == 1,
+        Spot.first_image_url.isnot(None),
+        Spot.first_image_url != "",
+    ]
     if q:
         pat = f"%{_escape_like(q)}%"
         conds.append(or_(Spot.title.ilike(pat, escape="\\"), Spot.addr1.ilike(pat, escape="\\")))
