@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import { Stack } from "expo-router";
 import { queryClient } from "@/lib/query-client";
 import { AuthPromptSheet } from "@/features/auth/components/AuthPromptSheet";
@@ -7,7 +7,7 @@ import { AuthPromptSheet } from "@/features/auth/components/AuthPromptSheet";
 export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
-      <SafeAreaProvider>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="onboarding" />
