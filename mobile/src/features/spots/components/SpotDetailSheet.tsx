@@ -19,45 +19,44 @@ import { LocationSection } from "@/features/spots/components/LocationSection";
 import { VisitSection } from "@/features/spots/components/VisitSection";
 import { NearbyRail } from "@/features/spots/components/NearbyRail";
 import { PhotoViewer } from "@/features/spots/components/PhotoViewer";
-import {
-  detailSheetSnapY,
-  HERO_BELOW_FOLD_PX,
-  HERO_PAD_BOTTOM_PX,
-} from "@/features/spots/lib/detail-sheet-snap";
+import { detailSheetSnapY, type DetailSnap } from "@/features/spots/lib/detail-sheet-snap";
+import type { NearbySpot } from "@/lib/api-types";
 import { colors, radii, spacing } from "@/constants/theme";
 
 const H = Dimensions.get("window").height;
-// Dragged this far past base (or flung down from base) → close instead of snap.
-const CLOSE_DRAG_PX = 80;
-const CLOSE_FLING_VY = 0.9;
 // At full only the grabber/nav zone starts a drag, so the body scroll keeps working.
 const NAV_ZONE_PX = 76;
 
-type Snap = "base" | "full";
+type Snap = DetailSnap;
 
 interface Props {
   contentId: string;
   tabBarHeight: number;
   onClose: () => void;
+  /** The map/nearby card that opened this panel — seeds the hero instantly. */
+  seed?: NearbySpot | null;
 }
 
 /**
  * Marker tap → spot-detail panel (rises over the map list sheet). Base snap
  * reveals the hero up to just above the 전체 사진 button; drag up for the full
- * detail, drag down (or ✕) to return to the list. Same self-made
- * PanResponder + JS-driven spring pattern as MapBottomSheet.
+ * detail, drag down to peek (below the lead text, above the photos) — the detail
+ * stays open. Only ✕ returns to the list. Same self-made PanResponder + JS-driven
+ * spring pattern as MapBottomSheet.
  */
-export function SpotDetailSheet({ contentId, tabBarHeight, onClose }: Props) {
-  const { data, isLoading, isError, refetch } = useSpot(contentId);
+export function SpotDetailSheet({ contentId, tabBarHeight, onClose, seed }: Props) {
+  const { data, isLoading, isError, refetch, isPlaceholderData } = useSpot(contentId, seed);
   const { saved, toggle: onToggleSave } = useSaveOptimistic(contentId);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [snap, setSnap] = useState<Snap>("base");
   const [heroH, setHeroH] = useState<number | null>(null);
 
   const hasGallery = !!data && (data.images.length > 0 || !!data.firstImageUrl);
-  const belowFold = hasGallery ? HERO_BELOW_FOLD_PX : HERO_PAD_BOTTOM_PX;
-  const heroAboveFold = heroH == null ? null : Math.max(0, heroH - belowFold);
-  const { base: baseY, full: fullY } = detailSheetSnapY(H, heroAboveFold, tabBarHeight);
+  const {
+    peek: peekY,
+    base: baseY,
+    full: fullY,
+  } = detailSheetSnapY(H, heroH, tabBarHeight, hasGallery);
 
   // Stable value: init once (off-screen), never re-create.
   const y = useMemo(() => new Animated.Value(H), []);
@@ -65,11 +64,11 @@ export function SpotDetailSheet({ contentId, tabBarHeight, onClose }: Props) {
   useEffect(() => {
     // JS driver for parity with MapBottomSheet (and PanResponder setValue).
     Animated.spring(y, {
-      toValue: snap === "base" ? baseY : fullY,
+      toValue: snap === "peek" ? peekY : snap === "base" ? baseY : fullY,
       useNativeDriver: false,
       bounciness: 2,
     }).start();
-  }, [y, snap, baseY, fullY]);
+  }, [y, snap, peekY, baseY, fullY]);
 
   const animateClose = useCallback(() => {
     Animated.timing(y, { toValue: H, duration: 200, useNativeDriver: false }).start(
@@ -79,50 +78,38 @@ export function SpotDetailSheet({ contentId, tabBarHeight, onClose }: Props) {
     );
   }, [y, onClose]);
 
-  const pan = useMemo(
-    () =>
-      PanResponder.create({
-        // Capture phase: the body ScrollView (enabled at full) would otherwise
-        // claim every vertical drag and the sheet could never be pulled down.
-        // Dominance factor keeps the hero's horizontal gallery strip usable on
-        // near-diagonal swipes.
-        onMoveShouldSetPanResponderCapture: (_e, g) => {
-          if (Math.abs(g.dy) <= 10 || Math.abs(g.dy) <= Math.abs(g.dx) * 1.25) return false;
-          return snap === "base" || g.y0 < fullY + NAV_ZONE_PX;
-        },
-        // Don't fight a snap spring still in flight when the user grabs the sheet.
-        onPanResponderGrant: () => y.stopAnimation(),
-        onPanResponderTerminationRequest: () => false,
-        onPanResponderTerminate: () => {
-          Animated.spring(y, {
-            toValue: snap === "base" ? baseY : fullY,
-            useNativeDriver: false,
-            bounciness: 2,
-          }).start();
-        },
-        onPanResponderMove: (_e, g) => {
-          const from = snap === "base" ? baseY : fullY;
-          y.setValue(Math.max(fullY, Math.min(H, from + g.dy)));
-        },
-        onPanResponderRelease: (_e, g) => {
-          const from = snap === "base" ? baseY : fullY;
-          const landing = from + g.dy;
-          if (landing > baseY + CLOSE_DRAG_PX || (snap === "base" && g.vy > CLOSE_FLING_VY)) {
-            animateClose();
-            return;
-          }
-          const next: Snap =
-            Math.abs(baseY - landing) < Math.abs(fullY - landing) ? "base" : "full";
-          setSnap(next);
-          Animated.spring(y, {
-            toValue: next === "base" ? baseY : fullY,
-            useNativeDriver: false,
-            bounciness: 2,
-          }).start();
-        },
-      }),
-    [snap, y, baseY, fullY, animateClose],
-  );
+  const pan = useMemo(() => {
+    const Y3: Record<Snap, number> = { peek: peekY, base: baseY, full: fullY };
+    return PanResponder.create({
+      // Capture phase: the body ScrollView (enabled at full) would otherwise
+      // claim every vertical drag and the sheet could never be pulled down.
+      // Dominance factor keeps the hero's horizontal gallery strip usable on
+      // near-diagonal swipes.
+      onMoveShouldSetPanResponderCapture: (_e, g) => {
+        if (Math.abs(g.dy) <= 10 || Math.abs(g.dy) <= Math.abs(g.dx) * 1.25) return false;
+        return snap !== "full" || g.y0 < fullY + NAV_ZONE_PX;
+      },
+      // Don't fight a snap spring still in flight when the user grabs the sheet.
+      onPanResponderGrant: () => y.stopAnimation(),
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderTerminate: () => {
+        Animated.spring(y, { toValue: Y3[snap], useNativeDriver: false, bounciness: 2 }).start();
+      },
+      // Floor at fullY (top), cap at peekY — drag can't dismiss the sheet; only ✕
+      // closes it (S05 marker-tap flow: the list returns via the close button).
+      onPanResponderMove: (_e, g) => {
+        y.setValue(Math.max(fullY, Math.min(peekY, Y3[snap] + g.dy)));
+      },
+      onPanResponderRelease: (_e, g) => {
+        const landing = Y3[snap] + g.dy;
+        const next = (["full", "base", "peek"] as Snap[]).reduce((best, cand) =>
+          Math.abs(Y3[cand] - landing) < Math.abs(Y3[best] - landing) ? cand : best,
+        );
+        setSnap(next);
+        Animated.spring(y, { toValue: Y3[next], useNativeDriver: false, bounciness: 2 }).start();
+      },
+    });
+  }, [snap, y, peekY, baseY, fullY]);
 
   const galleryImages =
     data && data.images.length > 0
@@ -172,7 +159,9 @@ export function SpotDetailSheet({ contentId, tabBarHeight, onClose }: Props) {
                 <Text style={styles.retryText}>다시 시도</Text>
               </Pressable>
             </View>
-          ) : isLoading || !data ? (
+          ) : isLoading || !data || isPlaceholderData ? (
+            // Seeded hero renders above; body waits for the authoritative KTO row
+            // so the snippet overview never flashes in place of the full text.
             <View style={{ padding: spacing.lg, gap: spacing.md }}>
               <Skeleton height={18} />
               <Skeleton height={18} width="80%" />

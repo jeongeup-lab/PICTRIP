@@ -12,9 +12,11 @@ interface GalleryProps {
 
 /** Hero gallery strip (first tile wide, rest narrow) + 전체 사진 glass button. */
 export function Gallery({ images, firstImageUrl, onViewAll }: GalleryProps) {
+  // Strip tiles are 108–300px wide — load the small thumbnail, not the full-res
+  // origin (that's slow to fetch/decode). PhotoViewer uses origin for fullscreen.
   const uris =
     images.length > 0
-      ? images.map((img) => img.originImageUrl ?? img.smallImageUrl)
+      ? images.map((img) => img.smallImageUrl ?? img.originImageUrl)
       : firstImageUrl
         ? [firstImageUrl]
         : [];
