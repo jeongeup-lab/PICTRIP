@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -13,6 +14,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import KtoApiUnavailable, ResourceNotFound
+from app.core.logging import get_logger
 from app.modules.spots.kto_client import KtoClient, KtoService
 from app.modules.spots.models import (
     LclsSystmCode,
@@ -29,7 +31,85 @@ from app.modules.spots.services.rows import (
 )
 from app.modules.spots.text import clean_homepage, clean_scalar, verbatim
 
+logger = get_logger(__name__)
+
 _DETAIL_TTL = timedelta(days=7)
+
+# Redis hot front cache for the KTO-derived detail bundle (overview/images/intro).
+# Postgres (spot_details + spot_images) stays the 7-day authority; Redis just
+# skips its two reads on a hit. Shorter TTL bounds staleness from a pipeline
+# modified_time bump between Redis writes — the modified_time supersede check
+# below still runs on every request (cached_at travels in the bundle), so a bump
+# is honoured immediately regardless of TTL.
+_REDIS_KEY = "spotdetail:v1:{content_id}"
+_REDIS_TTL_SECONDS = int(timedelta(hours=1).total_seconds())
+
+
+@dataclass(frozen=True)
+class _DetailCache:
+    """The KTO-derived detail bundle, sourced from Redis or Postgres. cached_at
+    drives the TTL + modified_time freshness check identically for both sources."""
+
+    overview: str | None
+    homepage: str | None
+    tel: str | None
+    intro_data: dict[str, Any] | None
+    cached_at: datetime
+    images: list[SpotImageRow]
+
+
+async def _redis_get_detail(redis: Redis, content_id: str) -> _DetailCache | None:
+    """Read the cached detail bundle. Fail-open: any Redis/parse error is a miss."""
+    key = _REDIS_KEY.format(content_id=content_id)
+    try:
+        raw = await redis.get(key)
+    except Exception as exc:  # cache is non-critical — fall back to Postgres
+        logger.warning("spot.detail.cache_get_failed", content_id=content_id, error=str(exc))
+        return None
+    if raw is None:
+        return None
+    try:
+        d = json.loads(raw)
+        return _DetailCache(
+            overview=d["overview"],
+            homepage=d["homepage"],
+            tel=d["tel"],
+            intro_data=d["intro_data"],
+            cached_at=datetime.fromisoformat(d["cached_at"]),
+            images=[SpotImageRow(origin_image_url=o, small_image_url=s) for o, s in d["images"]],
+        )
+    except (ValueError, KeyError, TypeError) as exc:
+        logger.warning("spot.detail.cache_corrupt", content_id=content_id, error=str(exc))
+        return None
+
+
+async def _redis_set_detail(redis: Redis, content_id: str, cache: _DetailCache) -> None:
+    """Write the detail bundle. Best-effort: a Redis failure never breaks the request."""
+    key = _REDIS_KEY.format(content_id=content_id)
+    payload = json.dumps(
+        {
+            "overview": cache.overview,
+            "homepage": cache.homepage,
+            "tel": cache.tel,
+            "intro_data": cache.intro_data,
+            "cached_at": cache.cached_at.isoformat(),
+            "images": [[i.origin_image_url, i.small_image_url] for i in cache.images],
+        }
+    )
+    try:
+        await redis.set(key, payload, ex=_REDIS_TTL_SECONDS)
+    except Exception as exc:  # cache write best-effort
+        logger.warning("spot.detail.cache_set_failed", content_id=content_id, error=str(exc))
+
+
+def _is_fresh(cached_at: datetime, modified_time: datetime | None) -> bool:
+    """Fresh = within TTL AND not superseded by a newer KTO change (pipeline bumps
+    spots.modified_time on content change). modified_time is NULL until the
+    pipeline sync lands the field, so the supersede clause is a safe no-op until
+    then (#37)."""
+    return (datetime.now(UTC) - cached_at) < _DETAIL_TTL and (
+        modified_time is None or cached_at >= modified_time
+    )
 
 
 async def _load_detail_images(session: AsyncSession, content_id: str) -> list[SpotImageRow]:
@@ -195,9 +275,11 @@ class _DetailContext:
         )
 
 
-async def _load_spot_base(session: AsyncSession, content_id: str) -> Any:
-    """Load the visible Spot row; raise ResourceNotFound if absent or hidden."""
-    spot = (
+async def _load_spot_context(session: AsyncSession, content_id: str) -> Any:
+    """Load the visible Spot row plus its (region, sigungu, category) label scalars
+    in one LEFT-JOINed query; raise ResourceNotFound if absent or hidden. The code
+    columns are PKs of the label tables, so the joins can't multiply the row."""
+    row = (
         await session.execute(
             select(
                 Spot.content_id,
@@ -208,47 +290,21 @@ async def _load_spot_base(session: AsyncSession, content_id: str) -> Any:
                 Spot.addr2,
                 Spot.mapx,
                 Spot.mapy,
-                Spot.ldong_regn_cd,
-                Spot.ldong_signgu_cd,
-                Spot.lcls_systm3,
                 Spot.modified_time,
-            ).where(Spot.content_id == content_id, Spot.show_flag == 1)
+                Region.ldong_regn_nm.label("region_name"),
+                Sigungu.ldong_signgu_nm.label("sigungu_name"),
+                LclsSystmCode.lcls_systm3_nm.label("category"),
+            )
+            .select_from(Spot)
+            .outerjoin(Region, Region.ldong_regn_cd == Spot.ldong_regn_cd)
+            .outerjoin(Sigungu, Sigungu.ldong_signgu_cd == Spot.ldong_signgu_cd)
+            .outerjoin(LclsSystmCode, LclsSystmCode.lcls_systm3_cd == Spot.lcls_systm3)
+            .where(Spot.content_id == content_id, Spot.show_flag == 1)
         )
     ).first()
-    if spot is None:
+    if row is None:
         raise ResourceNotFound(f"Spot '{content_id}' not found.")
-    return spot
-
-
-async def _load_spot_meta(
-    session: AsyncSession, spot: Any
-) -> tuple[str | None, str | None, str | None]:
-    """Resolve (region_name, sigungu_name, category) scalars, skipping lookups
-    when the corresponding code is absent."""
-    region_name = (
-        await session.scalar(
-            select(Region.ldong_regn_nm).where(Region.ldong_regn_cd == spot.ldong_regn_cd)
-        )
-        if spot.ldong_regn_cd
-        else None
-    )
-    sigungu_name = (
-        await session.scalar(
-            select(Sigungu.ldong_signgu_nm).where(Sigungu.ldong_signgu_cd == spot.ldong_signgu_cd)
-        )
-        if spot.ldong_signgu_cd
-        else None
-    )
-    category = (
-        await session.scalar(
-            select(LclsSystmCode.lcls_systm3_nm).where(
-                LclsSystmCode.lcls_systm3_cd == spot.lcls_systm3
-            )
-        )
-        if spot.lcls_systm3
-        else None
-    )
-    return region_name, sigungu_name, category
+    return row
 
 
 async def _read_cached_detail(
@@ -306,35 +362,40 @@ async def load_spot_detail(
     redis: Redis,
     content_id: str,
 ) -> SpotDetailRow:
-    """Spot detail with lazy KTO enrichment (ADR-0007). Commits the read txn
-    before any HTTP, then fetches/upserts the 7-day cache outside a txn. On KTO
-    failure serves stale or partial — never 502. 404 if absent or show_flag=0.
-    redis is injected but unused (reserved for moving the cache off Postgres)."""
-    _ = redis
-    spot = await _load_spot_base(session, content_id)
-    region_name, sigungu_name, category = await _load_spot_meta(session, spot)
-    ctx = _DetailContext(spot, region_name, sigungu_name, category)
+    """Spot detail with lazy KTO enrichment (ADR-0007). Reads the detail bundle
+    from Redis (hot front cache) then Postgres (7-day authority), commits the read
+    txn before any HTTP, then fetches/upserts on miss/stale outside a txn. On KTO
+    failure serves stale or partial — never 502. 404 if absent or show_flag=0."""
+    spot = await _load_spot_context(session, content_id)
+    ctx = _DetailContext(spot, spot.region_name, spot.sigungu_name, spot.category)
 
-    detail, existing_images = await _read_cached_detail(session, content_id)
+    cache = await _redis_get_detail(redis, content_id)
+    from_redis = cache is not None
+    if cache is None:
+        detail, existing_images = await _read_cached_detail(session, content_id)
+        if detail is not None:
+            cache = _DetailCache(
+                overview=detail.overview,
+                homepage=detail.homepage,
+                tel=detail.tel,
+                intro_data=detail.intro_data,
+                cached_at=detail.cached_at,
+                images=existing_images,
+            )
 
     # End read txn before HTTP. commit() (not rollback) keeps rows under savepoint test fixtures.
     await session.commit()
 
-    # Fresh = within TTL AND not superseded by a newer KTO change (pipeline bumps
-    # spots.modified_time on content change). modified_time is NULL until the
-    # pipeline sync lands the field, so this is a safe no-op until then (#37).
-    if (
-        detail is not None
-        and (datetime.now(UTC) - detail.cached_at) < _DETAIL_TTL
-        and (spot.modified_time is None or detail.cached_at >= spot.modified_time)
-    ):
+    if cache is not None and _is_fresh(cache.cached_at, spot.modified_time):
+        if not from_redis:
+            await _redis_set_detail(redis, content_id, cache)  # warm from Postgres
         return ctx.assemble(
-            overview=detail.overview,
-            homepage=detail.homepage,
-            tel=detail.tel,
-            images=existing_images,
+            overview=cache.overview,
+            homepage=cache.homepage,
+            tel=cache.tel,
+            images=cache.images,
             status="fresh",
-            intro=_extract_intro(spot.content_type_id, detail.intro_data),
+            intro=_extract_intro(spot.content_type_id, cache.intro_data),
         )
 
     try:
@@ -342,14 +403,14 @@ async def load_spot_detail(
             kto, content_id, spot.content_type_id
         )
     except KtoApiUnavailable:
-        if detail is not None:
+        if cache is not None:
             return ctx.assemble(
-                overview=detail.overview,
-                homepage=detail.homepage,
-                tel=detail.tel,
-                images=existing_images,
+                overview=cache.overview,
+                homepage=cache.homepage,
+                tel=cache.tel,
+                images=cache.images,
                 status="stale",
-                intro=_extract_intro(spot.content_type_id, detail.intro_data),
+                intro=_extract_intro(spot.content_type_id, cache.intro_data),
             )
         return ctx.assemble(
             overview=None,
@@ -363,12 +424,25 @@ async def load_spot_detail(
     await _persist_detail(
         session, content_id, spot.content_type_id, overview, homepage, tel, images, intro_data
     )
+    image_rows = [SpotImageRow(origin_image_url=o, small_image_url=s) for o, s in images]
+    await _redis_set_detail(
+        redis,
+        content_id,
+        _DetailCache(
+            overview=overview,
+            homepage=homepage,
+            tel=tel,
+            intro_data=intro_data,
+            cached_at=datetime.now(UTC),
+            images=image_rows,
+        ),
+    )
 
     return ctx.assemble(
         overview=overview,
         homepage=homepage,
         tel=tel,
-        images=[SpotImageRow(origin_image_url=o, small_image_url=s) for o, s in images],
+        images=image_rows,
         status="fresh",
         intro=_extract_intro(spot.content_type_id, intro_data),
     )
