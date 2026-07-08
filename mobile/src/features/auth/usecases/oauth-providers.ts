@@ -33,6 +33,12 @@ function providerError(detail?: string): never {
   );
 }
 
+// OAuth2 returns error=access_denied when the user declines consent on the
+// provider's screen — that's a cancel, not a failure (S01: 취소는 무음 복귀).
+function isConsentDeclined(error: string): boolean {
+  return error === "access_denied";
+}
+
 function toBase64Url(b64: string): string {
   return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
@@ -100,7 +106,9 @@ async function kakaoLogin(): Promise<OAuthOutcome> {
   if (result.type === "cancel" || result.type === "dismiss") return "canceled";
   if (result.type !== "success") return providerError(`session:${result.type}`);
   const params = parseQueryParams(result.url);
-  if (params.error) return providerError(`kakao:${params.error}`);
+  if (params.error) {
+    return isConsentDeclined(params.error) ? "canceled" : providerError(`kakao:${params.error}`);
+  }
   if (params.state !== request.state) return providerError("state-mismatch"); // CSRF guard
   if (!params.code) return providerError("no-code");
   let token: AuthSession.TokenResponse;
@@ -148,7 +156,11 @@ async function webOidcLogin(cfg: OidcConfig): Promise<OAuthOutcome> {
   const result = await request.promptAsync(discovery);
   if (result.type === "cancel" || result.type === "dismiss") return "canceled";
   if (result.type !== "success") return providerError(`session:${result.type}`);
-  if (result.params.error) return providerError(`provider:${result.params.error}`);
+  if (result.params.error) {
+    return isConsentDeclined(result.params.error)
+      ? "canceled"
+      : providerError(`provider:${result.params.error}`);
+  }
   if (!result.params.code) return providerError("no-code");
   let token: AuthSession.TokenResponse;
   try {
