@@ -711,6 +711,22 @@ async def test_spot_search_excludes_hidden(db_session, client, seed) -> None:
     assert "vis" in ids
 
 
+async def test_spot_search_excludes_imageless(db_session, client, seed) -> None:
+    """Picker must not surface active-but-imageless spots — the cover/handpick
+    save gate would 422 them, so results must match what can actually be saved."""
+    _override(db_session, seed)
+    await _seed_spot(db_session, "noimg", region_cd="R0", title="Quokka", img=None)
+    await _seed_spot(db_session, "empty", region_cd="R0", title="Quokka Empty", img="")
+    await _seed_spot(db_session, "ok", region_cd="R0", title="Quokka Ready")
+    await db_session.flush()
+    try:
+        r = await client.get("/admin/api/spots/search", params={"q": "quokka"}, headers=_AUTH)
+    finally:
+        app.dependency_overrides.clear()
+    ids = {s["contentId"] for s in r.json()["data"]["spots"]}
+    assert ids == {"ok"}
+
+
 async def test_spot_search_sigungu_filter(db_session, client, seed) -> None:
     _override(db_session, seed)
     await _seed_sigungu(db_session, "SG1", "R0", "sigungu-1")
