@@ -1,8 +1,8 @@
 <!doctype html>
 <!--
   홈 큐레이션 편성 보드 — C안(App Store 피처링 보드 + 슬라이드오버) + B안 폼 밀도.
-  보드가 곧 미리보기: 히어로 6장은 앱 홈과 동일 렌더의 카드 갤러리, 무드 레일은
-  와이드 로우. 카드 클릭 → 우측 슬라이드오버에서 카피·표지·손픽·발행 편집.
+  히어로 6장은 앱 홈과 동일 렌더의 카드 갤러리, 무드 레일은 와이드 로우.
+  카드 클릭 → 우측 슬라이드오버에서 카피·표지·손픽 편집. 순서는 보드 카드 드래그.
   동적 마크업은 전부 <template> 클론 + DOM 프로퍼티 대입(assets/curation.js).
 -->
 <html lang="ko">
@@ -60,10 +60,9 @@
         <div>
           <div class="eyebrow">Home · Curation Board</div>
           <h1>홈 편성 보드</h1>
-          <p>보드가 곧 미리보기입니다 — 카드는 실제 앱 홈 피드와 동일한 렌더 · 노출 순서 그대로</p>
         </div>
         <span class="sp"></span>
-        <div class="legend"><span class="pub"><i></i>발행 중</span><span class="off"><i></i>비공개</span><span>카드 드래그 = 순서 변경</span></div>
+        <div class="legend"><span>카드 드래그 = 순서 변경</span></div>
       </div>
 
       <!-- 목록 로드 에러 -->
@@ -104,12 +103,6 @@
           <div class="bs-h"><h2>무드 레일</h2><span class="x" id="rail-caption">가로 스크롤 레일 · 히어로 아래</span></div>
           <div id="board-rails"></div>
         </section>
-
-        <section class="board-sec" id="board-editorial-sec" hidden>
-          <div class="bs-h"><h2>에디토리얼</h2><span class="x" id="editorial-caption">0개</span></div>
-          <div id="board-editorial"></div>
-          <div class="edempty" id="editorial-empty" hidden>에디토리얼 큐레이션 없음 · 시드 스크립트로 관리됩니다</div>
-        </section>
       </div>
 
     </div>
@@ -123,7 +116,6 @@
       <div class="eyebrow"><span id="so-kind">지역 히어로</span> <span class="pchip" id="so-pos-chip">position #0</span> <span class="pchip" id="so-slug">—</span></div>
       <h2 id="so-heading">—</h2>
       <div class="dw-meta">
-        <span class="chip pub" id="so-status">발행됨</span>
         <span class="chip dirtyc" id="so-dirty-chip" hidden>수정됨 · 저장 안 됨</span>
         <span class="lastsave" id="so-lastsaved" hidden></span>
       </div>
@@ -131,6 +123,12 @@
     <button class="x" id="so-close" type="button" aria-label="편집 패널 닫기"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
   </div>
   <div class="dw-b">
+    <!-- 상세 로드 실패 — 목록 값만 표시 중, 저장 비활성 -->
+    <div class="errbanner" id="so-detail-error" role="alert" hidden>
+      <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16" r=".7" fill="currentColor" stroke="none"/></svg>
+      <span>상세를 불러오지 못했습니다 — 저장이 비활성화됩니다 <small id="so-detail-error-detail"></small></span>
+      <button class="btn" id="so-detail-retry" type="button">다시 시도</button>
+    </div>
     <div class="mini" id="so-preview">
       <div class="mini-tabs" role="tablist" aria-label="프리뷰 전환">
         <button class="on" data-m="home" role="tab" aria-selected="true" type="button">홈 카드</button>
@@ -159,7 +157,6 @@
           </div>
         </div>
       </div>
-      <div class="mini-cap" id="mp-cap">실제 앱과 동일 렌더 · 편집 즉시 반영</div>
     </div>
 
     <div class="fs" id="so-cover-sec">
@@ -212,19 +209,6 @@
       <div class="autonote" id="so-autonote"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16" r=".7" fill="currentColor" stroke="none"/></svg><span id="so-autonote-txt">비우면 품질 랭킹으로 자동 충전 · 미리보기에 실제 반영</span></div>
       <div class="emsg" data-err-for="spotIds" hidden></div>
     </div>
-
-    <div class="fs">
-      <div class="fs-t">편성</div>
-      <div class="togglerow">
-        <span class="tl"><b>홈에 발행</b><small>끄면 홈 피드에서 즉시 제외 · GET /home/feed 반영</small></span>
-        <label class="tglwrap"><input type="checkbox" id="so-publish" aria-label="홈에 발행"><span class="tgl" aria-hidden="true"></span></label>
-      </div>
-      <div class="posrow">
-        <span class="pl">홈 내 노출 순서 <span class="ph" id="so-pos-hint"></span></span>
-        <span class="stepper"><button id="so-pos-dec" type="button" aria-label="순서 앞으로">−</button><span class="v" id="so-pos-value">0</span><button id="so-pos-inc" type="button" aria-label="순서 뒤로">+</button></span>
-      </div>
-      <div class="emsg" data-err-for="position" hidden></div>
-    </div>
   </div>
   <div class="dw-f">
     <span class="state" id="so-state-dirty" hidden><span class="d"></span>수정됨 · 저장 안 됨<small class="ep" id="so-endpoint-dirty"></small></span>
@@ -250,22 +234,28 @@
     </div>
     <div class="ptop">
       <div class="psearch"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg><input id="picker-search" placeholder="스팟 이름 또는 지역으로 검색" aria-label="스팟 검색"><span class="n" id="picker-count"></span></div>
-      <div class="fchips" id="picker-filters">
-        <button class="fchip on" type="button" data-region="">전체</button>
-        <button class="fchip" type="button" data-region="11">서울</button>
-        <button class="fchip" type="button" data-region="26">부산</button>
-        <button class="fchip" type="button" data-region="51">강원</button>
-        <button class="fchip" type="button" data-region="52">전북</button>
-        <button class="fchip" type="button" data-region="46">전남</button>
-        <button class="fchip" type="button" data-region="47">경북</button>
-        <button class="fchip" type="button" data-region="50">제주</button>
+      <div class="pfilters" id="picker-filters">
+        <div class="frow">
+          <select class="fsel" id="picker-sido" aria-label="시도 필터">
+            <option value="">시도 전체</option>
+          </select>
+          <div class="fchips" id="picker-cats">
+            <button class="fchip on" type="button" data-category="">전체</button>
+            <button class="fchip" type="button" data-category="attraction">관광지</button>
+            <button class="fchip" type="button" data-category="food">음식점</button>
+            <button class="fchip" type="button" data-category="cafe">카페</button>
+            <button class="fchip" type="button" data-category="leisure">레저</button>
+            <button class="fchip" type="button" data-category="shopping">쇼핑</button>
+          </div>
+        </div>
+        <div class="fchips sgg" id="picker-sigungu" hidden></div>
       </div>
     </div>
     <div class="pres" id="picker-results" hidden></div>
     <div class="pstate" id="picker-empty-prompt">
       <span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></span>
-      <b>검색어를 입력하세요</b>
-      <p>스팟 이름 또는 지역으로 검색할 수 있습니다</p>
+      <b>검색어를 입력하거나 필터를 선택하세요</b>
+      <p>스팟 이름으로 검색하거나 지역·카테고리 필터로 둘러볼 수 있습니다</p>
     </div>
     <div class="pstate" id="picker-empty-none" hidden>
       <span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/><path d="M8.5 11h5"/></svg></span>
@@ -305,10 +295,9 @@
       <div class="grad"></div>
       <span class="pos" data-pos></span>
       <span class="grab" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></svg></span>
-      <span class="offbadge" hidden>비공개</span>
       <div class="txt"><h3 data-t></h3><p data-s></p></div>
     </div>
-    <div class="hmeta"><span class="st"></span><b data-slug></b><span class="m" hidden>수정됨</span></div>
+    <div class="hmeta"><b data-slug></b><span class="m" hidden>수정됨</span></div>
   </div>
 </template>
 <template id="tpl-rail-row">
@@ -318,7 +307,6 @@
     <span class="stack" data-stack></span>
     <span class="rm"><b data-t></b><small data-s></small></span>
     <span class="chip hand" data-chip></span>
-    <label class="tglwrap" data-stop><input type="checkbox" aria-label="홈에 발행"><span class="tglmini" aria-hidden="true"></span></label>
     <span class="chev" aria-hidden="true">›</span>
   </div>
 </template>

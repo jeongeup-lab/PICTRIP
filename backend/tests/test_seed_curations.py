@@ -68,6 +68,26 @@ async def test_seed_is_idempotent(db_session: AsyncSession) -> None:
     assert await _count(db_session, "mood") == 3
 
 
+async def test_seed_restores_unpublished_rows_to_published(db_session: AsyncSession) -> None:
+    """The admin surface has no publish toggle — re-seeding must flip any drifted
+    published=false row back to true (the board is always the fixed 6+3)."""
+    await seed_curations.seed(db_session)
+    await db_session.flush()
+    await db_session.execute(
+        text("UPDATE curations SET is_published = false WHERE slug IN ('region-jeju', 'mood-sea')")
+    )
+    await db_session.flush()
+
+    second = await seed_curations.seed(db_session)
+    await db_session.flush()
+
+    assert second == 0  # still no new inserts
+    unpublished = await db_session.execute(
+        text("SELECT count(*) FROM curations WHERE is_published = false")
+    )
+    assert int(unpublished.scalar_one()) == 0
+
+
 async def test_titles_preserve_newline_verbatim(db_session: AsyncSession) -> None:
     await seed_curations.seed(db_session)
     await db_session.flush()

@@ -53,8 +53,9 @@
 | A6 | **상세 로그 = run 요약 + `error`** (raw stdout 아님) | DB에 로그 컬럼 없음. 전체 로그가 필요해지면 juns가 적재 추가(차기) |
 | A7 | **트리거 메커니즘 미정 → 어댑터로 격리** | `workflow_dispatch` vs CT111 Tailscale HTTP는 juns 협의. 인터페이스 `trigger(job)->run_id`만 고정, 구현체 교체 가능 |
 | A8 | **단계화: Phase 1(조회 전용) 단독 선출시** | 현황·이력·헬스는 공용 DB 읽기 + 백엔드 내부값 = 0 외부의존. 트리거만 Phase 2 |
-| A9 | **홈 큐레이션 편집기 채택 — read-write 확장** (2026-06-21, 사용자 승인) | A01 본래 "콘텐츠 큐레이션=비목표"·어드민 read-only 결정을 뒤집음. 홈 편성(히어로6+무드레일3)을 앱 재배포 없이 편집/발행. `curations`/`curation_spots`에 한정한 **스코프된 쓰기**(그 외 표면은 read-only 유지). Phase 4. → §7, 목업 `admin/mockups/curation.html`(B안), 요구사항 ADM-012~018 |
+| A9 | **홈 큐레이션 편집기 채택 — read-write 확장** (2026-06-21, 사용자 승인) | A01 본래 "콘텐츠 큐레이션=비목표"·어드민 read-only 결정을 뒤집음. 홈 편성(히어로6+무드레일3)을 앱 재배포 없이 편집/발행(발행은 이후 A11로 제거). `curations`/`curation_spots`에 한정한 **스코프된 쓰기**(그 외 표면은 read-only 유지). Phase 4. → §7, 목업 `admin/mockups/curation.html`(B안), 요구사항 ADM-012~018 |
 | A10 | **임베딩 현황 카드 + 재임베딩 채택 — read-write 확장** (2026-06-28, 사용자 승인) | 수집(`spots`)과 임베딩(CLIP→`spot_embeddings`)은 분리된 단계인데 현황 페이지엔 수집만 보였음. 임베딩 커버리지·실패 백로그·이번 수집분 진행을 노출하고, 실패/백로그를 **인프로세스 BackgroundTask**로 재임베딩(Celery 없음, Redis `SET NX` 락=동시성 가드+running 표시). 실패 영속화용 `embedding_failures` 신설(백엔드 소유). 쓰기는 `images.services` 경유(어드민이 모델 직접 쓰지 않음). `GET /admin/api/embedding` · `POST /admin/api/embedding/trigger?scope=failed\|missing` → 수집 현황 아래 카드 |
+| A11 | **큐레이션 하드닝 — 발행 토글 제거 · 보드 DnD 단일화** (2026-07-08, 사용자 승인) | 편성=시드된 고정 히어로6+레일3이라 발행/미발행 운영 개념이 무의미 — 어드민 API/UI에서 `isPublished` 노출·수정 완전 제거(`is_published` 컬럼·피드 필터는 DB 내부 계약으로 잔존, `seed_curations.py`가 전량 published 보장). 에디토리얼 그룹·UI 제거(목록=`{heroes, rails}`, DB CHECK의 'editorial' 타입은 잔존). 순서=`PUT /admin/api/curations/positions`(type별 전체 순열·단일 트랜잭션·응답=보드) 보드 DnD 단일 경로(슬라이드오버 스테퍼 제거). 손픽 품질 게이트=커버와 동일(존재+`show_flag=1`+이미지 비어있지 않음, 등록 422+서빙 필터). `…/{id}/preview` 정식 문서화, 피커=q 선택화+시군구/카테고리/offset, `/admin/login` 레이트리밋 5회/분/IP → §7 |
 
 **미정(blocking은 트리거뿐):** A7 트리거 메커니즘.
 **제외(스코프 밖):** Redis ping·`rlte:*` 카운트, 취향벡터 보유,
@@ -110,6 +111,10 @@ app/modules/admin/
   마이그레이션 0016이 `admin`/`admin` 시드(약한 기본값 — `scripts/set_admin_password.py`로 로테이션).
   자격증명 없음/오류 → `401 WWW-Authenticate: Basic`(503 잠금 개념 폐지).
 - HTTP Basic 의존성을 `/admin` HTML + `/admin/api/*` 전 라우트에 적용(공개 경로라 Basic 필수).
+  - **현행 구현:** `/admin/login` 폼 + 서명 쿠키 세션 — HTML 페이지는 미로그인 시
+    `/admin/login`으로 리다이렉트, `/admin/api/*`는 401(`AdminAuth` 의존성).
+  - **레이트리밋(2026-07-08, A11):** `POST /admin/login`은 **5회/분/IP**
+    (`rate_limit(bucket="admin_login", limit=5, window_seconds=60)`) — bcrypt 브루트포스 방어.
 - ⚠️ 보안: `/admin`은 CF 터널로 공개되고 홈 큐레이션 **쓰기** 권한이 있음. `admin`/`admin`은
   데모용 약한 기본값 — 실사용 전 강한 비번 로테이션 또는 A9 CF Access 게이트 권장.
 - ~~(superseded) env `ADMIN_PASSWORD` 미설정 시 503, username 고정 `admin`, `secrets.compare_digest`.~~
@@ -254,6 +259,10 @@ TriggerResult { job: "sync-daily", runId: str|null, accepted: bool }
     (ADM-012~015) + 발행 시 BE-HOME-003 캐시 무효화 재사용 + 변경 audit(ADM-016).
 11. 편집 화면 = 목업 `curation.html`(B안: 편성 미리보기 + 편집) fetch 연결(ADM-017).
 12. pytest(`POSTGRES_DB=pictrip_test`) — 편집·손픽·검색·발행 무효화·권한(ADM-018).
+13. **(2026-07-08, A11) 큐레이션 하드닝:** 발행 토글 제거(편성=시드 고정 6+3) ·
+    `PUT /admin/api/curations/positions` 원자 재정렬(보드 DnD 단일 경로) ·
+    `…/{id}/preview` 정식화 · 손픽 품질 게이트(422+서빙 필터) · 피커 필터
+    (시군구·카테고리·offset 페이지네이션) · `/admin/login` 레이트리밋 5회/분/IP.
 
 ---
 
@@ -281,16 +290,34 @@ TriggerResult { job: "sync-daily", runId: str|null, accepted: bool }
   users 집계)은 read-only 유지. 쓰기 트랜잭션 경계는 `admin/services.py`. 큐레이션은 어드민이
   소유 도메인으로 직접 다룬다(taste/spots 등 타 모듈은 계속 read 전용 집계).
 - **편집 대상:** 히어로 6(region) + 무드 레일 3(mood). 카피(제목 `\n` 원문 유지·부제·리드·
-  소개), 표지 스팟(**KTO URL 참조만 — 다운로드·저장 금지**), 발행 여부, 노출 순서, 손픽
-  스팟(≤8, 순서). 손픽을 비우면 BE-HOME-003 품질게이트 랭킹으로 자동 채움(덮어쓰기 아님).
-- **API(신규, `/admin/api/`):**
-  - `GET  /admin/api/curations` — 히어로6 + 레일3 목록(발행 상태 포함)
+  소개), 표지 스팟(**KTO URL 참조만 — 다운로드·저장 금지**), 노출 순서(보드 DnD →
+  positions 엔드포인트), 손픽 스팟(≤8, 순서). 손픽을 비우면 BE-HOME-003 품질게이트
+  랭킹으로 자동 채움(덮어쓰기 아님).
+  - **[정정 — 2026-07-08, A11]** **발행 여부는 편집 대상 아님** — 편성=시드 고정 6+3,
+    `isPublished`는 API/UI에서 완전 제거(`is_published` 컬럼·피드 필터는 DB 내부 계약으로
+    잔존, 시드가 전량 published 보장). 에디토리얼 그룹 UI도 제거(보드=heroes/rails만,
+    DB CHECK의 'editorial' 타입은 잔존). 순서 변경은 보드 카드 DnD **단일 경로**
+    (슬라이드오버 내 순서 스테퍼 제거). **손픽/표지 품질 게이트** = 존재 + `show_flag=1` +
+    대표 이미지 비어있지 않음 — 등록 시 422(`ADMIN_VALIDATION`) + 서빙 시 필터 양쪽.
+- **API(신규, `/admin/api/`; 2026-07-08 A11 반영):**
+  - `GET  /admin/api/curations` — 편성 보드 `{heroes, rails}`(type별 `position, id` 순;
+    발행 상태 없음, editorial 제외)
   - `GET  /admin/api/curations/{id}` — 카피·표지·손픽 스팟 상세
-  - `PUT  /admin/api/curations/{id}` — 카피·표지·발행·순서 수정(타입↔스코프 CHECK 검증)
-  - `PUT  /admin/api/curations/{id}/spots` — 손픽 스팟 순서 set(`curation_spots` 교체)
-  - `GET  /admin/api/spots/search?q=&region=` — 어드민 전용 스팟 피커(공개 `/spots/search`
-    비목표와 별개의 내부 검색; 응답=content_id·이름·대표이미지·지역 최소 필드)
-- **발행 일관성:** 저장/발행 시 BE-HOME-003 `on-publish 즉시 DEL` 무효화를 재사용 → 앱 홈에
-  즉시 반영. 모든 쓰기에 변경 audit 1줄(누가·언제·무엇·발행 여부, ADM-010 패턴).
+  - `GET  /admin/api/curations/{id}/preview` — 앱이 실제 렌더할 스팟(손픽 있으면 손픽,
+    없으면 품질게이트 자동채움 풀 — 라이브 피드 리졸버 재사용, truthful 미리보기)
+  - `PUT  /admin/api/curations/{id}` — 카피·표지만(`title·subtitle·lead·intro·coverSpotId`;
+    타입/스코프 불변이라 CHECK 유지, 발행·순서 필드 없음)
+  - `PUT  /admin/api/curations/positions` — `{type, orderedIds}` 원자 재정렬: 해당 type
+    **전체 id의 순열** 검증, position=배열 인덱스, 단일 트랜잭션, 응답=갱신된 보드
+  - `PUT  /admin/api/curations/{id}/spots` — 손픽 스팟 순서 set(`curation_spots` 교체,
+    ≤8·중복·품질 게이트 검증 → 422)
+  - `GET  /admin/api/spots/search?q=&region=&sigungu=&category=&offset=` — 어드민 전용
+    스팟 피커(공개 `/spots/search` 비목표와 별개의 내부 검색). **q 선택** — 필터만으로
+    브라우징 가능; `category`는 NearbyCategory 5종(attraction·food·cafe·leisure·shopping),
+    페이지 20건 고정, 응답 `{spots, total, hasMore}`. 피커 UI=`/map/regions-tree` 시도→시군구
+    캐스케이드 + 카테고리 칩 + "더 보기"(offset append)
+- **쓰기 일관성(구 "발행 일관성"):** 카피/표지·손픽 저장 시 BE-HOME-003 `curation:{id}:spots`
+  on-write DEL 무효화를 재사용 → 앱 홈에 즉시 반영. positions(순서)는 캐시 무효화 불필요
+  (순서는 spots 캐시에 미포함). 모든 쓰기에 변경 audit 1줄(누가·언제·무엇, ADM-010 패턴).
 - **인증:** 기존 A4(Basic) + A9 배포의 CF Access 게이트로 보호. write도 동일 게이트.
 - **여전히 비목표:** 회원 관리, 큐레이션 신규 타입/스키마 변경, editorial 큐레이션 자동 생성.

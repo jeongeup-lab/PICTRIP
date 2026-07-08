@@ -9,13 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.spots.services import curations as curation_svc
 from app.modules.spots.services.cards import (
+    load_active_spot_cards_by_ids,
     load_cover_images,
-    load_spot_cards_by_ids,
 )
 from app.modules.spots.services.rows import SpotCardRow
 
 _HERO_COUNT = 6
 _RAIL_COUNT = 3
+_RAIL_MIN_SPOTS = 3  # a rail with fewer resolved spots is omitted (S02:36, S11 §6)
 
 
 @dataclass
@@ -73,7 +74,9 @@ async def assemble_home_feed(session: AsyncSession, redis: Redis) -> HomeFeedRow
     rail_ids = [await curation_svc.resolve_curation_ids(session, redis, c) for c in mood_curations]
 
     all_ids = {cid for ids in (*hero_ids, *rail_ids) for cid in ids}
-    by_id = await load_spot_cards_by_ids(session, list(all_ids))
+    # Active-only hydration: a spot hidden after the day-cache was built must
+    # not render even while its id is still cached.
+    by_id = await load_active_spot_cards_by_ids(session, list(all_ids))
     cover_images = await load_cover_images(
         session, [c.cover_spot_id for c in region_curations if c.cover_spot_id]
     )
@@ -81,19 +84,27 @@ async def assemble_home_feed(session: AsyncSession, redis: Redis) -> HomeFeedRow
     heroes: list[HeroRow] = []
     for cur, ids in zip(region_curations, hero_ids, strict=True):
         resolved = [by_id[cid] for cid in ids if cid in by_id]
+        cover = _pick_cover(cur.cover_spot_id, cover_images, resolved)
+        if cover is None:
+            # Defense rule (S02:36): a hero without a resolvable cover is
+            # dropped — fewer than 6 heroes is allowed.
+            continue
         heroes.append(
             HeroRow(
                 id=cur.id,
                 slug=cur.slug,
                 title=cur.title,
                 subtitle=cur.subtitle,
-                cover_url=_pick_cover(cur.cover_spot_id, cover_images, resolved),
+                cover_url=cover,
             )
         )
 
     rails: list[RailRow] = []
     for cur, ids in zip(mood_curations, rail_ids, strict=True):
         resolved = [by_id[cid] for cid in ids if cid in by_id]
+        if len(resolved) < _RAIL_MIN_SPOTS:
+            # Defense rule (S11 §6): omit rails that resolve to fewer than 3 spots.
+            continue
         rails.append(RailRow(id=cur.id, title=cur.title, subtitle=cur.subtitle, spots=resolved))
 
     return HomeFeedRow(heroes=heroes, rails=rails)

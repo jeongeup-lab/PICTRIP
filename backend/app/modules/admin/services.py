@@ -48,6 +48,7 @@ from app.modules.admin.schemas import (
     HistoryList,
     HistoryRun,
     LastRun,
+    PositionsUpdate,
     PreviewSpot,
     SpotSearchItem,
     SpotSearchResult,
@@ -61,6 +62,7 @@ from app.modules.spots.services.curations import (
     load_curation,
     resolve_curation_spots,
 )
+from app.modules.spots.services.nearby import NearbyCategory
 
 _SOURCE_NAME = "국문 관광정보 서비스"
 _SOURCE_ENDPOINT = "areaBasedSyncList2"
@@ -360,30 +362,28 @@ def _audit_trigger(actor: str, *, accepted: bool, ref: str | None, reason: str |
 # --- curation editor (A01 §7 / ADM-012~016) -----------------------------------
 # This is the admin module's only write surface; transaction commit boundaries
 # live here (repos mutate the passed session, services commit). Every write
-# invalidates the on-publish cache and emits a structured audit line.
+# invalidates the curation spot cache and emits a structured audit line.
 
 
 async def list_curations(session: AsyncSession) -> CurationList:
     rows = await repo.list_curations(session)
-    by_type: dict[str, list[CurationListItem]] = {"region": [], "mood": [], "editorial": []}
+    by_type: dict[str, list[CurationListItem]] = {"region": [], "mood": []}
     for r in rows:
-        item = CurationListItem(
-            id=r.id,
-            type=r.type,
-            slug=r.slug,
-            title=r.title,
-            subtitle=r.subtitle,
-            coverUrl=r.cover_url,
-            isPublished=r.is_published,
-            position=r.position,
+        if r.type not in by_type:  # legacy 'editorial' rows are ignored
+            continue
+        by_type[r.type].append(
+            CurationListItem(
+                id=r.id,
+                type=r.type,
+                slug=r.slug,
+                title=r.title,
+                subtitle=r.subtitle,
+                coverUrl=r.cover_url,
+                position=r.position,
+            )
         )
-        by_type.setdefault(r.type, []).append(item)
     # rows arrive ordered by (type, position); the per-group lists preserve it.
-    return CurationList(
-        heroes=by_type["region"],
-        rails=by_type["mood"],
-        editorial=by_type["editorial"],
-    )
+    return CurationList(heroes=by_type["region"], rails=by_type["mood"])
 
 
 async def _build_detail(session: AsyncSession, curation) -> CurationDetail:  # type: ignore[no-untyped-def]
@@ -416,7 +416,6 @@ async def _build_detail(session: AsyncSession, curation) -> CurationDetail:  # t
         coverSpot=cover,
         regionCd=curation.region_cd,
         moodId=curation.mood_id,
-        isPublished=curation.is_published,
         position=curation.position,
         handpicks=handpicks,
     )
@@ -470,8 +469,6 @@ async def update_curation(
     title = body.title  # newlines allowed; only reject blank-after-strip
     if not title.strip():
         details.append({"field": "title", "issue": "제목은 비워둘 수 없습니다."})
-    if body.position < 0:
-        details.append({"field": "position", "issue": "노출 순서는 0 이상이어야 합니다."})
     if body.coverSpotId is not None and not await repo.spot_exposable_with_image(
         session, body.coverSpotId
     ):
@@ -493,13 +490,11 @@ async def update_curation(
         lead=body.lead,
         intro=body.intro,
         cover_spot_id=body.coverSpotId,
-        is_published=body.isPublished,
-        position=body.position,
     )
     # Defensive: type/scope are not editable here, so ck_curation_scope still
     # holds; the COMMIT would surface any DB-level CHECK violation regardless.
     await session.commit()
-    await invalidate_curation_cache(redis, curation_id)  # ADM-016 on-publish DEL
+    await invalidate_curation_cache(redis, curation_id)  # ADM-016 on-write DEL
     _audit("curation.update", curation)
     return await _build_detail(session, curation)
 
@@ -523,11 +518,16 @@ async def set_curation_spots(
     if len(set(spot_ids)) != len(spot_ids):
         details.append({"field": "spotIds", "issue": "중복된 스팟이 있습니다."})
     if spot_ids:
-        existing = await repo.existing_spot_ids(session, spot_ids)
-        missing = [cid for cid in spot_ids if cid not in existing]
-        if missing:
+        # Quality gate: handpicks must be servable as-is — exists, show_flag=1,
+        # non-empty image (same policy as the cover check).
+        exposable = await repo.exposable_spot_ids(session, spot_ids)
+        rejected = [cid for cid in spot_ids if cid not in exposable]
+        if rejected:
             details.append(
-                {"field": "spotIds", "issue": f"존재하지 않는 스팟: {', '.join(missing)}"}
+                {
+                    "field": "spotIds",
+                    "issue": f"노출할 수 없는 스팟(없음/숨김/이미지 없음): {', '.join(rejected)}",
+                }
             )
     if details:
         raise AdminValidationFailed(details=details)
@@ -535,7 +535,7 @@ async def set_curation_spots(
     await repo.replace_curation_spots(session, curation_id, spot_ids)
     curation.updated_at = datetime.now(tz=UTC)
     await session.commit()
-    await invalidate_curation_cache(redis, curation_id)  # ADM-016 on-publish DEL
+    await invalidate_curation_cache(redis, curation_id)  # ADM-016 on-write DEL
     _audit("curation.spots", curation, count=len(spot_ids))
 
     hp_rows = await repo.curation_handpicks(session, curation_id)
@@ -553,10 +553,82 @@ async def set_curation_spots(
     )
 
 
+async def update_curation_positions(session: AsyncSession, body: PositionsUpdate) -> CurationList:
+    """Atomic per-type reorder: position = array index, one transaction (ADM-013).
+
+    ``orderedIds`` must be an exact permutation of ALL curation ids of ``type``
+    (set equality, no duplicates) so a stale board can never silently drop or
+    duplicate a row. Returns the refreshed grouped board. No spot-cache
+    invalidation — ordering never enters the ``curation:{id}:spots`` cache.
+    """
+    if body.type not in ("region", "mood"):
+        raise AdminValidationFailed(
+            details=[{"field": "type", "issue": "type은 region 또는 mood여야 합니다."}]
+        )
+
+    ordered = body.orderedIds
+    existing = set(await repo.curation_ids_by_type(session, body.type))
+    details: list[dict[str, str]] = []
+    if len(set(ordered)) != len(ordered):
+        details.append({"field": "orderedIds", "issue": "중복된 큐레이션 id가 있습니다."})
+    if set(ordered) != existing:
+        details.append(
+            {
+                "field": "orderedIds",
+                "issue": f"orderedIds는 {body.type} 큐레이션 전체 id의 순열이어야 합니다.",
+            }
+        )
+    if details:
+        raise AdminValidationFailed(details=details)
+
+    await repo.set_curation_positions(session, {cid: i for i, cid in enumerate(ordered)})
+    await session.commit()
+    # ADM-016 audit: one structured line per reorder (same pipeline as _audit).
+    _logger.info(
+        "curation.positions",
+        actor=_ADMIN_ACTOR,
+        action="curation.positions",
+        type=body.type,
+        count=len(ordered),
+        orderedIds=ordered,
+    )
+    return await list_curations(session)
+
+
 async def search_spots(
-    session: AsyncSession, q: str, region: str | None, limit: int
+    session: AsyncSession,
+    *,
+    q: str | None,
+    region: str | None,
+    sigungu: str | None,
+    category: str | None,
+    limit: int,
+    offset: int,
 ) -> SpotSearchResult:
-    rows = await repo.admin_spot_search(session, q, region, limit)
+    """Picker search — q optional (region/sigungu/category alone allow browsing);
+    invalid category → 422 ADMIN_VALIDATION (NearbyCategory is the SSOT)."""
+    cat: NearbyCategory | None = None
+    if category:
+        try:
+            cat = NearbyCategory(category)
+        except ValueError:
+            allowed = ", ".join(c.value for c in NearbyCategory)
+            raise AdminValidationFailed(
+                details=[
+                    {"field": "category", "issue": f"category는 {allowed} 중 하나여야 합니다."}
+                ]
+            ) from None
+
+    q_norm = q.strip() if q else None
+    rows, total = await repo.admin_spot_search(
+        session,
+        q=q_norm or None,
+        region=region,
+        sigungu=sigungu,
+        category=cat,
+        limit=limit,
+        offset=offset,
+    )
     return SpotSearchResult(
         spots=[
             SpotSearchItem(
@@ -567,7 +639,9 @@ async def search_spots(
                 imageUrl=r.first_image_url,
             )
             for r in rows
-        ]
+        ],
+        total=total,
+        hasMore=offset + len(rows) < total,
     )
 
 
@@ -580,6 +654,5 @@ def _audit(action: str, curation, **extra) -> None:  # type: ignore[no-untyped-d
         actor=_ADMIN_ACTOR,
         curationId=curation.id,
         slug=curation.slug,
-        isPublished=curation.is_published,
         **extra,
     )

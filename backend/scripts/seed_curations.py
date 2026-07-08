@@ -15,7 +15,9 @@ nothing resolves.
     uv run python -m scripts.seed_curations --dry-run   # print plan, no writes
 
 Idempotency: ``INSERT ... ON CONFLICT (slug) DO NOTHING`` against the unique
-``uq_curations_slug`` constraint, so a second run inserts nothing.
+``uq_curations_slug`` constraint, so a second run inserts nothing. Re-running
+also restores ``is_published = true`` on any seeded row that drifted to false —
+the admin surface has no publish toggle, so the board is always the full 6+3.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 
+from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -131,18 +134,32 @@ def _rows() -> list[dict[str, object]]:
 async def seed(session: AsyncSession) -> int:
     """Insert the 9 curations idempotently; return the number of rows inserted.
 
-    ``ON CONFLICT (slug) DO NOTHING`` makes a second run a no-op. The session is
-    injected (not committed here) so tests can pass a rolled-back fixture; the
-    ``main()`` wrapper owns the commit.
+    ``ON CONFLICT (slug) DO NOTHING`` makes a second run a no-op for inserts.
+    A follow-up UPDATE guarantees every seeded row is published: the admin
+    surface has no publish toggle, so any ``is_published = false`` drift (manual
+    SQL, legacy toggle) is flipped back to true. The session is injected (not
+    committed here) so tests can pass a rolled-back fixture; the ``main()``
+    wrapper owns the commit.
     """
+    rows = _rows()
     stmt = (
         pg_insert(Curation)
-        .values(_rows())
+        .values(rows)
         .on_conflict_do_nothing(index_elements=[Curation.slug])
         .returning(Curation.id)
     )
     result = await session.execute(stmt)
-    return len(result.scalars().all())
+    inserted = len(result.scalars().all())
+
+    await session.execute(
+        update(Curation)
+        .where(
+            Curation.slug.in_([str(r["slug"]) for r in rows]),
+            Curation.is_published.is_(False),
+        )
+        .values(is_published=True)
+    )
+    return inserted
 
 
 async def main() -> None:
