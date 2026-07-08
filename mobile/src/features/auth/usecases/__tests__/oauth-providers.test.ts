@@ -89,6 +89,39 @@ describe("getIdToken", () => {
     expect(await getIdToken("kakao")).toBe("canceled");
   });
 
+  it("web oidc (google) access_denied maps to 'canceled'", async () => {
+    const promptAsync = jest.fn(async () => ({
+      type: "success",
+      params: { error: "access_denied" },
+    }));
+    (AuthSession.AuthRequest as unknown as jest.Mock).mockImplementation(() => ({ promptAsync }));
+    expect(await getIdToken("google")).toBe("canceled");
+  });
+
+  it("kakao access_denied (consent decline) maps to 'canceled'", async () => {
+    (AuthSession.AuthRequest as unknown as jest.Mock).mockImplementation(() => ({
+      makeAuthUrlAsync: jest.fn(async () => "https://kauth.kakao.com/authorize"),
+      state: "st",
+    }));
+    (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({
+      type: "success",
+      url: "pictrip://oauthredirect?error=access_denied&state=st",
+    });
+    expect(await getIdToken("kakao")).toBe("canceled");
+  });
+
+  it("kakao surfaces a non-cancel provider error as AppError", async () => {
+    (AuthSession.AuthRequest as unknown as jest.Mock).mockImplementation(() => ({
+      makeAuthUrlAsync: jest.fn(async () => "https://kauth.kakao.com/authorize"),
+      state: "st",
+    }));
+    (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({
+      type: "success",
+      url: "pictrip://oauthredirect?error=server_error&state=st",
+    });
+    await expect(getIdToken("kakao")).rejects.toBeInstanceOf(AppError);
+  });
+
   it("kakao rejects a state mismatch (CSRF guard)", async () => {
     (AuthSession.AuthRequest as unknown as jest.Mock).mockImplementation(() => ({
       makeAuthUrlAsync: jest.fn(async () => "https://kauth.kakao.com/authorize"),
