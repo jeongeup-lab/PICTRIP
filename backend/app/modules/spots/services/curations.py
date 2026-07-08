@@ -20,7 +20,7 @@ from app.modules.images.services import spot_has_embedding_clause
 from app.modules.spots.models import Curation, CurationSpot, Spot, SpotDetail, SpotMood
 from app.modules.spots.services.cards import (
     cover_url,
-    load_active_spot_cards_by_ids,
+    load_exposable_spot_cards_by_ids,
 )
 from app.modules.spots.services.rows import SpotCardRow
 
@@ -211,9 +211,9 @@ async def resolve_curation_spots(
     ids = await resolve_curation_ids(session, redis, curation)
     if not ids:
         return []
-    # Active-only hydration: even while the day-cache still holds a since-hidden
-    # spot's id, it must not render (the cache lives until KST midnight).
-    by_id = await load_active_spot_cards_by_ids(session, ids)
+    # Serving gate: even while the day-cache still holds a since-hidden or
+    # since-imageless spot's id, it must not render (cache lives until KST midnight).
+    by_id = await load_exposable_spot_cards_by_ids(session, ids)
     # Preserve the resolved order; drop ids that no longer hydrate.
     return [by_id[cid] for cid in ids if cid in by_id]
 
