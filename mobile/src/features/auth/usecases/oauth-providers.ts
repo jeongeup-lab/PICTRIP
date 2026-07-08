@@ -155,6 +155,12 @@ async function webOidcLogin(cfg: OidcConfig): Promise<OAuthOutcome> {
   });
   const result = await request.promptAsync(discovery);
   if (result.type === "cancel" || result.type === "dismiss") return "canceled";
+  // A declined consent can arrive as type:"error" (not "success") carrying
+  // error=access_denied — still a user cancel, so map it before the generic guard.
+  if (result.type === "error") {
+    const code = result.params?.error ?? result.errorCode ?? "error";
+    return isConsentDeclined(code) ? "canceled" : providerError(`provider:${code}`);
+  }
   if (result.type !== "success") return providerError(`session:${result.type}`);
   if (result.params.error) {
     return isConsentDeclined(result.params.error)

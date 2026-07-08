@@ -62,7 +62,7 @@ from app.modules.spots.services.curations import (
     load_curation,
     resolve_curation_spots,
 )
-from app.modules.spots.services.nearby import NearbyCategory
+from app.modules.spots.services.nearby import NearbyCategory, search_spots_for_picker
 
 _SOURCE_NAME = "국문 관광정보 서비스"
 _SOURCE_ENDPOINT = "areaBasedSyncList2"
@@ -620,7 +620,7 @@ async def search_spots(
             ) from None
 
     q_norm = q.strip() if q else None
-    rows, total = await repo.admin_spot_search(
+    rows, total = await search_spots_for_picker(
         session,
         q=q_norm or None,
         region=region,
@@ -634,7 +634,7 @@ async def search_spots(
             SpotSearchItem(
                 contentId=r.content_id,
                 name=r.title,
-                regionCd=r.ldong_regn_cd,
+                regionCd=r.region_cd,
                 regionName=r.region_name,
                 imageUrl=r.first_image_url,
             )
