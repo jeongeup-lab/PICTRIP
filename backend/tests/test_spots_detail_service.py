@@ -275,6 +275,48 @@ async def test_intro_persisted_and_returned(db_session: AsyncSession, redis: Fak
 
 
 @pytest.mark.asyncio
+async def test_redis_hit_skips_postgres_detail(db_session: AsyncSession, redis: FakeRedis) -> None:
+    """A warm Redis bundle serves the detail without touching spot_details — proven
+    by deleting the Postgres row and still getting it back from the second load."""
+    await _insert_spot(db_session, "DT-REDIS")
+    await _insert_detail(db_session, "DT-REDIS", overview="pg overview", age_days=1)
+
+    row1 = await load_spot_detail(db_session, FakeKto(), redis, "DT-REDIS")
+    assert row1.overview == "pg overview"  # PG read + warms Redis
+
+    await db_session.execute(text("DELETE FROM spot_details WHERE content_id = 'DT-REDIS'"))
+    await db_session.commit()
+
+    kto = FakeKto(_COMMON, _IMAGES)
+    row2 = await load_spot_detail(db_session, kto, redis, "DT-REDIS")
+    assert kto.calls == 0  # neither Postgres nor KTO — served from Redis
+    assert row2.detail_status == "fresh"
+    assert row2.overview == "pg overview"
+
+
+class BrokenRedis:
+    """Duck-typed Redis whose get/set always raise — exercises the fail-open path."""
+
+    async def get(self, *args, **kwargs):
+        raise RuntimeError("redis down")
+
+    async def set(self, *args, **kwargs):
+        raise RuntimeError("redis down")
+
+
+@pytest.mark.asyncio
+async def test_redis_down_falls_back_to_postgres(db_session: AsyncSession) -> None:
+    await _insert_spot(db_session, "DT-RDOWN")
+    await _insert_detail(db_session, "DT-RDOWN", overview="pg only", age_days=1)
+
+    kto = FakeKto(_COMMON, _IMAGES)
+    row = await load_spot_detail(db_session, kto, BrokenRedis(), "DT-RDOWN")
+    assert kto.calls == 0  # Postgres cache still fresh; Redis error was swallowed
+    assert row.detail_status == "fresh"
+    assert row.overview == "pg only"
+
+
+@pytest.mark.asyncio
 async def test_category_from_lcls3(db_session: AsyncSession, redis: FakeRedis) -> None:
     await db_session.execute(
         text(
