@@ -55,11 +55,17 @@ async def cover_url(
     resolved: list[SpotCardRow],
 ) -> str | None:
     """coverUrl = cover spot's image, else first resolved spot's, else None.
-    Lives here (not feed/curations) to avoid the feed->curations circular import."""
+    Lives here (not feed/curations) to avoid the feed->curations circular import.
+
+    Active-only (show_flag=1), same policy as ``load_cover_images``: a cover spot
+    hidden after being set must not keep serving its image — fall back instead.
+    """
     if cover_spot_id is not None:
         img = (
             await session.execute(
-                select(Spot.first_image_url).where(Spot.content_id == cover_spot_id)
+                select(Spot.first_image_url).where(
+                    Spot.content_id == cover_spot_id, Spot.show_flag == 1
+                )
             )
         ).scalar_one_or_none()
         if img:
@@ -75,12 +81,18 @@ async def load_cover_images(
     content_ids: list[str],
 ) -> dict[str, str | None]:
     """{content_id: first_image_url} for cover-spot lookups; missing ids absent.
-    Lets the feed batch every hero's cover image into a single query."""
+    Lets the feed batch every hero's cover image into a single query.
+
+    Active-only (show_flag=1): a cover spot hidden after being set must not keep
+    serving its image — the feed's cover fallback / hero-drop defense takes over.
+    """
     if not content_ids:
         return {}
     rows = (
         await session.execute(
-            select(Spot.content_id, Spot.first_image_url).where(Spot.content_id.in_(content_ids))
+            select(Spot.content_id, Spot.first_image_url).where(
+                Spot.content_id.in_(content_ids), Spot.show_flag == 1
+            )
         )
     ).all()
     return {r.content_id: r.first_image_url for r in rows}

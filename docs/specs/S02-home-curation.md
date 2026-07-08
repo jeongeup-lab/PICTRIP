@@ -18,6 +18,11 @@
 1. **Feed 구성 고정** — `/home/feed`는 히어로 정확히 **6**(region), 무드 레일 정확히
    **3**(mood)을 반환. 편성 교체 = 서버가 각 슬롯에 어떤 큐레이션을 넣을지 바꾸는 것;
    개수는 불변. 클라이언트는 항상 6 세그먼트 + 3 섹션을 렌더.
+   **[정정 — 발행 토글 제거, 2026-07-08 (DECISIONS CH1)]** 편성 = **시드된 고정** 히어로 6 +
+   무드 레일 3(`seed_curations.py`가 SSOT — 시드 전량 published 보장 + false 드리프트 복원).
+   발행/미발행 **라이프사이클 운영 개념 없음**: `is_published` 컬럼·피드 필터는 잔존하는 DB
+   내부 계약이나 어드민 API/UI에 노출·수정 경로가 없다. 슬롯 순서 교체는 어드민 보드
+   DnD(`PUT /admin/api/curations/positions`) 단일 경로, 피드 정렬 tiebreak = `(position, id)`.
 2. **레일/그리드 스팟 소스 = 손픽 우선, 빈 경우 테마-일치 품질게이트 랭킹** — 스키마는
    `curation_spots`(손픽·순서, 1급). 큐레이션에 손픽 스팟이 없으면 서버가 **테마 일치
    풀**에서 채움: region 큐레이션 → 해당 지역 스팟, mood 큐레이션 →
@@ -31,9 +36,10 @@
 3. **표지 = `cover_spot_id` 참조 + 자동 폴백** — 큐레이션에 `cover_spot_id`(FK) 저장 →
    read-time에 그 스팟의 대표 이미지(`firstimage`) KTO URL로 해석. null이면
    `curation_spots[0]`(또는 채움 풀 첫 스팟)의 이미지로 폴백. 이미지 바이트는 저장하지 않음.
-   - **[추가 — S11 §5, 사용자 승인 2026-06-21]** 피드 **조립 시점에 표지 cover image URL이 non-null인지
-     검증**하고, null이면 **폴백 표지(2순위 스팟)**의 이미지를 사용. 끝까지 해석 불가한 히어로/커버는
-     방어적으로 제외(커버 없는 카드 노출 금지).
+   - **[추가 — S11 §5, 사용자 승인 2026-06-21 · 구현됨 2026-07-08]** 피드 **조립 시점에 표지 cover
+     image URL이 non-null인지 검증**하고, null이면 **폴백 표지(2순위 스팟)**의 이미지를 사용. 끝까지
+     해석 불가한 히어로/커버는 방어적으로 제외(커버 없는 카드 노출 금지) — 서버 조립기가 해당
+     히어로를 드롭하며 6 미만 히어로 허용.
 4. **편집 필드 = `{title, subtitle, lead, intro, cover_spot_id, ordered spots}`** — eyebrow
    없음(목업 미사용). `title`은 편집자 줄바꿈(`\n`)을 verbatim 저장하고 `pre-line`로 렌더.
 5. **히어로 캐러셀 = 수동 스와이프 + 페이징 스냅 + 6분할 인디케이터, 자동전환 없음** —
@@ -91,10 +97,15 @@ curation_spots                       ← 손픽·순서 (비면 서버가 랜덤
 > 대체됨: `first_image_url` 보유 필수 게이트 + `show_flag = 1` 필수, `overview`/임베딩 보유 가산으로
 > 품질 정렬 → 상위 버킷(top ~30)에서 `hash(curation_id, KST date)` seed로 8개 선택·회전.
 
-- region: 품질순 정렬된 `WHERE region_id = :rid AND first_image_url IS NOT NULL AND show_flag = 1` 풀의
-  상위 버킷에서 `hash(curation_id, KST date)`로 8개 선택
-- mood:   품질순 정렬된 `JOIN spot_moods WHERE mood_id = :mid AND first_image_url IS NOT NULL AND show_flag = 1`
-  풀의 상위 버킷에서 동일 seed로 8개 선택
+- region: 품질순 정렬된 `WHERE region_id = :rid AND first_image_url IS NOT NULL AND
+  first_image_url != '' AND show_flag = 1` 풀의 상위 버킷에서 `hash(curation_id, KST date)`로 8개 선택
+- mood:   품질순 정렬된 `JOIN spot_moods WHERE mood_id = :mid AND first_image_url IS NOT NULL AND
+  first_image_url != '' AND show_flag = 1` 풀의 상위 버킷에서 동일 seed로 8개 선택
+  - **[정정 — 2026-07-08 (CH1)]** 이미지 게이트는 `IS NOT NULL`만이 아니라 **빈 문자열도 제외**
+    (`!= ''`) — 위 두 조건에 반영됨.
+- **[추가 — 2026-07-08 (CH1)] 손픽도 동일 품질 게이트** — 커버 검증과 같은 조건(존재 +
+  `show_flag = 1` + 대표 이미지 비어있지 않음)을 **등록 시**(어드민 422 거부)와 **서빙 시**
+  (조건 미충족 손픽은 필터) 양쪽에 적용. 손픽 후 숨김/이미지 소실된 스팟이 렌더되지 않음.
 - 손픽 < 목표수(8)면 손픽 먼저, 모자란 만큼만 같은 풀에서 채울지(보충)는 v1 미사용 —
   손픽이 있으면 손픽만, 없으면 전량 품질게이트 랭킹(단순 규칙). 보충은 후속에 열어둠.
 - 결과를 Redis에 `curation:{id}:spots` (TTL ~24h)로 캐시 가능 — S8 인프라에서 확정.
@@ -146,13 +157,17 @@ curation_spots                       ← 손픽·순서 (비면 서버가 랜덤
   - `rails[3]`:  `{ id, title, subtitle, spots[≤8 가변]: <스팟 카드> }`
 - **스팟 카드(canonical)** = `{ contentId, title, category, firstImageUrl }` — 백엔드/모바일/S3와
   동일 작명(KTO명+camelCase). ~~`{spot_id,name,image_url}`~~ 폐기.
-  - **[추가 — S11 §7-A 혼잡도 재융합, 사용자 승인 2026-06-21]** canonical 카드에 **선택 확장 필드**
+  - **[철회 — 2026-07-08 (DECISIONS CH2)]** 아래 `congestion` 확장(S11 §7-A, 2026-06-21 승인)은
+    **대회 범위에서 제외** — 어떤 엔드포인트도 `congestion`을 직렬화하지 않음. `spot_concentration`
+    테이블·`scripts/sync_concentration.py`는 잔존(적재 자산 보존, 재도입 대비). S07 §6.2·S09 §1.3의
+    congestion 서술도 이 철회로 superseded. 원문은 기록용으로 유지:
+    ~~**[추가 — S11 §7-A 혼잡도 재융합, 사용자 승인 2026-06-21]** canonical 카드에 **선택 확장 필드**
     `congestion: "low"|"medium"|"high"|null` 추가. `spot_concentration`(KTO 15128555 집중률 예측,
     향후 30일 상대집중률 0~100, 100=가장 붐빔)에서 오늘값 `v`를 버킷팅: `v<34`→`low`(한산) /
     `34≤v≤66`→`medium`(보통) / `v>66`→`high`(붐빔), 데이터 없으면 `null`(배지 숨김). 트렌딩
     화면/엔드포인트는 계속 제거 — 데이터는 카드 enrichment로만 노출. canonical 카드를 쓰는 모든
     곳(홈 레일·상세 그리드 등)에 동일 적용. UI = 무채색 텍스트 칩/톤("한산/보통/붐빔"), `null`이면
-    숨김(honest-minimal). **필드 권위 정의는 S9, DB 조인은 S7.**
+    숨김(honest-minimal). **필드 권위 정의는 S9, DB 조인은 S7.**~~
 - 모든 이미지 = KTO URL(다운로드 X). `category` = **세분 카테고리 라벨**(해변/카페/자연… =
   `lcls_systm3_nm`); 무드 큐레이션의 테마 분류와는 별개.
 
@@ -164,8 +179,9 @@ curation_spots                       ← 손픽·순서 (비면 서버가 랜덤
   inset-gray 유지(깨진 아이콘 없음).
 - **partial**: 어떤 레일의 (손픽+품질채움) 스팟이 8 미만이면 가진 만큼만 렌더. 스팟이 0개로
   떨어지는 레일/커버 해석 불가한 히어로는 방어적으로 제외(서버는 항상 채워 6/3을 보내는 게 목표).
-  - **[추가 — S11 §6, 사용자 승인 2026-06-21]** (손픽+품질채움) 스팟이 **3개 미만**이면 해당 레일을
-    **생략**(빈약한 레일 노출 금지, 밀도 안정). 즉 레일은 ≥3 스팟일 때만 렌더.
+  - **[추가 — S11 §6, 사용자 승인 2026-06-21 · 구현됨 2026-07-08]** (손픽+품질채움) 스팟이
+    **3개 미만**이면 해당 레일을 **생략**(빈약한 레일 노출 금지, 밀도 안정). 즉 레일은 ≥3 스팟일
+    때만 렌더 — 히어로 드롭과 함께 서버 조립기(`/home/feed`)에서 적용, 클라 방어 아님.
 - **empty**: `/home/feed`가 히어로·레일 모두 0(정상 운영에선 발생 X) → 소프트
   플레이스홀더("곧 새로운 큐레이션을 준비할게요"). 빈 화면 노출 금지.
 - **error**: feed fetch 실패(네트워크/5xx) → 풀화면 에러 + 재시도 버튼(무채색, 라인 아이콘,
@@ -230,7 +246,8 @@ curation_spots                       ← 손픽·순서 (비면 서버가 랜덤
 - 이탈:
   - **뒤로** → 홈(05).
   - **공유** → OS 공유 시트(큐레이션 `title` + 딥링크 URL). KTO: URL 공유는 허용. 딥링크
-    스킴/웹 URL 형식은 S8에서 확정.
+    스킴/웹 URL 형식은 S8에서 확정 — 구현(2026-07-08)은 `https://pictrip.org/curations/{slug}`
+    (S8 웹 폴백 페이지와 동일 경로).
   - **그리드 카드 탭** → 스팟 상세(07).
 
 ### 인터랙션

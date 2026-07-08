@@ -231,6 +231,27 @@ DB/인프라/API 세션은 화면 세션들의 data needs를 종합해 형식화
   유일 경로). 어드민에 **`curations`/`curation_spots` 한정 스코프된 쓰기** 도입(그 외 표면 read-only
   유지). 신규 admin API(목록·상세·편집·손픽·스팟검색) + 발행 시 BE-HOME-003 캐시 무효화 재사용 +
   변경 audit. 표지=KTO URL 참조만(다운로드 금지). 회원 관리는 여전히 비목표.
+- **CH1 (2026-07-08) 발행 토글 제거 — 편성=시드 고정 히어로6+레일3, 순서=보드 DnD 단일 경로**
+  (curation-hardening 세션) → `admin/specs/A01-admin-console.md`(A11·§7)·`S02-home-curation.md`
+  정정, 구현 `backend/app/modules/admin/`. 어드민 API/UI에서 `isPublished` 노출·수정 **완전
+  제거**(발행/미발행 운영 개념 폐기). `is_published` 컬럼·피드 필터는 잔존하는 DB 내부 계약 —
+  `seed_curations.py`가 시드 전량 published 보장+false 드리프트 복원(DB 무변경, 운영 표면만
+  제거). 어드민 목록=`{heroes, rails}`만(에디토리얼 그룹·UI 제거, DB CHECK의 'editorial'
+  타입은 잔존). 순서=신규 `PUT /admin/api/curations/positions` `{type, orderedIds}` 전체 순열
+  검증·단일 트랜잭션·응답=갱신 보드(보드 DnD 단일 경로, 슬라이드오버 스테퍼 제거);
+  `PUT /admin/api/curations/{id}`=카피/표지(title·subtitle·lead·intro·coverSpotId)만. 손픽
+  품질 게이트=커버와 동일(존재+show_flag=1+이미지 비어있지 않음), 등록 422+서빙 필터 양쪽;
+  자동채움 풀도 빈 문자열 이미지 제외. 피드 방어 2종 구현(커버 해석 불가 히어로 제외·스팟
+  <3 레일 생략), 피드/보드 정렬 tiebreak `(position, id)`. `GET /admin/api/curations/{id}/preview`
+  정식 문서화(손픽 없으면 자동채움 풀 미리보기 — 기존 미문서화). 스팟 피커=q 선택화+
+  region/sigungu/category(NearbyCategory 5종)+offset(페이지 20, `{spots,total,hasMore}`),
+  UI=regions-tree 시도→시군구 캐스케이드+카테고리 칩+더 보기. `/admin/login` 레이트리밋 5회/분/IP.
+- **CH2 (2026-07-08) congestion 카드 필드 철회 — 대회 범위 제외** (curation-hardening 세션) →
+  `S02-home-curation.md` 정정. canonical 카드 선택 확장 `congestion`(S11 §7-A 재융합 —
+  S02 §05·S07 §6.2·S09 §1.3이 약속)을 철회: 어떤 엔드포인트도 직렬화하지 않음(미구현이
+  현 계약). `spot_concentration` 테이블(마이그 0009)·`scripts/sync_concentration.py`는 잔존
+  (적재 자산 보존, 재도입 시 재사용). 트렌딩 엔드포인트/화면 컷은 기존대로 유지. S07 §6.2·
+  S09 §1.3의 congestion 서술은 이 결정으로 superseded.
 
 ## 교차 reconcile 결정 (2026-06-20 심층분석 + 독립 에이전트 패널)
 

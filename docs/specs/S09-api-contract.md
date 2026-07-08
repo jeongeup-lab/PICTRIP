@@ -74,6 +74,10 @@ SpotCard (코어)  { contentId, title, firstImageUrl: str|null, category: str|nu
   | `overview: str\|null` | `/map/nearby` | KTO overview 첫 줄(verbatim, null이면 생략) |
   | `congestion: "low"\|"medium"\|"high"\|null` | `/home/feed`·`/curations/{slug}`·`/spots/{id}`·`/map/nearby`·`/taste/photo-search` | 혼잡도(붐빔도) 텍스트 칩. 데이터 있으면 채움, 없으면 `null`(클라 배지 숨김) |
 
+  > **[철회 — 2026-07-08 (DECISIONS CH2)]** 아래 congestion 정의는 대회 범위에서
+  > 제외 — 어떤 엔드포인트도 직렬화하지 않음(`spot_concentration` 자산은 잔존,
+  > 재도입 대비).
+
   **`congestion` — 혼잡도 필드 (이 파일이 권위, S11 §7-A D1):** canonical 카드를 내리는 모든 엔드포인트가
   데이터 있으면 채우는 **선택 확장 필드**. 다른 스펙은 이 정의를 참조한다.
   - **출처**: `spot_concentration` 테이블(KTO 15128555 "한국관광공사 관광지별 방문자 집중률 예측" — 향후 30일

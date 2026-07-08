@@ -762,31 +762,6 @@ async function loadOverviewHistory() {
   }
 }
 
-async function loadOverviewCuration() {
-  const el = document.getElementById("ov-curation");
-  if (!el) return;
-  try {
-    const data = await adminFetch("/admin/api/curations");
-    const heroes = (data.heroes || []).slice(0, 4);
-    const railCount = (data.rails || []).length;
-    if (heroes.length === 0) {
-      el.innerHTML = `<span style="color:var(--ink-3);font-size:12px">큐레이션 없음</span>`;
-    } else {
-      el.innerHTML = heroes
-        .map((it, i) => {
-          const url = it.coverUrl ? escapeHtml(it.coverUrl) : "";
-          const pubColor = it.isPublished ? "var(--ok)" : "var(--warn)";
-          const num = String(i + 1).padStart(2, "0");
-          return `<div style="flex:1;position:relative;aspect-ratio:4/5;border:2px solid var(--ink);border-radius:4px;overflow:hidden;background:var(--surface-2)">${url ? `<img src="${url}" alt="" style="width:100%;height:100%;object-fit:cover">` : ""}<span style="position:absolute;top:0;left:0;background:var(--accent);color:#fff;font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 7px">${num}</span><span style="position:absolute;left:0;right:0;bottom:0;background:var(--ink);color:var(--surface);font-size:12px;font-weight:700;padding:5px 8px;display:flex;justify-content:space-between;align-items:center">${escapeHtml(it.title || "—")}<span style="width:8px;height:8px;border-radius:2px;background:${pubColor};flex:none"></span></span></div>`;
-        })
-        .join("");
-    }
-    ovSet("ov-curation-meta", `히어로 ${heroes.length} · 무드 레일 ${railCount}`);
-  } catch (err) {
-    el.innerHTML = `<span style="color:var(--bad);font-size:12px">${escapeHtml(err.message)}</span>`;
-  }
-}
-
 // Overview aggregates read-only endpoints; each section fails independently.
 function loadOverview() {
   loadOverviewCollection();

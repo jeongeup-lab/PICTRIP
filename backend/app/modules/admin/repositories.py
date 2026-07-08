@@ -14,10 +14,10 @@ shaping into DTOs is the service layer's job.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import Row, delete, select, text
+from sqlalchemy import Row, delete, func, or_, select, text, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,10 +25,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # DB-backed auth A01 §1.3) and curations/curation_spots (the curation editor's
 # scoped write surface, A01 §7). CLAUDE.md grants admin scoped ownership of these,
 # so importing the models here is sanctioned (ORM over raw SQL for writes: clearer
-# column binding, CHECK/FK violations surface as SQLAlchemy errors). All OTHER
+# column binding, CHECK/FK violations surface as SQLAlchemy errors). Spot/Region
+# ride the same registered repositories→models exception so the picker search can
+# reuse the NearbyCategory predicate SSOT (spots.services.nearby). All OTHER
 # admin access stays read-only raw SQL.
 from app.modules.admin.models import AdminUser
-from app.modules.spots.models import Curation, CurationSpot
+from app.modules.spots.models import Curation, CurationSpot, Region, Spot
+from app.modules.spots.services.nearby import NearbyCategory, category_predicate
 
 
 async def get_admin_user(session: AsyncSession, username: str) -> AdminUser | None:
@@ -183,17 +186,19 @@ async def user_aggregates(session: AsyncSession) -> Row[Any]:
 
 
 async def list_curations(session: AsyncSession) -> list[Row[Any]]:
-    """All curations + resolved cover image, grouped/ordered by the service.
+    """Board curations (region + mood only) + resolved cover image.
 
-    Ordered (type, position) so the service can split into heroes/rails/editorial
-    while preserving per-group position order in a single query.
+    Ordered (type, position, id) so the service can split into heroes/rails
+    while preserving per-group position order in a single query. Legacy
+    ``editorial`` rows are excluded — the board is the fixed hero 6 + rails 3.
     """
     result = await session.execute(
         text(
-            "SELECT c.id, c.type, c.slug, c.title, c.subtitle, c.is_published, c.position, "
+            "SELECT c.id, c.type, c.slug, c.title, c.subtitle, c.position, "
             "s.first_image_url AS cover_url "
             "FROM curations c "
             "LEFT JOIN spots s ON s.content_id = c.cover_spot_id "
+            "WHERE c.type IN ('region', 'mood') "
             "ORDER BY c.type, c.position, c.id"
         )
     )
@@ -242,19 +247,25 @@ async def spot_exposable_with_image(session: AsyncSession, content_id: str) -> b
     result = await session.execute(
         text(
             "SELECT 1 FROM spots "
-            "WHERE content_id = :cid AND show_flag = 1 AND first_image_url IS NOT NULL"
+            "WHERE content_id = :cid AND show_flag = 1 "
+            "AND first_image_url IS NOT NULL AND first_image_url != ''"
         ),
         {"cid": content_id},
     )
     return result.first() is not None
 
 
-async def existing_spot_ids(session: AsyncSession, content_ids: list[str]) -> set[str]:
-    """Subset of ``content_ids`` that exist in spots (any show_flag)."""
+async def exposable_spot_ids(session: AsyncSession, content_ids: list[str]) -> set[str]:
+    """Subset of ``content_ids`` that are exposable — same gate as the cover check
+    (``spot_exposable_with_image``): exists, show_flag=1 AND non-empty image."""
     if not content_ids:
         return set()
     result = await session.execute(
-        text("SELECT content_id FROM spots WHERE content_id = ANY(:ids)"),
+        text(
+            "SELECT content_id FROM spots "
+            "WHERE content_id = ANY(:ids) AND show_flag = 1 "
+            "AND first_image_url IS NOT NULL AND first_image_url != ''"
+        ),
         {"ids": content_ids},
     )
     return {r.content_id for r in result.all()}
@@ -269,23 +280,39 @@ async def update_curation_fields(
     lead: str | None,
     intro: str | None,
     cover_spot_id: str | None,
-    is_published: bool,
-    position: int,
 ) -> None:
-    """Mutate the editable columns + bump updated_at (no auto-onupdate, A01 §7).
+    """Mutate the editable copy/cover columns + bump updated_at (no auto-onupdate,
+    A01 §7). Ordering is NOT written here — that's the atomic positions endpoint.
 
     Operates on the passed (managed) ORM instance; the service commits.
     """
-    from datetime import UTC, datetime
-
     curation.title = title
     curation.subtitle = subtitle
     curation.lead = lead
     curation.intro = intro
     curation.cover_spot_id = cover_spot_id
-    curation.is_published = is_published
-    curation.position = position
     curation.updated_at = datetime.now(tz=UTC)
+
+
+async def curation_ids_by_type(session: AsyncSession, type_: str) -> list[int]:
+    """All curation ids of one type — the permutation universe for a reorder."""
+    rows = (await session.execute(select(Curation.id).where(Curation.type == type_))).scalars()
+    return list(rows)
+
+
+async def set_curation_positions(session: AsyncSession, positions: dict[int, int]) -> None:
+    """Bulk position write ({id: position}) + updated_at bump, single transaction.
+
+    Mutates the passed session only; the service commits (one COMMIT = atomic).
+    """
+    now = datetime.now(tz=UTC)
+    for curation_id, position in positions.items():
+        await session.execute(
+            update(Curation)
+            .where(Curation.id == curation_id)
+            .values(position=position, updated_at=now)
+        )
+    await session.flush()
 
 
 async def replace_curation_spots(
@@ -306,25 +333,55 @@ async def replace_curation_spots(
     await session.flush()
 
 
+def _escape_like(q: str) -> str:
+    """Escape LIKE wildcards so ``q`` matches literally (pairs with escape='\\\\')."""
+    return q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 async def admin_spot_search(
-    session: AsyncSession, q: str, region: str | None, limit: int
-) -> list[Row[Any]]:
-    """Admin-only trgm ILIKE picker over title/addr1, scoped show_flag=1.
+    session: AsyncSession,
+    *,
+    q: str | None,
+    region: str | None,
+    sigungu: str | None,
+    category: NearbyCategory | None,
+    limit: int,
+    offset: int,
+) -> tuple[list[Row[Any]], int]:
+    """Admin-only picker: trgm ILIKE over title/addr1 (q optional — filters alone
+    allow browsing), scoped show_flag=1. Returns (page rows, total match count).
 
     Uses idx_spots_title_trgm / idx_spots_addr1_trgm (partial WHERE show_flag=1).
-    Minimal fields; ordered by title.
+    ``%``/``_`` in q are escaped (literal match). Category reuses the
+    NearbyCategory SSOT predicate. Ordered by (title, content_id) so offset
+    pagination is deterministic.
     """
-    sql = (
-        "SELECT s.content_id, s.title, s.ldong_regn_cd, r.ldong_regn_nm AS region_name, "
-        "s.first_image_url "
-        "FROM spots s "
-        "LEFT JOIN regions r ON r.ldong_regn_cd = s.ldong_regn_cd "
-        "WHERE s.show_flag = 1 AND (s.title ILIKE :pat OR s.addr1 ILIKE :pat)"
-    )
-    params: dict[str, Any] = {"pat": f"%{q}%", "limit": limit}
+    conds = [Spot.show_flag == 1]
+    if q:
+        pat = f"%{_escape_like(q)}%"
+        conds.append(or_(Spot.title.ilike(pat, escape="\\"), Spot.addr1.ilike(pat, escape="\\")))
     if region:
-        sql += " AND s.ldong_regn_cd = :region"
-        params["region"] = region
-    sql += " ORDER BY s.title LIMIT :limit"
-    result = await session.execute(text(sql), params)
-    return list(result.all())
+        conds.append(Spot.ldong_regn_cd == region)
+    if sigungu:
+        conds.append(Spot.ldong_signgu_cd == sigungu)
+    if category is not None:
+        conds.append(category_predicate(category))
+
+    total = (
+        await session.execute(select(func.count()).select_from(Spot).where(*conds))
+    ).scalar_one()
+    rows = await session.execute(
+        select(
+            Spot.content_id,
+            Spot.title,
+            Spot.ldong_regn_cd,
+            Region.ldong_regn_nm.label("region_name"),
+            Spot.first_image_url,
+        )
+        .outerjoin(Region, Region.ldong_regn_cd == Spot.ldong_regn_cd)
+        .where(*conds)
+        .order_by(Spot.title, Spot.content_id)
+        .limit(limit)
+        .offset(offset)
+    )
+    return list(rows.all()), int(total)

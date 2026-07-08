@@ -128,6 +128,24 @@ async def test_curation_detail_shape(db_session, client, seed_detail) -> None:
     assert all({"contentId", "title", "firstImageUrl"} <= s.keys() for s in data["spots"])
 
 
+async def test_curation_detail_hidden_cover_falls_back(db_session, client, seed_detail) -> None:
+    """A cover spot hidden (show_flag=0) after being set must not keep serving its
+    image on the detail path — coverUrl falls back to the first resolved spot."""
+    await db_session.execute(text("UPDATE spots SET show_flag = 0 WHERE content_id = 'cover-1'"))
+    await db_session.flush()
+    redis = FakeRedis(decode_responses=True)
+    _override(db_session, redis)
+    try:
+        r = await client.get("/v1/curations/region-x")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert r.status_code == 200
+    data = r.json()["data"]
+    assert data["coverUrl"] != "http://kto/cover.jpg"  # hidden cover never served
+    assert data["coverUrl"] == "http://kto/i.jpg"  # first resolved spot's image
+
+
 async def test_curation_detail_unknown_slug_404(db_session, client, seed_detail) -> None:
     redis = FakeRedis(decode_responses=True)
     _override(db_session, redis)
