@@ -17,7 +17,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import Row, delete, func, or_, select, text, update
+from sqlalchemy import Row, delete, select, text, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,13 +25,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # DB-backed auth A01 §1.3) and curations/curation_spots (the curation editor's
 # scoped write surface, A01 §7). CLAUDE.md grants admin scoped ownership of these,
 # so importing the models here is sanctioned (ORM over raw SQL for writes: clearer
-# column binding, CHECK/FK violations surface as SQLAlchemy errors). Spot/Region
-# ride the same registered repositories→models exception so the picker search can
-# reuse the NearbyCategory predicate SSOT (spots.services.nearby). All OTHER
-# admin access stays read-only raw SQL.
+# column binding, CHECK/FK violations surface as SQLAlchemy errors). No OTHER
+# cross-module models are imported — reads of spots/users tables stay raw SQL, and
+# the picker's Spot/Region/category query lives in spots.services.nearby.
 from app.modules.admin.models import AdminUser
-from app.modules.spots.models import Curation, CurationSpot, Region, Spot
-from app.modules.spots.services.nearby import NearbyCategory, category_predicate
+from app.modules.spots.models import Curation, CurationSpot
 
 
 async def get_admin_user(session: AsyncSession, username: str) -> AdminUser | None:
@@ -331,64 +329,3 @@ async def replace_curation_spots(
             ]
         )
     await session.flush()
-
-
-def _escape_like(q: str) -> str:
-    """Escape LIKE wildcards so ``q`` matches literally (pairs with escape='\\\\')."""
-    return q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-
-
-async def admin_spot_search(
-    session: AsyncSession,
-    *,
-    q: str | None,
-    region: str | None,
-    sigungu: str | None,
-    category: NearbyCategory | None,
-    limit: int,
-    offset: int,
-) -> tuple[list[Row[Any]], int]:
-    """Admin-only picker: trgm ILIKE over title/addr1 (q optional — filters alone
-    allow browsing). Scoped to exposable spots (show_flag=1 AND non-empty image)
-    so picker results match the cover/handpick save gate (spot_exposable_with_image
-    / exposable_spot_ids) — an imageless spot the admin can't save never shows up.
-    Returns (page rows, total match count).
-
-    Uses idx_spots_title_trgm / idx_spots_addr1_trgm (partial WHERE show_flag=1).
-    ``%``/``_`` in q are escaped (literal match). Category reuses the
-    NearbyCategory SSOT predicate. Ordered by (title, content_id) so offset
-    pagination is deterministic.
-    """
-    conds = [
-        Spot.show_flag == 1,
-        Spot.first_image_url.isnot(None),
-        Spot.first_image_url != "",
-    ]
-    if q:
-        pat = f"%{_escape_like(q)}%"
-        conds.append(or_(Spot.title.ilike(pat, escape="\\"), Spot.addr1.ilike(pat, escape="\\")))
-    if region:
-        conds.append(Spot.ldong_regn_cd == region)
-    if sigungu:
-        conds.append(Spot.ldong_signgu_cd == sigungu)
-    if category is not None:
-        conds.append(category_predicate(category))
-
-    total = (
-        await session.execute(select(func.count()).select_from(Spot).where(*conds))
-    ).scalar_one()
-    rows = await session.execute(
-        select(
-            Spot.content_id,
-            Spot.title,
-            Spot.ldong_regn_cd,
-            Region.ldong_regn_nm.label("region_name"),
-            Spot.first_image_url,
-        )
-        .outerjoin(Region, Region.ldong_regn_cd == Spot.ldong_regn_cd)
-        .where(*conds)
-        .order_by(Spot.title, Spot.content_id)
-        .limit(limit)
-        .offset(offset)
-    )
-    return list(rows.all()), int(total)
