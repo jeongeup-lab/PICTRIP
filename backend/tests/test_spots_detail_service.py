@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -349,6 +350,51 @@ async def test_redis_down_falls_back_to_postgres(db_session: AsyncSession) -> No
     assert kto.calls == 0  # Postgres cache still fresh; Redis error was swallowed
     assert row.detail_status == "fresh"
     assert row.overview == "pg only"
+
+
+@pytest.mark.asyncio
+async def test_kto_budget_timeout_falls_back(
+    db_session: AsyncSession, redis: FakeRedis, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A KTO endpoint that outruns the wall-clock budget is cut off and served as
+    unavailable, not left to the full ~30s tenacity retry storm."""
+    monkeypatch.setattr("app.modules.spots.services.detail._KTO_DETAIL_BUDGET", 0.05)
+    await _insert_spot(db_session, "DT-SLOW")
+
+    class SlowKto:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def call(self, service, operation, **params):
+            self.calls += 1
+            await asyncio.sleep(0.5)  # exceeds the patched budget
+            return []
+
+    row = await load_spot_detail(db_session, SlowKto(), redis, "DT-SLOW")
+    assert row.detail_status == "unavailable"
+
+
+@pytest.mark.asyncio
+async def test_image_batch_upsert_updates_each_row(
+    db_session: AsyncSession, redis: FakeRedis
+) -> None:
+    """The batched image upsert applies each row's OWN proposed value on conflict
+    (excluded.*), not a single scalar — proven by two rows getting distinct updates."""
+    await _insert_spot(db_session, "DT-BATCH")
+    await _insert_detail(db_session, "DT-BATCH", overview="x", age_days=8)  # stale → refetch
+    await _insert_image(db_session, "DT-BATCH", 0, "http://old/0.jpg")
+    await _insert_image(db_session, "DT-BATCH", 1, "http://old/1.jpg")
+    kto = FakeKto(
+        _COMMON,
+        [
+            {"originimgurl": "http://new/0.jpg", "smallimageurl": "http://new/0s.jpg"},
+            {"originimgurl": "http://new/1.jpg", "smallimageurl": "http://new/1s.jpg"},
+        ],
+    )
+
+    row = await load_spot_detail(db_session, kto, redis, "DT-BATCH")
+    assert [i.origin_image_url for i in row.images] == ["http://new/0.jpg", "http://new/1.jpg"]
+    assert [i.small_image_url for i in row.images] == ["http://new/0s.jpg", "http://new/1s.jpg"]
 
 
 @pytest.mark.asyncio
