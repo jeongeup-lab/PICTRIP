@@ -18,7 +18,7 @@ export function MoodRail({ rail }: { rail: MoodRailDto }) {
           <SpotCard
             key={spot.contentId}
             spot={spot}
-            onPressIn={() => prefetchSpot(spot.contentId)}
+            onPressIn={() => prefetchSpot(spot)}
             onPress={() => router.push(`/spots/${spot.contentId}`)}
           />
         ))}

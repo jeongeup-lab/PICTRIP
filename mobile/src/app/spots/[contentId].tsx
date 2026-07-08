@@ -15,7 +15,7 @@ import { colors, spacing } from "@/constants/theme";
 
 export default function SpotScreen() {
   const { contentId } = useLocalSearchParams<{ contentId: string }>();
-  const { data, isLoading, isError, refetch } = useSpot(contentId);
+  const { data, isLoading, isError, refetch, isPlaceholderData } = useSpot(contentId);
   const { saved, toggle: onToggleSave } = useSaveOptimistic(contentId);
   const [galleryOpen, setGalleryOpen] = useState(false);
 
@@ -76,7 +76,9 @@ export default function SpotScreen() {
           }
         />
 
-        {isLoading || !data ? (
+        {isLoading || !data || isPlaceholderData ? (
+          // Seeded hero renders above; body waits for the authoritative KTO row
+          // so the snippet overview never flashes in place of the full text.
           <View style={{ padding: spacing.lg, gap: spacing.md }}>
             <Skeleton height={18} />
             <Skeleton height={18} width="80%" />
@@ -86,9 +88,17 @@ export default function SpotScreen() {
             <IntroSection overview={data.overview} />
             <LocationSection spot={data} />
             <VisitSection title={data.title} onShare={onShare} onScrap={onToggleSave} />
-            <NearbyRail lat={data.mapy} lng={data.mapx} excludeId={data.contentId} />
           </>
         )}
+
+        {/* Kept outside the body gate so the nearby fetch starts from the seed's
+            coords in parallel with the detail fetch, not in a waterfall behind
+            it. Self-hides until coords + results exist. */}
+        <NearbyRail
+          lat={data?.mapy ?? null}
+          lng={data?.mapx ?? null}
+          excludeId={data?.contentId ?? ""}
+        />
       </ScrollView>
       <PhotoViewer
         visible={galleryOpen}

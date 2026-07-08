@@ -9,7 +9,7 @@ function NearbyCard({ spot }: { spot: NearbySpot }) {
   return (
     <Pressable
       style={styles.card}
-      onPressIn={() => prefetchSpot(spot.contentId)}
+      onPressIn={() => prefetchSpot(spot)}
       onPress={() => router.push(`/spots/${spot.contentId}`)}
     >
       <RemoteImage uri={spot.firstImageUrl} radius={13} style={styles.photo} />
