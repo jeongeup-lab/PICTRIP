@@ -148,6 +148,21 @@ async def load_active_spot_cards_by_ids(
     }
 
 
+async def load_exposable_spot_cards_by_ids(
+    session: AsyncSession,
+    content_ids: list[str],
+) -> dict[str, SpotCardRow]:
+    """Active AND image-bearing cards — the curation serving gate (A11).
+
+    Mirrors the handpick/pool registration gate (show_flag=1 + non-empty image)
+    so a spot hidden OR stripped of its image after the day-cache was built still
+    won't render until the cache expires at KST midnight. CRS uses the plain
+    active loader instead — a course item may be an imageless spot.
+    """
+    by_id = await load_active_spot_cards_by_ids(session, content_ids)
+    return {cid: card for cid, card in by_id.items() if card.first_image_url}
+
+
 async def _load_spot_card(session: AsyncSession, content_id: str) -> SpotCardRow | None:
     stmt = (
         select(
