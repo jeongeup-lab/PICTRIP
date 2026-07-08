@@ -370,8 +370,12 @@ async def load_spot_detail(
     ctx = _DetailContext(spot, spot.region_name, spot.sigungu_name, spot.category)
 
     cache = await _redis_get_detail(redis, content_id)
-    from_redis = cache is not None
-    if cache is None:
+    # Fast path only when Redis is FRESH. A stale (or missing) Redis bundle must
+    # defer to Postgres, the authority, before any KTO call — otherwise a
+    # best-effort Redis SET that failed after a PG refresh would pin a stale
+    # response (and re-hit KTO) for up to the TTL even though PG is already fresh.
+    redis_fresh = cache is not None and _is_fresh(cache.cached_at, spot.modified_time)
+    if not redis_fresh:
         detail, existing_images = await _read_cached_detail(session, content_id)
         if detail is not None:
             cache = _DetailCache(
@@ -387,8 +391,8 @@ async def load_spot_detail(
     await session.commit()
 
     if cache is not None and _is_fresh(cache.cached_at, spot.modified_time):
-        if not from_redis:
-            await _redis_set_detail(redis, content_id, cache)  # warm from Postgres
+        if not redis_fresh:
+            await _redis_set_detail(redis, content_id, cache)  # warm / heal from Postgres
         return ctx.assemble(
             overview=cache.overview,
             homepage=cache.homepage,
