@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from fakeredis.aioredis import FakeRedis
 from sqlalchemy import text
@@ -9,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import KtoApiUnavailable, ResourceNotFound
 from app.modules.spots.services import load_spot_detail
+from app.modules.spots.services.detail import _DetailCache, _redis_set_detail
 
 
 @pytest.fixture
@@ -292,6 +295,38 @@ async def test_redis_hit_skips_postgres_detail(db_session: AsyncSession, redis: 
     assert kto.calls == 0  # neither Postgres nor KTO — served from Redis
     assert row2.detail_status == "fresh"
     assert row2.overview == "pg overview"
+
+
+@pytest.mark.asyncio
+async def test_stale_redis_defers_to_fresh_postgres(
+    db_session: AsyncSession, redis: FakeRedis
+) -> None:
+    """A stale Redis bundle must not shadow a fresh Postgres row (e.g. a prior
+    refresh whose best-effort Redis SET was lost): serve fresh PG, skip KTO, and
+    heal Redis — never pin the stale response for the TTL."""
+    await _insert_spot(db_session, "DT-HEAL")
+    await _insert_detail(db_session, "DT-HEAL", overview="pg fresh", age_days=1)
+    await _redis_set_detail(
+        redis,
+        "DT-HEAL",
+        _DetailCache(
+            overview="redis stale",
+            homepage=None,
+            tel=None,
+            intro_data=None,
+            cached_at=datetime.now(UTC) - timedelta(days=10),
+            images=[],
+        ),
+    )
+
+    kto = FakeKto(_COMMON, _IMAGES)
+    row = await load_spot_detail(db_session, kto, redis, "DT-HEAL")
+    assert kto.calls == 0  # fresh PG served — no needless KTO refetch
+    assert row.detail_status == "fresh"
+    assert row.overview == "pg fresh"  # not the stale Redis bundle
+
+    healed = await redis.get("spotdetail:v1:DT-HEAL")
+    assert healed is not None and "pg fresh" in healed  # Redis rewritten from PG
 
 
 class BrokenRedis:
