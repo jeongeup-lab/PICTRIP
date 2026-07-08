@@ -284,6 +284,29 @@ async def test_hidden_spot_dropped_even_with_stale_cache(db_session, seed_feed) 
     assert [r.content_id for r in second] == ["sp-M0-1"]
 
 
+async def test_imageless_spot_dropped_even_with_stale_cache(db_session, seed_feed) -> None:
+    """A spot whose image is emptied after the day-cache was built must not render
+    until midnight — the serving gate mirrors registration (show_flag=1 + image)."""
+    redis = FakeRedis(decode_responses=True)
+    await _add_handpick(db_session, 200, "sp-M0-3", 0)
+    await _add_handpick(db_session, 200, "sp-M0-1", 1)
+    await db_session.flush()
+
+    cur = await curation_svc.load_curation(db_session, 200)
+    first = await curation_svc.resolve_curation_spots(db_session, redis, cur)
+    assert [r.content_id for r in first] == ["sp-M0-3", "sp-M0-1"]
+
+    # empty sp-M0-3's image WITHOUT invalidating the cache (pipeline image strip)
+    await db_session.execute(
+        text("UPDATE spots SET first_image_url = '' WHERE content_id = 'sp-M0-3'")
+    )
+    await db_session.flush()
+    assert await redis.get("curation:200:spots") == "sp-M0-3,sp-M0-1"  # cache still stale
+
+    second = await curation_svc.resolve_curation_spots(db_session, redis, cur)
+    assert [r.content_id for r in second] == ["sp-M0-1"]
+
+
 async def test_hero_without_resolvable_cover_excluded(db_session, client, seed_feed) -> None:
     """A hero whose coverUrl cannot be resolved is dropped (fewer than 6 allowed)."""
     # curation 105 (R5) has no cover_spot_id; strip every R5 spot image so the

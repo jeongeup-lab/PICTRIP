@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.spots.services import curations as curation_svc
 from app.modules.spots.services.cards import (
-    load_active_spot_cards_by_ids,
     load_cover_images,
+    load_exposable_spot_cards_by_ids,
 )
 from app.modules.spots.services.rows import SpotCardRow
 
@@ -74,9 +74,9 @@ async def assemble_home_feed(session: AsyncSession, redis: Redis) -> HomeFeedRow
     rail_ids = [await curation_svc.resolve_curation_ids(session, redis, c) for c in mood_curations]
 
     all_ids = {cid for ids in (*hero_ids, *rail_ids) for cid in ids}
-    # Active-only hydration: a spot hidden after the day-cache was built must
-    # not render even while its id is still cached.
-    by_id = await load_active_spot_cards_by_ids(session, list(all_ids))
+    # Serving gate: a spot hidden OR stripped of its image after the day-cache
+    # was built must not render even while its id is still cached.
+    by_id = await load_exposable_spot_cards_by_ids(session, list(all_ids))
     cover_images = await load_cover_images(
         session, [c.cover_spot_id for c in region_curations if c.cover_spot_id]
     )
