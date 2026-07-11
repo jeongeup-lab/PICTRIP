@@ -6,7 +6,7 @@ export type SheetSnap = "peek" | "half" | "full";
 // (the entry default) exactly TWO, both sitting above the tab bar.
 export const HANDLE_ZONE_PX = 30; // handleZone: paddingTop 10 + grabber 4 + margin 10 + paddingBottom 6
 export const CHIPS_PX = 46; // CategoryChips: chip 34 + paddingVertical 6+6
-export const CARD_PX = 112; // NearbyCard: image 92 + paddingVertical 10+10
+export const CARD_PX = 106; // NearbyCard: image 86 + paddingVertical 10+10
 // Fallback tab-bar height (iOS 49 content + typical 34 home-indicator inset) for
 // the module-level SHEET_SNAP_Y constant. The map screen passes the REAL height
 // (49 + insets.bottom) so the reveal is exact on every device — a fixed 83 over-

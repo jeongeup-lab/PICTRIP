@@ -41,6 +41,13 @@ interface InfoItem {
 }
 
 function InfoRow({ icon, value, link, onPress, onCopy, last }: InfoItem & { last: boolean }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
   return (
     <View style={[styles.infoRow, !last && styles.infoRowDivider]}>
       <Icon name={icon} size={18} color={colors.ter} strokeWidth={1.8} />
@@ -48,8 +55,17 @@ function InfoRow({ icon, value, link, onPress, onCopy, last }: InfoItem & { last
         {value}
       </Text>
       {onCopy ? (
-        <Pressable style={styles.copyBtn} onPress={onCopy} hitSlop={6}>
-          <Text style={styles.copyText}>복사</Text>
+        <Pressable
+          style={[styles.copyBtn, copied && styles.copyBtnDone]}
+          onPress={() => {
+            onCopy();
+            setCopied(true);
+          }}
+          hitSlop={6}
+        >
+          <Text style={[styles.copyText, copied && styles.copyTextDone]}>
+            {copied ? "복사됨" : "복사"}
+          </Text>
         </Pressable>
       ) : null}
     </View>
@@ -199,5 +215,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 9,
   },
+  copyBtnDone: { borderColor: colors.accentText, backgroundColor: colors.accentFill },
   copyText: { fontSize: 12.5, fontWeight: "700", color: colors.sec },
+  copyTextDone: { color: colors.accentText },
 });

@@ -21,11 +21,9 @@ interface MapState {
   viewportBounds: Bounds | null;
   // The bbox the nearby query fetches. Derived from the anchor center (±RADIUS_M)
   // on GPS/region anchors, or the real visible rectangle when "이 지역에서 검색".
+  // Frozen at search time: snap/layout changes never re-derive it, so the
+  // fetched result set stays put while the user drags the sheet.
   queryBounds: Bounds | null;
-  // Unclipped viewport bbox of the last pan-search. Kept so snap changes can
-  // re-clip queryBounds; null when the anchor is center-derived (GPS/region),
-  // whose ±RADIUS_M square is not screen-aligned and must never be clipped.
-  rawViewportBounds: Bounds | null;
   // Map view height in px (window minus tab bar) — the denominator of the
   // visible-fraction clip. Set from the map screen's onLayout; the window
   // height alone over-clips because the tab bar shortens the map view.
@@ -57,7 +55,6 @@ const initial = {
   viewportCenter: null,
   viewportBounds: null,
   queryBounds: null,
-  rawViewportBounds: null,
   mapViewH: SCREEN_H,
   lastQueryCenter: null,
   selectedSpotId: null,
@@ -79,7 +76,6 @@ export const useMapStore = create<MapState>((set, get) => ({
       // A new anchor is a new search context: close an open spot-detail panel
       // (e.g. region applied from the header while the panel covered the list).
       selectedSpotId: null,
-      rawViewportBounds: bounds ?? null,
       // Pan→search passes the real viewport bbox: clip its south edge to the
       // sheet top so we never query (and pin) spots the panel hides. GPS/region
       // anchors get a ±RADIUS_M square around the center — NOT screen-aligned,
@@ -93,13 +89,7 @@ export const useMapStore = create<MapState>((set, get) => ({
   setLabel: (label) => set({ label }),
   setCategory: (category) => set({ category }),
   setGpsCoords: (gpsCoords) => set({ gpsCoords }),
-  setMapViewH: (mapViewH) =>
-    set((s) => ({
-      mapViewH,
-      queryBounds: s.rawViewportBounds
-        ? clipBoundsToVisible(s.rawViewportBounds, SHEET_SNAP_Y[s.snap], mapViewH)
-        : s.queryBounds,
-    })),
+  setMapViewH: (mapViewH) => set({ mapViewH }),
   onViewportChange: (viewportCenter, viewportBounds) =>
     set((s) => ({ viewportCenter, viewportBounds: viewportBounds ?? s.viewportBounds })),
 
@@ -117,16 +107,10 @@ export const useMapStore = create<MapState>((set, get) => ({
 
   applyRegion: (centroid) => get().setAnchor(centroid, "region"),
 
-  // The clip depends on the sheet top, so a snap change must re-derive
-  // queryBounds from the unclipped viewport bbox — a search made at half then
-  // collapsed to peek would otherwise keep pins/list frozen to the taller clip.
-  setSnap: (snap) =>
-    set((s) => ({
-      snap,
-      queryBounds: s.rawViewportBounds
-        ? clipBoundsToVisible(s.rawViewportBounds, SHEET_SNAP_Y[snap], s.mapViewH)
-        : s.queryBounds,
-    })),
+  // Snap changes never touch queryBounds: re-clipping on every drag refetched
+  // a different distance-capped result set, shuffling the list mid-gesture.
+  // The strip a lower snap reveals stays unqueried until the next search.
+  setSnap: (snap) => set({ snap }),
   selectSpot: (selectedSpotId) => set({ selectedSpotId }),
 
   pillVisible: () => shouldShowSearchHere(get().viewportCenter, get().lastQueryCenter, RADIUS_M),
