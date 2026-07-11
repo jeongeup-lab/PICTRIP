@@ -145,6 +145,7 @@ async function webOidcLogin(cfg: OidcConfig): Promise<OAuthOutcome> {
   const redirectUri = AuthSession.makeRedirectUri({
     scheme: cfg.redirectScheme,
     path: REDIRECT_PATH,
+    isTripleSlashed: true,
   });
   const request = new AuthSession.AuthRequest({
     clientId: cfg.clientId,
