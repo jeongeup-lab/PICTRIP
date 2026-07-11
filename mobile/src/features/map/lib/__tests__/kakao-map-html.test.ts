@@ -32,4 +32,8 @@ describe("buildKakaoMapHtml", () => {
     expect(locked).toContain("setDraggable(false)");
     expect(locked).not.toContain("center_changed");
   });
+  it("tints the generic pin dot with accent green only when accentDot is set", () => {
+    expect(buildKakaoMapHtml("TESTKEY123", false, true)).toContain('var DOT = "#03C75A"');
+    expect(buildKakaoMapHtml("TESTKEY123", false)).toContain('var DOT = "#fff"');
+  });
 });

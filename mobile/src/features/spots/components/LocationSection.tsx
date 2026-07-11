@@ -1,40 +1,58 @@
 import { useEffect, useState } from "react";
-import { View, Text, Pressable, Linking, InteractionManager, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  Linking,
+  Clipboard,
+  InteractionManager,
+  StyleSheet,
+} from "react-native";
 import type { SpotDetail, NearbySpot } from "@/lib/api-types";
 import { Icon } from "@/components/Icon";
 import type { IconName } from "@/components/Icon";
 import { KakaoWebMap } from "@/features/map/components/KakaoWebMap";
 import { cleanHomepage } from "@/lib/homepage";
 import { htmlToPlainText } from "@/lib/html-text";
-import { colors } from "@/constants/theme";
+import { colors, radii } from "@/constants/theme";
 
-function MapLink({ label, onPress }: { label: string; onPress: () => void }) {
+function MapLink({
+  label,
+  onPress,
+  accent,
+}: {
+  label: string;
+  onPress: () => void;
+  accent?: boolean;
+}) {
   return (
-    <Pressable style={styles.mapLink} onPress={onPress}>
-      <Icon name="map-pin" size={18} color={colors.ink} />
-      <Text style={styles.mapLinkText}>{label}</Text>
+    <Pressable style={[styles.mapLink, accent && styles.mapLinkAccent]} onPress={onPress}>
+      <Text style={[styles.mapLinkText, accent && styles.mapLinkTextAccent]}>{label}</Text>
     </Pressable>
   );
 }
 
-function InfoRow({
-  icon,
-  value,
-  link,
-  onPress,
-}: {
+interface InfoItem {
   icon: IconName;
   value: string;
   link?: boolean;
   onPress?: () => void;
-}) {
+  onCopy?: () => void;
+}
+
+function InfoRow({ icon, value, link, onPress, onCopy, last }: InfoItem & { last: boolean }) {
   return (
-    <Pressable style={styles.infoRow} onPress={onPress} disabled={!onPress}>
-      <Icon name={icon} size={20} color={colors.ter} />
-      <Text style={[styles.infoValue, link && styles.infoLink]} numberOfLines={2}>
+    <View style={[styles.infoRow, !last && styles.infoRowDivider]}>
+      <Icon name={icon} size={18} color={colors.ter} strokeWidth={1.8} />
+      <Text style={[styles.infoValue, link && styles.infoLink]} numberOfLines={2} onPress={onPress}>
         {value}
       </Text>
-    </Pressable>
+      {onCopy ? (
+        <Pressable style={styles.copyBtn} onPress={onCopy} hitSlop={6}>
+          <Text style={styles.copyText}>복사</Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -82,6 +100,25 @@ export function LocationSection({ spot }: { spot: SpotDetail }) {
     Linking.openURL(url).catch(() => {});
   };
 
+  const rows: InfoItem[] = [];
+  if (address)
+    rows.push({ icon: "map-pin", value: address, onCopy: () => Clipboard.setString(address) });
+  rows.push({ icon: "clock", value: usetime || "상시 개방" });
+  if (spot.tel)
+    rows.push({
+      icon: "phone",
+      value: spot.tel,
+      link: true,
+      onPress: () => Linking.openURL(`tel:${spot.tel}`),
+    });
+  if (homepage)
+    rows.push({
+      icon: "globe",
+      value: homepage.label,
+      link: true,
+      onPress: () => Linking.openURL(homepage.url),
+    });
+
   return (
     <View style={styles.section}>
       <Text style={styles.h2}>위치</Text>
@@ -95,6 +132,7 @@ export function LocationSection({ spot }: { spot: SpotDetail }) {
               pins={[pin]}
               userLocation={null}
               interactive={false}
+              accentDot
               onPinTap={() => {}}
             />
           ) : null}
@@ -105,64 +143,61 @@ export function LocationSection({ spot }: { spot: SpotDetail }) {
         </View>
       )}
       <View style={styles.mapLinks}>
-        <MapLink label="네이버 지도" onPress={openNaver} />
+        <MapLink label="네이버 지도" onPress={openNaver} accent />
         <MapLink label="카카오 지도" onPress={openKakao} />
       </View>
       <View style={styles.info}>
-        {address ? <InfoRow icon="map-pin" value={address} /> : null}
-        <InfoRow icon="clock" value={usetime || "상시 개방"} />
-        {spot.tel ? (
-          <InfoRow
-            icon="phone"
-            value={spot.tel}
-            onPress={() => Linking.openURL(`tel:${spot.tel}`)}
-          />
-        ) : null}
-        {homepage ? (
-          <InfoRow
-            icon="globe"
-            value={homepage.label}
-            link
-            onPress={() => Linking.openURL(homepage.url)}
-          />
-        ) : null}
+        {rows.map((r, i) => (
+          <InfoRow key={r.icon} {...r} last={i === rows.length - 1} />
+        ))}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  section: { paddingHorizontal: 20, paddingTop: 30 },
+  section: { paddingHorizontal: 20, paddingTop: 20 },
   h2: {
-    fontSize: 22,
+    fontSize: 19,
     fontWeight: "800",
-    letterSpacing: -0.44,
+    letterSpacing: -0.4,
     color: colors.ink,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   map: {
-    height: 200,
-    borderRadius: 12,
+    height: 170,
+    borderRadius: radii.md,
     overflow: "hidden",
     backgroundColor: colors.inset,
-    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: colors.fillStrong,
+    marginBottom: 12,
   },
   mapPlaceholder: { alignItems: "center", justifyContent: "center" },
   placeholderText: { color: colors.ter, fontSize: 14 },
-  mapLinks: { flexDirection: "row", gap: 12, marginBottom: 4 },
+  mapLinks: { flexDirection: "row", gap: 10, marginBottom: 6 },
   mapLink: {
     flex: 1,
-    height: 54,
-    borderRadius: 12,
+    height: 48,
+    borderRadius: radii.md,
     backgroundColor: colors.inset,
-    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 9,
   },
-  mapLinkText: { fontSize: 15, fontWeight: "700", color: colors.ink },
-  info: { marginTop: 8 },
-  infoRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14 },
-  infoValue: { flex: 1, fontSize: 15, color: colors.ink },
-  infoLink: { textDecorationLine: "underline" },
+  mapLinkAccent: { backgroundColor: colors.accentFill },
+  mapLinkText: { fontSize: 14, fontWeight: "700", color: colors.ink },
+  mapLinkTextAccent: { color: colors.accentText },
+  info: { marginTop: 2 },
+  infoRow: { flexDirection: "row", alignItems: "center", gap: 11, paddingVertical: 13 },
+  infoRowDivider: { borderBottomWidth: 1, borderBottomColor: "rgba(112,115,124,0.12)" },
+  infoValue: { flex: 1, fontSize: 14.5, color: colors.ink },
+  infoLink: { color: colors.accentText, textDecorationLine: "underline" },
+  copyBtn: {
+    borderWidth: 1,
+    borderColor: "rgba(112,115,124,0.22)",
+    borderRadius: radii.sm,
+    paddingVertical: 4,
+    paddingHorizontal: 9,
+  },
+  copyText: { fontSize: 12.5, fontWeight: "700", color: colors.sec },
 });

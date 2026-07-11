@@ -35,6 +35,9 @@ interface Props {
   /** When false, drag/zoom are locked so the map can sit inside a scrolling
    * page (spot detail). Defaults true — the map tab is unaffected. */
   interactive?: boolean;
+  /** Tint the generic (category-less) pin dot with the accent green. Used by the
+   * spot-detail self-pin; defaults false so the map tab is unaffected. */
+  accentDot?: boolean;
 }
 
 export function KakaoWebMap({
@@ -45,6 +48,7 @@ export function KakaoWebMap({
   onPinTap,
   onViewportChange,
   interactive = true,
+  accentDot = false,
 }: Props) {
   // react-native-webview 14's `WebView<P = undefined>` collapses its props to
   // `never` under React 19's JSX typing; instantiating the generic as `<object>`
@@ -148,7 +152,10 @@ export function KakaoWebMap({
         // The Kakao JS SDK enforces a domain check — pinning the source baseUrl
         // to the registered origin (and matching the whitelist) lets it init.
         originWhitelist={["https://*", "http://*"]}
-        source={{ html: buildKakaoMapHtml(KAKAO_JS_KEY, interactive), baseUrl: KAKAO_WEB_ORIGIN }}
+        source={{
+          html: buildKakaoMapHtml(KAKAO_JS_KEY, interactive, accentDot),
+          baseUrl: KAKAO_WEB_ORIGIN,
+        }}
         onMessage={onMessage}
         javaScriptEnabled
         domStorageEnabled

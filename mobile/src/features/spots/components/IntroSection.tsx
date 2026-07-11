@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
-import { Icon } from "@/components/Icon";
 import { htmlToPlainText } from "@/lib/html-text";
 import { colors, spacing } from "@/constants/theme";
 
@@ -16,24 +15,22 @@ export function IntroSection({ overview }: { overview: string | null }) {
       <Text style={styles.overview} numberOfLines={expanded ? undefined : 5}>
         {text}
       </Text>
-      <Pressable style={styles.more} onPress={() => setExpanded((v) => !v)} hitSlop={6}>
+      <Pressable onPress={() => setExpanded((v) => !v)} hitSlop={6}>
         <Text style={styles.moreText}>{expanded ? "접기" : "더보기"}</Text>
-        <Icon name="chevron-down" size={18} color={colors.ink} />
       </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  section: { paddingHorizontal: spacing.lg, paddingTop: 30 },
+  section: { paddingHorizontal: spacing.lg, paddingTop: 24 },
   h2: {
-    fontSize: 22,
+    fontSize: 19,
     fontWeight: "800",
-    letterSpacing: -0.44,
+    letterSpacing: -0.4,
     color: colors.ink,
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  overview: { fontSize: 15.5, lineHeight: 26, color: colors.sec },
-  more: { flexDirection: "row", alignItems: "center", gap: 2, marginTop: 11 },
-  moreText: { fontSize: 15, fontWeight: "700", color: colors.ink },
+  overview: { fontSize: 14.5, lineHeight: 23, color: colors.sec },
+  moreText: { fontSize: 13, fontWeight: "700", color: colors.accentText, marginTop: 12 },
 });

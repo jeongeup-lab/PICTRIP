@@ -1,29 +1,9 @@
-import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { router } from "expo-router";
-import { RemoteImage } from "@/components/RemoteImage";
+import { Rail } from "@/components/Rail";
+import { SpotCard } from "@/components/SpotCard";
 import { useNearby, prefetchSpot } from "@/features/spots/queries";
-import type { NearbySpot } from "@/lib/api-types";
 import { colors } from "@/constants/theme";
-
-function NearbyCard({ spot }: { spot: NearbySpot }) {
-  return (
-    <Pressable
-      style={styles.card}
-      onPressIn={() => prefetchSpot(spot)}
-      onPress={() => router.push(`/spots/${spot.contentId}`)}
-    >
-      <RemoteImage uri={spot.firstImageUrl} radius={13} style={styles.photo} />
-      <Text style={styles.name} numberOfLines={1}>
-        {spot.title}
-      </Text>
-      {spot.category ? (
-        <Text style={styles.cat} numberOfLines={1}>
-          {spot.category}
-        </Text>
-      ) : null}
-    </Pressable>
-  );
-}
 
 export function NearbyRail({
   lat,
@@ -38,33 +18,29 @@ export function NearbyRail({
   if (!data || data.length === 0) return null;
   return (
     <View style={styles.section}>
-      <Text style={styles.h3}>주변 둘러보기</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.rail}
-      >
+      <Text style={styles.h2}>주변 추천</Text>
+      <Rail gap={10}>
         {data.map((spot) => (
-          <NearbyCard key={spot.contentId} spot={spot} />
+          <SpotCard
+            key={spot.contentId}
+            spot={spot}
+            onPressIn={() => prefetchSpot(spot)}
+            onPress={() => router.push(`/spots/${spot.contentId}`)}
+          />
         ))}
-      </ScrollView>
+      </Rail>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  section: { paddingTop: 22, marginTop: 24 },
-  h3: {
-    fontSize: 17,
-    fontWeight: "700",
-    letterSpacing: -0.17,
+  section: { paddingTop: 22, paddingBottom: 4 },
+  h2: {
+    fontSize: 19,
+    fontWeight: "800",
+    letterSpacing: -0.4,
     color: colors.ink,
     paddingHorizontal: 20,
     marginBottom: 12,
   },
-  rail: { gap: 12, paddingHorizontal: 20, paddingBottom: 4 },
-  card: { width: 150 },
-  photo: { width: 150, height: 112 },
-  name: { fontSize: 14, fontWeight: "600", color: colors.ink, marginTop: 9 },
-  cat: { fontSize: 13, fontWeight: "500", color: colors.ter, marginTop: 2 },
 });
