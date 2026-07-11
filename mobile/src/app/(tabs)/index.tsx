@@ -17,12 +17,15 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.bar}>
-        <Text style={styles.wordmark}>PicTrip</Text>
+        <View style={styles.wordmarkRow}>
+          <Text style={styles.wordmark}>PicTrip</Text>
+          <View style={styles.wordmarkDot} />
+        </View>
       </View>
 
       {isLoading ? (
         <View style={styles.loading}>
-          <Skeleton height={360} radius={20} />
+          <Skeleton height={280} radius={12} />
           <Skeleton height={20} width="40%" style={{ marginTop: spacing.xxl }} />
           <Skeleton height={140} style={{ marginTop: spacing.md }} />
         </View>
@@ -54,30 +57,48 @@ export default function HomeScreen() {
                   <HeroCarousel heroes={data.heroes} />
                 </View>
               ) : null}
-              {data.rails.map((rail) => (
-                <MoodRail key={rail.id} rail={rail} />
+              {data.rails.map((rail, i) => (
+                <View key={rail.id}>
+                  {i > 0 ? <View style={styles.band} /> : null}
+                  <MoodRail rail={rail} />
+                </View>
               ))}
             </>
           )}
 
           <View style={styles.footer}>
-            <Pressable
-              testID="footer-terms"
-              accessibilityRole="link"
-              hitSlop={8}
-              onPress={() => router.push("/legal/terms")}
-            >
-              <Text style={styles.footerLink}>이용약관</Text>
-            </Pressable>
-            <View style={styles.footerSep} />
-            <Pressable
-              testID="footer-privacy"
-              accessibilityRole="link"
-              hitSlop={8}
-              onPress={() => router.push("/legal/privacy")}
-            >
-              <Text style={styles.footerLink}>개인정보</Text>
-            </Pressable>
+            <View style={styles.footerLinks}>
+              <Pressable
+                testID="footer-terms"
+                accessibilityRole="link"
+                hitSlop={8}
+                onPress={() => router.push("/legal/terms")}
+              >
+                <Text style={styles.footerLink}>이용약관</Text>
+              </Pressable>
+              <View style={styles.footerSep} />
+              <Pressable
+                testID="footer-privacy"
+                accessibilityRole="link"
+                hitSlop={8}
+                onPress={() => router.push("/legal/privacy")}
+              >
+                <Text style={styles.footerLinkStrong}>개인정보처리방침</Text>
+              </Pressable>
+              <View style={styles.footerSep} />
+              <Pressable
+                testID="footer-data-source"
+                accessibilityRole="link"
+                hitSlop={8}
+                onPress={() => router.push("/legal/data-sources")}
+              >
+                <Text style={styles.footerLink}>데이터 출처</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.footerNote}>
+              사진 기반 여행지 추천 서비스 · 관광 정보는 한국관광공사 제공
+            </Text>
+            <Text style={styles.footerNote}>ⓒ PicTrip</Text>
           </View>
         </ScrollView>
       )}
@@ -93,7 +114,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
   },
+  wordmarkRow: { flexDirection: "row", alignItems: "flex-end" },
   wordmark: { fontSize: 20, fontWeight: "800", letterSpacing: -0.5, color: colors.ink },
+  wordmarkDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginLeft: 3,
+    marginBottom: 4,
+    backgroundColor: colors.accent,
+  },
   loading: { padding: spacing.lg },
   error: {
     flex: 1,
@@ -111,15 +141,24 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
   emptyText: { fontSize: 15, color: colors.sec },
-  footer: {
-    marginTop: 40,
+  band: {
+    height: 8,
     backgroundColor: colors.inset,
-    paddingVertical: 28,
-    paddingHorizontal: 26,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: colors.fill,
   },
-  footerLink: { fontSize: 13.5, fontWeight: "600", color: colors.sec },
-  footerSep: { width: 1, height: 12, backgroundColor: colors.line },
+  footer: {
+    backgroundColor: colors.inset,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+  },
+  footerLinks: { flexDirection: "row", alignItems: "center", gap: 12 },
+  footerLink: { fontSize: 12, fontWeight: "600", color: colors.sec },
+  footerLinkStrong: { fontSize: 12, fontWeight: "700", color: colors.ink },
+  footerSep: { width: 1, height: 10, backgroundColor: colors.line },
+  footerNote: { fontSize: 11.5, lineHeight: 17, color: colors.ter },
 });

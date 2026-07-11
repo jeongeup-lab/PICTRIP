@@ -10,13 +10,13 @@ interface SpotCardProps {
   onPressIn?: () => void;
 }
 
-export function SpotCard({ spot, width = 185, onPress, onPressIn }: SpotCardProps) {
+export function SpotCard({ spot, width = 132, onPress, onPressIn }: SpotCardProps) {
   return (
     <Pressable onPress={onPress} onPressIn={onPressIn} style={{ width }}>
       <RemoteImage
         uri={spot.firstImageUrl}
-        radius={radii.md}
-        style={{ width, height: width * 0.72 }}
+        radius={radii.sm}
+        style={{ width, height: width * (96 / 132) }}
       />
       <Text numberOfLines={1} style={styles.title}>
         {spot.title}
@@ -31,6 +31,6 @@ export function SpotCard({ spot, width = 185, onPress, onPressIn }: SpotCardProp
 }
 
 const styles = StyleSheet.create({
-  title: { marginTop: 8, fontSize: 15, fontWeight: "700", color: colors.ink },
-  category: { marginTop: 3, fontSize: 13, color: colors.ter },
+  title: { marginTop: 7, fontSize: 13.5, fontWeight: "700", color: colors.ink },
+  category: { marginTop: 2, fontSize: 12, color: colors.ter },
 });
