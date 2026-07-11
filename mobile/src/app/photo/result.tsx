@@ -49,31 +49,36 @@ export default function PhotoResultScreen() {
           <>
             {hadLocation ? (
               <View style={styles.sortRow}>
-                <Pressable
-                  style={[styles.pill, mode === "similarity" ? styles.pillOn : styles.pillOff]}
-                  onPress={() => setMode("similarity")}
-                >
-                  <Text style={mode === "similarity" ? styles.pillTextOn : styles.pillTextOff}>
-                    유사도순
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.pill, mode === "distance" ? styles.pillOn : styles.pillOff]}
-                  onPress={() => setMode("distance")}
-                >
-                  <Text style={mode === "distance" ? styles.pillTextOn : styles.pillTextOff}>
-                    거리순
-                  </Text>
-                </Pressable>
+                <View style={styles.pills}>
+                  <Pressable
+                    style={[styles.pill, mode === "similarity" ? styles.pillOn : styles.pillOff]}
+                    onPress={() => setMode("similarity")}
+                  >
+                    <Text style={mode === "similarity" ? styles.pillTextOn : styles.pillTextOff}>
+                      유사도순
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.pill, mode === "distance" ? styles.pillOn : styles.pillOff]}
+                    onPress={() => setMode("distance")}
+                  >
+                    <Text style={mode === "distance" ? styles.pillTextOn : styles.pillTextOff}>
+                      거리순
+                    </Text>
+                  </Pressable>
+                </View>
+                <Text style={styles.sortHint}>위치 기준 포함</Text>
               </View>
             ) : null}
 
             <View style={styles.list}>
-              {sorted.map((match) => (
+              {sorted.map((match, i) => (
                 <ResultCard
                   key={match.contentId}
                   match={match}
                   showDistance={hadLocation}
+                  rank={i}
+                  isLast={i === sorted.length - 1}
                   onPress={() => openSpot(match.contentId)}
                 />
               ))}
@@ -87,7 +92,7 @@ export default function PhotoResultScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  hero: { height: 312, backgroundColor: colors.inset },
+  hero: { height: 300, backgroundColor: colors.inset },
   heroImg: { width: "100%", height: "100%" },
   heroScrim: { position: "absolute", inset: 0, backgroundColor: colors.scrim },
   heroBack: {
@@ -118,17 +123,26 @@ const styles = StyleSheet.create({
   },
   sortRow: {
     flexDirection: "row",
-    gap: 7,
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
-    paddingTop: 18,
+    paddingTop: spacing.md,
     paddingBottom: 8,
   },
-  pill: { paddingHorizontal: 15, paddingVertical: 8, borderRadius: radii.pill },
+  pills: { flexDirection: "row", gap: 7 },
+  pill: {
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
   pillOn: { backgroundColor: colors.ink },
-  pillOff: { backgroundColor: colors.fill },
+  pillOff: { borderColor: colors.line },
   pillTextOn: { fontSize: 13, fontWeight: "700", color: colors.onImage },
   pillTextOff: { fontSize: 13, fontWeight: "700", color: colors.sec },
-  list: { gap: 14, paddingHorizontal: spacing.lg, paddingTop: 8 },
+  sortHint: { fontSize: 12, color: colors.ter },
+  list: { paddingTop: 4 },
   empty: { alignItems: "center", paddingHorizontal: spacing.xl, paddingTop: 48, gap: 8 },
   emptyTitle: { fontSize: 18, fontWeight: "700", color: colors.ink },
   emptySub: { fontSize: 14, color: colors.sec, marginBottom: 12 },

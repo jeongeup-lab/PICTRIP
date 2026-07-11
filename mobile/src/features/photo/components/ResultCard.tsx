@@ -1,6 +1,5 @@
 import { Pressable, View, Text, StyleSheet } from "react-native";
 import { RemoteImage } from "@/components/RemoteImage";
-import { SimilarityGauge } from "@/features/photo/components/SimilarityGauge";
 import { formatDistance } from "@/lib/distance";
 import type { PhotoMatch } from "@/lib/api-types";
 import { colors, radii } from "@/constants/theme";
@@ -9,9 +8,11 @@ interface Props {
   match: PhotoMatch;
   showDistance: boolean;
   onPress: () => void;
+  rank?: number;
+  isLast?: boolean;
 }
 
-export function ResultCard({ match, showDistance, onPress }: Props) {
+export function ResultCard({ match, showDistance, onPress, rank = -1, isLast = false }: Props) {
   const region = [match.regionName, match.sigunguName].filter(Boolean).join(" ");
   const parts: string[] = [];
   if (match.category) parts.push(match.category);
@@ -19,45 +20,70 @@ export function ResultCard({ match, showDistance, onPress }: Props) {
   if (showDistance && match.distance != null) parts.push(formatDistance(match.distance));
   const meta = parts.join(" · ");
 
+  const percent = Math.round(match.similarity * 100);
+  const isHigh = percent >= 85;
+
   return (
-    <Pressable onPress={onPress} style={styles.card}>
-      <RemoteImage uri={match.firstImageUrl} radius={radii.xl} style={styles.image} />
-      <View style={styles.bar}>
-        <View style={styles.tx}>
-          <Text numberOfLines={1} style={styles.name}>
-            {match.title}
+    <Pressable onPress={onPress} style={[styles.row, isLast && styles.rowLast]}>
+      <View style={styles.thumbWrap}>
+        <RemoteImage uri={match.firstImageUrl} radius={radii.md} style={styles.thumb} />
+        {rank === 0 ? (
+          <View style={styles.best}>
+            <Text style={styles.bestText}>BEST</Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View style={styles.body}>
+        <Text numberOfLines={1} style={styles.name}>
+          {match.title}
+        </Text>
+        {meta ? (
+          <Text numberOfLines={1} style={styles.meta}>
+            {meta}
           </Text>
-          {meta ? (
-            <Text numberOfLines={1} style={styles.meta}>
-              {meta}
-            </Text>
-          ) : null}
-        </View>
-        <SimilarityGauge similarity={match.similarity} />
+        ) : null}
+      </View>
+
+      <View style={styles.simCol}>
+        <Text
+          style={[styles.simPct, isHigh ? styles.simHigh : styles.simInk]}
+        >{`${percent}%`}</Text>
+        <Text style={styles.simLabel}>유사도</Text>
       </View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { height: 188, borderRadius: radii.xl, overflow: "hidden", backgroundColor: colors.inset },
-  image: { width: "100%", height: "100%" },
-  bar: {
-    position: "absolute",
-    left: 12,
-    right: 12,
-    bottom: 12,
-    borderRadius: 15,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+  row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
-    backgroundColor: colors.scrim,
-    borderWidth: 1,
-    borderColor: colors.glassBorder,
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.fillStrong,
   },
-  tx: { flex: 1, minWidth: 0 },
-  name: { fontSize: 17, fontWeight: "700", color: colors.onImage },
-  meta: { fontSize: 12.5, color: colors.onDim, marginTop: 2 },
+  rowLast: { borderBottomWidth: 0 },
+  thumbWrap: { width: 96, height: 96, flexShrink: 0 },
+  thumb: { width: 96, height: 96 },
+  best: {
+    position: "absolute",
+    left: 6,
+    top: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radii.sm,
+    backgroundColor: colors.accent,
+  },
+  bestText: { fontSize: 10, fontWeight: "800", color: colors.onImage },
+  body: { flex: 1, minWidth: 0 },
+  name: { fontSize: 16, fontWeight: "700", color: colors.ink },
+  meta: { fontSize: 12.5, color: colors.ter, marginTop: 4 },
+  simCol: { alignItems: "flex-end", flexShrink: 0 },
+  simPct: { fontSize: 19, fontWeight: "800" },
+  simHigh: { color: colors.accentText },
+  simInk: { color: colors.ink },
+  simLabel: { fontSize: 10.5, fontWeight: "600", color: colors.ter, marginTop: 1 },
 });
