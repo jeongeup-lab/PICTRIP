@@ -5,6 +5,7 @@ import { Icon } from "@/components/Icon";
 import type { IconName } from "@/components/Icon";
 import { KakaoWebMap } from "@/features/map/components/KakaoWebMap";
 import { cleanHomepage } from "@/lib/homepage";
+import { htmlToPlainText } from "@/lib/html-text";
 import { colors } from "@/constants/theme";
 
 function MapLink({ label, onPress }: { label: string; onPress: () => void }) {
@@ -52,6 +53,7 @@ export function LocationSection({ spot }: { spot: SpotDetail }) {
   const lat = spot.mapy;
   const lng = spot.mapx;
   const homepage = cleanHomepage(spot.homepage);
+  const usetime = spot.intro?.usetime ? htmlToPlainText(spot.intro.usetime) : null;
 
   // Single non-interactive pin for this spot. KakaoWebMap reads contentId/mapx/mapy.
   const pin: NearbySpot = {
@@ -108,7 +110,7 @@ export function LocationSection({ spot }: { spot: SpotDetail }) {
       </View>
       <View style={styles.info}>
         {address ? <InfoRow icon="map-pin" value={address} /> : null}
-        <InfoRow icon="clock" value={spot.intro?.usetime ?? "상시 개방"} />
+        <InfoRow icon="clock" value={usetime || "상시 개방"} />
         {spot.tel ? (
           <InfoRow
             icon="phone"
