@@ -87,9 +87,10 @@ export default function PhotoSelectScreen() {
           onPress={analyze}
           disabled={!asset}
         >
-          <Icon name="sparkle" size={19} color={colors.onImage} />
+          <Icon name="sparkle" size={18} color={colors.onImage} />
           <Text style={styles.ctaText}>분석하기</Text>
         </Pressable>
+        <Text style={styles.privacy}>이미지는 기기에서 분석 후 즉시 폐기돼요</Text>
       </View>
     </View>
   );
@@ -106,10 +107,10 @@ const styles = StyleSheet.create({
   },
   body: { flex: 1, paddingHorizontal: spacing.xl, paddingBottom: spacing.lg },
   title: {
-    fontSize: 25,
+    fontSize: 24,
     fontWeight: "700",
     letterSpacing: -0.55,
-    lineHeight: 32,
+    lineHeight: 31,
     color: colors.ink,
   },
   sub: { color: colors.sec, fontSize: 14, marginTop: 8 },
@@ -151,24 +152,25 @@ const styles = StyleSheet.create({
   actions: { flexDirection: "row", gap: 11, marginBottom: 11 },
   btn: {
     flex: 1,
-    height: 54,
-    borderRadius: radii.sm,
+    height: 52,
+    borderRadius: radii.md,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
     backgroundColor: colors.inset,
   },
-  btnText: { fontSize: 15, fontWeight: "700", color: colors.ink },
+  btnText: { fontSize: 14.5, fontWeight: "700", color: colors.ink },
   cta: {
-    height: 56,
-    borderRadius: radii.sm,
+    height: 54,
+    borderRadius: radii.md,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: colors.ink,
+    backgroundColor: colors.accent,
   },
   ctaDisabled: { backgroundColor: colors.ter },
-  ctaText: { fontSize: 16, fontWeight: "700", color: colors.onImage },
+  ctaText: { fontSize: 15.5, fontWeight: "700", color: colors.onImage },
+  privacy: { fontSize: 11.5, color: colors.ter, textAlign: "center", marginTop: 10 },
 });

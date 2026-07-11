@@ -77,6 +77,10 @@ export default function PhotoAnalyzingScreen() {
             <View style={styles.bar}>
               <Animated.View style={[styles.barFill, { transform: [{ translateX }] }]} />
             </View>
+            <View style={styles.status}>
+              <View style={styles.statusDot} />
+              <Text style={styles.statusText}>색감과 분위기를 읽는 중</Text>
+            </View>
           </>
         )}
       </View>
@@ -97,12 +101,12 @@ const styles = StyleSheet.create({
   thumb: {
     width: 92,
     height: 92,
-    borderRadius: radii.xl,
+    borderRadius: 20,
     marginBottom: 26,
     backgroundColor: colors.inset,
   },
   title: {
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: "700",
     letterSpacing: -0.36,
     marginBottom: 6,
@@ -116,7 +120,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.skeleton,
     overflow: "hidden",
   },
-  barFill: { width: "42%", height: "100%", borderRadius: 2, backgroundColor: colors.ink },
+  barFill: { width: "42%", height: "100%", borderRadius: 2, backgroundColor: colors.accent },
+  status: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 22 },
+  statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.accent },
+  statusText: { fontSize: 12, color: colors.ter },
   errorActions: { flexDirection: "row", gap: 11, marginTop: 4 },
   errBtn: {
     height: 48,

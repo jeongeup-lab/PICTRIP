@@ -22,11 +22,12 @@ async function render(el: React.ReactElement) {
 }
 
 describe("ResultCard", () => {
-  it("shows name, category·region, distance and bucket label when showDistance", async () => {
+  it("shows name, category·region, distance and similarity percent when showDistance", async () => {
     const tree = await render(<ResultCard match={base} showDistance onPress={() => {}} />);
     expect(tree).toContain("곽지해수욕장");
     expect(tree).toContain("해변 · 제주 제주시 · 3.4km");
-    expect(tree).toContain("매우 닮음");
+    expect(tree).toContain("96%");
+    expect(tree).toContain("유사도");
   });
   it("omits distance when showDistance is false", async () => {
     const tree = await render(<ResultCard match={base} showDistance={false} onPress={() => {}} />);
@@ -38,5 +39,13 @@ describe("ResultCard", () => {
       <ResultCard match={{ ...base, distance: null }} showDistance onPress={() => {}} />,
     );
     expect(tree).not.toContain("km");
+  });
+  it("shows a BEST badge only on rank 0", async () => {
+    const best = await render(<ResultCard match={base} showDistance rank={0} onPress={() => {}} />);
+    expect(best).toContain("BEST");
+    const other = await render(
+      <ResultCard match={base} showDistance rank={2} onPress={() => {}} />,
+    );
+    expect(other).not.toContain("BEST");
   });
 });
