@@ -128,17 +128,7 @@ export default function MapTab() {
           onSnapChange={s.setSnap}
           onTranslate={handleTranslate}
           snapY={snapY}
-          headerExtra={
-            <>
-              <View style={styles.sheetHead}>
-                <Text style={styles.sheetCount}>
-                  주변 스팟 <Text style={styles.sheetCountNum}>{spots.length}</Text>
-                </Text>
-                <Text style={styles.sheetSort}>거리순 ▾</Text>
-              </View>
-              <CategoryChips value={s.category} onChange={s.setCategory} />
-            </>
-          }
+          headerExtra={<CategoryChips value={s.category} onChange={s.setCategory} />}
         >
           {nearby.isLoading ? (
             <View style={[styles.list, { paddingBottom: listPaddingBottom }]}>
@@ -235,16 +225,6 @@ const styles = StyleSheet.create({
     maxWidth: "80%",
   },
   labelText: { fontSize: 14.5, fontWeight: "700", color: colors.ink },
-  sheetHead: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xs,
-  },
-  sheetCount: { fontSize: 13, fontWeight: "700", color: colors.ink },
-  sheetCountNum: { color: colors.accentText },
-  sheetSort: { fontSize: 12, fontWeight: "600", color: colors.ter },
   // top:0 + translateY anchors these to the sheet's animated top edge (see body).
   pill: { position: "absolute", left: 0, right: 0, top: 0, alignItems: "center" },
   fab: { position: "absolute", right: spacing.lg, top: 0 },
