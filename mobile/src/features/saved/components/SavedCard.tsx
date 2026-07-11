@@ -12,6 +12,9 @@ interface Props {
 }
 
 export function SavedCard({ spot, onPress, onPressIn, onUnsave }: Props) {
+  const region = spot.addr1?.trim().split(/\s+/)[0];
+  const subline = [region, spot.category].filter(Boolean).join(" · ");
+
   return (
     <Pressable style={styles.card} onPress={onPress} onPressIn={onPressIn}>
       <RemoteImage uri={spot.firstImageUrl} style={styles.img} />
@@ -19,9 +22,16 @@ export function SavedCard({ spot, onPress, onPressIn, onUnsave }: Props) {
       <Pressable style={styles.heart} onPress={onUnsave} hitSlop={8}>
         <Icon name="heart-fill" size={19} color={colors.onImage} />
       </Pressable>
-      <Text numberOfLines={1} style={styles.name}>
-        {spot.title}
-      </Text>
+      <View style={styles.caption}>
+        <Text numberOfLines={1} style={styles.name}>
+          {spot.title}
+        </Text>
+        {subline ? (
+          <Text numberOfLines={1} style={styles.sub}>
+            {subline}
+          </Text>
+        ) : null}
+      </View>
     </Pressable>
   );
 }
@@ -54,13 +64,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  name: {
+  caption: {
     position: "absolute",
     left: 12,
     right: 12,
     bottom: 11,
+  },
+  name: {
     color: colors.onImage,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
+  },
+  sub: {
+    marginTop: 2,
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 11,
   },
 });

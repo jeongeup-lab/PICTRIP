@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/Skeleton";
 import { SavedCard } from "@/features/saved/components/SavedCard";
 import { useSavedList, useUnsaveMutation } from "@/features/saved/queries";
 import { prefetchSpot } from "@/features/spots/queries";
-import { colors, spacing } from "@/constants/theme";
+import { colors, spacing, radii } from "@/constants/theme";
 
 export default function SavedScreen() {
   const insets = useSafeAreaInsets();
@@ -19,12 +19,12 @@ export default function SavedScreen() {
         <Pressable style={styles.navBtn} onPress={() => router.back()} hitSlop={8}>
           <Icon name="chevron-left" size={23} />
         </Pressable>
-        <Text style={styles.title}>스크랩</Text>
+        <Text style={styles.title}>스크랩{data && data.length > 0 ? ` ${data.length}` : ""}</Text>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.grid}>
         {isLoading ? (
-          [0, 1, 2, 3].map((i) => <Skeleton key={i} height={150} width="48.5%" radius={14} />)
+          [0, 1, 2, 3].map((i) => <Skeleton key={i} height={150} width="48.5%" radius={radii.md} />)
         ) : data && data.length > 0 ? (
           data.map((spot) => (
             <SavedCard
