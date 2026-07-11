@@ -43,7 +43,12 @@ export default function ProfileTab() {
 
         <View style={styles.scrapWrap}>
           <View style={styles.secHead}>
-            <Text style={styles.secTitle}>스크랩</Text>
+            <Text style={styles.secTitle}>
+              스크랩
+              {isAuthenticated && saved && saved.length > 0 ? (
+                <Text style={styles.secCount}> {saved.length}</Text>
+              ) : null}
+            </Text>
             {isAuthenticated && saved && saved.length > 0 ? (
               <Pressable style={styles.seeAll} onPress={() => router.push("/saved")}>
                 <Text style={styles.seeAllText}>전체보기</Text>
@@ -84,17 +89,20 @@ export default function ProfileTab() {
         <SettingsRows onLogout={isAuthenticated ? () => void logout() : undefined} />
 
         <View style={styles.foot}>
-          <Pressable onPress={() => router.push("/legal")}>
-            <Text style={styles.footLink}>약관·정책</Text>
-          </Pressable>
-          {isAuthenticated ? (
-            <>
-              <View style={styles.footDiv} />
-              <Pressable onPress={confirmDelete}>
-                <Text style={styles.footLink}>회원 탈퇴</Text>
-              </Pressable>
-            </>
-          ) : null}
+          <View style={styles.footLinks}>
+            <Pressable onPress={() => router.push("/legal")}>
+              <Text style={styles.footLink}>약관·정책</Text>
+            </Pressable>
+            {isAuthenticated ? (
+              <>
+                <View style={styles.footDiv} />
+                <Pressable onPress={confirmDelete}>
+                  <Text style={styles.footLink}>회원 탈퇴</Text>
+                </Pressable>
+              </>
+            ) : null}
+          </View>
+          <Text style={styles.footNote}>ⓒ PicTrip</Text>
         </View>
       </ScrollView>
     </View>
@@ -116,16 +124,21 @@ const styles = StyleSheet.create({
     paddingBottom: 11,
   },
   secTitle: { fontSize: 18, fontWeight: "800", letterSpacing: -0.3, color: colors.ink },
+  secCount: { color: colors.accentText },
   seeAll: { flexDirection: "row", alignItems: "center", gap: 3 },
   seeAllText: { color: colors.sec, fontSize: 13.5, fontWeight: "600" },
   foot: {
-    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 16,
-    paddingVertical: 24,
+    gap: spacing.sm,
+    backgroundColor: colors.inset,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
     paddingBottom: 30,
   },
-  footLink: { color: colors.sec, fontSize: 13, fontWeight: "600" },
-  footDiv: { width: 1, height: 12, backgroundColor: colors.line },
+  footLinks: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12 },
+  footLink: { color: colors.sec, fontSize: 12, fontWeight: "600" },
+  footDiv: { width: 1, height: 10, backgroundColor: colors.line },
+  footNote: { fontSize: 11.5, color: colors.ter },
 });
