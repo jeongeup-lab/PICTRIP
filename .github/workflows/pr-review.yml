@@ -1,0 +1,39 @@
+name: pr-review
+
+# 자체 호스팅 코드 리뷰 — Codex GitHub 커넥터 대체.
+# 홈서버 CT112의 codexproxy(ChatGPT 구독 → OpenAI 호환 API)로 diff를 리뷰하고
+# P1/P2/P3 인라인 코멘트를 단다. 반드시 self-hosted(ct112) 러너에서 돌아야
+# 127.0.0.1:8787 의 codexproxy에 닿는다.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# 같은 PR에 연속 push가 오면 이전 리뷰 실행은 취소
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    if: github.event.pull_request.draft == false
+    runs-on: [self-hosted, ct112]
+    steps:
+      # PR 머지 ref를 checkout — 리뷰 스크립트와 AGENTS.md(가이드라인)를 함께 확보한다
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run codexproxy review
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          CODEXPROXY_URL: http://127.0.0.1:8787
+          REVIEW_MODEL: gpt-5.5
+          REVIEW_EFFORT: high
+          GUIDELINES_FILE: AGENTS.md
+        run: python3 .github/scripts/pr_review.py
