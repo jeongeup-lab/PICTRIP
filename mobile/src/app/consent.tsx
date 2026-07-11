@@ -7,7 +7,7 @@ import { Icon } from "@/components/Icon";
 import { TERMS_VERSION } from "@/constants/legal";
 import { useConsents, useUpdateConsent } from "@/features/consent/queries";
 import { buildConsentPut } from "@/features/consent/lib/build-consent-put";
-import { colors, spacing } from "@/constants/theme";
+import { colors, radii, spacing } from "@/constants/theme";
 
 export default function ConsentScreen() {
   const insets = useSafeAreaInsets();
@@ -81,7 +81,9 @@ export default function ConsentScreen() {
                     내 주변 추천에 사용해요. 기기 설정에서 변경할 수 있어요.
                   </Text>
                 </View>
-                <Text style={styles.value}>{data.locationConsent ? "허용" : "거부"}</Text>
+                <Text style={[styles.value, data.locationConsent && styles.valueOn]}>
+                  {data.locationConsent ? "허용" : "거부"}
+                </Text>
                 <Icon name="chevron-right" size={20} color={colors.ter} />
               </Pressable>
             </View>
@@ -97,7 +99,7 @@ export default function ConsentScreen() {
                 <Switch
                   value={data.photoConsent}
                   onValueChange={togglePhoto}
-                  trackColor={{ false: colors.line, true: colors.ink }}
+                  trackColor={{ false: colors.line, true: colors.accent }}
                 />
               </View>
             </View>
@@ -112,7 +114,9 @@ export default function ConsentScreen() {
                   </Text>
                 </View>
                 {isCurrent ? (
-                  <Text style={styles.value}>최신</Text>
+                  <View style={styles.currentBadge}>
+                    <Text style={styles.currentBadgeText}>최신</Text>
+                  </View>
                 ) : (
                   <Pressable style={styles.reBtn} onPress={reConsent} hitSlop={8}>
                     <Text style={styles.reBtnText}>재동의</Text>
@@ -163,6 +167,14 @@ const styles = StyleSheet.create({
   label: { fontSize: 15.5, fontWeight: "600", color: colors.ink },
   sub: { fontSize: 12.5, lineHeight: 18, color: colors.ter },
   value: { fontSize: 14, color: colors.ter },
+  valueOn: { color: colors.accentText, fontWeight: "700" },
+  currentBadge: {
+    backgroundColor: colors.accentFill,
+    borderRadius: radii.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  currentBadgeText: { fontSize: 12, fontWeight: "700", color: colors.accentText },
   reBtn: {
     paddingHorizontal: spacing.md,
     paddingVertical: 7,
