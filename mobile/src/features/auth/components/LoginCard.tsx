@@ -101,13 +101,15 @@ export function LoginCard({ variant, onSuccess, onCancel, onEmailPress }: Props)
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <View style={styles.divider}>
-        <View style={styles.dividerLine} />
-        <Text style={styles.dividerText}>또는</Text>
-        <View style={styles.dividerLine} />
-      </View>
+      {variant === "full" ? (
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>또는</Text>
+          <View style={styles.dividerLine} />
+        </View>
+      ) : null}
 
-      <View style={styles.emailWrap}>
+      <View style={variant === "full" ? styles.emailWrap : styles.emailWrapSheet}>
         <Pressable
           style={({ pressed }) => [styles.emailBtn, pressed && styles.emailBtnPressed]}
           onPress={onEmailPress ?? (() => router.push("/auth/email"))}
@@ -177,6 +179,7 @@ const styles = StyleSheet.create({
   dividerLine: { flex: 1, height: 1, backgroundColor: colors.line },
   dividerText: { fontSize: 11.5, color: colors.ter },
   emailWrap: { paddingHorizontal: spacing.lg, marginTop: spacing.lg },
+  emailWrapSheet: { paddingHorizontal: spacing.lg, marginTop: 11 },
   emailBtn: {
     height: 52,
     borderRadius: radii.md,
