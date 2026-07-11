@@ -45,9 +45,6 @@ export function HeroCarousel({ heroes }: { heroes: HeroTile[] }) {
             style={{ width: cardWidth, height: 280 }}
           />
           <View style={styles.scrim} pointerEvents="none" />
-          <View style={styles.chip} pointerEvents="none">
-            <Text style={styles.chipText}>큐레이션</Text>
-          </View>
           <View style={styles.copy} pointerEvents="none">
             <Text style={styles.title}>{hero.title}</Text>
             {hero.subtitle ? <Text style={styles.subtitle}>{hero.subtitle}</Text> : null}
@@ -73,21 +70,6 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: radii.lg,
     borderBottomRightRadius: radii.lg,
     backgroundColor: colors.scrimStrong,
-  },
-  chip: {
-    position: "absolute",
-    left: 16,
-    top: 14,
-    backgroundColor: "rgba(20,18,22,0.45)",
-    borderRadius: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  chipText: {
-    fontSize: 10.5,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-    color: "rgba(255,255,255,0.92)",
   },
   copy: { position: "absolute", left: 16, right: 16, bottom: 16 },
   title: {

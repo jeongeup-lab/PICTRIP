@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { View, Text, Pressable, Linking, StyleSheet } from "react-native";
+import { router } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { getPermissionStatus, type PermStatus } from "@/features/map/usecases/request-location";
 import { APP_VERSION } from "@/lib/app-meta";
@@ -11,7 +12,13 @@ const PERM_LABEL: Record<PermStatus, string> = {
   undetermined: "미설정",
 };
 
-export function SettingsRows({ onLogout }: { onLogout?: () => void }) {
+export function SettingsRows({
+  onLogout,
+  onDeleteAccount,
+}: {
+  onLogout?: () => void;
+  onDeleteAccount?: () => void;
+}) {
   const [perm, setPerm] = useState<PermStatus | null>(null);
 
   useEffect(() => {
@@ -47,12 +54,31 @@ export function SettingsRows({ onLogout }: { onLogout?: () => void }) {
         <Text style={styles.value}>{APP_VERSION}</Text>
       </View>
 
+      <Pressable style={styles.row} onPress={() => router.push("/legal")}>
+        <View style={styles.icon}>
+          <Icon name="shield-check" size={21} color={colors.sec} />
+        </View>
+        <Text style={styles.label}>약관·정책</Text>
+        <Icon name="chevron-right" size={20} color={colors.ter} />
+      </Pressable>
+
+      {onLogout || onDeleteAccount ? <View style={styles.divider} /> : null}
+
       {onLogout ? (
-        <Pressable style={styles.row} onPress={onLogout}>
+        <Pressable style={[styles.row, styles.first]} onPress={onLogout}>
           <View style={styles.icon}>
             <Icon name="log-out" size={21} color={colors.sec} />
           </View>
           <Text style={styles.label}>로그아웃</Text>
+        </Pressable>
+      ) : null}
+
+      {onDeleteAccount ? (
+        <Pressable style={[styles.row, !onLogout && styles.first]} onPress={onDeleteAccount}>
+          <View style={styles.icon}>
+            <Icon name="person" size={21} color={colors.sec} />
+          </View>
+          <Text style={styles.label}>회원 탈퇴</Text>
         </Pressable>
       ) : null}
     </View>
@@ -71,6 +97,13 @@ const styles = StyleSheet.create({
     borderTopColor: colors.line,
   },
   first: { borderTopWidth: 0 },
+  divider: {
+    height: 9,
+    backgroundColor: colors.inset,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: colors.line,
+  },
   icon: { width: 21, alignItems: "center" },
   label: { flex: 1, fontSize: 15.5, fontWeight: "600", color: colors.ink },
   value: { color: colors.ter, fontSize: 14 },

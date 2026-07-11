@@ -29,7 +29,6 @@ export default function LegalListScreen() {
             </Pressable>
           ))}
         </View>
-        <Text style={styles.caption}>문서는 최신 버전이 웹에서 열려요 · pictrip.org/legal</Text>
       </ScrollView>
     </View>
   );
@@ -64,10 +63,4 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.line,
   },
   rowLabel: { flex: 1, fontSize: 15.5, fontWeight: "600", color: colors.ink },
-  caption: {
-    fontSize: 11.5,
-    color: colors.ter,
-    textAlign: "center",
-    marginTop: spacing.lg,
-  },
 });

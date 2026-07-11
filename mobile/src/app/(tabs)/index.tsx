@@ -18,7 +18,7 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.bar}>
         <View style={styles.wordmarkRow}>
-          <Text style={styles.wordmark}>PicTrip</Text>
+          <Text style={styles.wordmark}>PICTRIP</Text>
           <View style={styles.wordmarkDot} />
         </View>
       </View>
@@ -95,9 +95,6 @@ export default function HomeScreen() {
                 <Text style={styles.footerLink}>데이터 출처</Text>
               </Pressable>
             </View>
-            <Text style={styles.footerNote}>
-              사진 기반 여행지 추천 서비스 · 관광 정보는 한국관광공사 제공
-            </Text>
             <Text style={styles.footerNote}>ⓒ PicTrip</Text>
           </View>
         </ScrollView>
@@ -111,6 +108,7 @@ const styles = StyleSheet.create({
   bar: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
+    alignItems: "center",
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
   },

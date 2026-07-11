@@ -86,24 +86,12 @@ export default function ProfileTab() {
 
         <View style={styles.sep} />
 
-        <SettingsRows onLogout={isAuthenticated ? () => void logout() : undefined} />
+        <SettingsRows
+          onLogout={isAuthenticated ? () => void logout() : undefined}
+          onDeleteAccount={isAuthenticated ? confirmDelete : undefined}
+        />
 
-        <View style={styles.foot}>
-          <View style={styles.footLinks}>
-            <Pressable onPress={() => router.push("/legal")}>
-              <Text style={styles.footLink}>약관·정책</Text>
-            </Pressable>
-            {isAuthenticated ? (
-              <>
-                <View style={styles.footDiv} />
-                <Pressable onPress={confirmDelete}>
-                  <Text style={styles.footLink}>회원 탈퇴</Text>
-                </Pressable>
-              </>
-            ) : null}
-          </View>
-          <Text style={styles.footNote}>ⓒ PicTrip</Text>
-        </View>
+        <View style={styles.foot} />
       </ScrollView>
     </View>
   );
@@ -128,16 +116,9 @@ const styles = StyleSheet.create({
   seeAll: { flexDirection: "row", alignItems: "center", gap: 3 },
   seeAllText: { color: colors.sec, fontSize: 13.5, fontWeight: "600" },
   foot: {
-    gap: spacing.sm,
+    height: 30,
     backgroundColor: colors.inset,
     borderTopWidth: 1,
     borderTopColor: colors.line,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: 30,
   },
-  footLinks: { flexDirection: "row", alignItems: "center", gap: 12 },
-  footLink: { color: colors.sec, fontSize: 12, fontWeight: "600" },
-  footDiv: { width: 1, height: 10, backgroundColor: colors.line },
-  footNote: { fontSize: 11.5, lineHeight: 17, color: colors.ter },
 });
