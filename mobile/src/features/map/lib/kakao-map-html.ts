@@ -8,8 +8,9 @@ import { SEOUL_CITY_HALL } from "@/constants/map";
  * When `interactive` is false the map is locked (no drag/zoom, no
  * center_changed events) so it can live inside a scrolling page (spot detail)
  * without fighting the page scroll. */
-export function buildKakaoMapHtml(jsKey: string, interactive = true): string {
+export function buildKakaoMapHtml(jsKey: string, interactive = true, accentDot = false): string {
   const { lat, lng } = SEOUL_CITY_HALL;
+  const dotColor = accentDot ? "#03C75A" : "#fff";
   // 'idle' fires after the map settles from a drag, zoom, OR programmatic
   // setCenter — so the viewport bbox (sw/ne) is reported on every movement, not
   // just drags. The bbox drives "이 지역에서 검색" (query what the user sees).
@@ -47,8 +48,9 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true): string {
     leisure: '<path d="M3 9c2-2 4-2 6 0s4 2 6 0M3 15c2-2 4-2 6 0s4 2 6 0"/>',
     shopping: '<path d="M6 8h10l-1 12H7zM9 8V6a3 3 0 0 1 6 0v2"/>'
   };
+  var DOT = ${JSON.stringify(dotColor)};
   function glyphSvg(cat){
-    var p = GLYPHS[cat] || '<circle cx="12" cy="12" r="3" fill="#fff" stroke="none"/>';
+    var p = GLYPHS[cat] || '<circle cx="12" cy="12" r="3" fill="'+DOT+'" stroke="none"/>';
     return '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
   }
   function post(type, payload){ if(window.ReactNativeWebView){ window.ReactNativeWebView.postMessage(JSON.stringify({type:type,payload:payload||{}})); } }

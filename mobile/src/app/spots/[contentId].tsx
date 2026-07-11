@@ -86,6 +86,7 @@ export default function SpotScreen() {
         ) : (
           <>
             <IntroSection overview={data.overview} />
+            <View style={styles.band} />
             <LocationSection spot={data} />
             <VisitSection title={data.title} onShare={onShare} onScrap={onToggleSave} />
           </>
@@ -111,6 +112,14 @@ export default function SpotScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
+  band: {
+    height: 8,
+    backgroundColor: colors.inset,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: colors.fill,
+    marginTop: 22,
+  },
   errNav: { flexDirection: "row", paddingHorizontal: 14, paddingTop: 62 },
   errBack: {
     width: 44,
