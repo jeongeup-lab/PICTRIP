@@ -1,7 +1,7 @@
 import { Pressable, Text, View, ActivityIndicator, StyleSheet } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import type { Provider } from "@/features/auth/usecases/oauth-providers";
-import { colors } from "@/constants/theme";
+import { colors, radii } from "@/constants/theme";
 
 interface Props {
   provider: Provider;
@@ -87,8 +87,8 @@ export function SocialButton({ provider, onPress, loading, disabled }: Props) {
 
 const styles = StyleSheet.create({
   btn: {
-    height: 54,
-    borderRadius: 13,
+    height: 52,
+    borderRadius: radii.md,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",

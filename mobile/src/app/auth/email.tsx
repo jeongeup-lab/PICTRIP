@@ -14,7 +14,7 @@ import { router } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { AppError } from "@/lib/app-error";
-import { colors, spacing } from "@/constants/theme";
+import { colors, spacing, radii } from "@/constants/theme";
 
 type Mode = "login" | "signup";
 
@@ -49,6 +49,7 @@ export default function EmailAuthScreen() {
   const [name, setName] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [focused, setFocused] = useState<"name" | "email" | "password" | null>(null);
 
   const close = () => {
     if (router.canGoBack()) router.back();
@@ -114,7 +115,7 @@ export default function EmailAuthScreen() {
             <View style={styles.field}>
               <Text style={styles.label}>이름 (선택)</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, focused === "name" && styles.inputFocused]}
                 value={name}
                 onChangeText={setName}
                 placeholder="이름"
@@ -123,6 +124,8 @@ export default function EmailAuthScreen() {
                 autoComplete="name"
                 returnKeyType="next"
                 editable={!pending}
+                onFocus={() => setFocused("name")}
+                onBlur={() => setFocused(null)}
               />
             </View>
           ) : null}
@@ -130,7 +133,7 @@ export default function EmailAuthScreen() {
           <View style={styles.field}>
             <Text style={styles.label}>이메일</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, focused === "email" && styles.inputFocused]}
               value={email}
               onChangeText={setEmail}
               placeholder="you@example.com"
@@ -142,13 +145,15 @@ export default function EmailAuthScreen() {
               textContentType="emailAddress"
               returnKeyType="next"
               editable={!pending}
+              onFocus={() => setFocused("email")}
+              onBlur={() => setFocused(null)}
             />
           </View>
 
           <View style={styles.field}>
             <Text style={styles.label}>비밀번호</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, focused === "password" && styles.inputFocused]}
               value={password}
               onChangeText={setPassword}
               placeholder={isSignup ? "8자 이상" : "비밀번호"}
@@ -163,6 +168,8 @@ export default function EmailAuthScreen() {
                 if (canSubmit) void submit();
               }}
               editable={!pending}
+              onFocus={() => setFocused("password")}
+              onBlur={() => setFocused(null)}
             />
           </View>
 
@@ -195,13 +202,13 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   back: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   body: { paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: spacing.xxl },
-  title: { fontSize: 28, fontWeight: "800", letterSpacing: -0.84, color: colors.ink },
-  subtitle: { fontSize: 15, color: colors.sec, marginTop: spacing.sm, marginBottom: spacing.xl },
+  title: { fontSize: 27, fontWeight: "800", letterSpacing: -0.8, color: colors.ink },
+  subtitle: { fontSize: 14.5, color: colors.sec, marginTop: spacing.sm, marginBottom: spacing.xl },
   field: { marginBottom: spacing.lg },
   label: { fontSize: 13, fontWeight: "700", color: colors.sec, marginBottom: spacing.xs },
   input: {
-    height: 54,
-    borderRadius: 13,
+    height: 52,
+    borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.line,
     backgroundColor: colors.bg,
@@ -209,11 +216,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.ink,
   },
+  inputFocused: { borderWidth: 1.5, borderColor: colors.accent },
   error: { color: colors.sec, fontSize: 13, marginBottom: spacing.md },
   submit: {
-    height: 54,
-    borderRadius: 13,
-    backgroundColor: colors.ink,
+    height: 52,
+    borderRadius: radii.md,
+    backgroundColor: colors.accent,
     alignItems: "center",
     justifyContent: "center",
     marginTop: spacing.sm,
@@ -222,5 +230,5 @@ const styles = StyleSheet.create({
   submitText: { color: colors.onImage, fontSize: 16, fontWeight: "700" },
   toggle: { alignSelf: "center", marginTop: spacing.xl, paddingVertical: spacing.sm },
   toggleText: { fontSize: 13, color: colors.ter },
-  toggleLink: { color: colors.sec, fontWeight: "700", textDecorationLine: "underline" },
+  toggleLink: { color: colors.accentText, fontWeight: "700", textDecorationLine: "underline" },
 });
