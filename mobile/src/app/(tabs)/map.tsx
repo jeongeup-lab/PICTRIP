@@ -18,6 +18,7 @@ import { useNearbyMap, useRegionLabel } from "@/features/map/queries";
 import { prefetchSpot } from "@/features/spots/queries";
 import { SpotDetailSheet } from "@/features/spots/components/SpotDetailSheet";
 import { formatHeaderLabel, NEAR_ME_LABEL } from "@/features/map/lib/region-label";
+import { withUserDistance } from "@/features/map/lib/user-distance";
 import { mapListPaddingBottom } from "@/features/map/lib/list-padding";
 import { sheetSnapY } from "@/features/map/lib/sheet-snap";
 import { NEARBY_CAP } from "@/constants/map";
@@ -31,7 +32,10 @@ export default function MapTab() {
 
   const nearby = useNearbyMap(s.queryBounds, s.category);
   const label = useRegionLabel(s.center, s.anchorSource !== "region");
-  const spots = (nearby.data ?? []).slice(0, NEARBY_CAP);
+  const spots = useMemo(
+    () => withUserDistance((nearby.data ?? []).slice(0, NEARBY_CAP), s.gpsCoords),
+    [nearby.data, s.gpsCoords],
+  );
 
   // useBottomTabBarHeight isn't exported by expo-router and bottom-tabs isn't
   // installed, so use the iOS default tab content height (49) + safe-area inset.

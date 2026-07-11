@@ -83,17 +83,16 @@ describe("map-store", () => {
     expect(qb.sw.lat).toBeGreaterThan(vpBounds.sw.lat); // south edge raised
   });
 
-  // Regression (e4a3800): queryBounds was clipped once at search time and
-  // frozen — collapsing the sheet left the newly revealed strip unqueried.
-  it("setSnap re-clips the pan-search bbox (peek reveals more map than half)", () => {
+  it("setSnap keeps the pan-search queryBounds frozen (results stay put while dragging)", () => {
     const vpBounds = { sw: { lat: 37.5, lng: 126.9 }, ne: { lat: 37.66, lng: 127.05 } };
     useMapStore.getState().setAnchor(seoul, "gps", seoul);
     useMapStore.getState().onViewportChange({ lat: 37.58, lng: 126.9784 }, vpBounds);
-    useMapStore.getState().searchHere(); // snap = half
-    const atHalf = useMapStore.getState().queryBounds!.sw.lat;
+    useMapStore.getState().searchHere();
+    const before = useMapStore.getState().queryBounds;
     useMapStore.getState().setSnap("peek");
-    const atPeek = useMapStore.getState().queryBounds!.sw.lat;
-    expect(atPeek).toBeLessThan(atHalf); // lower sheet → deeper visible band
+    expect(useMapStore.getState().queryBounds).toEqual(before);
+    useMapStore.getState().setSnap("full");
+    expect(useMapStore.getState().queryBounds).toEqual(before);
   });
 
   it("setSnap leaves a center-derived queryBounds unchanged", () => {
