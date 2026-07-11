@@ -48,4 +48,10 @@ describe("ResultCard", () => {
     );
     expect(other).not.toContain("BEST");
   });
+  it("hides the BEST badge on rank 0 when showBest is false (distance sort)", async () => {
+    const tree = await render(
+      <ResultCard match={base} showDistance rank={0} showBest={false} onPress={() => {}} />,
+    );
+    expect(tree).not.toContain("BEST");
+  });
 });

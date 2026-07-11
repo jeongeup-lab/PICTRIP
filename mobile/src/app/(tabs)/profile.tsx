@@ -128,7 +128,6 @@ const styles = StyleSheet.create({
   seeAll: { flexDirection: "row", alignItems: "center", gap: 3 },
   seeAllText: { color: colors.sec, fontSize: 13.5, fontWeight: "600" },
   foot: {
-    alignItems: "center",
     gap: spacing.sm,
     backgroundColor: colors.inset,
     borderTopWidth: 1,
@@ -137,8 +136,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: 30,
   },
-  footLinks: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12 },
+  footLinks: { flexDirection: "row", alignItems: "center", gap: 12 },
   footLink: { color: colors.sec, fontSize: 12, fontWeight: "600" },
   footDiv: { width: 1, height: 10, backgroundColor: colors.line },
-  footNote: { fontSize: 11.5, color: colors.ter },
+  footNote: { fontSize: 11.5, lineHeight: 17, color: colors.ter },
 });

@@ -9,10 +9,18 @@ interface Props {
   showDistance: boolean;
   onPress: () => void;
   rank?: number;
+  showBest?: boolean;
   isLast?: boolean;
 }
 
-export function ResultCard({ match, showDistance, onPress, rank = -1, isLast = false }: Props) {
+export function ResultCard({
+  match,
+  showDistance,
+  onPress,
+  rank = -1,
+  showBest = true,
+  isLast = false,
+}: Props) {
   const region = [match.regionName, match.sigunguName].filter(Boolean).join(" ");
   const parts: string[] = [];
   if (match.category) parts.push(match.category);
@@ -27,7 +35,7 @@ export function ResultCard({ match, showDistance, onPress, rank = -1, isLast = f
     <Pressable onPress={onPress} style={[styles.row, isLast && styles.rowLast]}>
       <View style={styles.thumbWrap}>
         <RemoteImage uri={match.firstImageUrl} radius={radii.md} style={styles.thumb} />
-        {rank === 0 ? (
+        {rank === 0 && showBest ? (
           <View style={styles.best}>
             <Text style={styles.bestText}>BEST</Text>
           </View>
