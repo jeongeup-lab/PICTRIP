@@ -11,3 +11,6 @@ coverage/
 
 # Generated
 expo-env.d.ts
+
+# Design handoff reference assets (mockup HTML/JS, not app code)
+design_handoff_naver_style/

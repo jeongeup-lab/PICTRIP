@@ -1,8 +1,3 @@
-/**
- * Monochrome design tokens ported from docs/mockups/ CSS variables.
- * Ink/gray only — no rose, no color.
- */
-
 export const colors = {
   bg: "#FFFFFF",
   inset: "#F7F7F8",
@@ -14,7 +9,9 @@ export const colors = {
   fill: "rgba(112,115,124,0.08)",
   fillStrong: "rgba(112,115,124,0.10)",
   control: "rgba(23,23,25,0.34)",
-  // On-image overlays
+  accent: "#03C75A",
+  accentText: "#03A94E",
+  accentFill: "rgba(3,199,90,0.08)",
   scrim: "rgba(20,18,22,0.50)",
   scrimStrong: "rgba(16,14,18,0.64)",
   glassFill: "rgba(255,255,255,0.15)",
@@ -24,7 +21,7 @@ export const colors = {
 } as const;
 
 export const type = {
-  family: undefined as undefined | string, // system default; Pretendard added later if bundled
+  family: undefined as undefined | string,
   h1: { fontSize: 38, fontWeight: "800" as const, letterSpacing: -1 },
   h2: { fontSize: 25, fontWeight: "800" as const, letterSpacing: -0.5 },
   h3: { fontSize: 22, fontWeight: "800" as const, letterSpacing: -0.3 },
@@ -45,10 +42,10 @@ export const spacing = {
 } as const;
 
 export const radii = {
-  sm: 12,
-  md: 14,
-  lg: 16,
-  xl: 20,
+  sm: 6,
+  md: 8,
+  lg: 12,
+  xl: 12,
   pill: 999,
 } as const;
 

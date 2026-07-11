@@ -21,7 +21,7 @@ module.exports = [
     },
   },
   {
-    ignores: ["dist/**", ".expo/**", "node_modules/**"],
+    ignores: ["dist/**", ".expo/**", "node_modules/**", "design_handoff_naver_style/**"],
   },
   // Layer boundaries (CLAUDE.md Architecture). src/app (Expo Router screens) is
   // the top layer — nothing below it may import it back.
