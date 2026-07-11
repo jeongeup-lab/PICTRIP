@@ -18,7 +18,7 @@ export default function CurationScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const { data, isLoading, isError, error, refetch } = useCuration(slug);
   const { width } = useWindowDimensions();
-  const cardWidth = (width - spacing.lg * 2 - spacing.md) / 2;
+  const cardWidth = (width - GUTTER * 2 - spacing.md) / 2;
 
   // 404 (unpublished/deleted) vs everything else — branch on err.code, not message.
   const notFound = isError && error instanceof AppError && error.code === "RESOURCE_NOT_FOUND";
@@ -26,6 +26,7 @@ export default function CurationScreen() {
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <AppBar
+        bordered
         onBack={() => router.back()}
         right={
           data ? (
@@ -56,13 +57,18 @@ export default function CurationScreen() {
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl }}>
           {isLoading || !data ? (
-            <View style={{ padding: spacing.lg, gap: spacing.md }}>
-              <Skeleton height={32} width="60%" />
-              <Skeleton height={width * 1.0} radius={radii.lg} />
+            <View style={styles.loading}>
+              <Skeleton height={16} width="30%" />
+              <Skeleton height={30} width="70%" />
+              <Skeleton height={(width - GUTTER * 2) * (5 / 4)} radius={radii.lg} />
             </View>
           ) : (
             <>
-              <Text style={styles.title}>{data.title}</Text>
+              <View style={styles.titleBlock}>
+                <Text style={styles.eyebrow}>CURATION</Text>
+                <Text style={styles.title}>{data.title}</Text>
+                <Text style={styles.meta}>스팟 {data.spots.length}곳</Text>
+              </View>
               <View style={styles.coverWrap}>
                 <RemoteImage
                   uri={data.coverUrl}
@@ -72,6 +78,8 @@ export default function CurationScreen() {
               </View>
               {data.lead ? <Text style={styles.lead}>{data.lead}</Text> : null}
               {data.intro ? <CurationIntro intro={data.intro} /> : null}
+              <View style={styles.band} />
+              <Text style={styles.sectionHeader}>포함된 스팟</Text>
               {data.spots.length === 0 ? (
                 <View style={styles.emptyGrid}>
                   <Text style={styles.emptyGridText}>곧 새로운 스팟을 준비할게요</Text>
@@ -97,15 +105,15 @@ export default function CurationScreen() {
   );
 }
 
+const GUTTER = 16;
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   shareBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.inset,
   },
   state: {
     flex: 1,
@@ -115,27 +123,53 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
   stateText: { fontSize: 15, color: colors.sec },
-  title: {
-    textAlign: "center",
-    fontSize: 25,
-    fontWeight: "800",
-    letterSpacing: -0.5,
-    color: colors.ink,
-    paddingHorizontal: spacing.lg,
-    marginVertical: spacing.md,
+  loading: { padding: GUTTER, gap: spacing.md },
+  titleBlock: {
+    paddingHorizontal: GUTTER,
+    marginTop: spacing.md,
+    marginBottom: spacing.lg,
+    gap: spacing.xs,
   },
-  coverWrap: { paddingHorizontal: spacing.lg },
-  lead: {
-    fontSize: 16,
-    fontWeight: "700",
-    textAlign: "center",
+  eyebrow: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1.5,
+    color: colors.accentText,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "800",
+    letterSpacing: -0.55,
     color: colors.ink,
-    paddingHorizontal: spacing.lg,
+  },
+  meta: { fontSize: 13, color: colors.ter },
+  coverWrap: { marginHorizontal: GUTTER },
+  lead: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.ink,
+    paddingHorizontal: GUTTER,
     marginTop: spacing.lg,
   },
-  emptyGrid: {
-    marginHorizontal: spacing.lg,
+  band: {
+    height: 8,
     marginTop: spacing.xl,
+    backgroundColor: colors.inset,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: colors.fill,
+  },
+  sectionHeader: {
+    fontSize: 17,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+    color: colors.ink,
+    paddingHorizontal: GUTTER,
+    marginTop: spacing.xl,
+  },
+  emptyGrid: {
+    marginHorizontal: GUTTER,
+    marginTop: spacing.lg,
     paddingVertical: spacing.xxl,
     borderRadius: radii.lg,
     backgroundColor: colors.inset,
@@ -146,7 +180,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    marginTop: spacing.xl,
+    paddingHorizontal: GUTTER,
+    marginTop: spacing.lg,
   },
 });

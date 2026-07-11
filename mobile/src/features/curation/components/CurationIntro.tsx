@@ -57,11 +57,10 @@ export function CurationIntro({ intro }: { intro: string }) {
 
 const styles = StyleSheet.create({
   intro: {
-    fontSize: 15,
+    fontSize: 14,
     color: colors.sec,
-    lineHeight: 23,
-    textAlign: "center",
-    paddingHorizontal: spacing.lg,
+    lineHeight: 22,
+    paddingHorizontal: 16,
     marginTop: spacing.sm,
   },
   chevron: { alignItems: "center", marginTop: spacing.lg },
