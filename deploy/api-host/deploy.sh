@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
-# CT112 deploy — pulled image → migrate → smoke → rollback on failure.
-# Invoked by .github/workflows/backend-deploy.yml on the self-hosted runner.
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-# .deploy.env pins the image tag (the only file deploy.sh mutates; .env is immutable).
 PREV_TAG="$(grep -E '^IMAGE_TAG=' .deploy.env | cut -d= -f2 || true)"
 NEW_TAG="${1:-${GITHUB_SHA:-latest}}"
 
@@ -14,15 +11,10 @@ sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${NEW_TAG}/" .deploy.env || echo "IMAGE_TAG=${
 
 docker compose --env-file .deploy.env pull api
 
-# Free :8000 before compose rebinds it. A leftover/foreign container squatting the
-# public API port makes `up` fail with "port is already allocated" (the one-time
-# CT112 cutover). Our own compose api container is left for `up` to recreate; only
-# foreign containers are removed. A non-docker host process holding :8000 can't be
-# safely killed here, so fail fast with guidance instead of a cryptic docker error.
 for _cid in $(docker ps --filter "publish=8000" -q); do
   _name="$(docker inspect -f '{{.Name}}' "$_cid" | sed 's#^/##')"
   case "$_name" in
-    api-host[-_]api[-_]*) ;;  # ours — compose recreates it
+    api-host[-_]api[-_]*) ;;
     *) echo "freeing :8000 held by foreign container ${_name} (${_cid})"
        docker rm -f "$_cid" >/dev/null ;;
   esac
@@ -30,17 +22,13 @@ done
 if ! docker ps --filter "publish=8000" -q | grep -q . \
    && ss -ltn 'sport = :8000' 2>/dev/null | grep -q LISTEN; then
   echo "ERROR: :8000 is held by a non-docker host process. Free it once on CT112:"
-  echo "  sudo ss -ltnp 'sport = :8000'        # find the PID/unit"
-  echo "  sudo systemctl stop <old-api-unit>   # or: sudo kill <pid>"
+  echo "  sudo ss -ltnp 'sport = :8000'"
+  echo "  sudo systemctl stop <old-api-unit>"
   exit 1
 fi
 
-# alembic upgrade head runs on container start (forward-only)
 docker compose --env-file .deploy.env up -d
 
-# smoke: poll local + public health until the new container finishes booting
-# (alembic upgrade + uvicorn start), up to ~60s, before declaring failure — a
-# single immediate check races the container startup and false-fails.
 smoke_ok() {
   curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1 &&
     curl -fsS https://api.pictrip.org/health >/dev/null 2>&1
@@ -63,17 +51,12 @@ if [ "${_ok}" -ne 1 ]; then
 fi
 echo "deploy OK: ${NEW_TAG}"
 
-# GC old images. Each SHA-tagged backend image is ~3.8GB and nothing pruned them —
-# ~12 deploys filled the 47GB CT112 disk, which failed the deploy job with "No
-# space left on device" and hung the next one until the 6h timeout (2026-07-08).
-# Keep only the just-deployed image + the rollback spare (PREV_TAG); drop the rest.
-# Runs after "deploy OK" and is fully best-effort — GC never affects deploy outcome.
 IMAGE_REPO="ghcr.io/jeongeup-lab/pictrip-backend"
 docker images "${IMAGE_REPO}" --format '{{.Tag}}' | while read -r _tag; do
   case "${_tag}" in
-    "${NEW_TAG}"|"${PREV_TAG}") ;;  # keep current + rollback spare
+    "${NEW_TAG}"|"${PREV_TAG}") ;;
     *) echo "gc: removing stale image ${IMAGE_REPO}:${_tag}"
        docker rmi "${IMAGE_REPO}:${_tag}" >/dev/null 2>&1 || true ;;
   esac
 done
-docker image prune -f >/dev/null 2>&1 || true  # dangling <none> layers
+docker image prune -f >/dev/null 2>&1 || true
