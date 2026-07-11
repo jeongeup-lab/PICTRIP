@@ -138,6 +138,9 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
 - **DO NOT add emoji or new native modules to mobile** — use line-SVG `<Icon>` /
   `expo-symbols`. Map = KakaoWebMap (WebView + JS SDK), never `@react-native-kakao/map`.
 - **DO NOT add `sync_runs` to backend Alembic** — pipeline owns it.
+- **DO NOT write code comments** — 코드에 주석을 달지 않는다. 의도는 이름·구조로
+  드러내고, 문맥은 커밋 메시지/PR에 남긴다. (shebang·라이선스 헤더 등 도구가 요구하는
+  줄은 예외.)
 
 ## Review guidelines
 
