@@ -14,10 +14,7 @@ import { router } from "expo-router";
 import { setOnboardingSeen } from "@/lib/storage";
 import { Icon } from "@/components/Icon";
 import { MiniDevice } from "@/components/onboarding/MiniDevice";
-import { MiniSelectScreen } from "@/components/onboarding/MiniSelectScreen";
-import { MiniAnalyzeScreen } from "@/components/onboarding/MiniAnalyzeScreen";
-import { MiniResultScreen } from "@/components/onboarding/MiniResultScreen";
-import { colors, spacing } from "@/constants/theme";
+import { colors, spacing, radii } from "@/constants/theme";
 
 const SLIDES = [
   {
@@ -25,21 +22,18 @@ const SLIDES = [
     eyebrow: "STEP 1",
     h2: "마음에 든 사진을 골라요",
     sub: "여행 사진이든 인터넷에서 본 풍경이든, 한 장이면 충분해요",
-    screen: <MiniSelectScreen />,
   },
   {
     key: "analyze",
     eyebrow: "STEP 2",
     h2: "AI가 분위기를 읽어요",
     sub: "사진의 색감과 분위기를 분석해 닮은 곳을 찾아요",
-    screen: <MiniAnalyzeScreen />,
   },
   {
     key: "result",
     eyebrow: "STEP 3",
     h2: "닮은 여행지를 추천받아요",
     sub: "분위기가 비슷한 곳을 유사도 순으로 보여드려요",
-    screen: <MiniResultScreen />,
   },
 ];
 
@@ -80,7 +74,7 @@ export default function Onboarding() {
         {SLIDES.map((s) => (
           <View key={s.key} style={[styles.slide, { width }]}>
             <Text style={styles.eyebrow}>{s.eyebrow}</Text>
-            <MiniDevice>{s.screen}</MiniDevice>
+            <MiniDevice />
             <View style={styles.cap}>
               <Text style={styles.h2}>{s.h2}</Text>
               <Text style={styles.sub}>{s.sub}</Text>
@@ -96,8 +90,13 @@ export default function Onboarding() {
           ))}
         </View>
         <Pressable style={styles.cta} onPress={finish}>
-          <Icon name="camera" size={19} color={colors.onImage} strokeWidth={1.8} />
+          <Icon name="camera" size={18} color={colors.onImage} strokeWidth={1.8} />
           <Text style={styles.ctaLabel}>사진으로 시작하기</Text>
+        </Pressable>
+        <Pressable onPress={finish} hitSlop={8}>
+          <Text style={styles.aux}>
+            이미 둘러본 적이 있다면 <Text style={styles.auxLink}>바로 시작</Text>
+          </Text>
         </Pressable>
       </View>
     </SafeAreaView>
@@ -106,8 +105,6 @@ export default function Onboarding() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.inset },
-  // Absolute children ignore SafeAreaView's inset padding, so `top` must add
-  // insets.top itself (set inline) or the button lands under the notch.
   skip: {
     position: "absolute",
     right: spacing.lg,
@@ -119,22 +116,22 @@ const styles = StyleSheet.create({
   slide: {
     flex: 1,
     alignItems: "center",
-    paddingTop: 18,
+    paddingTop: 8,
     backgroundColor: colors.bg,
   },
-  eyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 1.5, color: colors.ter },
-  cap: { alignItems: "center", paddingTop: 22, paddingHorizontal: 36 },
+  eyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 1.5, color: colors.accentText },
+  cap: { alignItems: "center", paddingTop: 24, paddingHorizontal: 40 },
   h2: {
-    fontSize: 23,
+    fontSize: 22,
     fontWeight: "800",
     letterSpacing: -0.5,
-    lineHeight: 30,
+    lineHeight: 28,
     color: colors.ink,
     textAlign: "center",
   },
   sub: {
     fontSize: 14,
-    lineHeight: 22,
+    lineHeight: 21,
     color: colors.sec,
     marginTop: 9,
     textAlign: "center",
@@ -145,18 +142,22 @@ const styles = StyleSheet.create({
     paddingBottom: 26,
     gap: 16,
     backgroundColor: colors.inset,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
   },
   dots: { flexDirection: "row", justifyContent: "center", gap: 7 },
-  dot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: colors.line },
-  dotOn: { width: 22, borderRadius: 4, backgroundColor: colors.ink },
+  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.line },
+  dotOn: { width: 22, backgroundColor: colors.accent },
   cta: {
-    height: 54,
-    borderRadius: 13,
-    backgroundColor: colors.ink,
+    height: 52,
+    borderRadius: radii.md,
+    backgroundColor: colors.accent,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
   },
-  ctaLabel: { fontSize: 16, fontWeight: "700", color: colors.onImage },
+  ctaLabel: { fontSize: 15, fontWeight: "700", color: colors.onImage },
+  aux: { fontSize: 12.5, color: colors.ter, textAlign: "center" },
+  auxLink: { color: colors.sec, fontWeight: "700", textDecorationLine: "underline" },
 });
