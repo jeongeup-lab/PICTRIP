@@ -21,7 +21,7 @@ import { formatHeaderLabel, NEAR_ME_LABEL } from "@/features/map/lib/region-labe
 import { mapListPaddingBottom } from "@/features/map/lib/list-padding";
 import { sheetSnapY } from "@/features/map/lib/sheet-snap";
 import { NEARBY_CAP } from "@/constants/map";
-import { colors, spacing } from "@/constants/theme";
+import { colors, spacing, radii } from "@/constants/theme";
 
 export default function MapTab() {
   const insets = useSafeAreaInsets();
@@ -145,9 +145,9 @@ export default function MapTab() {
               {[0, 1, 2].map((i) => (
                 <Skeleton
                   key={i}
-                  height={92}
+                  height={86}
                   style={{ marginHorizontal: spacing.lg, marginBottom: spacing.sm }}
-                  radius={14}
+                  radius={radii.md}
                 />
               ))}
             </View>

@@ -78,6 +78,7 @@ export default function PhotoResultScreen() {
                   match={match}
                   showDistance={hadLocation}
                   rank={i}
+                  showBest={mode === "similarity"}
                   isLast={i === sorted.length - 1}
                   onPress={() => openSpot(match.contentId)}
                 />
