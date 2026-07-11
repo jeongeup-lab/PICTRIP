@@ -30,6 +30,9 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true, accentDot =
   .pin{width:28px;height:28px;background:#171719;border:2px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 1px 3px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center}
   .pin .g{transform:rotate(45deg);width:15px;height:15px;display:flex;align-items:center;justify-content:center}
   .pin svg{width:15px;height:15px;display:block}
+  .sel{position:relative;width:34px;height:34px;display:block}
+  .sel .tear{width:34px;height:34px;display:block}
+  .sel .lab{position:absolute;top:36px;left:50%;transform:translateX(-50%);font:700 11px -apple-system,sans-serif;color:#171719;background:rgba(255,255,255,.92);border-radius:5px;padding:2px 7px;box-shadow:0 1px 4px rgba(23,23,25,.14);white-space:nowrap}
   .me{width:16px;height:16px;background:#2D7DF6;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 6px rgba(45,125,246,.25)}
   #msg{position:absolute;top:0;left:0;right:0;font:14px -apple-system,sans-serif;color:#8a8a8e;padding:16px;text-align:center;z-index:10}
 </style>
@@ -38,7 +41,7 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true, accentDot =
 <div id="map"></div>
 <div id="msg"></div>
 <script>
-  var map, pins = [], me = null;
+  var map, pins = [], me = null, lastSpots = [], selectedId = null;
   // Monochrome category glyphs (white line-icons on the ink pin) — keeps the
   // sanctioned all-grey palette while letting each marker read as 관광지/음식점/카페/레저/쇼핑.
   var GLYPHS = {
@@ -57,18 +60,32 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true, accentDot =
   function fail(msg, human, detail){ document.getElementById('msg').textContent = human; post('error',{message:msg, detail:detail||''}); }
   function clearPins(){ pins.forEach(function(o){ o.setMap(null); }); pins = []; }
   function setCenter(lat,lng){ if(map){ map.setCenter(new kakao.maps.LatLng(lat,lng)); } }
-  function setPins(spots){
-    if(!map) return; clearPins();
-    spots.forEach(function(s){
-      if(s.mapy==null||s.mapx==null) return;
-      var el = document.createElement('div'); el.className='pin';
+  function esc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function pinEl(s, sel){
+    var el = document.createElement('div');
+    if(sel){
+      el.className='sel';
+      el.innerHTML = '<svg class="tear" viewBox="0 0 24 24" fill="#171719"><path d="M12 22s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11z"></path><circle cx="12" cy="10.5" r="2.6" fill="#03C75A"></circle></svg><span class="lab">'+esc(s.title)+'</span>';
+    } else {
+      el.className='pin';
       el.innerHTML = '<span class="g">'+glyphSvg(s.categoryGroup)+'</span>';
-      var ov = new kakao.maps.CustomOverlay({ position:new kakao.maps.LatLng(s.mapy,s.mapx), content:el, yAnchor:1 });
+    }
+    return el;
+  }
+  function renderPins(){
+    if(!map) return; clearPins();
+    lastSpots.forEach(function(s){
+      if(s.mapy==null||s.mapx==null) return;
+      var sel = selectedId!=null && String(s.contentId)===selectedId;
+      var el = pinEl(s, sel);
+      var ov = new kakao.maps.CustomOverlay({ position:new kakao.maps.LatLng(s.mapy,s.mapx), content:el, yAnchor:1, zIndex: sel?10:1 });
       ov.setMap(map);
       el.addEventListener('click', function(){ post('pin_tap',{contentId:s.contentId}); });
       pins.push(ov);
     });
   }
+  function setPins(spots){ lastSpots = spots||[]; renderPins(); }
+  function setSelected(id){ selectedId = (id==null?null:String(id)); renderPins(); }
   function setUserMarker(lat,lng){
     if(me){ me.setMap(null); me=null; }
     if(lat==null||!map) return;
@@ -79,6 +96,7 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true, accentDot =
   function handle(e){ try{ var m = JSON.parse(e.data);
     if(m.cmd==='setCenter') setCenter(m.lat,m.lng);
     else if(m.cmd==='setPins') setPins(m.spots);
+    else if(m.cmd==='setSelected') setSelected(m.contentId);
     else if(m.cmd==='setUserMarker') setUserMarker(m.lat,m.lng);
   }catch(_){} }
   document.addEventListener('message', handle);

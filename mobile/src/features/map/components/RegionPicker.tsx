@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.ink,
+    backgroundColor: colors.accent,
   },
   ctaText: { fontSize: 17, fontWeight: "800", color: colors.onImage },
 });

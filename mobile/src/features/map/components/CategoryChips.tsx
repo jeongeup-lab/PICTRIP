@@ -38,9 +38,10 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.fill,
+    borderWidth: 1,
+    borderColor: colors.line,
   },
-  chipActive: { backgroundColor: colors.ink },
+  chipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
   label: { fontSize: 13.5, fontWeight: "700", color: colors.sec },
   labelActive: { color: colors.onImage },
 });

@@ -84,6 +84,7 @@ export default function MapTab() {
       <KakaoWebMap
         center={s.center}
         pins={spots}
+        selectedId={s.selectedSpotId}
         userLocation={s.gpsCoords}
         onPinTap={(id) => {
           // Warm the detail cache, then swap the list sheet for the detail panel
@@ -96,6 +97,7 @@ export default function MapTab() {
 
       <View style={[styles.header, { top: insets.top + spacing.xs }]}>
         <Pressable style={styles.label} onPress={() => setPickerOpen(true)}>
+          <Icon name="location" size={15} color={colors.accentText} />
           <Text numberOfLines={1} style={styles.labelText}>
             {formatHeaderLabel(s.anchorSource, s.label)}
           </Text>
@@ -126,7 +128,17 @@ export default function MapTab() {
           onSnapChange={s.setSnap}
           onTranslate={handleTranslate}
           snapY={snapY}
-          headerExtra={<CategoryChips value={s.category} onChange={s.setCategory} />}
+          headerExtra={
+            <>
+              <View style={styles.sheetHead}>
+                <Text style={styles.sheetCount}>
+                  주변 스팟 <Text style={styles.sheetCountNum}>{spots.length}</Text>
+                </Text>
+                <Text style={styles.sheetSort}>거리순 ▾</Text>
+              </View>
+              <CategoryChips value={s.category} onChange={s.setCategory} />
+            </>
+          }
         >
           {nearby.isLoading ? (
             <View style={[styles.list, { paddingBottom: listPaddingBottom }]}>
@@ -200,7 +212,7 @@ export default function MapTab() {
 // RN bottom-tab content height on iOS (excludes the safe-area inset, added separately).
 const TAB_BAR_CONTENT_HEIGHT = 49;
 const PILL_HEIGHT = 38; // SearchHerePill height
-const FAB_HEIGHT = 46; // RecenterFab height
+const FAB_HEIGHT = 44; // RecenterFab height
 const SHEET_GAP = 14; // mockup: control bottom sits 14px above the sheet top edge
 
 const styles = StyleSheet.create({
@@ -209,10 +221,10 @@ const styles = StyleSheet.create({
   label: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 6,
     alignSelf: "flex-start",
     height: 40,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     borderRadius: 20,
     backgroundColor: colors.bg,
     shadowColor: "#100E12",
@@ -222,7 +234,17 @@ const styles = StyleSheet.create({
     elevation: 4,
     maxWidth: "80%",
   },
-  labelText: { fontSize: 15, fontWeight: "700", color: colors.ink },
+  labelText: { fontSize: 14.5, fontWeight: "700", color: colors.ink },
+  sheetHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xs,
+  },
+  sheetCount: { fontSize: 13, fontWeight: "700", color: colors.ink },
+  sheetCountNum: { color: colors.accentText },
+  sheetSort: { fontSize: 12, fontWeight: "600", color: colors.ter },
   // top:0 + translateY anchors these to the sheet's animated top edge (see body).
   pill: { position: "absolute", left: 0, right: 0, top: 0, alignItems: "center" },
   fab: { position: "absolute", right: spacing.lg, top: 0 },

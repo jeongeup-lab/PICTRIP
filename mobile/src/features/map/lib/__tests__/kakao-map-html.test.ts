@@ -22,6 +22,12 @@ describe("buildKakaoMapHtml", () => {
     expect(html).toContain("center_changed");
     expect(html).toContain("pin_tap");
     expect(html).toContain("setPins");
+    expect(html).toContain("setSelected");
+  });
+  it("renders the selected pin with an accent dot and a title label chip", () => {
+    expect(html).toContain("el.className='sel'");
+    expect(html).toContain('class="lab"');
+    expect(html).toContain('circle cx="12" cy="10.5" r="2.6" fill="#03C75A"');
   });
   it("emits center_changed in the default (interactive) mode", () => {
     expect(buildKakaoMapHtml("TESTKEY123", true)).toContain("center_changed");
