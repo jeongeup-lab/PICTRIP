@@ -16,52 +16,50 @@ import { colors, radii } from "@/constants/theme";
 
 export function HeroCarousel({ heroes }: { heroes: HeroTile[] }) {
   const { width } = useWindowDimensions();
-  const cardWidth = width - 40;
+  const cardWidth = width - 32;
   const [index, setIndex] = useState(0);
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    setIndex(Math.round(e.nativeEvent.contentOffset.x / (cardWidth + 12)));
+    const next = Math.round(e.nativeEvent.contentOffset.x / (cardWidth + 12));
+    setIndex(Math.min(Math.max(next, 0), heroes.length - 1));
   };
 
   return (
-    <View>
-      <ScrollView
-        horizontal
-        snapToInterval={cardWidth + 12}
-        decelerationRate="fast"
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}
-        onMomentumScrollEnd={onScroll}
-      >
-        {heroes.map((hero) => (
-          <Pressable
-            key={hero.id}
-            style={{ width: cardWidth }}
-            onPress={() => router.push(`/curations/${hero.slug}`)}
-          >
-            <RemoteImage
-              uri={hero.coverUrl}
-              radius={radii.xl}
-              style={{ width: cardWidth, height: cardWidth * 1.1 }}
-            />
-            <View style={styles.scrim} pointerEvents="none" />
-            <View style={styles.copy} pointerEvents="none">
-              <Text style={styles.title}>{hero.title}</Text>
-              {hero.subtitle ? <Text style={styles.subtitle}>{hero.subtitle}</Text> : null}
-            </View>
-          </Pressable>
-        ))}
-      </ScrollView>
-
-      <View style={styles.dots}>
-        {heroes.map((hero, i) => (
-          <View
-            key={hero.id}
-            style={[styles.dot, { backgroundColor: i === index ? colors.ink : colors.line }]}
+    <ScrollView
+      horizontal
+      snapToInterval={cardWidth + 12}
+      decelerationRate="fast"
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}
+      onMomentumScrollEnd={onScroll}
+    >
+      {heroes.map((hero) => (
+        <Pressable
+          key={hero.id}
+          style={{ width: cardWidth }}
+          onPress={() => router.push(`/curations/${hero.slug}`)}
+        >
+          <RemoteImage
+            uri={hero.coverUrl}
+            radius={radii.lg}
+            style={{ width: cardWidth, height: 280 }}
           />
-        ))}
-      </View>
-    </View>
+          <View style={styles.scrim} pointerEvents="none" />
+          <View style={styles.chip} pointerEvents="none">
+            <Text style={styles.chipText}>큐레이션</Text>
+          </View>
+          <View style={styles.copy} pointerEvents="none">
+            <Text style={styles.title}>{hero.title}</Text>
+            {hero.subtitle ? <Text style={styles.subtitle}>{hero.subtitle}</Text> : null}
+          </View>
+          <View style={styles.counter} pointerEvents="none">
+            <Text testID="hero-counter" style={styles.counterText}>
+              {`${index + 1} / ${heroes.length}`}
+            </Text>
+          </View>
+        </Pressable>
+      ))}
+    </ScrollView>
   );
 }
 
@@ -71,20 +69,43 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: "55%",
-    borderBottomLeftRadius: radii.xl,
-    borderBottomRightRadius: radii.xl,
+    height: "58%",
+    borderBottomLeftRadius: radii.lg,
+    borderBottomRightRadius: radii.lg,
     backgroundColor: colors.scrimStrong,
   },
-  copy: { position: "absolute", left: 20, right: 20, bottom: 22 },
-  title: {
-    fontSize: 30,
-    fontWeight: "800",
-    letterSpacing: -0.6,
-    color: colors.onImage,
-    lineHeight: 36,
+  chip: {
+    position: "absolute",
+    left: 16,
+    top: 14,
+    backgroundColor: "rgba(20,18,22,0.45)",
+    borderRadius: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
-  subtitle: { marginTop: 6, fontSize: 15, color: colors.onDim },
-  dots: { flexDirection: "row", justifyContent: "center", gap: 7, paddingVertical: 14 },
-  dot: { width: 7, height: 7, borderRadius: 4 },
+  chipText: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    color: "rgba(255,255,255,0.92)",
+  },
+  copy: { position: "absolute", left: 16, right: 16, bottom: 16 },
+  title: {
+    fontSize: 21,
+    fontWeight: "800",
+    letterSpacing: -0.45,
+    color: colors.onImage,
+    lineHeight: 27,
+  },
+  subtitle: { marginTop: 4, fontSize: 13, color: colors.onDim },
+  counter: {
+    position: "absolute",
+    right: 12,
+    bottom: 14,
+    backgroundColor: "rgba(20,18,22,0.5)",
+    borderRadius: 11,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  counterText: { fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.9)" },
 });

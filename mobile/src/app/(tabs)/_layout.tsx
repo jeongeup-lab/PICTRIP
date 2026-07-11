@@ -1,11 +1,15 @@
-import type { ColorValue } from "react-native";
 import { Tabs, router } from "expo-router";
 import { Icon, type IconName } from "@/components/Icon";
 import { colors } from "@/constants/theme";
 
 function tabIcon(name: IconName) {
-  const TabBarIcon = ({ color }: { color: ColorValue }) => (
-    <Icon name={name} size={24} color={color} />
+  const TabBarIcon = ({ focused }: { focused: boolean }) => (
+    <Icon
+      name={name}
+      size={24}
+      color={focused ? colors.accent : colors.ter}
+      strokeWidth={focused ? 2 : 1.9}
+    />
   );
   TabBarIcon.displayName = `TabBarIcon(${name})`;
   return TabBarIcon;
@@ -16,8 +20,9 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.ink,
+        tabBarActiveTintColor: colors.accentText,
         tabBarInactiveTintColor: colors.ter,
+        tabBarLabelStyle: { fontSize: 10, fontWeight: "700" },
         tabBarStyle: { borderTopColor: colors.line },
       }}
     >

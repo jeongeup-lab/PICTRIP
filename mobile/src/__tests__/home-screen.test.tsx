@@ -45,7 +45,7 @@ describe("HomeScreen", () => {
     ).toBeGreaterThan(0);
   });
 
-  it("renders footer legal links that route to /legal/terms and /legal/privacy", async () => {
+  it("renders footer legal links that route to terms, privacy and data-sources", async () => {
     useHomeFeedMock.mockReturnValue(feedState({ data: { heroes: [], rails: [] } }));
     await act(async () => {
       tree = renderer.create(<HomeScreen />);
@@ -60,6 +60,11 @@ describe("HomeScreen", () => {
       tree!.root.findByProps({ testID: "footer-privacy" }).props.onPress();
     });
     expect(router.push).toHaveBeenCalledWith("/legal/privacy");
+
+    await act(async () => {
+      tree!.root.findByProps({ testID: "footer-data-source" }).props.onPress();
+    });
+    expect(router.push).toHaveBeenCalledWith("/legal/data-sources");
   });
 
   it("wires pull-to-refresh to a feed refetch", async () => {
