@@ -26,6 +26,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 interface Props {
   center: LatLng | null;
   pins: NearbySpot[];
+  selectedId?: string | null;
   userLocation: LatLng | null;
   onReady?: () => void;
   onPinTap: (contentId: string) => void;
@@ -43,6 +44,7 @@ interface Props {
 export function KakaoWebMap({
   center,
   pins,
+  selectedId = null,
   userLocation,
   onReady,
   onPinTap,
@@ -73,12 +75,16 @@ export function KakaoWebMap({
         cmd: "setPins",
         spots: pins.map((p) => ({
           contentId: p.contentId,
+          title: p.title,
           mapx: p.mapx,
           mapy: p.mapy,
           categoryGroup: p.categoryGroup,
         })),
       });
   }, [pins]);
+  useEffect(() => {
+    if (ready.current) send({ cmd: "setSelected", contentId: selectedId });
+  }, [selectedId]);
   useEffect(() => {
     if (ready.current)
       send({
@@ -102,11 +108,13 @@ export function KakaoWebMap({
           cmd: "setPins",
           spots: pins.map((p) => ({
             contentId: p.contentId,
+            title: p.title,
             mapx: p.mapx,
             mapy: p.mapy,
             categoryGroup: p.categoryGroup,
           })),
         });
+        send({ cmd: "setSelected", contentId: selectedId });
         send({
           cmd: "setUserMarker",
           lat: userLocation?.lat ?? null,

@@ -12,9 +12,9 @@ export function RecenterFab({ onPress }: { onPress: () => void }) {
 
 const styles = StyleSheet.create({
   fab: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: colors.bg,

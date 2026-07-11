@@ -1,7 +1,7 @@
 import { useEffect, useMemo, type ReactNode } from "react";
 import { Animated, Dimensions, PanResponder, View, StyleSheet } from "react-native";
 import { sheetSnapY, type SheetSnap } from "@/features/map/lib/sheet-snap";
-import { colors, radii, spacing } from "@/constants/theme";
+import { colors, spacing } from "@/constants/theme";
 
 type Snap = SheetSnap;
 
@@ -91,8 +91,8 @@ const styles = StyleSheet.create({
     top: 0,
     height: H,
     backgroundColor: colors.bg,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
     shadowColor: "#100E12",
     shadowOpacity: 0.16,
     shadowRadius: 16,
