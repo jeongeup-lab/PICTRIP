@@ -7,11 +7,12 @@ interface AppBarProps {
   title?: string;
   onBack?: () => void;
   right?: ReactNode;
+  bordered?: boolean;
 }
 
-export function AppBar({ title, onBack, right }: AppBarProps) {
+export function AppBar({ title, onBack, right, bordered }: AppBarProps) {
   return (
-    <View style={styles.bar}>
+    <View style={[styles.bar, bordered && styles.bordered]}>
       <View style={styles.side}>
         {onBack && (
           <Pressable onPress={onBack} hitSlop={8} style={styles.circle}>
@@ -34,6 +35,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 12,
   },
+  bordered: { borderBottomWidth: 1, borderBottomColor: colors.line },
   side: { width: 44, justifyContent: "center" },
   circle: {
     width: 40,
