@@ -62,3 +62,18 @@ if [ "${_ok}" -ne 1 ]; then
   exit 1
 fi
 echo "deploy OK: ${NEW_TAG}"
+
+# GC old images. Each SHA-tagged backend image is ~3.8GB and nothing pruned them —
+# ~12 deploys filled the 47GB CT112 disk, which failed the deploy job with "No
+# space left on device" and hung the next one until the 6h timeout (2026-07-08).
+# Keep only the just-deployed image + the rollback spare (PREV_TAG); drop the rest.
+# Runs after "deploy OK" and is fully best-effort — GC never affects deploy outcome.
+IMAGE_REPO="ghcr.io/jeongeup-lab/pictrip-backend"
+docker images "${IMAGE_REPO}" --format '{{.Tag}}' | while read -r _tag; do
+  case "${_tag}" in
+    "${NEW_TAG}"|"${PREV_TAG}") ;;  # keep current + rollback spare
+    *) echo "gc: removing stale image ${IMAGE_REPO}:${_tag}"
+       docker rmi "${IMAGE_REPO}:${_tag}" >/dev/null 2>&1 || true ;;
+  esac
+done
+docker image prune -f >/dev/null 2>&1 || true  # dangling <none> layers
