@@ -6,7 +6,7 @@ import { SocialButton } from "@/features/auth/components/SocialButton";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import type { Provider } from "@/features/auth/usecases/oauth-providers";
 import { AppError } from "@/lib/app-error";
-import { colors, spacing } from "@/constants/theme";
+import { colors, spacing, radii } from "@/constants/theme";
 
 interface Props {
   variant: "full" | "sheet";
@@ -47,6 +47,7 @@ function BrandSymbol() {
         <Rect x={26} y={11.4} width={8} height={5.2} rx={1.6} fill="#fff" stroke="none" />
         <Circle cx={30} cy={14} r={1.3} fill={colors.ink} />
       </Svg>
+      <View style={styles.symDot} />
     </View>
   );
 }
@@ -80,6 +81,7 @@ export function LoginCard({ variant, onSuccess, onCancel, onEmailPress }: Props)
         <View style={styles.brand}>
           <BrandSymbol />
           <Text style={styles.word}>PicTrip</Text>
+          <Text style={styles.tagline}>사진으로 떠나는 여행</Text>
         </View>
       ) : (
         <Text style={styles.sheetTitle}>저장하려면 로그인이 필요해요</Text>
@@ -98,6 +100,12 @@ export function LoginCard({ variant, onSuccess, onCancel, onEmailPress }: Props)
       </View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      <View style={styles.divider}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerText}>또는</Text>
+        <View style={styles.dividerLine} />
+      </View>
 
       <View style={styles.emailWrap}>
         <Pressable
@@ -129,15 +137,27 @@ const styles = StyleSheet.create({
   sheet: { paddingTop: spacing.sm },
   brand: { alignItems: "center", marginBottom: spacing.xxl },
   sym: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
+    width: 70,
+    height: 70,
+    borderRadius: 16,
     backgroundColor: colors.ink,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: spacing.lg,
   },
-  word: { fontSize: 28, fontWeight: "800", letterSpacing: -0.84, color: colors.ink },
+  symDot: {
+    position: "absolute",
+    right: -4,
+    bottom: -4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.accent,
+    borderWidth: 3,
+    borderColor: colors.bg,
+  },
+  word: { fontSize: 26, fontWeight: "800", letterSpacing: -0.8, color: colors.ink },
+  tagline: { fontSize: 13.5, color: colors.sec, marginTop: spacing.xs },
   sheetTitle: {
     fontSize: 20,
     fontWeight: "800",
@@ -147,12 +167,21 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   social: { paddingHorizontal: spacing.lg, gap: 11 },
-  emailWrap: { paddingHorizontal: spacing.lg, marginTop: 11 },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    gap: spacing.md,
+  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.line },
+  dividerText: { fontSize: 11.5, color: colors.ter },
+  emailWrap: { paddingHorizontal: spacing.lg, marginTop: spacing.lg },
   emailBtn: {
-    height: 54,
-    borderRadius: 13,
+    height: 52,
+    borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.line,
+    borderColor: "rgba(112,115,124,0.28)",
     backgroundColor: colors.bg,
     alignItems: "center",
     justifyContent: "center",
@@ -168,5 +197,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.lg,
   },
-  termsLink: { color: colors.sec, fontWeight: "700", textDecorationLine: "underline" },
+  termsLink: { color: colors.accentText, fontWeight: "700", textDecorationLine: "underline" },
 });
