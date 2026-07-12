@@ -21,6 +21,7 @@ from app.core.db import Base
 # Side-effect imports: F401 is suppressed for the whole alembic/* tree via ruff
 # per-file-ignores; no explicit noqa is needed (it would trigger RUF100).
 from app.modules.admin import models as _admin_models
+from app.modules.feed import models as _feed_models
 from app.modules.images import models as _images_models
 from app.modules.map import models as _map_models
 from app.modules.spots import models as _spots_models
