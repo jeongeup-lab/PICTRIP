@@ -84,6 +84,13 @@ async def test_feed_same_seed_stable_order(client, seeded):
     assert [i["id"] for i in a["items"]] == [i["id"] for i in b["items"]]
 
 
+async def test_feed_rejects_garbage_cursor(client, seeded):
+    res = await client.get("/v1/feed", params={"cursor": "not-a-cursor"})
+    body = res.json()
+    assert res.status_code == 422
+    assert body["error"]["code"] == "VALIDATION_FAILED"
+
+
 async def test_explore_same_pool(client, seeded):
     res = await client.get("/v1/explore", params={"limit": 30})
     assert len(res.json()["data"]["items"]) == 3
