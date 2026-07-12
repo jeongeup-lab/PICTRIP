@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import secrets
 from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import ValidationFailed
 from app.modules.feed import repositories
 from app.modules.feed.repositories import OverseasPostRow
 from app.modules.feed.schemas import OverseasPost
@@ -41,8 +43,13 @@ def _encode_cursor(row: OverseasPostRow) -> str:
 def _decode_cursor(cursor: str | None) -> tuple[float | None, int | None]:
     if not cursor:
         return None, None
-    key, _, oid = base64.urlsafe_b64decode(cursor.encode()).decode().partition(":")
-    return float(key), int(oid)
+    try:
+        key, sep, oid = base64.urlsafe_b64decode(cursor.encode()).decode().partition(":")
+        if not sep:
+            raise ValueError
+        return float(key), int(oid)
+    except (binascii.Error, ValueError, UnicodeDecodeError) as exc:
+        raise ValidationFailed("invalid cursor") from exc
 
 
 def _spread_countries(items: list[OverseasPostRow]) -> list[OverseasPostRow]:
