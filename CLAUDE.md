@@ -73,7 +73,7 @@ app/modules/<code>/
 - Routes import services/schemas/`app.core.*` only — never `models`/`sqlalchemy`.
 - Cross-module reads go through the other module's `services.py`, never `models`.
 - `admin` is the exception: read-only cross-module aggregates via its own
-  `repositories.py`, plus scoped writes to `curations`/`curation_spots` only.
+  `repositories.py`, plus scoped writes to `curations`/`curation_spots`/`overseas_spots.is_hidden` only.
 - `app/core/` admission rule: infrastructure plumbing (db, redis, auth,
   middleware, logging, envelope, errors) or utilities imported by **2+ modules**
   (`embedding`, `passwords`, `kto_images`, `time`). Single-consumer code lives

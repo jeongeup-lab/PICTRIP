@@ -161,3 +161,9 @@ class AdminValidationFailed(AppError):
     code = "ADMIN_VALIDATION"
     http_status = 422
     message = "큐레이션 편집 요청이 유효하지 않습니다."
+
+
+class AdminOverseasNotFound(AppError):
+    code = "ADMIN_OVERSEAS_NOT_FOUND"
+    http_status = 404
+    message = "해당 게시물을 찾을 수 없습니다."

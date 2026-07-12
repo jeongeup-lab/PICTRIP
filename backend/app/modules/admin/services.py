@@ -18,6 +18,7 @@ from app.core.db import engine
 from app.core.exceptions import (
     AdminCurationNotFound,
     AdminHistoryNotFound,
+    AdminOverseasNotFound,
     AdminTriggerFailed,
     AdminValidationFailed,
 )
@@ -48,6 +49,9 @@ from app.modules.admin.schemas import (
     HistoryList,
     HistoryRun,
     LastRun,
+    OverseasList,
+    OverseasListItem,
+    OverseasVisibility,
     PositionsUpdate,
     PreviewSpot,
     SpotSearchItem,
@@ -643,6 +647,58 @@ async def search_spots(
         total=total,
         hasMore=offset + len(rows) < total,
     )
+
+
+# --- 게시물(해외 스팟) 숨김 관리 (A7) — admin's 2nd scoped-write surface --------
+# Only overseas_spots.is_hidden is written here (CLAUDE.md grant). Hiding a spot
+# is exactly the filter /v1/feed applies, so the toggle removes it from the app
+# feed. One structured audit line per toggle (same pipeline as the curation audit).
+
+
+async def list_overseas(
+    session: AsyncSession, *, q: str | None, cursor_id: int | None, limit: int
+) -> OverseasList:
+    """One id-cursor page. Fetches limit+1 to know whether more rows follow;
+    ``nextCursor`` is the last returned id when they do, else None."""
+    q_norm = q.strip() if q else None
+    rows = await repo.list_overseas(session, q=q_norm or None, cursor_id=cursor_id, limit=limit + 1)
+    has_more = len(rows) > limit
+    page = rows[:limit]
+    next_cursor = page[-1].id if has_more and page else None
+    return OverseasList(
+        items=[
+            OverseasListItem(
+                id=r.id,
+                nameKo=r.name_ko,
+                countryNameKo=r.country_name_ko,
+                imageUrl=r.image_url,
+                fameScore=r.fame_score,
+                isHidden=r.is_hidden,
+            )
+            for r in page
+        ],
+        nextCursor=next_cursor,
+    )
+
+
+async def set_overseas_visibility(
+    session: AsyncSession,
+    overseas_id: int,
+    hidden: bool,
+    actor: str = _ADMIN_ACTOR,
+) -> OverseasVisibility:
+    found = await repo.set_overseas_hidden(session, overseas_id, hidden)
+    if not found:
+        raise AdminOverseasNotFound
+    await session.commit()
+    _logger.info(
+        "overseas.visibility",
+        actor=actor,
+        action="overseas.visibility",
+        overseasId=overseas_id,
+        isHidden=hidden,
+    )
+    return OverseasVisibility(id=overseas_id, isHidden=hidden)
 
 
 def _audit(action: str, curation, **extra) -> None:  # type: ignore[no-untyped-def]

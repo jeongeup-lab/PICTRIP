@@ -307,3 +307,35 @@ class SpotSearchResult(BaseModel):
     spots: list[SpotSearchItem]
     total: int  # all rows matching the filters, not just this page
     hasMore: bool  # offset + len(spots) < total
+
+
+# --- 게시물(해외 스팟) 숨김 관리 (A7) — scoped write: overseas_spots.is_hidden ---
+class OverseasListItem(BaseModel):
+    """One row of the 게시물 관리 table. image_url is a Wikimedia Commons https
+    URL already (no KTO http→https upgrade needed)."""
+
+    id: int
+    nameKo: str
+    countryNameKo: str
+    imageUrl: str
+    fameScore: int
+    isHidden: bool
+
+
+class OverseasList(BaseModel):
+    """GET /admin/api/overseas — id-cursor page. ``nextCursor`` is the last id
+    of this page when more rows follow, else None."""
+
+    items: list[OverseasListItem]
+    nextCursor: int | None
+
+
+class OverseasVisibilityUpdate(BaseModel):
+    """PUT /admin/api/overseas/{id}/visibility body."""
+
+    isHidden: bool
+
+
+class OverseasVisibility(BaseModel):
+    id: int
+    isHidden: bool

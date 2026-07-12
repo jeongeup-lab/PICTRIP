@@ -313,6 +313,49 @@ async def set_curation_positions(session: AsyncSession, positions: dict[int, int
     await session.flush()
 
 
+# --- 게시물(해외 스팟) 숨김 관리 (A7) — read list + scoped is_hidden write ------
+# overseas_spots is owned by the feed module; admin's sanctioned write here is the
+# single ``is_hidden`` column (CLAUDE.md grants overseas_spots.is_hidden). Reads
+# stay raw SQL like the other cross-module aggregates above.
+
+
+async def list_overseas(
+    session: AsyncSession, *, q: str | None, cursor_id: int | None, limit: int
+) -> list[Row[Any]]:
+    """One id-ordered page (id > cursor). ``q`` is a case-insensitive name_ko
+    substring with LIKE wildcards escaped (% and _ are literals)."""
+    pattern = None
+    if q:
+        esc = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{esc}%"
+    result = await session.execute(
+        text(
+            "SELECT id, name_ko, country_name_ko, image_url, fame_score, is_hidden "
+            "FROM overseas_spots "
+            "WHERE (CAST(:pat AS text) IS NULL OR name_ko ILIKE CAST(:pat AS text)) "
+            "AND (CAST(:cid AS bigint) IS NULL OR id > CAST(:cid AS bigint)) "
+            "ORDER BY id LIMIT :lim"
+        ),
+        {"pat": pattern, "cid": cursor_id, "lim": limit},
+    )
+    return list(result.all())
+
+
+async def set_overseas_hidden(session: AsyncSession, overseas_id: int, hidden: bool) -> bool:
+    """Set is_hidden (+ updated_at) for one overseas spot. False iff no such row.
+
+    Mutates the passed session; the service commits.
+    """
+    result = await session.execute(
+        text(
+            "UPDATE overseas_spots SET is_hidden = :h, updated_at = now() "
+            "WHERE id = :oid RETURNING id"
+        ),
+        {"h": hidden, "oid": overseas_id},
+    )
+    return result.first() is not None
+
+
 async def replace_curation_spots(
     session: AsyncSession, curation_id: int, spot_ids: list[str]
 ) -> None:
