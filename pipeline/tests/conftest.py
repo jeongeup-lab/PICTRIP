@@ -20,6 +20,7 @@ FIXTURE_IDS = ("2865520", "3509884")
 # Column types/FKs mirror the live spots schema; sync_runs is created separately
 # by the pipeline's own ensure_table().
 _SCHEMA = """
+CREATE EXTENSION IF NOT EXISTS vector;
 CREATE TABLE IF NOT EXISTS regions (
     ldong_regn_cd varchar(8) PRIMARY KEY,
     ldong_regn_nm varchar(64) NOT NULL
