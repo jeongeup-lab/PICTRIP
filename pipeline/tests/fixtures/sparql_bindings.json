@@ -1,0 +1,62 @@
+[
+  {
+    "item": {
+      "type": "uri",
+      "value": "http://www.wikidata.org/entity/Q798766"
+    },
+    "img": {
+      "type": "uri",
+      "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Kobe%20port%20tower12s3200.jpg"
+    },
+    "links": {
+      "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+      "type": "literal",
+      "value": "23"
+    },
+    "ko": {
+      "xml:lang": "ko",
+      "type": "literal",
+      "value": "고베 포트 타워"
+    },
+    "en": {
+      "xml:lang": "en",
+      "type": "literal",
+      "value": "Kobe Port Tower"
+    },
+    "lat": {
+      "datatype": "http://www.w3.org/2001/XMLSchema#double",
+      "type": "literal",
+      "value": "34.6825"
+    },
+    "lng": {
+      "datatype": "http://www.w3.org/2001/XMLSchema#double",
+      "type": "literal",
+      "value": "135.18666666667"
+    },
+    "desc": {
+      "xml:lang": "ko",
+      "type": "literal",
+      "value": "일본의 효고현 고베시 주오구에 있는 타워"
+    }
+  },
+  {
+    "item": {
+      "type": "uri",
+      "value": "http://www.wikidata.org/entity/Q5302436"
+    },
+    "img": {
+      "type": "uri",
+      "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Jigokudani%20hotspring%20in%20Nagano%20Japan%20001.jpg"
+    },
+    "links": {
+      "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+      "type": "literal",
+      "value": "19"
+    },
+    "ko": {
+      "xml:lang": "ko",
+      "type": "literal",
+      "value": "지고쿠다니 야생 원숭이 공원"
+    }
+  }
+]
