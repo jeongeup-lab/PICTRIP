@@ -251,10 +251,10 @@ async def api_overseas_list(
 
 @router.put("/api/overseas/{overseas_id}/visibility")
 async def api_overseas_visibility(
-    _: AdminAuth, db: DbSession, overseas_id: int, body: OverseasVisibilityUpdate
+    _: AdminAuth, db: DbSession, redis: RedisDep, overseas_id: int, body: OverseasVisibilityUpdate
 ) -> dict[str, Any]:
     """Toggle overseas_spots.is_hidden; 404 ADMIN_OVERSEAS_NOT_FOUND if absent."""
-    return ok(await services.set_overseas_visibility(db, overseas_id, body.isHidden))
+    return ok(await services.set_overseas_visibility(db, redis, overseas_id, body.isHidden))
 
 
 @router.get("/api/spots/search")
