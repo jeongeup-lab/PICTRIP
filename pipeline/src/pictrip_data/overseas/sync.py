@@ -6,9 +6,15 @@ from pictrip_data.overseas.wikidata import WikidataClient
 from pictrip_data.sync.audit import ensure_table, record_run
 
 
-def sync_overseas(*, wikidata=None, commons=None, conn=None,
-                  countries: list[Country] | None = None,
-                  limit: int | None = None, dry_run: bool = False) -> None:
+def sync_overseas(
+    *,
+    wikidata=None,
+    commons=None,
+    conn=None,
+    countries: list[Country] | None = None,
+    limit: int | None = None,
+    dry_run: bool = False,
+) -> None:
     wikidata = wikidata or WikidataClient()
     commons = commons or CommonsClient()
     countries = countries if countries is not None else COUNTRIES
