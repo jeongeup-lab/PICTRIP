@@ -100,3 +100,11 @@ async def _cache_set(redis: Redis, overseas_id: int, rows: list[MatchRow]) -> No
         await redis.set(key, payload, ex=_TTL_SECONDS)
     except Exception as exc:
         logger.warning("feed.match.cache_set_failed", overseas_id=overseas_id, error=str(exc))
+
+
+async def invalidate_match_cache(redis: Redis, overseas_id: int) -> None:
+    key = _KEY.format(overseas_id=overseas_id)
+    try:
+        await redis.delete(key)
+    except Exception as exc:
+        logger.warning("feed.match.cache_del_failed", overseas_id=overseas_id, error=str(exc))

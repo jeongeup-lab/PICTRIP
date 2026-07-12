@@ -60,6 +60,7 @@ from app.modules.admin.schemas import (
     TriggerResult,
 )
 from app.modules.admin.triggers import get_collection_trigger
+from app.modules.feed.services.matching import invalidate_match_cache
 from app.modules.images import services as image_services
 from app.modules.spots.services.curations import (
     invalidate_curation_cache,
@@ -683,6 +684,7 @@ async def list_overseas(
 
 async def set_overseas_visibility(
     session: AsyncSession,
+    redis: Redis,
     overseas_id: int,
     hidden: bool,
     actor: str = _ADMIN_ACTOR,
@@ -691,6 +693,7 @@ async def set_overseas_visibility(
     if not found:
         raise AdminOverseasNotFound
     await session.commit()
+    await invalidate_match_cache(redis, overseas_id)
     _logger.info(
         "overseas.visibility",
         actor=actor,
