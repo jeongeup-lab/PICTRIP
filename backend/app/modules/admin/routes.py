@@ -20,7 +20,12 @@ from app.core.ratelimit import rate_limit
 from app.core.redis import RedisDep
 from app.core.schemas import ok
 from app.modules.admin import services
-from app.modules.admin.schemas import CurationUpdate, PositionsUpdate, SpotsUpdate
+from app.modules.admin.schemas import (
+    CurationUpdate,
+    OverseasVisibilityUpdate,
+    PositionsUpdate,
+    SpotsUpdate,
+)
 from app.modules.admin.security import SESSION_KEY, AdminAuth, authenticate
 
 _STATIC_DIR = Path(__file__).parent / "static"
@@ -115,6 +120,14 @@ async def admin_curation(request: Request) -> Response:
     if not _logged_in(request):
         return RedirectResponse("/admin/login", status_code=303)
     return _page("curation.html")
+
+
+@router.get("/overseas")
+async def admin_overseas(request: Request) -> Response:
+    """게시물(해외 스팟) 숨김 관리 (overseas.html; A7)."""
+    if not _logged_in(request):
+        return RedirectResponse("/admin/login", status_code=303)
+    return _page("overseas.html")
 
 
 # --- JSON API (A01 §3) --------------------------------------------------------
@@ -221,6 +234,27 @@ async def api_curation_spots(
 ) -> dict[str, Any]:
     """Replace handpicks (≤8, ordered); cache DEL + audit (ADM-014/016)."""
     return ok(await services.set_curation_spots(db, redis, curation_id, body))
+
+
+# --- 게시물(해외 스팟) 숨김 관리 (A7) — admin's 2nd scoped write surface --------
+@router.get("/api/overseas")
+async def api_overseas_list(
+    _: AdminAuth,
+    db: DbSession,
+    q: str | None = Query(None),
+    cursor: int | None = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+) -> dict[str, Any]:
+    """OverseasList — id-cursor page, optional name_ko search (A7)."""
+    return ok(await services.list_overseas(db, q=q, cursor_id=cursor, limit=limit))
+
+
+@router.put("/api/overseas/{overseas_id}/visibility")
+async def api_overseas_visibility(
+    _: AdminAuth, db: DbSession, overseas_id: int, body: OverseasVisibilityUpdate
+) -> dict[str, Any]:
+    """Toggle overseas_spots.is_hidden; 404 ADMIN_OVERSEAS_NOT_FOUND if absent."""
+    return ok(await services.set_overseas_visibility(db, overseas_id, body.isHidden))
 
 
 @router.get("/api/spots/search")
