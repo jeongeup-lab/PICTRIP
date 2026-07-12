@@ -133,6 +133,7 @@ source_modules = [
     "app.modules.map.routes",
     "app.modules.system.routes",
     "app.modules.admin.routes",
+    "app.modules.feed.routes",
 ]
 forbidden_modules = [
     "sqlalchemy",
@@ -156,6 +157,7 @@ source_modules = [
     "app.modules.map.routes",
     "app.modules.system.routes",
     "app.modules.admin.routes",
+    "app.modules.feed.routes",
 ]
 forbidden_modules = [
     "app.modules.users.models",
@@ -165,6 +167,7 @@ forbidden_modules = [
     "app.modules.map.models",
     "app.modules.system.models",
     "app.modules.admin.models",
+    "app.modules.feed.models",
 ]
 # Routes -> services -> models is fine (services is the documented seam).
 allow_indirect_imports = true
@@ -181,6 +184,7 @@ source_modules = [
     "app.modules.map.schemas",
     # system has no schemas.py (removed as dead code) — re-add if it returns.
     "app.modules.admin.schemas",
+    "app.modules.feed.schemas",
 ]
 forbidden_modules = [
     "sqlalchemy",
@@ -202,6 +206,7 @@ source_modules = [
     "app.modules.map.services",
     "app.modules.system.services",
     "app.modules.admin.services",
+    "app.modules.feed.services",
 ]
 forbidden_modules = [
     "app.modules.users.models",
@@ -211,6 +216,7 @@ forbidden_modules = [
     "app.modules.map.models",
     "app.modules.system.models",
     "app.modules.admin.models",
+    "app.modules.feed.models",
 ]
 ignore_imports = [
     "app.modules.users.services -> app.modules.users.models",
