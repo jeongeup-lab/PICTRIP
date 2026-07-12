@@ -16,6 +16,10 @@ _embed_lock = asyncio.Lock()
 
 _USER_AGENT = "PicTrip/1.0 (https://pictrip.org)"
 
+_RETRY_STATUSES = frozenset({429, 503})
+_MAX_DOWNLOAD_ATTEMPTS = 6
+_MAX_BACKOFF_SECONDS = 120.0
+
 _TARGETS_SQL = "SELECT id, image_url FROM overseas_spots WHERE embedding IS NULL ORDER BY id"
 _WRITE_SQL = text(
     "UPDATE overseas_spots SET embedding = CAST(:emb AS halfvec(512)), "
@@ -34,12 +38,44 @@ async def collect_overseas_targets(
     return [(int(oid), url) for oid, url in rows]
 
 
+def _retry_wait(resp: httpx.Response, attempt: int, backoff_base: float) -> float:
+    retry_after = resp.headers.get("Retry-After")
+    try:
+        wait = float(retry_after) if retry_after is not None else backoff_base * (2**attempt)
+    except ValueError:
+        wait = backoff_base * (2**attempt)
+    return min(wait, _MAX_BACKOFF_SECONDS)
+
+
+async def _download(
+    image_url: str,
+    client: httpx.AsyncClient,
+    dl_sem: asyncio.Semaphore,
+    download_pace: float,
+    backoff_base: float,
+) -> httpx.Response:
+    async with dl_sem:
+        resp = await client.get(image_url, timeout=20.0, follow_redirects=True)
+        for attempt in range(_MAX_DOWNLOAD_ATTEMPTS - 1):
+            if resp.status_code not in _RETRY_STATUSES:
+                break
+            await asyncio.sleep(_retry_wait(resp, attempt, backoff_base))
+            resp = await client.get(image_url, timeout=20.0, follow_redirects=True)
+        if download_pace:
+            await asyncio.sleep(download_pace)
+        return resp
+
+
 async def _embed_one(
-    oid: int, image_url: str, client: httpx.AsyncClient, dl_sem: asyncio.Semaphore
+    oid: int,
+    image_url: str,
+    client: httpx.AsyncClient,
+    dl_sem: asyncio.Semaphore,
+    download_pace: float,
+    backoff_base: float,
 ) -> tuple[int, list[float] | None]:
     try:
-        async with dl_sem:
-            resp = await client.get(image_url, timeout=20.0, follow_redirects=True)
+        resp = await _download(image_url, client, dl_sem, download_pace, backoff_base)
         if resp.status_code != 200 or not resp.content:
             logger.warning(
                 "overseas.embed.download_failed", overseas_id=oid, status=resp.status_code
@@ -56,8 +92,10 @@ async def _embed_one(
 async def run_overseas_embedding_job(
     *,
     limit: int | None = None,
-    concurrency: int = 8,
+    concurrency: int = 2,
     batch_size: int = 50,
+    download_pace: float = 0.3,
+    backoff_base: float = 2.0,
     session_factory: async_sessionmaker[AsyncSession] = async_session_factory,
 ) -> dict[str, int]:
     async with session_factory() as session:
@@ -72,7 +110,10 @@ async def run_overseas_embedding_job(
         for i in range(0, len(targets), max(1, batch_size)):
             batch = targets[i : i + max(1, batch_size)]
             outcomes = await asyncio.gather(
-                *(_embed_one(oid, url, client, dl_sem) for oid, url in batch)
+                *(
+                    _embed_one(oid, url, client, dl_sem, download_pace, backoff_base)
+                    for oid, url in batch
+                )
             )
             async with session_factory() as session:
                 for oid, vector in outcomes:
