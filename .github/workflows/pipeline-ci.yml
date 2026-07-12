@@ -15,7 +15,7 @@ jobs:
       # DB-integration tests self-bootstrap their schema (tests/conftest.py),
       # so an empty Postgres is enough — no backend Alembic dependency.
       postgres:
-        image: postgres:16
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: pictrip
           POSTGRES_PASSWORD: pictrip_dev_only
