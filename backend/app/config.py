@@ -128,6 +128,10 @@ class Settings(BaseSettings):
     PHOTO_SEARCH_SIMILARITY_FLOOR: float = 0.60
     PHOTO_SEARCH_MAX: int = 30
 
+    # --- Overseas → domestic matching (S13) ---
+    MATCH_DISTANCE_MAX: float = 0.45
+    MATCH_CANDIDATES: int = 40
+
     # --- Admin console (A01) ---
     # Auth is DB-backed (admin_users table), NOT an env var (decision 2026-06-27):
     # the credential lives in the shared CT110 DB so it needs no CT112 .env/shell to

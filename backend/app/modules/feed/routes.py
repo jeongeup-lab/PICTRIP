@@ -5,9 +5,10 @@ from typing import Any
 from fastapi import APIRouter, Query
 
 from app.core.db import DbSession
+from app.core.redis import RedisDep
 from app.core.schemas import ok
-from app.modules.feed.schemas import PostsResponse
-from app.modules.feed.services import posts
+from app.modules.feed.schemas import MatchCard, MatchesResponse, PostsResponse
+from app.modules.feed.services import matching, posts
 
 router = APIRouter(tags=["feed"])
 
@@ -32,6 +33,30 @@ async def explore(
 ) -> dict[str, Any]:
     page = await posts.list_posts(session, seed=seed, cursor=cursor, limit=limit)
     return ok(_to_response(page))
+
+
+@router.get("/overseas/{overseas_id}/matches")
+async def overseas_matches(
+    session: DbSession,
+    redis: RedisDep,
+    overseas_id: int,
+) -> dict[str, Any]:
+    rows = await matching.find_matches(session, redis, overseas_id)
+    return ok(
+        MatchesResponse(
+            overseasId=overseas_id,
+            matches=[
+                MatchCard(
+                    contentId=r.content_id,
+                    title=r.title,
+                    regionLabel=r.region_label,
+                    imageUrl=r.image_url,
+                    overviewFirst=r.overview_first,
+                )
+                for r in rows
+            ],
+        )
+    )
 
 
 def _to_response(page: posts.PostsPageRow) -> PostsResponse:

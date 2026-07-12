@@ -42,6 +42,35 @@ class OverseasPostRow:
     shuffle_key: float
 
 
+_NEIGHBORS_SQL = """
+SELECT se.content_id,
+       (se.embedding <=> (SELECT embedding FROM overseas_spots WHERE id = :oid))::float AS distance
+FROM spot_embeddings se
+ORDER BY se.embedding <=> (SELECT embedding FROM overseas_spots WHERE id = :oid)
+LIMIT :lim
+"""
+
+
+async def get_overseas_brief(session: AsyncSession, overseas_id: int) -> tuple[int, bool] | None:
+    row = (
+        await session.execute(
+            text(
+                "SELECT id, embedding IS NOT NULL AS has_embedding FROM overseas_spots "
+                "WHERE id = :oid AND is_hidden = false"
+            ),
+            {"oid": overseas_id},
+        )
+    ).first()
+    return (row.id, row.has_embedding) if row else None
+
+
+async def find_domestic_neighbors(
+    session: AsyncSession, overseas_id: int, *, limit: int
+) -> list[tuple[str, float]]:
+    result = await session.execute(text(_NEIGHBORS_SQL), {"oid": overseas_id, "lim": limit})
+    return [(r.content_id, r.distance) for r in result]
+
+
 async def fetch_posts_page(
     session: AsyncSession,
     *,

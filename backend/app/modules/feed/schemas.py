@@ -21,3 +21,16 @@ class PostsResponse(BaseModel):
     items: list[OverseasPost]
     nextCursor: str | None
     hasMore: bool
+
+
+class MatchCard(BaseModel):
+    contentId: str
+    title: str
+    regionLabel: str
+    imageUrl: str
+    overviewFirst: str | None
+
+
+class MatchesResponse(BaseModel):
+    overseasId: int
+    matches: list[MatchCard]
