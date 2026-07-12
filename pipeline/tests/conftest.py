@@ -58,6 +58,28 @@ CREATE TABLE IF NOT EXISTS spots (
     modified_time timestamptz,
     synced_at timestamptz NOT NULL DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS overseas_spots (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    wikidata_id VARCHAR(32) UNIQUE NOT NULL,
+    name_ko VARCHAR(255) NOT NULL,
+    name_en VARCHAR(255),
+    country_code VARCHAR(2) NOT NULL,
+    country_name_ko VARCHAR(80) NOT NULL,
+    description_ko TEXT,
+    image_url TEXT NOT NULL,
+    image_author TEXT,
+    image_license VARCHAR(80),
+    image_license_url TEXT,
+    image_source_url TEXT NOT NULL,
+    fame_score INTEGER NOT NULL DEFAULT 0,
+    category VARCHAR(40),
+    lat DOUBLE PRECISION,
+    lng DOUBLE PRECISION,
+    embedding halfvec(512),
+    is_hidden BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 """
 
 
@@ -73,6 +95,7 @@ def _cleanup(conn: psycopg.Connection) -> None:
         "DELETE FROM spots WHERE content_id LIKE %s OR content_id = ANY(%s)",
         (TEST_PREFIX + "%", list(FIXTURE_IDS)),
     )
+    cur.execute("DELETE FROM overseas_spots WHERE wikidata_id LIKE 'QTEST%'")
     cur.execute("TRUNCATE sync_runs RESTART IDENTITY")
     conn.commit()
 
