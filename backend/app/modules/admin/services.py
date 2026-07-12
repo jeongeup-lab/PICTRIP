@@ -694,7 +694,6 @@ async def set_overseas_visibility(
     _logger.info(
         "overseas.visibility",
         actor=actor,
-        action="overseas.visibility",
         overseasId=overseas_id,
         isHidden=hidden,
     )
