@@ -25,12 +25,18 @@ from app.modules.feed.embedding_job import run_overseas_embedding_job
 async def main() -> None:
     parser = argparse.ArgumentParser(description="Backfill CLIP embeddings for overseas spots.")
     parser.add_argument("--limit", type=int, default=None, help="only the first N missing rows")
-    parser.add_argument("--concurrency", type=int, default=8, help="parallel image downloads")
+    parser.add_argument("--concurrency", type=int, default=2, help="parallel image downloads")
     parser.add_argument("--batch-size", type=int, default=50, help="rows per commit")
+    parser.add_argument(
+        "--pace", type=float, default=0.3, help="seconds to hold a download slot after each fetch"
+    )
     args = parser.parse_args()
 
     counters = await run_overseas_embedding_job(
-        limit=args.limit, concurrency=args.concurrency, batch_size=args.batch_size
+        limit=args.limit,
+        concurrency=args.concurrency,
+        batch_size=args.batch_size,
+        download_pace=args.pace,
     )
 
     print("--- overseas embed summary ---")

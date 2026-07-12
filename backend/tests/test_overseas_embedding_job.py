@@ -82,6 +82,49 @@ async def test_job_embeds_missing_rows(
 
 
 @pytest.mark.asyncio
+async def test_job_retries_rate_limited_download(
+    db_session: AsyncSession, httpx_mock, fake_clip: None
+) -> None:
+    await _seed(db_session, "QR1", "https://commons/qr1.jpg", embedded=False)
+    await db_session.flush()
+
+    httpx_mock.add_response(
+        url="https://commons/qr1.jpg", status_code=429, headers={"Retry-After": "0"}
+    )
+    httpx_mock.add_response(url="https://commons/qr1.jpg", status_code=429)
+    httpx_mock.add_response(
+        url="https://commons/qr1.jpg",
+        content=b"\xff\xd8fakejpeg",
+        match_headers={"User-Agent": _UA},
+    )
+
+    counters = await run_overseas_embedding_job(
+        session_factory=make_factory(db_session), download_pace=0.0, backoff_base=0.0
+    )
+
+    assert counters["embedded"] == 1
+    assert counters["failed"] == 0
+
+
+@pytest.mark.asyncio
+async def test_job_fails_after_exhausting_rate_limit_retries(
+    db_session: AsyncSession, httpx_mock, fake_clip: None
+) -> None:
+    await _seed(db_session, "QR2", "https://commons/qr2.jpg", embedded=False)
+    await db_session.flush()
+
+    for _ in range(6):
+        httpx_mock.add_response(url="https://commons/qr2.jpg", status_code=429)
+
+    counters = await run_overseas_embedding_job(
+        session_factory=make_factory(db_session), download_pace=0.0, backoff_base=0.0
+    )
+
+    assert counters["embedded"] == 0
+    assert counters["failed"] == 1
+
+
+@pytest.mark.asyncio
 async def test_job_counts_download_failure(
     db_session: AsyncSession, httpx_mock, fake_clip: None
 ) -> None:
