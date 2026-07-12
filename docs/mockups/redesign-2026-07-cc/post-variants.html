@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PicTrip · 홈 게시물 4버전 비교</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<style>
+  :root {
+    --bg:#FFFFFF; --inset:#F7F7F8; --skeleton:#ECEDEF;
+    --ink:#171719; --sec:#5A5C63; --ter:#9396A0;
+    --line:rgba(112,115,124,.18); --fill:rgba(112,115,124,.08);
+    --accent:#03C75A; --accent-text:#03A94E; --accent-fill:rgba(3,199,90,.08);
+    --scrim:rgba(20,18,22,.50); --scrim-strong:rgba(16,14,18,.64);
+    --glass:rgba(255,255,255,.15); --glass-border:rgba(255,255,255,.22);
+    --on-image:#FFFFFF; --on-dim:rgba(255,255,255,.85);
+    --pt:'Pretendard',-apple-system,system-ui,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  body{font-family:var(--pt);background:#e6e7ea;color:var(--ink);
+    display:flex;flex-wrap:wrap;gap:52px;justify-content:center;padding:48px 24px}
+  .unit{display:flex;flex-direction:column;align-items:center;gap:14px}
+  .cap{font-size:14px;font-weight:800;color:#171719;letter-spacing:-.2px}
+  .cap small{display:block;font-size:12px;font-weight:500;color:#5A5C63;margin-top:3px;text-align:center}
+
+  .phone{width:402px;height:874px;background:var(--bg);border-radius:46px;
+    box-shadow:0 30px 80px rgba(20,18,22,.28);overflow:hidden;position:relative;
+    display:flex;flex-direction:column}
+  .statusbar{height:54px;display:flex;align-items:flex-end;justify-content:space-between;
+    padding:0 28px 8px;font-size:15px;font-weight:600;flex-shrink:0}
+  .topbar{display:flex;justify-content:center;padding:14px 20px;
+    border-bottom:1px solid var(--line);flex-shrink:0}
+  .wordmark{font-size:20px;font-weight:800;letter-spacing:-.5px}
+  .wordmark-dot{width:6px;height:6px;border-radius:3px;background:var(--accent);
+    display:inline-block;margin-left:3px;margin-bottom:1px}
+
+  .circles{display:flex;gap:13px;padding:16px 0 14px 16px;overflow:hidden;
+    border-bottom:1px solid var(--line);flex-shrink:0}
+  .circle{display:flex;flex-direction:column;align-items:center;gap:7px;flex-shrink:0;width:58px}
+  .ring{width:58px;height:58px;border-radius:50%;padding:2.5px;flex-shrink:0}
+  .ring.unseen{background:linear-gradient(140deg,var(--accent),#02A94E 70%,#059669)}
+  .ring.seen{background:var(--line)}
+  .thumb{width:100%;height:100%;border-radius:50%;border:2.5px solid var(--bg);
+    background-size:cover;background-position:center;background-color:var(--skeleton);
+    display:flex;align-items:center;justify-content:center}
+  .thumb.around{background-color:#E7F8EF;color:var(--accent-text)}
+  .circle-label{font-size:11px;font-weight:700;color:var(--sec)}
+
+  .scroll{flex:1;overflow:hidden;display:flex;flex-direction:column}
+  .peek{flex-shrink:0;height:96px;background-size:cover;background-position:center 30%}
+
+  .dots{display:flex;gap:5px;justify-content:center;padding:12px 0 10px;flex-shrink:0}
+  .dot{width:6px;height:6px;border-radius:3px;background:var(--skeleton)}
+  .dot.on{background:var(--ink)}
+  .dots.on-photo{position:absolute;left:0;right:0;bottom:12px;z-index:3;padding:0}
+  .dots.on-photo .dot{background:rgba(255,255,255,.45)}
+  .dots.on-photo .dot.on{background:#fff}
+
+  .tabbar{display:flex;border-top:1px solid var(--line);padding:9px 8px 26px;
+    background:var(--bg);margin-top:auto;flex-shrink:0}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+    font-size:10px;font-weight:700;color:var(--ter)}
+  .tab.on{color:var(--accent-text)}
+  .home-indicator{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);
+    width:140px;height:5px;border-radius:3px;background:var(--ink);opacity:.9;z-index:5}
+
+  /* ── A. 풀블리드 오버레이 (현행) ── */
+  .a-img{width:402px;height:502px;background-size:cover;background-position:center;
+    position:relative;flex-shrink:0}
+  .a-img::after{content:"";position:absolute;inset:0;
+    background:linear-gradient(180deg,transparent 50%,var(--scrim-strong) 100%)}
+  .a-meta{position:absolute;left:20px;right:20px;bottom:18px;z-index:2;color:var(--on-image)}
+  .a-eyebrow{font-size:12px;font-weight:800;letter-spacing:1.5px;color:var(--on-dim);
+    text-transform:uppercase;margin-bottom:6px}
+  .a-title{font-size:25px;font-weight:800;letter-spacing:-.5px}
+  .a-desc{font-size:13px;color:var(--on-dim);margin-top:5px}
+  .a-hint{display:inline-flex;align-items:center;gap:6px;margin-top:14px;
+    padding:8px 13px;border-radius:999px;background:var(--glass);
+    border:1px solid var(--glass-border);backdrop-filter:blur(8px);
+    font-size:12px;font-weight:700;color:var(--on-image)}
+
+  /* ── B. 인스타 클래식 (헤더 + 클린 사진 + 캡션) ── */
+  .b-head{display:flex;align-items:center;gap:10px;padding:12px 16px;flex-shrink:0}
+  .b-avatar{width:34px;height:34px;border-radius:50%;background-size:cover;background-position:center}
+  .b-name{font-size:14px;font-weight:800;letter-spacing:-.2px}
+  .b-sub{font-size:12px;color:var(--ter);margin-top:1px}
+  .b-img{width:402px;height:502px;background-size:cover;background-position:center;flex-shrink:0}
+  .b-caption{padding:2px 16px 16px;flex-shrink:0}
+  .b-caption p{font-size:14px;line-height:1.5;color:var(--ink)}
+  .b-caption p b{font-weight:800}
+  .b-hint{display:inline-flex;align-items:center;gap:5px;margin-top:8px;
+    font-size:12.5px;font-weight:700;color:var(--accent-text)}
+
+  /* ── C. 카드 인셋 (에디토리얼) ── */
+  .c-wrap{padding:16px 16px 0;flex-shrink:0}
+  .c-card{width:100%;height:460px;border-radius:16px;overflow:hidden;position:relative;
+    background-size:cover;background-position:center;
+    box-shadow:0 10px 24px rgba(23,23,25,.12)}
+  .c-card::after{content:"";position:absolute;inset:0;
+    background:linear-gradient(180deg,transparent 52%,var(--scrim-strong) 100%)}
+  .c-meta{position:absolute;left:18px;right:18px;bottom:16px;z-index:2;color:var(--on-image)}
+  .c-eyebrow{font-size:11px;font-weight:800;letter-spacing:1.5px;color:var(--on-dim);
+    text-transform:uppercase;margin-bottom:5px}
+  .c-title{font-size:23px;font-weight:800;letter-spacing:-.4px}
+  .c-desc{font-size:12.5px;color:var(--on-dim);margin-top:4px}
+  .c-chev{position:absolute;right:14px;top:50%;transform:translateY(-50%);z-index:2;
+    width:34px;height:34px;border-radius:50%;background:var(--glass);
+    border:1px solid var(--glass-border);backdrop-filter:blur(8px);
+    display:flex;align-items:center;justify-content:center}
+
+  /* ── D. 미니멀 오버레이 (인디케이터 온포토) ── */
+  .d-img{width:402px;height:540px;background-size:cover;background-position:center;
+    position:relative;flex-shrink:0}
+  .d-img::after{content:"";position:absolute;inset:0;
+    background:linear-gradient(180deg,transparent 58%,var(--scrim-strong) 100%)}
+  .d-meta{position:absolute;left:20px;right:64px;bottom:34px;z-index:2;color:var(--on-image)}
+  .d-title{font-size:27px;font-weight:800;letter-spacing:-.6px}
+  .d-sub{font-size:13px;font-weight:600;color:var(--on-dim);margin-top:4px}
+  .d-chev{position:absolute;right:14px;top:50%;transform:translateY(-50%);z-index:2;
+    width:38px;height:38px;border-radius:50%;background:var(--glass);
+    border:1px solid var(--glass-border);backdrop-filter:blur(8px);
+    display:flex;align-items:center;justify-content:center}
+</style>
+</head>
+<body>
+
+<!-- A -->
+<div class="unit">
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span>&nbsp;</span></div>
+    <div class="topbar"><span class="wordmark">PICTRIP<span class="wordmark-dot"></span></span></div>
+    <div class="circles">
+      <div class="circle"><div class="ring unseen"><div class="thumb around"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/><circle cx="12" cy="12" r="8" stroke-opacity=".45"/></svg></div></div><span class="circle-label">Around</span></div>
+      <div class="circle"><div class="ring unseen"><div class="thumb" style="background-image:url('https://loremflickr.com/160/160/korea,temple?lock=21')"></div></div><span class="circle-label">Hot</span></div>
+      <div class="circle"><div class="ring unseen"><div class="thumb" style="background-image:url('https://loremflickr.com/160/160/forest,path?lock=22')"></div></div><span class="circle-label">Hidden</span></div>
+      <div class="circle"><div class="ring seen"><div class="thumb" style="background-image:url('https://loremflickr.com/160/160/lantern,festival?lock=23')"></div></div><span class="circle-label">Festa</span></div>
+      <div class="circle"><div class="ring seen"><div class="thumb" style="background-image:url('https://loremflickr.com/160/160/dog,park?lock=24')"></div></div><span class="circle-label">Pets</span></div>
+      <div class="circle"><div class="ring unseen"><div class="thumb" style="background-image:url('https://loremflickr.com/160/160/cherry,blossom?lock=25')"></div></div><span class="circle-label">Snap</span></div>
+    </div>
+    <div class="scroll">
+      <div class="a-img" style="background-image:url('https://loremflickr.com/804/1004/santorini?lock=11')">
+        <div class="a-meta">
+          <div class="a-eyebrow">Greece</div>
+          <div class="a-title">산토리니</div>
+          <div class="a-desc">에게해 절벽 위 하얀 마을</div>
+          <div class="a-hint">비슷한 국내 여행지 밀어보기
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="dots"><span class="dot on"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+      <div class="peek" style="background-image:url('https://loremflickr.com/804/1004/arashiyama,bamboo?lock=12')"></div>
+    </div>
+    <div class="tabbar"><div class="tab on">홈</div><div class="tab">탐색</div><div class="tab">지도</div><div class="tab">마이</div></div>
+    <div class="home-indicator"></div>
+  </div>
+  <span class="cap">A. 풀블리드 오버레이 (현행안)<small>사진 위 제목·설명 + 글래스 힌트 pill, 인디케이터는 사진 밖</small></span>
+</div>
+
+<!-- B -->
+<div class="unit">
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span>&nbsp;</span></div>
+    <div class="topbar"><span class="wordmark">PICTRIP<span class="wordmark-dot"></span></span></div>
+    <div class="circles">
+      <div class="circle"><div class="ring unseen"><div class="thumb around"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/><circle cx="12" cy="12" r="8" stroke-opacity=".45"/></svg></div></div><span class="circle-label">Around</span></div>
+      <div class="circle"><div class="ring unseen"><div class="thumb" style="background-image:url('https://loremflickr.com/160/160/korea,temple?lock=21')"></div></div><span class="circle-label">Hot</span></div>
+      <div class="circle"><div class="ring unseen"><div class="thumb" style="background-image:url('https://loremflickr.com/160/160/forest,path?lock=22')"></div></div><span class="circle-label">Hidden</span></div>
+      <div class="circle"><div class="ring seen"><div class="thumb" style="background-image:url('https://loremflickr.com/160/160/lantern,festival?lock=23')"></div></div><span class="circle-label">Festa</span></div>
+      <div class="circle"><div class="ring seen"><div class="thumb" style="background-image:url('https://loremflickr.com/160/160/dog,park?lock=24')"></div></div><span class="circle-label">Pets</span></div>
+      <div class="circle"><div class="ring unseen"><div class="thumb" style="background-image:url('https://loremflickr.com/160/160/cherry,blossom?lock=25')"></div></div><span class="circle-label">Snap</span></div>
+    </div>
+    <div class="scroll">
+      <div class="b-head">
+        <div class="b-avatar" style="background-image:url('https://loremflickr.com/160/160/santorini?lock=11')"></div>
+        <div>
+          <div class="b-name">산토리니</div>
+          <div class="b-sub">그리스</div>
+        </div>
+      </div>
+      <div class="b-img" style="background-image:url('https://loremflickr.com/804/1004/santorini?lock=11')"></div>
+      <div class="dots"><span class="dot on"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+      <div class="b-caption">
+        <p><b>산토리니</b> 에게해 절벽 위 하얀 마을</p>
+        <div class="b-hint">비슷한 국내 여행지 밀어보기
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </div>
+      </div>
+      <div class="peek" style="background-image:url('https://loremflickr.com/804/1004/arashiyama,bamboo?lock=12')"></div>
+    </div>
+    <div class="tabbar"><div class="tab on">홈</div><div class="tab">탐색</div><div class="tab">지도</div><div class="tab">마이</div></div>
+    <div class="home-indicator"></div>
+  </div>
+  <span class="cap">B. 인스타 클래식<small>헤더(아바타+이름) + 깨끗한 사진 + 캡션 아래, 힌트는 그린 텍스트</small></span>
+</div>
+
+<!-- C -->
+<div class="unit">
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span>&nbsp;</span></div>
+    <div class="topbar"><span class="wordmark">PICTRIP<span class="wordmark-dot"></span></span></div>
+    <div class="circles">
+      <div class="circle"><div class="ring unseen"><div class="thumb around"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/><circle cx="12" cy="12" r="8" stroke-opacity=".45"/></svg></div></div><span class="circle-label">Around</span></div>
+      <div class="circle"><div class="ring unseen"><div class="thumb" style="background-image:url('https://loremflickr.com/160/160/korea,temple?lock=21')"></div></div><span class="circle-label">Hot</span></div>
+      <div class="circle"><div class="ring unseen"><div class="thumb" style="background-image:url('https://loremflickr.com/160/160/forest,path?lock=22')"></div></div><span class="circle-label">Hidden</span></div>
+      <div class="circle"><div class="ring seen"><div class="thumb" style="background-image:url('https://loremflickr.com/160/160/lantern,festival?lock=23')"></div></div><span class="circle-label">Festa</span></div>
+      <div class="circle"><div class="ring seen"><div class="thumb" style="background-image:url('https://loremflickr.com/160/160/dog,park?lock=24')"></div></div><span class="circle-label">Pets</span></div>
+      <div class="circle"><div class="ring unseen"><div class="thumb" style="background-image:url('https://loremflickr.com/160/160/cherry,blossom?lock=25')"></div></div><span class="circle-label">Snap</span></div>
+    </div>
+    <div class="scroll">
+      <div class="c-wrap">
+        <div class="c-card" style="background-image:url('https://loremflickr.com/804/1004/santorini?lock=11')">
+          <div class="c-chev">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+          </div>
+          <div class="c-meta">
+            <div class="c-eyebrow">Greece</div>
+            <div class="c-title">산토리니</div>
+            <div class="c-desc">에게해 절벽 위 하얀 마을</div>
+          </div>
+        </div>
+      </div>
+      <div class="dots"><span class="dot on"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+      <div class="c-wrap" style="padding-top:0">
+        <div class="c-card" style="height:110px;background-image:url('https://loremflickr.com/804/1004/arashiyama,bamboo?lock=12')"></div>
+      </div>
+    </div>
+    <div class="tabbar"><div class="tab on">홈</div><div class="tab">탐색</div><div class="tab">지도</div><div class="tab">마이</div></div>
+    <div class="home-indicator"></div>
+  </div>
+  <span class="cap">C. 카드 인셋<small>여백+라운드 카드, 스와이프 힌트는 우측 셰브런 · 에디토리얼 무드</small></span>
+</div>
+
+<!-- D -->
+<div class="unit">
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span>&nbsp;</span></div>
+    <div class="topbar"><span class="wordmark">PICTRIP<span class="wordmark-dot"></span></span></div>
+    <div class="circles">
+      <div class="circle"><div class="ring unseen"><div class="thumb around"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/><circle cx="12" cy="12" r="8" stroke-opacity=".45"/></svg></div></div><span class="circle-label">Around</span></div>
+      <div class="circle"><div class="ring unseen"><div class="thumb" style="background-image:url('https://loremflickr.com/160/160/korea,temple?lock=21')"></div></div><span class="circle-label">Hot</span></div>
+      <div class="circle"><div class="ring unseen"><div class="thumb" style="background-image:url('https://loremflickr.com/160/160/forest,path?lock=22')"></div></div><span class="circle-label">Hidden</span></div>
+      <div class="circle"><div class="ring seen"><div class="thumb" style="background-image:url('https://loremflickr.com/160/160/lantern,festival?lock=23')"></div></div><span class="circle-label">Festa</span></div>
+      <div class="circle"><div class="ring seen"><div class="thumb" style="background-image:url('https://loremflickr.com/160/160/dog,park?lock=24')"></div></div><span class="circle-label">Pets</span></div>
+      <div class="circle"><div class="ring unseen"><div class="thumb" style="background-image:url('https://loremflickr.com/160/160/cherry,blossom?lock=25')"></div></div><span class="circle-label">Snap</span></div>
+    </div>
+    <div class="scroll">
+      <div class="d-img" style="background-image:url('https://loremflickr.com/804/1004/santorini?lock=11')">
+        <div class="d-chev">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+        </div>
+        <div class="d-meta">
+          <div class="d-title">산토리니</div>
+          <div class="d-sub">그리스</div>
+        </div>
+        <div class="dots on-photo"><span class="dot on"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+      </div>
+      <div class="peek" style="background-image:url('https://loremflickr.com/804/1004/arashiyama,bamboo?lock=12')"></div>
+    </div>
+    <div class="tabbar"><div class="tab on">홈</div><div class="tab">탐색</div><div class="tab">지도</div><div class="tab">마이</div></div>
+    <div class="home-indicator"></div>
+  </div>
+  <span class="cap">D. 미니멀 오버레이<small>제목·나라만, 설명 없음 · 인디케이터 사진 위 · 힌트는 셰브런만</small></span>
+</div>
+
+</body>
+</html>

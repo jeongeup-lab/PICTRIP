@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PicTrip 리디자인 목업 (2026-07 · S13)</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<style>
+  :root{--ink:#171719;--sec:#5A5C63;--ter:#9396A0;--line:rgba(112,115,124,.18);
+    --inset:#F7F7F8;--accent:#03C75A;--accent-text:#03A94E}
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  body{font-family:'Pretendard',-apple-system,system-ui,sans-serif;color:var(--ink);
+    background:#fff;max-width:680px;margin:0 auto;padding:64px 24px 96px}
+  h1{font-size:30px;font-weight:800;letter-spacing:-.6px}
+  h1 .dot{display:inline-block;width:8px;height:8px;border-radius:4px;
+    background:var(--accent);margin-left:4px}
+  .sub{font-size:14px;color:var(--sec);margin-top:10px;line-height:1.6}
+  .sub code{background:var(--inset);padding:1px 6px;border-radius:5px;font-size:12.5px}
+  ul{list-style:none;margin-top:36px}
+  li a{display:flex;justify-content:space-between;align-items:baseline;gap:16px;
+    padding:18px 4px;border-bottom:1px solid var(--line);text-decoration:none;color:var(--ink)}
+  li a:hover .t{color:var(--accent-text)}
+  .t{font-size:17px;font-weight:800;letter-spacing:-.3px}
+  .d{font-size:13px;color:var(--ter);text-align:right;flex-shrink:0}
+</style>
+</head>
+<body>
+  <h1>PicTrip 리디자인 목업<span class="dot"></span></h1>
+  <p class="sub">
+    스펙: <code>docs/specs/S13-home-feed-explore-redesign.md</code> ·
+    토큰: <code>mobile/src/constants/theme.ts</code> 미러<br/>
+    사진은 전부 플레이스홀더(picsum). 레거시 목업(<code>docs/mockups/*.html</code>)과 무관한 신규 세트.
+  </p>
+  <ul>
+    <li><a href="home.html"><span class="t">홈</span><span class="d">서클 6채널 + 해외 훅 게시물 · 프레임 1</span></a></li>
+    <li><a href="home-story-viewer.html"><span class="t">스토리 뷰어</span><span class="d">채널 6종 + 권한 거부 · 프레임 7</span></a></li>
+    <li><a href="post-carousel.html"><span class="t">게시물 캐러셀</span><span class="d">훅·매칭·스켈레톤·0건·크레딧 · 프레임 5</span></a></li>
+    <li><a href="explore.html"><span class="t">탐색</span><span class="d">크롬 제로 그리드 B안 · 프레임 2</span></a></li>
+  </ul>
+</body>
+</html>

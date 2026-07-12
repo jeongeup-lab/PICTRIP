@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PicTrip · 스와이프 힌트 2차 — 콘텐츠형 4버전</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<style>
+  :root {
+    --bg:#FFFFFF; --skeleton:#ECEDEF; --ink:#171719; --sec:#5A5C63; --ter:#9396A0;
+    --accent:#03C75A; --accent-text:#03A94E;
+    --scrim-strong:rgba(16,14,18,.64);
+    --glass:rgba(255,255,255,.15); --glass-border:rgba(255,255,255,.22);
+    --on-dim:rgba(255,255,255,.85);
+    --pt:'Pretendard',-apple-system,system-ui,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  body{font-family:var(--pt);background:#e6e7ea;color:var(--ink);
+    display:flex;flex-wrap:wrap;gap:44px;justify-content:center;padding:48px 24px}
+  .unit{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .cap{font-size:14px;font-weight:800;letter-spacing:-.2px}
+  .cap small{display:block;font-size:12px;font-weight:500;color:#5A5C63;margin-top:3px;
+    text-align:center;max-width:340px;line-height:1.5}
+
+  .stage{width:370px;height:520px;position:relative}
+  .card{width:100%;height:100%;border-radius:16px;overflow:hidden;position:relative;
+    background-size:cover;background-position:center;background-color:var(--skeleton);
+    background-image:url('https://loremflickr.com/804/1042/santorini?lock=11');
+    box-shadow:0 10px 24px rgba(23,23,25,.12)}
+  .card::after{content:"";position:absolute;inset:0;
+    background:linear-gradient(180deg,rgba(20,18,22,.14) 0%,transparent 24%,transparent 46%,var(--scrim-strong) 100%)}
+  .counter{position:absolute;top:14px;right:14px;z-index:3;padding:5px 11px;
+    border-radius:999px;background:rgba(20,18,22,.45);backdrop-filter:blur(8px);
+    font-size:12px;font-weight:700;color:#fff}
+  .meta{position:absolute;left:18px;right:18px;bottom:20px;z-index:2;color:#fff}
+  .title-row{display:flex;align-items:baseline;gap:10px}
+  .name{font-size:24px;font-weight:800;letter-spacing:-.5px}
+  .region-chip{display:inline-flex;align-items:center;gap:8px;font-size:13px;
+    font-weight:600;color:var(--on-dim)}
+  .region-chip::before{content:"";width:1px;height:12px;background:rgba(255,255,255,.4)}
+  .desc{margin-top:10px;font-size:14.5px;line-height:1.55;font-weight:500;color:var(--on-dim)}
+
+  /* F. 다음 장 피크 */
+  .vF .card{width:calc(100% - 18px)}
+  .vF .next-sliver{position:absolute;top:0;right:0;width:14px;height:100%;
+    border-radius:16px 0 0 16px;overflow:hidden;background-size:cover;
+    background-position:left center;
+    background-image:url('https://loremflickr.com/804/1042/colorful,village?lock=13');
+    box-shadow:0 10px 24px rgba(23,23,25,.12)}
+  .vF .next-sliver::after{content:"";position:absolute;inset:0;background:rgba(16,14,18,.25)}
+
+  /* G. 국내 매칭 티저 (미니 서클 스택 + 카피) */
+  .vG .teaser{display:flex;align-items:center;gap:10px;margin-top:14px}
+  .vG .stack{display:flex}
+  .vG .stack span{width:30px;height:30px;border-radius:50%;background-size:cover;
+    background-position:center;border:2px solid rgba(255,255,255,.95);
+    box-shadow:0 2px 8px rgba(16,14,18,.35)}
+  .vG .stack span+span{margin-left:-9px}
+  .vG .teaser p{font-size:13.5px;font-weight:700;color:#fff;display:flex;
+    align-items:center;gap:5px}
+  .vG .teaser svg{margin-top:1px}
+
+  /* H. 넛지 모션 */
+  .vH .card{animation:nudge 3.2s ease-in-out infinite}
+  @keyframes nudge{
+    0%,72%,100%{transform:translateX(0)}
+    78%{transform:translateX(-14px)}
+    86%{transform:translateX(0)}
+  }
+  .vH .edge-arrow{position:absolute;right:12px;top:50%;transform:translateY(-50%);
+    z-index:3;opacity:0;animation:arrowfade 3.2s ease-in-out infinite}
+  @keyframes arrowfade{
+    0%,70%,100%{opacity:0}
+    78%,88%{opacity:1}
+  }
+
+  /* I. 카운터 통합 */
+  .vI .counter{display:flex;align-items:center;gap:6px;padding:6px 12px}
+  .vI .counter svg{animation:pulse-x 1.6s ease-in-out infinite}
+  @keyframes pulse-x{
+    0%,100%{transform:translateX(0);opacity:.7}
+    50%{transform:translateX(3px);opacity:1}
+  }
+</style>
+</head>
+<body>
+
+<!-- F -->
+<div class="unit">
+  <div class="stage vF">
+    <div class="card">
+      <div class="counter">1/4</div>
+      <div class="meta">
+        <div class="title-row"><span class="name">산토리니</span><span class="region-chip">그리스</span></div>
+        <div class="desc">그리스 에게해 키클라데스 제도의 화산섬</div>
+      </div>
+    </div>
+    <div class="next-sliver"></div>
+  </div>
+  <span class="cap">F. 다음 장 피크<small>다음 슬라이드(감천문화마을)가 오른쪽에 14px 살짝 보임 — 텍스트 없이 콘텐츠 자체가 힌트</small></span>
+</div>
+
+<!-- G -->
+<div class="unit">
+  <div class="stage vG">
+    <div class="card">
+      <div class="counter">1/4</div>
+      <div class="meta">
+        <div class="title-row"><span class="name">산토리니</span><span class="region-chip">그리스</span></div>
+        <div class="desc">그리스 에게해 키클라데스 제도의 화산섬</div>
+        <div class="teaser">
+          <div class="stack">
+            <span style="background-image:url('https://loremflickr.com/160/160/colorful,village?lock=13')"></span>
+            <span style="background-image:url('https://loremflickr.com/160/160/coast,cliff?lock=14')"></span>
+            <span style="background-image:url('https://loremflickr.com/160/160/mural,village?lock=15')"></span>
+          </div>
+          <p>한국에서 만나는 산토리니
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <span class="cap">G. 국내 매칭 티저<small>실제 국내 3곳 미니 썸네일 + "한국에서 만나는 산토리니" — 다음 장 내용을 미리 보여줌</small></span>
+</div>
+
+<!-- H -->
+<div class="unit">
+  <div class="stage vH">
+    <div class="card">
+      <div class="counter">1/4</div>
+      <div class="meta">
+        <div class="title-row"><span class="name">산토리니</span><span class="region-chip">그리스</span></div>
+        <div class="desc">그리스 에게해 키클라데스 제도의 화산섬</div>
+      </div>
+      <div class="edge-arrow">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+      </div>
+    </div>
+  </div>
+  <span class="cap">H. 넛지 모션<small>카드가 3초에 한 번 살짝 밀렸다 돌아옴 (브라우저에서 확인) — UI 요소 0개</small></span>
+</div>
+
+<!-- I -->
+<div class="unit">
+  <div class="stage vI">
+    <div class="card">
+      <div class="counter">
+        1/4
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </div>
+      <div class="meta">
+        <div class="title-row"><span class="name">산토리니</span><span class="region-chip">그리스</span></div>
+        <div class="desc">그리스 에게해 키클라데스 제도의 화산섬</div>
+      </div>
+    </div>
+  </div>
+  <span class="cap">I. 카운터 통합<small>기존 1/4 뱃지에 맥동하는 화살표만 — 새 요소 없이 해결</small></span>
+</div>
+
+</body>
+</html>
