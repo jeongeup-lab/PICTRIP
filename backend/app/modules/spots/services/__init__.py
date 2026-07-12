@@ -6,6 +6,7 @@ from app.modules.spots.services import curations, feed
 from app.modules.spots.services.cards import (
     image_bearing_spots_stmt,
     load_active_spot_cards_by_ids,
+    load_overview_map,
     load_region_meta,
     load_spot_cards_by_ids,
 )
@@ -40,6 +41,7 @@ __all__ = [
     "image_bearing_spots_stmt",
     "list_saved_spots",
     "load_active_spot_cards_by_ids",
+    "load_overview_map",
     "load_region_meta",
     "load_spot_cards_by_ids",
     "load_spot_detail",

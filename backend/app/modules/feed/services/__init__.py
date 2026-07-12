@@ -1,3 +1,3 @@
-from app.modules.feed.services import posts
+from app.modules.feed.services import matching, posts
 
-__all__ = ["posts"]
+__all__ = ["matching", "posts"]

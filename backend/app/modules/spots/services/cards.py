@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.spots.models import LclsSystmCode, Region, Sigungu, Spot
+from app.modules.spots.models import LclsSystmCode, Region, Sigungu, Spot, SpotDetail
 from app.modules.spots.services.nearby import derive_category
 from app.modules.spots.services.rows import SpotCardRow
 
@@ -47,6 +48,22 @@ async def load_region_meta(
     )
     rows = (await session.execute(stmt)).all()
     return {r.content_id: (r.ldong_regn_nm, r.ldong_signgu_nm) for r in rows}
+
+
+async def load_overview_map(
+    session: AsyncSession,
+    content_ids: Sequence[str],
+) -> dict[str, str | None]:
+    """{content_id: overview} for a batch of ids; missing ids absent. overview lives
+    on spot_details (KTO verbatim), the cross-module seam for match-card previews."""
+    if not content_ids:
+        return {}
+    result = await session.execute(
+        select(SpotDetail.content_id, SpotDetail.overview).where(
+            SpotDetail.content_id.in_(content_ids)
+        )
+    )
+    return {row.content_id: row.overview for row in result}
 
 
 async def cover_url(
