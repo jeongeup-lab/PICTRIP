@@ -77,8 +77,12 @@ class WikidataClient:
             timeout=httpx.Timeout(90.0, connect=5.0), headers={"User-Agent": USER_AGENT}
         )
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=2, max=30),
-           retry=retry_if_exception(_is_transient), reraise=True)
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=2, min=2, max=30),
+        retry=retry_if_exception(_is_transient),
+        reraise=True,
+    )
     def fetch_country(self, country: Country) -> list[RawSpot]:
         resp = self._client.post(
             SPARQL_ENDPOINT, data={"query": build_query(country), "format": "json"}

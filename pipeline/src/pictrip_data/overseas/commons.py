@@ -56,13 +56,23 @@ class CommonsClient:
             timeout=httpx.Timeout(30.0, connect=5.0), headers={"User-Agent": USER_AGENT}
         )
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8),
-           retry=retry_if_exception(_is_transient), reraise=True)
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=8),
+        retry=retry_if_exception(_is_transient),
+        reraise=True,
+    )
     def _call(self, titles: list[str]) -> dict:
-        resp = self._client.get(API, params={
-            "action": "query", "format": "json", "prop": "imageinfo",
-            "iiprop": "extmetadata", "titles": "|".join(titles),
-        })
+        resp = self._client.get(
+            API,
+            params={
+                "action": "query",
+                "format": "json",
+                "prop": "imageinfo",
+                "iiprop": "extmetadata",
+                "titles": "|".join(titles),
+            },
+        )
         resp.raise_for_status()
         return resp.json()
 

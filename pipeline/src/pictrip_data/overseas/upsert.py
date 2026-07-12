@@ -27,15 +27,23 @@ RETURNING (xmax = 0) AS inserted
 
 
 def upsert_overseas(cur, spot: RawSpot, credit: Credit | None) -> bool:
-    cur.execute(_SQL, {
-        "wikidata_id": spot.wikidata_id, "name_ko": spot.name_ko, "name_en": spot.name_en,
-        "country_code": spot.country.code, "country_name_ko": spot.country.name_ko,
-        "description_ko": spot.description_ko,
-        "image_url": thumb_url(spot.image_filename),
-        "image_author": credit.author if credit else None,
-        "image_license": credit.license if credit else None,
-        "image_license_url": credit.license_url if credit else None,
-        "image_source_url": source_url(spot.image_filename),
-        "fame_score": spot.fame_score, "lat": spot.lat, "lng": spot.lng,
-    })
+    cur.execute(
+        _SQL,
+        {
+            "wikidata_id": spot.wikidata_id,
+            "name_ko": spot.name_ko,
+            "name_en": spot.name_en,
+            "country_code": spot.country.code,
+            "country_name_ko": spot.country.name_ko,
+            "description_ko": spot.description_ko,
+            "image_url": thumb_url(spot.image_filename),
+            "image_author": credit.author if credit else None,
+            "image_license": credit.license if credit else None,
+            "image_license_url": credit.license_url if credit else None,
+            "image_source_url": source_url(spot.image_filename),
+            "fame_score": spot.fame_score,
+            "lat": spot.lat,
+            "lng": spot.lng,
+        },
+    )
     return bool(cur.fetchone()[0])
