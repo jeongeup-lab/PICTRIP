@@ -129,7 +129,7 @@ class Settings(BaseSettings):
     PHOTO_SEARCH_MAX: int = 30
 
     # --- Overseas → domestic matching (S13) ---
-    MATCH_DISTANCE_MAX: float = 0.45
+    MATCH_DISTANCE_MAX: float = 0.32
     MATCH_CANDIDATES: int = 40
 
     # --- Admin console (A01) ---
