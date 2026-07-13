@@ -59,8 +59,8 @@ async def _seed_concentration(session: AsyncSession, cid: str, *, rate: str, ove
     await session.execute(
         text(
             "INSERT INTO spots (content_id, content_type_id, title, first_image_url, "
-            "show_flag, ldong_regn_cd, ldong_signgu_cd) "
-            "VALUES (:cid, 12, :t, 'http://kto/i.jpg', 1, '26', '26380')"
+            "show_flag, ldong_regn_cd, ldong_signgu_cd, lcls_systm1) "
+            "VALUES (:cid, 12, :t, 'http://tong.visitkorea.or.kr/i.jpg', 1, '26', '26380', 'NA')"
         ),
         {"cid": cid, "t": f"t-{cid}"},
     )
@@ -151,11 +151,11 @@ async def test_channels_meta_order_and_shape(client, seeded_concentration, kto_a
     assert [c["key"] for c in chans] == ["around", "hot", "hidden", "festa", "pets", "snap"]
     assert chans[0]["thumbnailUrl"] is None
     assert chans[0]["available"] is True
-    assert chans[1]["thumbnailUrl"] == "http://kto/i.jpg"
+    assert chans[1]["thumbnailUrl"] == "https://tong.visitkorea.or.kr/i.jpg"
     by_key = {c["key"]: c for c in chans}
     assert by_key["festa"]["available"] is True
-    assert by_key["festa"]["thumbnailUrl"] == "http://tong.visitkorea.or.kr/f1.jpg"
-    assert by_key["pets"]["thumbnailUrl"] == "http://tong.visitkorea.or.kr/p1.jpg"
+    assert by_key["festa"]["thumbnailUrl"] == "https://tong.visitkorea.or.kr/f1.jpg"
+    assert by_key["pets"]["thumbnailUrl"] == "https://tong.visitkorea.or.kr/p1.jpg"
     assert by_key["snap"]["thumbnailUrl"] == "https://tong.visitkorea.or.kr/s1.jpg"
     assert by_key["snap"]["label"] == "Snap"
 
@@ -210,6 +210,6 @@ async def test_channels_meta_degrades_on_kto_error(
     assert by_key["snap"]["available"] is False
     assert by_key["festa"]["available"] is False
     assert by_key["hot"]["available"] is True
-    assert by_key["hot"]["thumbnailUrl"] == "http://kto/i.jpg"
+    assert by_key["hot"]["thumbnailUrl"] == "https://tong.visitkorea.or.kr/i.jpg"
     assert by_key["hidden"]["available"] is True
-    assert by_key["hidden"]["thumbnailUrl"] == "http://kto/i.jpg"
+    assert by_key["hidden"]["thumbnailUrl"] == "https://tong.visitkorea.or.kr/i.jpg"

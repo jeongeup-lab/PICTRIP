@@ -67,8 +67,8 @@ async def _seed_concentration(
     await session.execute(
         text(
             "INSERT INTO spots (content_id, content_type_id, title, first_image_url, "
-            "show_flag, ldong_regn_cd, ldong_signgu_cd) "
-            "VALUES (:cid, 12, :t, 'http://kto/i.jpg', 1, '26', '26380')"
+            "show_flag, ldong_regn_cd, ldong_signgu_cd, lcls_systm1) "
+            "VALUES (:cid, 12, :t, 'http://tong.visitkorea.or.kr/i.jpg', 1, '26', '26380', 'NA')"
         ),
         {"cid": cid, "t": f"t-{cid}"},
     )
@@ -145,6 +145,7 @@ async def test_hot_returns_ranked_cards(db_session, client, seeded_concentration
     assert cards[0]["rank"] == 1
     assert cards[0]["dday"] is None
     assert cards[0]["regionLabel"] == "부산광역시 사하구"
+    assert cards[0]["imageUrl"] == "https://tong.visitkorea.or.kr/i.jpg"
 
 
 async def test_hidden_returns_cards_without_rank_exposure(
@@ -188,6 +189,7 @@ async def test_kto_channel_returns_kto_cards(db_session, client) -> None:
     assert body["label"] == "Festa"
     assert len(body["cards"]) == 1
     assert body["cards"][0]["contentId"] == "F1"
+    assert body["cards"][0]["imageUrl"] == "https://tong.visitkorea.or.kr/f1.jpg"
 
 
 async def test_unknown_channel_404(db_session, client) -> None:

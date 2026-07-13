@@ -43,14 +43,15 @@ async def _seed_spot(
     show: int = 1,
     img: str | None = "http://kto/i.jpg",
     overview: str | None = None,
+    lcls1: str | None = "NA",
 ) -> None:
     await session.execute(
         text(
             "INSERT INTO spots (content_id, content_type_id, title, first_image_url, "
-            "show_flag, ldong_regn_cd, ldong_signgu_cd) "
-            "VALUES (:cid, 12, :t, :img, :show, '26', '26380')"
+            "show_flag, ldong_regn_cd, ldong_signgu_cd, lcls_systm1) "
+            "VALUES (:cid, 12, :t, :img, :show, '26', '26380', :lcls1)"
         ),
-        {"cid": cid, "t": f"t-{cid}", "img": img, "show": show},
+        {"cid": cid, "t": f"t-{cid}", "img": img, "show": show, "lcls1": lcls1},
     )
     await session.execute(
         text(
@@ -78,6 +79,8 @@ async def seeded_concentration(db_session: AsyncSession) -> SeededConcentration:
     await _seed_spot(db_session, "c30", rate="30.00", overview=None)
     await _seed_spot(db_session, "c10", rate="10.00", overview="설명 10")
     await _seed_spot(db_session, "c95hidden", rate="95.00", show=0, overview="설명 95")
+    await _seed_spot(db_session, "c99uncat", rate="99.00", overview="설명 99", lcls1=None)
+    await _seed_spot(db_session, "c98event", rate="98.00", overview="설명 98", lcls1="EV")
     await db_session.flush()
     return SeededConcentration(
         highest_id="c90",
@@ -95,6 +98,8 @@ async def test_hot_orders_by_rate_desc_with_rank(
     assert all(r.first_image_url for r in rows)
     assert seeded_concentration.no_overview_id in [r.content_id for r in rows]
     assert "c95hidden" not in [r.content_id for r in rows]
+    assert "c99uncat" not in [r.content_id for r in rows]
+    assert "c98event" not in [r.content_id for r in rows]
     assert rows[0].region_label == "부산광역시 사하구"
 
 
