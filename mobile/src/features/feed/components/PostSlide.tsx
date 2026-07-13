@@ -67,12 +67,7 @@ function HeroSlide({
 }) {
   return (
     <View style={[styles.slide, { width }]}>
-      <RemoteImage
-        uri={post.imageUrl}
-        withUA
-        cropBanner={false}
-        style={StyleSheet.absoluteFill as object}
-      />
+      <RemoteImage uri={post.imageUrl} withUA cropBanner={false} style={StyleSheet.absoluteFill} />
       <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
         <Defs>
           <LinearGradient id="postScrim" x1="0" y1="0" x2="0" y2="1">
@@ -131,7 +126,7 @@ function MatchSlide({
         router.push(`/spots/${match.contentId}`);
       }}
     >
-      <RemoteImage uri={match.imageUrl} style={StyleSheet.absoluteFill as object} />
+      <RemoteImage uri={match.imageUrl} style={StyleSheet.absoluteFill} />
       <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
         <Defs>
           <LinearGradient id="matchScrim" x1="0" y1="0" x2="0" y2="1">
