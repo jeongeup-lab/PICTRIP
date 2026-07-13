@@ -95,4 +95,28 @@ describe("RemoteImage", () => {
     });
     expect(images(r!)[0].props.source.uri).toBe("https://example.com/b.jpg");
   });
+
+  it("retries again after an A→B→A round-trip back to a previously-failed uri", async () => {
+    const A = "https://example.com/a.jpg";
+    const B = "https://example.com/b.jpg";
+    let r: renderer.ReactTestRenderer;
+    await act(async () => {
+      r = renderer.create(<RemoteImage uri={A} />);
+    });
+    await failAllRetries(r!);
+    expect(images(r!)).toHaveLength(0);
+
+    await act(async () => {
+      r!.update(<RemoteImage uri={B} />);
+    });
+    await act(async () => {
+      r!.update(<RemoteImage uri={A} />);
+    });
+    // Back on A: a single error must retry, not reuse A's earlier exhausted count.
+    await act(async () => {
+      images(r!)[0].props.onError();
+    });
+    expect(images(r!)).toHaveLength(1);
+    expect(images(r!)[0].props.source.uri).toBe(A);
+  });
 });
