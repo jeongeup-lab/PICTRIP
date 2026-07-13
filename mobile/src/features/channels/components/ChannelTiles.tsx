@@ -2,7 +2,7 @@ import { ScrollView, Pressable, View, Text, StyleSheet } from "react-native";
 import Svg, { Defs, LinearGradient, Stop, Rect } from "react-native-svg";
 import { RemoteImage } from "@/components/RemoteImage";
 import { Icon } from "@/components/Icon";
-import { useChannels, useSeenChannels } from "@/features/channels/queries";
+import { prefetchChannelCards, useChannels, useSeenChannels } from "@/features/channels/queries";
 import type { ChannelKey, ChannelMeta } from "@/features/channels/api";
 import { colors } from "@/constants/theme";
 
@@ -43,6 +43,7 @@ function ChannelTile({
   return (
     <Pressable
       testID="channel-tile"
+      onPressIn={() => prefetchChannelCards(meta.key)}
       onPress={() => onOpen(meta.key)}
       disabled={!meta.available}
       style={[styles.tile, dimmed && styles.dimmed]}
