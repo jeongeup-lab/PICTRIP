@@ -1,6 +1,8 @@
 import { useState } from "react";
 import {
+  Animated,
   Image,
+  StyleSheet,
   View,
   type StyleProp,
   type ImageStyle,
@@ -41,6 +43,8 @@ const COMMONS_UA = "PicTrip/1.0 (https://pictrip.org)";
 // falls below the visible edge. Heuristic — band height varies per image.
 const BANNER_FRACTION = 0.12;
 
+const FADE_MS = 220;
+
 export function RemoteImage({
   uri,
   style,
@@ -50,6 +54,7 @@ export function RemoteImage({
   withUA = false,
 }: RemoteImageProps) {
   const [failedUri, setFailedUri] = useState<string | null>(null);
+  const [opacity] = useState(() => new Animated.Value(0));
   const source =
     uri && withUA ? { uri, headers: { "User-Agent": COMMONS_UA } } : uri ? { uri } : { uri: "" };
   const failed = !!uri && failedUri === uri;
@@ -63,35 +68,57 @@ export function RemoteImage({
       />
     );
   }
+  const resetFade = () => opacity.setValue(0);
+  const fadeIn = () =>
+    Animated.timing(opacity, { toValue: 1, duration: FADE_MS, useNativeDriver: true }).start();
+  const onError = () => setFailedUri(uri);
+
   if (!cropBanner) {
+    const showBackground = resizeMode !== "contain";
     return (
-      <Image
-        source={source}
-        onError={() => setFailedUri(uri)}
-        resizeMode={resizeMode}
-        style={[{ borderRadius: radius }, style]}
-      />
+      <View
+        style={[
+          { borderRadius: radius } as ViewStyle,
+          showBackground && ({ backgroundColor: colors.inset } as ViewStyle),
+          style as StyleProp<ViewStyle>,
+        ]}
+      >
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity }]}>
+          <Image
+            source={source}
+            onLoadStart={resetFade}
+            onLoad={fadeIn}
+            onError={onError}
+            resizeMode={resizeMode}
+            style={[StyleSheet.absoluteFill, { borderRadius: radius }]}
+          />
+        </Animated.View>
+      </View>
     );
   }
   return (
     <View
       style={[
-        { borderRadius: radius, overflow: "hidden" } as ViewStyle,
+        { borderRadius: radius, overflow: "hidden", backgroundColor: colors.inset } as ViewStyle,
         style as StyleProp<ViewStyle>,
       ]}
     >
-      <Image
-        source={source}
-        onError={() => setFailedUri(uri)}
-        resizeMode="cover"
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: `${100 / (1 - BANNER_FRACTION)}%`,
-        }}
-      />
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity }]}>
+        <Image
+          source={source}
+          onLoadStart={resetFade}
+          onLoad={fadeIn}
+          onError={onError}
+          resizeMode="cover"
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: `${100 / (1 - BANNER_FRACTION)}%`,
+          }}
+        />
+      </Animated.View>
     </View>
   );
 }

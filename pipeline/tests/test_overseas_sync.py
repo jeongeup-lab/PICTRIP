@@ -11,6 +11,7 @@ CREDIT = Credit(
     author="Jane",
     license="CC BY-SA 4.0",
     license_url="https://creativecommons.org/licenses/by-sa/4.0",
+    thumb="https://upload.wikimedia.org/wikipedia/commons/thumb/t/Tokyo.jpg/1200px-Tokyo.jpg",
 )
 
 
@@ -33,8 +34,7 @@ def test_sync_overseas_inserts_and_records_run(db_conn):
         )
         row = cur.fetchone()
     assert row[0] == "도쿄타워"
-    assert row[1].startswith("https://commons.wikimedia.org/wiki/Special:FilePath/")
-    assert "width=800" in row[1]
+    assert row[1] == CREDIT.thumb
     assert row[2].startswith("https://commons.wikimedia.org/wiki/File:")
     with db_conn.cursor() as cur:
         cur.execute("SELECT status, mode FROM sync_runs ORDER BY id DESC LIMIT 1")
@@ -58,7 +58,13 @@ def test_sync_overseas_upsert_preserves_hidden_and_resets_embedding_on_image_cha
 
     class ChangedCommons(FakeCommons):
         def fetch_credits(self, filenames):
-            return {"New Tower.jpg": CREDIT}
+            moved = Credit(
+                author=CREDIT.author,
+                license=CREDIT.license,
+                license_url=CREDIT.license_url,
+                thumb="https://upload.wikimedia.org/wikipedia/commons/thumb/n/New.jpg/1200px-New.jpg",
+            )
+            return {"New Tower.jpg": moved}
 
     sync_overseas(wikidata=Changed(), commons=ChangedCommons(), conn=db_conn, countries=[JP])
     with db_conn.cursor() as cur:
