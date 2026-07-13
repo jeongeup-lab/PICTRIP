@@ -45,10 +45,8 @@ export function StoryViewer({ start }: Props) {
   const isAround = channelKey === "around";
   const needCoords = isAround && !coords;
 
-  const { data: cardData, isLoading: cardsLoading } = useChannelCards(
-    channelKey,
-    coords ?? undefined,
-  );
+  const { data: cardData, isError } = useChannelCards(channelKey, coords ?? undefined);
+  const noData = !cardData;
   const cards = cardData?.cards ?? [];
   const cardCount = cards.length;
   const shownIdx = cardCount > 0 ? Math.min(cardIdx, cardCount - 1) : 0;
@@ -96,13 +94,13 @@ export function StoryViewer({ start }: Props) {
   };
 
   const rightTap = () => {
-    if (cardsLoading) return;
+    if (noData) return;
     if (shownIdx < cardCount - 1) setCardIdx(shownIdx + 1);
     else nextChannel();
   };
 
   const leftTap = () => {
-    if (cardsLoading) return;
+    if (noData) return;
     if (shownIdx > 0) setCardIdx(shownIdx - 1);
     else prevChannel();
   };
@@ -130,7 +128,7 @@ export function StoryViewer({ start }: Props) {
     onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 12 || g.dy > 12,
     onPanResponderRelease: (_e, g) => {
       if (g.dy > 90 && g.dy > Math.abs(g.dx)) close();
-      else if (cardsLoading) return;
+      else if (noData) return;
       else if (g.dx < -50) nextChannel();
       else if (g.dx > 50) prevChannel();
     },
@@ -142,6 +140,21 @@ export function StoryViewer({ start }: Props) {
     return (
       <View style={[styles.root, { backgroundColor: BG }]} {...pan.panHandlers}>
         {primer ? <PermissionPrimer variant="priming" onAllow={onAllow} onSkip={close} /> : null}
+        <Pressable
+          style={[styles.close, styles.closeFloat, { top: insets.top + 12 }]}
+          onPress={close}
+          hitSlop={8}
+        >
+          <Icon name="close" size={18} color={colors.onImage} />
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (isError) {
+    return (
+      <View style={[styles.root, styles.errorRoot, { backgroundColor: BG }]} {...pan.panHandlers}>
+        <Text style={styles.errorText}>채널을 불러오지 못했어요</Text>
         <Pressable
           style={[styles.close, styles.closeFloat, { top: insets.top + 12 }]}
           onPress={close}
@@ -214,6 +227,8 @@ export function StoryViewer({ start }: Props) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  errorRoot: { alignItems: "center", justifyContent: "center", paddingHorizontal: 24 },
+  errorText: { fontSize: 15, fontWeight: "600", color: colors.onImage, textAlign: "center" },
   zoneLeft: { right: "66%" },
   zoneRight: { left: "34%" },
   top: { position: "absolute", top: 0, left: 0, right: 0, paddingHorizontal: 16 },
