@@ -53,3 +53,14 @@ class ChannelCardsResponse(BaseModel):
     key: str
     label: str
     cards: list[ChannelCard]
+
+
+class ChannelMeta(BaseModel):
+    key: str
+    label: str
+    thumbnailUrl: str | None
+    available: bool
+
+
+class ChannelsResponse(BaseModel):
+    channels: list[ChannelMeta]
