@@ -94,4 +94,30 @@ describe("ChannelTiles", () => {
     await act(async () => hot.props.onPress());
     expect(onOpen).toHaveBeenCalledWith("hot");
   });
+
+  it("tapping an available:false tile does not call onOpen", async () => {
+    setChannels([meta("pets", { available: false })]);
+    setSeen([]);
+    const onOpen = jest.fn();
+    const r = await mount(onOpen);
+    const tile = tiles(r)[0];
+    expect(tile.props.disabled).toBe(true);
+    await act(async () => {
+      if (!tile.props.disabled) tile.props.onPress();
+    });
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it("tapping an available seen tile still calls onOpen", async () => {
+    setChannels([meta("hot")]);
+    setSeen(["hot"]);
+    const onOpen = jest.fn();
+    const r = await mount(onOpen);
+    const tile = tiles(r)[0];
+    expect(tile.props.disabled).toBe(false);
+    await act(async () => {
+      if (!tile.props.disabled) tile.props.onPress();
+    });
+    expect(onOpen).toHaveBeenCalledWith("hot");
+  });
 });

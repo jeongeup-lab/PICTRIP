@@ -60,7 +60,12 @@ function HeroSlide({
 }) {
   return (
     <View style={[styles.slide, { width }]}>
-      <RemoteImage uri={post.imageUrl} withUA style={StyleSheet.absoluteFill as object} />
+      <RemoteImage
+        uri={post.imageUrl}
+        withUA
+        cropBanner={false}
+        style={StyleSheet.absoluteFill as object}
+      />
       <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
         <Defs>
           <LinearGradient id="postScrim" x1="0" y1="0" x2="0" y2="1">
@@ -129,7 +134,10 @@ function MatchSlide({
       <Pressable
         testID="match-save"
         style={styles.save}
-        onPress={toggle}
+        onPress={(e) => {
+          e.stopPropagation();
+          void toggle();
+        }}
         hitSlop={8}
         accessibilityLabel="저장"
       >

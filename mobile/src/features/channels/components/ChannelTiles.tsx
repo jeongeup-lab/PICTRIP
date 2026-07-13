@@ -44,6 +44,7 @@ function ChannelTile({
     <Pressable
       testID="channel-tile"
       onPress={() => onOpen(meta.key)}
+      disabled={!meta.available}
       style={[styles.tile, dimmed && styles.dimmed]}
     >
       {isAround ? (

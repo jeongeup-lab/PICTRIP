@@ -95,9 +95,11 @@ describe("PostCarousel", () => {
     (useSaveOptimistic as jest.Mock).mockReturnValue({ saved: false, toggle });
     setMatches([match()]);
     const r = await mount();
+    const stopPropagation = jest.fn();
     await act(async () => {
-      r.root.findAllByProps({ testID: "match-save" })[0].props.onPress();
+      r.root.findAllByProps({ testID: "match-save" })[0].props.onPress({ stopPropagation });
     });
+    expect(stopPropagation).toHaveBeenCalled();
     expect(toggle).toHaveBeenCalled();
   });
 
