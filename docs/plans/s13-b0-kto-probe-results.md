@@ -40,20 +40,21 @@ Task B0 산출물. **B1의 base URL·enum, B4의 오퍼레이션명·필드명�
 - **contentId 호환성**: `galContentId`는 `contentTypeId=17`(사진갤러리 전용)로 **KorService2 스팟과 비호환**.
   → 스펙대로 Snap 카드는 `contentId=null` · `saveable=false` · `line=galPhotographyLocation`.
 
-## 3. Pets — `KorPetTourService2/areaBasedList2` ⏳ 승인 완료·게이트웨이 전파 대기
+## 3. Pets — `KorPetTourService2/areaBasedList2` ✅ LIVE (전파 완료·재프로브 200)
 
 - Base URL: `http://apis.data.go.kr/B551011/KorPetTourService2` (**버전 접미사 `2` 필수** — 계획 예시의
   `KorPetTourService`(무버전)는 `API not found`, `KorPetTourService1`은 `Unexpected errors`).
 - 활용신청 페이지: https://www.data.go.kr/data/15135102/openapi.do
-- 현재 상태: 신청 승인 직후 `areaBasedList2` 호출이 **`Forbidden` 지속**(승인이 API 게이트웨이에
-  전파되기까지 지연, 통상 수 분~1시간). **B4 Pets 구현 착수 전 재프로브로 200·필드 확정 필요.**
-- 예상 오퍼레이션: `areaBasedList2`(지역기반) · `locationBasedList2`(위치기반). 전파 후 필드
-  (`firstimage`·`title`·`addr1`·`contentid`·`acmpyTypeCd`) 및 KorService2 contentid 호환성 확정.
-- **동작 확인된 대체 경로**: `KorService2/detailPetTour2`(반려동물 동반 상세)는 **이미 등록·정상**
-  (resultCode `0000`, `contentid`별 `acmpyTypeCd`(예: "전구역 동반가능")·`etcAcmpyInfo` 제공).
-  KorPetTourService2 전파가 끝내 실패하면 Pets 채널은 `KorService2/areaBasedList2`(반려동물 카테고리)
-  + `detailPetTour2` 조합으로 fallback 가능(구현 복잡도만 증가).
-- **B4 Pets 카드 매핑**: `tag` = `acmpyTypeCd`(동반 가능 구역), `saveable` = contentid 호환 시 true.
+- 현재 상태: **재프로브 resultCode `0000` 확인** — 게이트웨이 전파 완료, `Forbidden` 해소. `areaBasedList2`
+  (파라미터 `numOfRows`·`arrange="C"`) 정상 응답.
+- 확정 오퍼레이션: `areaBasedList2`(지역기반). 반환 필드 `contentid`·`contenttypeid`(="12", 일반 관광지)·
+  `title`·`addr1`·`firstimage`·`cpyrhtDivCd`. `contentid`는 KorService2 type-12 스팟과 호환 →
+  `saveable=true`·`content_id` 채움.
+- **주의**: `areaBasedList2`는 반려동물 전용 필드를 반환하지 않는다(`acmpyTypeCd`는 KorService2/detailPetTour2
+  에만 존재하며, 우리는 이를 호출하지 않음). 따라서 Pets 카드의 `tag`는 **정적 라벨 `"반려동물 동반 가능"`**
+  (필드에서 읽지 않음).
+- **B4 Pets 카드 매핑**: `tag` = 정적 `"반려동물 동반 가능"`, `saveable=true`(contentid type-12 호환),
+  이미지 필수 필터 후 `random.sample` 최대 10개.
 
 ## 4. 집중률 신선도 — `TatsCnctrRateService/tatsCnctrRatedList`
 
@@ -82,5 +83,5 @@ Task B0 산출물. **B1의 base URL·enum, B4의 오퍼레이션명·필드명�
 
 ## 미결/후속
 
-- **[블로커→B4]** KorPetTourService2 게이트웨이 전파 → B4 착수 직전 재프로브 필수.
+- ~~**[블로커→B4]** KorPetTourService2 게이트웨이 전파~~ → **해소**: 재프로브 `0000` LIVE, B4 착수(§3 참조).
 - **[B6]** CT110 `spot_concentration` `max(base_ymd)` 신선도 확정 + 일일 크론 복원.
