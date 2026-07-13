@@ -4,10 +4,8 @@ import HomeScreen from "@/app/(tabs)/index";
 import { usePostsFeed } from "@/features/feed/posts-queries";
 import type { OverseasPost } from "@/features/feed/posts-api";
 
-const mockRemoveQueries = jest.fn();
-jest.mock("@tanstack/react-query", () => ({
-  useQueryClient: () => ({ removeQueries: mockRemoveQueries }),
-}));
+let seedCounter = 0;
+jest.mock("@/lib/seed", () => ({ makeSeed: () => `seed-${(seedCounter += 1)}` }));
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), push: jest.fn() },
 }));
@@ -173,17 +171,18 @@ describe("HomeScreen", () => {
     expect(fetchNextPage).not.toHaveBeenCalled();
   });
 
-  it("pull-to-refresh evicts the posts cache and resets the seed for a new shuffle", async () => {
+  it("pull-to-refresh generates a new client seed for a fresh shuffle", async () => {
     setFeed();
     const r = await mount();
     const list = r.root.findAllByType(FlatList)[0];
-    usePostsFeedMock.mockClear();
+    const before = usePostsFeedMock.mock.calls.at(-1)?.[0];
     await act(async () => {
       list.props.refreshControl.props.onRefresh();
     });
-    expect(mockRemoveQueries).toHaveBeenCalledWith({ queryKey: ["posts"] });
-    expect(refetch).toHaveBeenCalled();
-    expect(usePostsFeedMock.mock.calls.some((c) => c[0] === undefined)).toBe(true);
+    const after = usePostsFeedMock.mock.calls.at(-1)?.[0];
+    expect(typeof before).toBe("string");
+    expect(typeof after).toBe("string");
+    expect(after).not.toBe(before);
   });
 
   it("shows the refresh spinner while a refetch is in flight", async () => {
