@@ -139,6 +139,8 @@ export function StoryViewer({ start }: Props) {
       <View style={[styles.root, styles.errorRoot, { backgroundColor: BG }]} {...pan.panHandlers}>
         {channelsError ? (
           <Text style={styles.loadingText}>채널을 불러오지 못했어요</Text>
+        ) : channelData ? (
+          <Text style={styles.loadingText}>지금은 열 수 있는 채널이 없어요</Text>
         ) : (
           <>
             <ActivityIndicator color={colors.onImage} />
