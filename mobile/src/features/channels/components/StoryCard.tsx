@@ -9,8 +9,27 @@ interface Props {
   onDetail: () => void;
 }
 
+function SaveActions({ contentId, onDetail }: { contentId: string; onDetail: () => void }) {
+  const { saved, toggle } = useSaveOptimistic(contentId);
+  return (
+    <View style={styles.actions}>
+      <Pressable testID="story-save" style={styles.save} onPress={toggle} hitSlop={8}>
+        <Icon
+          name={saved ? "bookmark-fill" : "bookmark"}
+          size={20}
+          color={colors.onImage}
+          strokeWidth={1.8}
+        />
+        <Text style={styles.saveText}>저장</Text>
+      </Pressable>
+      <Pressable testID="story-detail" style={styles.detail} onPress={onDetail}>
+        <Text style={styles.detailText}>자세히 보기</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export function StoryCard({ card, onDetail }: Props) {
-  const { saved, toggle } = useSaveOptimistic(card.contentId ?? "");
   const hasBadges = card.rank !== null || card.dday !== null || card.tag !== null;
 
   return (
@@ -41,21 +60,8 @@ export function StoryCard({ card, onDetail }: Props) {
       {card.regionLabel ? <Text style={styles.region}>{card.regionLabel}</Text> : null}
       {card.line ? <Text style={styles.line}>{card.line}</Text> : null}
 
-      {card.saveable ? (
-        <View style={styles.actions}>
-          <Pressable testID="story-save" style={styles.save} onPress={toggle} hitSlop={8}>
-            <Icon
-              name={saved ? "bookmark-fill" : "bookmark"}
-              size={20}
-              color={colors.onImage}
-              strokeWidth={1.8}
-            />
-            <Text style={styles.saveText}>저장</Text>
-          </Pressable>
-          <Pressable testID="story-detail" style={styles.detail} onPress={onDetail}>
-            <Text style={styles.detailText}>자세히 보기</Text>
-          </Pressable>
-        </View>
+      {card.saveable && card.contentId ? (
+        <SaveActions contentId={card.contentId} onDetail={onDetail} />
       ) : null}
     </View>
   );
