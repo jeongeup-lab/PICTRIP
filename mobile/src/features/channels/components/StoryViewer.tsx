@@ -28,7 +28,7 @@ export function StoryViewer({ start }: Props) {
   const insets = useSafeAreaInsets();
   const { data: channelData } = useChannels();
   const { markSeen } = useSeenChannels();
-  const channels = channelData?.channels ?? [];
+  const channels = (channelData?.channels ?? []).filter((c) => c.available);
 
   const [manualIdx, setManualIdx] = useState<number | null>(null);
   const [cardIdx, setCardIdx] = useState(0);
