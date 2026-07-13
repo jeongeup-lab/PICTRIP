@@ -1,0 +1,234 @@
+import { useEffect, useState } from "react";
+import { View, Text, Pressable, PanResponder, StyleSheet } from "react-native";
+import Svg, { Defs, LinearGradient, Stop, Rect } from "react-native-svg";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { router } from "expo-router";
+import { RemoteImage } from "@/components/RemoteImage";
+import { Icon } from "@/components/Icon";
+import { useChannelCards, useChannels, useSeenChannels } from "@/features/channels/queries";
+import type { ChannelKey } from "@/features/channels/api";
+import {
+  getCurrentCoords,
+  getPermissionStatus,
+  requestPermission,
+  type Coords,
+} from "@/features/map/usecases/request-location";
+import { PermissionPrimer } from "@/features/map/components/PermissionPrimer";
+import { StoryCard } from "@/features/channels/components/StoryCard";
+import { colors } from "@/constants/theme";
+
+interface Props {
+  start: ChannelKey;
+}
+
+const LAST = Number.MAX_SAFE_INTEGER;
+const BG = "#141216";
+
+export function StoryViewer({ start }: Props) {
+  const insets = useSafeAreaInsets();
+  const { data: channelData } = useChannels();
+  const { markSeen } = useSeenChannels();
+  const channels = channelData?.channels ?? [];
+
+  const [channelIdx, setChannelIdx] = useState(() =>
+    Math.max(
+      0,
+      channels.findIndex((c) => c.key === start),
+    ),
+  );
+  const [cardIdx, setCardIdx] = useState(0);
+  const [coords, setCoords] = useState<Coords | null>(null);
+  const [primer, setPrimer] = useState(false);
+
+  const channel = channels[channelIdx];
+  const channelKey = channel?.key ?? start;
+  const isAround = channelKey === "around";
+  const needCoords = isAround && !coords;
+
+  const { data: cardData } = useChannelCards(channelKey, coords ?? undefined);
+  const cards = cardData?.cards ?? [];
+  const cardCount = cards.length;
+  const shownIdx = cardCount > 0 ? Math.min(cardIdx, cardCount - 1) : 0;
+  const currentCard = cards[shownIdx];
+
+  useEffect(() => {
+    if (!needCoords) return;
+    let alive = true;
+    void (async () => {
+      const status = await getPermissionStatus();
+      if (!alive) return;
+      if (status === "granted") {
+        const c = await getCurrentCoords();
+        if (alive && c) setCoords(c);
+      } else {
+        setPrimer(true);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [needCoords, channelKey]);
+
+  const close = () => router.back();
+
+  const nextChannel = () => {
+    markSeen(channelKey);
+    if (channelIdx < channels.length - 1) {
+      setChannelIdx(channelIdx + 1);
+      setCardIdx(0);
+      setCoords(null);
+    } else {
+      close();
+    }
+  };
+
+  const prevChannel = () => {
+    if (channelIdx > 0) {
+      setChannelIdx(channelIdx - 1);
+      setCardIdx(LAST);
+      setCoords(null);
+    }
+  };
+
+  const rightTap = () => {
+    if (shownIdx < cardCount - 1) setCardIdx(shownIdx + 1);
+    else nextChannel();
+  };
+
+  const leftTap = () => {
+    if (shownIdx > 0) setCardIdx(shownIdx - 1);
+    else prevChannel();
+  };
+
+  const onDetail = () => {
+    if (!currentCard?.contentId) return;
+    close();
+    router.push(`/spots/${currentCard.contentId}`);
+  };
+
+  const onAllow = () => {
+    void (async () => {
+      const status = await requestPermission();
+      if (status === "granted") {
+        const c = await getCurrentCoords();
+        if (c) {
+          setCoords(c);
+          setPrimer(false);
+        }
+      }
+    })();
+  };
+
+  const pan = PanResponder.create({
+    onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 12 || g.dy > 12,
+    onPanResponderRelease: (_e, g) => {
+      if (g.dy > 90 && g.dy > Math.abs(g.dx)) close();
+      else if (g.dx < -50) nextChannel();
+      else if (g.dx > 50) prevChannel();
+    },
+  });
+
+  if (channels.length === 0) return null;
+
+  if (needCoords) {
+    return (
+      <View style={[styles.root, { backgroundColor: BG }]} {...pan.panHandlers}>
+        {primer ? <PermissionPrimer variant="priming" onAllow={onAllow} onSkip={close} /> : null}
+        <Pressable
+          style={[styles.close, styles.closeFloat, { top: insets.top + 12 }]}
+          onPress={close}
+          hitSlop={8}
+        >
+          <Icon name="close" size={18} color={colors.onImage} />
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.root, { backgroundColor: BG }]} {...pan.panHandlers}>
+      <RemoteImage uri={currentCard?.imageUrl ?? null} style={StyleSheet.absoluteFill} />
+      <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
+        <Defs>
+          <LinearGradient id="storyScrim" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={BG} stopOpacity={0.55} />
+            <Stop offset="0.4" stopColor={BG} stopOpacity={0.15} />
+            <Stop offset="1" stopColor={BG} stopOpacity={0.85} />
+          </LinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill="url(#storyScrim)" />
+      </Svg>
+
+      <Pressable
+        testID="story-tap-left"
+        style={[StyleSheet.absoluteFill, styles.zoneLeft]}
+        onPress={leftTap}
+      />
+      <Pressable
+        testID="story-tap-right"
+        style={[StyleSheet.absoluteFill, styles.zoneRight]}
+        onPress={rightTap}
+      />
+
+      <View style={[styles.top, { paddingTop: insets.top + 12 }]} pointerEvents="box-none">
+        <View style={styles.progress}>
+          {cards.map((_, i) => (
+            <View key={i} testID="story-progress-seg" style={styles.segTrack}>
+              <View
+                style={[
+                  styles.segFill,
+                  { opacity: i < shownIdx ? 1 : i === shownIdx ? 0.55 : 0.32 },
+                ]}
+              />
+            </View>
+          ))}
+        </View>
+        <View style={styles.topRow}>
+          <Text style={styles.channelLabel}>{channel?.label ?? ""}</Text>
+          <Pressable style={styles.close} onPress={close} hitSlop={8}>
+            <Icon name="close" size={18} color={colors.onImage} />
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={[styles.bottom, { paddingBottom: insets.bottom + 24 }]} pointerEvents="box-none">
+        {currentCard ? <StoryCard card={currentCard} onDetail={onDetail} /> : null}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+  zoneLeft: { right: "66%" },
+  zoneRight: { left: "34%" },
+  top: { position: "absolute", top: 0, left: 0, right: 0, paddingHorizontal: 16 },
+  progress: { flexDirection: "row", gap: 4 },
+  segTrack: {
+    flex: 1,
+    height: 3,
+    borderRadius: 2,
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.28)",
+  },
+  segFill: { flex: 1, backgroundColor: colors.onImage },
+  topRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 14,
+  },
+  channelLabel: { fontSize: 16, fontWeight: "800", color: colors.onImage },
+  close: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.glassFill,
+    borderWidth: 1,
+    borderColor: colors.glassBorder,
+  },
+  closeFloat: { position: "absolute", right: 16 },
+  bottom: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 20 },
+});

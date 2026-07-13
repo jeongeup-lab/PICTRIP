@@ -15,6 +15,10 @@ export default function RootLayout() {
           <Stack.Screen name="curations/[slug]" />
           <Stack.Screen name="spots/[contentId]" />
           <Stack.Screen name="photo" options={{ presentation: "modal" }} />
+          <Stack.Screen
+            name="channels"
+            options={{ presentation: "fullScreenModal", headerShown: false }}
+          />
           <Stack.Screen name="auth/login" options={{ presentation: "fullScreenModal" }} />
           <Stack.Screen name="auth/email" options={{ presentation: "fullScreenModal" }} />
           <Stack.Screen name="saved" />
