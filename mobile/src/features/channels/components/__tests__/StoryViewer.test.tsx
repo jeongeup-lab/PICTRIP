@@ -123,6 +123,19 @@ describe("StoryViewer", () => {
     expect(router.back).toHaveBeenCalled();
   });
 
+  it("skips unavailable channels: past the last available channel closes without entering a locked one", async () => {
+    setChannels([meta("hot", "Hot"), { ...meta("hidden", "Hidden"), available: false }]);
+    cardsByKey.hot = [card({ title: "A" }), card({ title: "B" })];
+    cardsByKey.hidden = [card({ title: "H1" })];
+    const r = await mount("hot");
+    await tap(r, "right");
+    await tap(r, "right");
+    expect(mockMarkSeen).toHaveBeenCalledWith("hot");
+    expect(mockMarkSeen).not.toHaveBeenCalledWith("hidden");
+    expect(router.back).toHaveBeenCalled();
+    expect(JSON.stringify(r.toJSON())).not.toContain("Hidden");
+  });
+
   it("advancing past the last card moves to the next channel and marks the current seen", async () => {
     setChannels([meta("hot", "Hot"), meta("hidden", "Hidden")]);
     cardsByKey.hot = [card({ title: "A" }), card({ title: "B" })];

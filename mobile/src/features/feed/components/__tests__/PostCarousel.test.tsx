@@ -112,6 +112,22 @@ describe("PostCarousel", () => {
     expect(router.push).toHaveBeenCalledWith("/spots/555");
   });
 
+  it("match card press runs onNavigate before pushing the spot detail route", async () => {
+    setMatches([match({ contentId: "555" })]);
+    const order: string[] = [];
+    const onNavigate = jest.fn(() => order.push("navigate"));
+    (router.push as jest.Mock).mockImplementation(() => order.push("push"));
+    await act(async () => {
+      tree = renderer.create(<PostCarousel post={post} onNavigate={onNavigate} />);
+    });
+    await act(async () => {
+      tree!.root.findAllByProps({ testID: "match-card" })[0].props.onPress();
+    });
+    expect(onNavigate).toHaveBeenCalled();
+    expect(router.push).toHaveBeenCalledWith("/spots/555");
+    expect(order).toEqual(["navigate", "push"]);
+  });
+
   it("zero matches renders searching card", async () => {
     setMatches([]);
     const r = await mount();
