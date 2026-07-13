@@ -97,6 +97,7 @@ ignore = [
     "E501",  # line length handled by formatter
     "B008",  # FastAPI uses Depends() in defaults
     "UP046", # PEP 695 generics — Pydantic v2 convention is still Generic[T]
+    "UP047", # PEP 695 generic functions — codebase convention is TypeVar
 ]
 
 [tool.ruff.lint.per-file-ignores]

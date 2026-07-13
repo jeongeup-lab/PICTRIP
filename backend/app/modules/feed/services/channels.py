@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Coroutine
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar
 
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +24,7 @@ CHANNEL_LABELS = {
 }
 _CARD_COUNT = 10
 _AROUND_RADIUS_M = 5000
+_T = TypeVar("_T")
 
 
 @dataclass(frozen=True)
@@ -115,7 +116,7 @@ async def _load_kto_channel(redis: Redis, kto: KtoClient, key: str) -> list[Chan
     return await load_kto_channel_cached(redis, kto, key)
 
 
-async def _safe[T](coro: Coroutine[Any, Any, T]) -> T | None:
+async def _safe(coro: Coroutine[Any, Any, _T]) -> _T | None:
     try:
         return await coro
     except Exception:
