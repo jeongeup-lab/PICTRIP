@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   View,
   FlatList,
@@ -21,10 +22,12 @@ const SCRIM_HEIGHT = 92;
 
 export function ExploreGrid() {
   const { width } = useWindowDimensions();
+  const queryClient = useQueryClient();
   const [seed, setSeed] = useState<string | null>(null);
   const [selected, setSelected] = useState<OverseasPost | null>(null);
 
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } = useExploreFeed(seed);
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isRefetching, refetch } =
+    useExploreFeed(seed);
 
   const firstSeed = data?.pages[0]?.seed;
   if (seed === null && firstSeed) setSeed(firstSeed);
@@ -37,10 +40,11 @@ export function ExploreGrid() {
   const unit = (width - GAP * 2) / 3;
   const bigSize = unit * 2 + GAP;
 
-  const onRefresh = () => {
+  const onRefresh = useCallback(() => {
+    queryClient.removeQueries({ queryKey: ["explore"] });
     setSeed(null);
     void refetch();
-  };
+  }, [queryClient, refetch]);
 
   const onEndReached = () => {
     if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
@@ -85,7 +89,11 @@ export function ExploreGrid() {
         onEndReached={onEndReached}
         onEndReachedThreshold={0.6}
         refreshControl={
-          <RefreshControl refreshing={false} onRefresh={onRefresh} tintColor={colors.onImage} />
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={onRefresh}
+            tintColor={colors.onImage}
+          />
         }
       />
 
