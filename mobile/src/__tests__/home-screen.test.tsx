@@ -67,7 +67,7 @@ function setFeed(over: Record<string, unknown> = {}) {
     fetchNextPage,
     hasNextPage: true,
     isFetchingNextPage: false,
-    isRefetching: false,
+    isFetching: false,
     isLoading: false,
     isError: false,
     refetch,
@@ -186,7 +186,7 @@ describe("HomeScreen", () => {
   });
 
   it("shows the refresh spinner while a refetch is in flight", async () => {
-    setFeed({ isRefetching: true });
+    setFeed({ isFetching: true });
     const r = await mount();
     const list = r.root.findAllByType(FlatList)[0];
     expect(list.props.refreshControl.props.refreshing).toBe(true);
