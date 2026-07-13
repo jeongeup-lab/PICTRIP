@@ -1,6 +1,7 @@
 from urllib.parse import unquote
 
 from pictrip_data.overseas.commons import CommonsClient
+from pictrip_data.overseas.wikipedia import WikipediaClient
 
 _FILE_PREFIX = "https://commons.wikimedia.org/wiki/File:"
 _SELECT = (
@@ -8,6 +9,13 @@ _SELECT = (
     "WHERE image_url LIKE 'https://commons.wikimedia.org/wiki/Special:FilePath/%'"
 )
 _UPDATE = "UPDATE overseas_spots SET image_url = %(url)s, updated_at = now() WHERE id = %(id)s"
+
+_SELECT_NODESC = (
+    "SELECT id, wikidata_id FROM overseas_spots WHERE description_ko IS NULL OR description_ko = ''"
+)
+_UPDATE_DESC = (
+    "UPDATE overseas_spots SET description_ko = %(desc)s, updated_at = now() WHERE id = %(id)s"
+)
 
 
 def _filename(source_url: str | None) -> str | None:
@@ -49,6 +57,44 @@ def _run(commons, conn, dry_run: bool) -> dict[str, int]:
                 continue
             for oid in ids:
                 cur.execute(_UPDATE, {"url": thumb, "id": oid})
+                counters["updated"] += 1
+    if dry_run:
+        conn.rollback()
+    else:
+        conn.commit()
+    return counters
+
+
+def backfill_overseas_descriptions(
+    *, wikipedia=None, conn=None, dry_run: bool = False
+) -> dict[str, int]:
+    wikipedia = wikipedia or WikipediaClient()
+    if conn is not None:
+        return _run_descriptions(wikipedia, conn, dry_run)
+    from pictrip_data.db import connect
+
+    with connect() as owned:
+        return _run_descriptions(wikipedia, owned, dry_run)
+
+
+def _run_descriptions(wikipedia, conn, dry_run: bool) -> dict[str, int]:
+    counters = {"scanned": 0, "updated": 0, "skipped": 0}
+    with conn.cursor() as cur:
+        cur.execute(_SELECT_NODESC)
+        rows = cur.fetchall()
+    ids_by_qid: dict[str, list[int]] = {}
+    for oid, qid in rows:
+        counters["scanned"] += 1
+        ids_by_qid.setdefault(qid, []).append(oid)
+    descriptions = wikipedia.fetch_descriptions(list(ids_by_qid))
+    with conn.cursor() as cur:
+        for qid, ids in ids_by_qid.items():
+            desc = descriptions.get(qid)
+            if not desc:
+                counters["skipped"] += len(ids)
+                continue
+            for oid in ids:
+                cur.execute(_UPDATE_DESC, {"desc": desc, "id": oid})
                 counters["updated"] += 1
     if dry_run:
         conn.rollback()
