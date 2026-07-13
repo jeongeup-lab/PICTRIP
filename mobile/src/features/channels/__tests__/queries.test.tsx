@@ -1,5 +1,5 @@
 import renderer, { act } from "react-test-renderer";
-import { channelCardsKey, useSeenChannels } from "@/features/channels/queries";
+import { channelCardsKey, useSeenChannels, useSeenStore } from "@/features/channels/queries";
 import { loadSeen, saveSeen } from "@/features/channels/lib/seen-store";
 
 const mockKst = { day: "2026-07-13" };
@@ -36,6 +36,27 @@ describe("channelCardsKey", () => {
 });
 
 describe("useSeenChannels day reset", () => {
+  let trees: renderer.ReactTestRenderer[] = [];
+  const mountHarness = (Harness: () => null) => {
+    const tree = renderer.create(<Harness />);
+    trees.push(tree);
+    return tree;
+  };
+
+  beforeEach(() => {
+    trees = [];
+    useSeenStore.setState({ seen: new Set(), day: null, hydrated: false });
+    mockLoadSeen.mockReset();
+    mockLoadSeen.mockResolvedValue([]);
+    mockSaveSeen.mockClear();
+  });
+
+  afterEach(async () => {
+    await act(async () => {
+      trees.forEach((t) => t.unmount());
+    });
+  });
+
   it("drops yesterday's keys and stamps the new day when KST midnight rolls over", async () => {
     let hook: ReturnType<typeof useSeenChannels> | undefined;
     function Harness() {
@@ -46,7 +67,7 @@ describe("useSeenChannels day reset", () => {
     mockKst.day = "2026-07-13";
     mockSaveSeen.mockClear();
     await act(async () => {
-      renderer.create(<Harness />);
+      mountHarness(Harness);
     });
 
     await act(async () => {
@@ -80,7 +101,7 @@ describe("useSeenChannels day reset", () => {
       return null;
     }
     await act(async () => {
-      renderer.create(<Harness />);
+      mountHarness(Harness);
     });
 
     await act(async () => {
@@ -95,5 +116,43 @@ describe("useSeenChannels day reset", () => {
 
     expect(hook!.seen.has("hot")).toBe(true);
     expect(hook!.seen.has("hidden")).toBe(true);
+  });
+
+  it("defers a pre-hydrate markSeen persist and keeps the stored keys once hydrate resolves", async () => {
+    let resolveLoad: ((keys: string[]) => void) | undefined;
+    mockLoadSeen.mockImplementationOnce(
+      () =>
+        new Promise<string[]>((resolve) => {
+          resolveLoad = resolve;
+        }),
+    );
+
+    mockKst.day = "2026-07-16";
+    let hook: ReturnType<typeof useSeenChannels> | undefined;
+    function Harness() {
+      hook = useSeenChannels();
+      return null;
+    }
+    await act(async () => {
+      mountHarness(Harness);
+    });
+
+    await act(async () => {
+      hook!.markSeen("hot");
+    });
+    expect(hook!.seen.has("hot")).toBe(true);
+    expect(mockSaveSeen).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveLoad!(["hidden"]);
+      await Promise.resolve();
+    });
+
+    expect(hook!.seen.has("hot")).toBe(true);
+    expect(hook!.seen.has("hidden")).toBe(true);
+    expect(mockSaveSeen).toHaveBeenCalledTimes(1);
+    const persisted = new Set(mockSaveSeen.mock.calls[0][0] as string[]);
+    expect(persisted.has("hot")).toBe(true);
+    expect(persisted.has("hidden")).toBe(true);
   });
 });

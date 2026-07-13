@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, Text, Pressable, PanResponder, StyleSheet } from "react-native";
+import { View, Text, Pressable, PanResponder, StyleSheet, ActivityIndicator } from "react-native";
 import Svg, { Defs, LinearGradient, Stop, Rect } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -134,7 +134,22 @@ export function StoryViewer({ start }: Props) {
     },
   });
 
-  if (channels.length === 0) return null;
+  if (channels.length === 0) {
+    return (
+      <View style={[styles.root, styles.errorRoot, { backgroundColor: BG }]} {...pan.panHandlers}>
+        <ActivityIndicator color={colors.onImage} />
+        <Text style={styles.loadingText}>채널을 불러오는 중이에요</Text>
+        <Pressable
+          testID="story-empty-close"
+          style={[styles.close, styles.closeFloat, { top: insets.top + 12 }]}
+          onPress={close}
+          hitSlop={8}
+        >
+          <Icon name="close" size={18} color={colors.onImage} />
+        </Pressable>
+      </View>
+    );
+  }
 
   if (needCoords) {
     return (
@@ -229,6 +244,7 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   errorRoot: { alignItems: "center", justifyContent: "center", paddingHorizontal: 24 },
   errorText: { fontSize: 15, fontWeight: "600", color: colors.onImage, textAlign: "center" },
+  loadingText: { fontSize: 14, fontWeight: "500", color: colors.onImage, textAlign: "center" },
   zoneLeft: { right: "66%" },
   zoneRight: { left: "34%" },
   top: { position: "absolute", top: 0, left: 0, right: 0, paddingHorizontal: 16 },
