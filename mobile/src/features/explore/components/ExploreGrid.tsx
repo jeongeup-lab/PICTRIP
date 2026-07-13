@@ -25,7 +25,7 @@ export function ExploreGrid() {
   const [seed, setSeed] = useState(() => makeSeed());
   const [selected, setSelected] = useState<OverseasPost | null>(null);
 
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isRefetching } =
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isFetching, isLoading } =
     useExploreFeed(seed);
 
   const { blocks, leftover } = useMemo(() => {
@@ -89,7 +89,7 @@ export function ExploreGrid() {
         }
         refreshControl={
           <RefreshControl
-            refreshing={isRefetching}
+            refreshing={isFetching && !isLoading && !isFetchingNextPage}
             onRefresh={onRefresh}
             tintColor={colors.onImage}
           />

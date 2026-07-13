@@ -40,6 +40,7 @@ function setFeed(over: Record<string, unknown> = {}) {
     fetchNextPage,
     hasNextPage: true,
     isFetchingNextPage: false,
+    isFetching: false,
     isRefetching: false,
     isLoading: false,
     isError: false,
@@ -130,11 +131,18 @@ describe("ExploreGrid", () => {
     expect(hosts(r, "explore-tile").length).toBe(9);
   });
 
-  it("shows the refresh spinner while a refetch is in flight", async () => {
-    setFeed({ isRefetching: true });
+  it("shows the refresh spinner while a seed refetch keeps previous items", async () => {
+    setFeed({ isFetching: true, isLoading: false, isFetchingNextPage: false });
     const r = await mount();
     const list = r.root.findAllByType(FlatList)[0];
     expect(list.props.refreshControl.props.refreshing).toBe(true);
+  });
+
+  it("hides the refresh spinner during the initial load", async () => {
+    setFeed({ isFetching: true, isLoading: true, isFetchingNextPage: false });
+    const r = await mount();
+    const list = r.root.findAllByType(FlatList)[0];
+    expect(list.props.refreshControl.props.refreshing).toBe(false);
   });
 
   it("fetches the next page when the list end is reached", async () => {
