@@ -11,6 +11,8 @@ from app.core.schemas import ok
 from app.modules.feed.schemas import (
     ChannelCard,
     ChannelCardsResponse,
+    ChannelMeta,
+    ChannelsResponse,
     MatchCard,
     MatchesResponse,
     PostsResponse,
@@ -62,6 +64,28 @@ async def overseas_matches(
                 )
                 for r in rows
             ],
+        )
+    )
+
+
+@router.get("/home/channels")
+async def home_channels(
+    session: DbSession,
+    redis: RedisDep,
+    kto: KtoDep,
+) -> dict[str, Any]:
+    metas = await channels.load_channel_metas(session, redis, kto)
+    return ok(
+        ChannelsResponse(
+            channels=[
+                ChannelMeta(
+                    key=m.key,
+                    label=m.label,
+                    thumbnailUrl=m.thumbnail_url,
+                    available=m.available,
+                )
+                for m in metas
+            ]
         )
     )
 
