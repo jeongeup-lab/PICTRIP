@@ -64,7 +64,7 @@ export function RemoteImage({
   const [failedUri, setFailedUri] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [prevUri, setPrevUri] = useState(uri);
-  const retryRef = useRef({ uri: "", count: 0 });
+  const retryRef = useRef<{ uri: string | null; count: number }>({ uri: null, count: 0 });
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [opacity] = useState(() => new Animated.Value(0));
   // Reset per-uri retry state when the component is reused for a different image
