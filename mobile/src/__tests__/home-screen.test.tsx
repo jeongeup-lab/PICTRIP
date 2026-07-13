@@ -162,7 +162,7 @@ describe("HomeScreen", () => {
   });
 
   it("does not fetch the next page while one is already loading", async () => {
-    setFeed({ isFetchingNextPage: true });
+    setFeed({ isFetchingNextPage: true, isFetching: true });
     const r = await mount();
     const list = r.root.findAllByType(FlatList)[0];
     await act(async () => {
