@@ -74,7 +74,7 @@ export default function HomeScreen() {
   const onRefresh = useCallback(() => setSeed(makeSeed()), []);
 
   const onEndReached = () => {
-    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+    if (hasNextPage && !isFetching) void fetchNextPage();
   };
 
   return (
