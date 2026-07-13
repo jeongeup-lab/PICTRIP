@@ -11,8 +11,7 @@ import { colors } from "@/constants/theme";
 export type Slide =
   | { kind: "hero"; post: OverseasPost }
   | { kind: "match"; match: MatchCard; number: number }
-  | { kind: "skeleton" }
-  | { kind: "empty" };
+  | { kind: "skeleton" };
 
 interface Props {
   slide: Slide;
@@ -36,8 +35,6 @@ export function PostSlide({ slide, width, counter, onInfo, onNavigate }: Props) 
           onNavigate={onNavigate}
         />
       );
-    case "empty":
-      return <EmptySlide width={width} counter={counter} />;
     case "skeleton":
     default:
       return <SkeletonSlide width={width} counter={counter} />;
@@ -45,6 +42,7 @@ export function PostSlide({ slide, width, counter, onInfo, onNavigate }: Props) 
 }
 
 function CounterPill({ counter }: { counter: string }) {
+  if (!counter) return null;
   return (
     <View style={styles.counter} pointerEvents="none">
       <Text testID="post-counter" style={styles.counterText}>
@@ -185,15 +183,6 @@ function SkeletonSlide({ width, counter }: { width: number; counter: string }) {
   );
 }
 
-function EmptySlide({ width, counter }: { width: number; counter: string }) {
-  return (
-    <View style={[styles.slide, styles.empty, { width }]}>
-      <CounterPill counter={counter} />
-      <Text style={styles.emptyText}>비슷한 국내 여행지를 찾는 중이에요</Text>
-    </View>
-  );
-}
-
 const GLASS = {
   backgroundColor: colors.glassFill,
   borderWidth: 1,
@@ -258,12 +247,4 @@ const styles = StyleSheet.create({
   matchChipText: { fontSize: 12.5, fontWeight: "600", color: colors.onImage },
   matchOverview: { fontSize: 14, lineHeight: 20, color: colors.onDim, marginTop: 10 },
   skeleton: { backgroundColor: colors.skeleton },
-  empty: { backgroundColor: colors.inset, alignItems: "center", justifyContent: "center" },
-  emptyText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: colors.sec,
-    textAlign: "center",
-    paddingHorizontal: 32,
-  },
 });

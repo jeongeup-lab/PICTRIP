@@ -1,4 +1,5 @@
 import renderer, { act } from "react-test-renderer";
+import { FlatList } from "react-native";
 import { router } from "expo-router";
 import { PostCarousel } from "@/features/feed/components/PostCarousel";
 import { useMatches } from "@/features/feed/posts-queries";
@@ -128,11 +129,13 @@ describe("PostCarousel", () => {
     expect(order).toEqual(["navigate", "push"]);
   });
 
-  it("zero matches renders searching card", async () => {
+  it("zero matches renders only the hero with swipe, dots and counter removed", async () => {
     setMatches([]);
     const r = await mount();
-    expect(text(r)).toContain("비슷한 국내 여행지를 찾는 중이에요");
-    expect(text(r)).toContain("2/2");
+    expect(text(r)).toContain("도쿄 타워");
+    expect(text(r)).not.toContain("1/1");
+    expect(r.root.findAllByProps({ testID: "post-counter" })).toHaveLength(0);
+    expect(r.root.findByType(FlatList).props.scrollEnabled).toBe(false);
   });
 
   it("info button opens credit sheet with three rows", async () => {
