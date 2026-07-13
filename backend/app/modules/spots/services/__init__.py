@@ -10,6 +10,11 @@ from app.modules.spots.services.cards import (
     load_region_meta,
     load_spot_cards_by_ids,
 )
+from app.modules.spots.services.concentration import (
+    ConcentrationCardRow,
+    load_hidden_spots,
+    load_hot_spots,
+)
 from app.modules.spots.services.detail import load_spot_detail
 from app.modules.spots.services.nearby import (
     NearbyCategory,
@@ -27,6 +32,7 @@ from app.modules.spots.services.rows import (
 from app.modules.spots.services.saved import list_saved_spots, save_spot, unsave_spot
 
 __all__ = [
+    "ConcentrationCardRow",
     "NearbyCategory",
     "NearbySpotRow",
     "SpotCardRow",
@@ -41,6 +47,8 @@ __all__ = [
     "image_bearing_spots_stmt",
     "list_saved_spots",
     "load_active_spot_cards_by_ids",
+    "load_hidden_spots",
+    "load_hot_spots",
     "load_overview_map",
     "load_region_meta",
     "load_spot_cards_by_ids",
