@@ -30,16 +30,16 @@ export function StoryViewer({ start }: Props) {
   const { markSeen } = useSeenChannels();
   const channels = channelData?.channels ?? [];
 
-  const [channelIdx, setChannelIdx] = useState(() =>
-    Math.max(
-      0,
-      channels.findIndex((c) => c.key === start),
-    ),
-  );
+  const [manualIdx, setManualIdx] = useState<number | null>(null);
   const [cardIdx, setCardIdx] = useState(0);
   const [coords, setCoords] = useState<Coords | null>(null);
   const [primer, setPrimer] = useState(false);
 
+  const startIdx = Math.max(
+    0,
+    channels.findIndex((c) => c.key === start),
+  );
+  const channelIdx = manualIdx ?? startIdx;
   const channel = channels[channelIdx];
   const channelKey = channel?.key ?? start;
   const isAround = channelKey === "around";
@@ -74,7 +74,7 @@ export function StoryViewer({ start }: Props) {
   const nextChannel = () => {
     markSeen(channelKey);
     if (channelIdx < channels.length - 1) {
-      setChannelIdx(channelIdx + 1);
+      setManualIdx(channelIdx + 1);
       setCardIdx(0);
       setCoords(null);
     } else {
@@ -84,7 +84,7 @@ export function StoryViewer({ start }: Props) {
 
   const prevChannel = () => {
     if (channelIdx > 0) {
-      setChannelIdx(channelIdx - 1);
+      setManualIdx(channelIdx - 1);
       setCardIdx(LAST);
       setCoords(null);
     }
@@ -192,7 +192,13 @@ export function StoryViewer({ start }: Props) {
       </View>
 
       <View style={[styles.bottom, { paddingBottom: insets.bottom + 24 }]} pointerEvents="box-none">
-        {currentCard ? <StoryCard card={currentCard} onDetail={onDetail} /> : null}
+        {currentCard ? (
+          <StoryCard
+            key={currentCard.contentId ?? String(shownIdx)}
+            card={currentCard}
+            onDetail={onDetail}
+          />
+        ) : null}
       </View>
     </View>
   );
