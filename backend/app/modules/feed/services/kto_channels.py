@@ -1,7 +1,8 @@
-"""festa·pets·snap 채널 — 라이브 KTO fetch + KST 자정까지 Redis 캐시."""
+"""festa·pets·snap 채널 — 라이브 KTO fetch + KST 일자 기준 stale-while-revalidate 캐시."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 import random
 from collections.abc import Awaitable, Callable
@@ -25,15 +26,15 @@ _FESTA_MAX_PAGES = 5
 _FESTA_PAGE_ROWS = 100
 _PETS_TAG = "반려동물 동반 가능"
 
+_CACHE_VERSION = "v2"
+_STALE_TTL = 3 * 24 * 3600
+
+_refreshing: set[str] = set()
+_bg_tasks: set[asyncio.Task[Any]] = set()
+
 
 def _today() -> date:
     return datetime.now(KST).date()
-
-
-def _ttl_until_kst_midnight() -> int:
-    now = datetime.now(KST)
-    midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-    return max(int((midnight - now).total_seconds()), 60)
 
 
 def _parse_ymd(raw: Any) -> date | None:
@@ -146,20 +147,58 @@ _FETCHERS: dict[str, Callable[[KtoClient], Awaitable[list[ChannelCardRow]]]] = {
 }
 
 
-async def load_kto_channel_cached(redis: Redis, kto: KtoClient, key: str) -> list[ChannelCardRow]:
-    cache_key = f"channel:{key}:v1"
-    try:
-        raw = await redis.get(cache_key)
-        if raw:
-            return [ChannelCardRow(**d) for d in json.loads(raw)]
-    except Exception as exc:
-        logger.warning("feed.channel.cache_get_failed", key=key, error=str(exc))
+def _cache_key(key: str) -> str:
+    return f"channel:{key}:{_CACHE_VERSION}"
 
+
+def _encode(cards: list[ChannelCardRow]) -> str:
+    return json.dumps(
+        {"date": _today().isoformat(), "cards": [asdict(c) for c in cards]},
+        ensure_ascii=False,
+    )
+
+
+async def _fetch_and_store(redis: Redis, kto: KtoClient, key: str) -> list[ChannelCardRow]:
     cards = await _FETCHERS[key](kto)
-
     try:
-        payload = json.dumps([asdict(c) for c in cards], ensure_ascii=False)
-        await redis.set(cache_key, payload, ex=_ttl_until_kst_midnight())
+        await redis.set(_cache_key(key), _encode(cards), ex=_STALE_TTL)
     except Exception as exc:
         logger.warning("feed.channel.cache_set_failed", key=key, error=str(exc))
     return cards
+
+
+def _spawn_refresh(redis: Redis, kto: KtoClient, key: str) -> None:
+    if key in _refreshing:
+        return
+    _refreshing.add(key)
+
+    async def _run() -> None:
+        try:
+            await _fetch_and_store(redis, kto, key)
+        except Exception as exc:
+            logger.warning("feed.channel.refresh_failed", key=key, error=str(exc))
+        finally:
+            _refreshing.discard(key)
+
+    task = asyncio.create_task(_run())
+    _bg_tasks.add(task)
+    task.add_done_callback(_bg_tasks.discard)
+
+
+async def load_kto_channel_cached(redis: Redis, kto: KtoClient, key: str) -> list[ChannelCardRow]:
+    try:
+        raw = await redis.get(_cache_key(key))
+    except Exception as exc:
+        logger.warning("feed.channel.cache_get_failed", key=key, error=str(exc))
+        raw = None
+    if raw:
+        try:
+            doc = json.loads(raw)
+            cards = [ChannelCardRow(**d) for d in doc["cards"]]
+        except (ValueError, TypeError, KeyError) as exc:
+            logger.warning("feed.channel.cache_corrupt", key=key, error=str(exc))
+        else:
+            if doc.get("date") != _today().isoformat():
+                _spawn_refresh(redis, kto, key)
+            return cards
+    return await _fetch_and_store(redis, kto, key)

@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
-from datetime import date
+import json
+from dataclasses import asdict
+from datetime import date, timedelta
 from unittest.mock import AsyncMock
 
 import pytest
 
 from app.core.kto_client import KtoClient, KtoService
+from app.modules.feed.services.channels import ChannelCardRow
 from app.modules.feed.services.kto_channels import (
+    _bg_tasks,
+    _cache_key,
+    _today,
     fetch_festa_cards,
     fetch_pets_cards,
     fetch_snap_cards,
@@ -246,6 +252,29 @@ async def test_channel_cache_roundtrip(redis_client_fake, kto_mock_snap: KtoClie
     first = await load_kto_channel_cached(redis_client_fake, kto_mock_snap, "snap")
     second = await load_kto_channel_cached(redis_client_fake, kto_mock_snap, "snap")
     assert first == second
+    assert kto_mock_snap.call.await_count == 1
+
+
+async def test_channel_serves_stale_then_refreshes_in_background(
+    redis_client_fake, kto_mock_snap: KtoClient
+) -> None:
+    stale_card = ChannelCardRow(
+        content_id=None, title="어제 카드", region_label="", image_url="x", saveable=False
+    )
+    stale = json.dumps(
+        {"date": (_today() - timedelta(days=1)).isoformat(), "cards": [asdict(stale_card)]}
+    )
+    await redis_client_fake.set(_cache_key("snap"), stale)
+
+    served = await load_kto_channel_cached(redis_client_fake, kto_mock_snap, "snap")
+    assert served[0].title == "어제 카드"
+
+    for task in list(_bg_tasks):
+        await task
+    assert kto_mock_snap.call.await_count == 1
+
+    fresh = await load_kto_channel_cached(redis_client_fake, kto_mock_snap, "snap")
+    assert fresh[0].title == "노을 진 통영 앞바다"
     assert kto_mock_snap.call.await_count == 1
 
 

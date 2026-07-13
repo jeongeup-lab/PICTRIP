@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 from unittest.mock import AsyncMock
@@ -166,6 +167,36 @@ async def test_channels_meta_hides_festa_when_empty(
     keys = [c["key"] for c in chans]
     assert "festa" not in keys
     assert keys == ["around", "hot", "hidden", "pets", "snap"]
+
+
+@pytest_asyncio.fixture
+async def kto_slow_pets(db_session: AsyncSession) -> AsyncIterator[None]:
+    async def _call(service: object, method: str, **_: Any) -> list[dict[str, Any]]:
+        if method == "searchFestival2":
+            return [_FESTA_ITEM]
+        if method == "areaBasedList2":
+            await asyncio.sleep(0.3)
+            return [_PETS_ITEM]
+        if method == "galleryList1":
+            return [_SNAP_ITEM]
+        return []
+
+    kto = AsyncMock()
+    kto.call = AsyncMock(side_effect=_call)
+    _install(db_session, kto)
+    yield
+    app.dependency_overrides.clear()
+
+
+async def test_channels_meta_times_out_slow_channel(
+    client, seeded_concentration, kto_slow_pets, monkeypatch
+) -> None:
+    monkeypatch.setattr("app.modules.feed.services.channels._META_TIMEOUT", 0.05)
+    chans = (await client.get("/v1/home/channels")).json()["data"]["channels"]
+    by_key = {c["key"]: c for c in chans}
+    assert by_key["pets"]["available"] is False
+    assert by_key["snap"]["thumbnailUrl"] is not None
+    assert by_key["festa"]["available"] is True
 
 
 async def test_channels_meta_degrades_on_kto_error(
