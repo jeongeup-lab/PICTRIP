@@ -1,0 +1,126 @@
+import { ScrollView, Pressable, View, Text, StyleSheet } from "react-native";
+import Svg, { Defs, LinearGradient, Stop, Rect } from "react-native-svg";
+import { RemoteImage } from "@/components/RemoteImage";
+import { Icon } from "@/components/Icon";
+import { useChannels, useSeenChannels } from "@/features/channels/queries";
+import type { ChannelKey, ChannelMeta } from "@/features/channels/api";
+import { colors } from "@/constants/theme";
+
+interface Props {
+  onOpen: (key: ChannelKey) => void;
+}
+
+export function ChannelTiles({ onOpen }: Props) {
+  const { data } = useChannels();
+  const { seen } = useSeenChannels();
+  const channels = data?.channels ?? [];
+  if (channels.length === 0) return null;
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.row}
+    >
+      {channels.map((meta) => (
+        <ChannelTile key={meta.key} meta={meta} seen={seen.has(meta.key)} onOpen={onOpen} />
+      ))}
+    </ScrollView>
+  );
+}
+
+function ChannelTile({
+  meta,
+  seen,
+  onOpen,
+}: {
+  meta: ChannelMeta;
+  seen: boolean;
+  onOpen: (key: ChannelKey) => void;
+}) {
+  const dimmed = seen || !meta.available;
+  const showBadge = !seen && meta.available;
+  const isAround = meta.key === "around";
+  return (
+    <Pressable
+      testID="channel-tile"
+      onPress={() => onOpen(meta.key)}
+      style={[styles.tile, dimmed && styles.dimmed]}
+    >
+      {isAround ? (
+        <>
+          <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
+            <Defs>
+              <LinearGradient id="channelAround" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor="#E7F8EF" stopOpacity={1} />
+                <Stop offset="1" stopColor="#D3F2E2" stopOpacity={1} />
+              </LinearGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height="100%" fill="url(#channelAround)" />
+          </Svg>
+          <View style={styles.center}>
+            <Icon name="map-pin" size={26} color={colors.accentText} />
+          </View>
+          <Text style={[styles.label, styles.aroundLabel]}>{meta.label}</Text>
+        </>
+      ) : (
+        <>
+          <RemoteImage uri={meta.thumbnailUrl} style={StyleSheet.absoluteFill} radius={14} />
+          <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
+            <Defs>
+              <LinearGradient id="channelScrim" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor="#100E12" stopOpacity={0} />
+                <Stop offset="1" stopColor="#100E12" stopOpacity={0.68} />
+              </LinearGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height="100%" fill="url(#channelScrim)" />
+          </Svg>
+          <Text style={styles.label}>{meta.label}</Text>
+        </>
+      )}
+      {showBadge ? <View testID="channel-new-dot" style={styles.badge} /> : null}
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  row: { paddingHorizontal: 16, gap: 10 },
+  tile: {
+    width: 86,
+    height: 110,
+    borderRadius: 14,
+    overflow: "hidden",
+    backgroundColor: colors.inset,
+  },
+  dimmed: { opacity: 0.55 },
+  center: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  label: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 8,
+    textAlign: "center",
+    fontSize: 11.5,
+    fontWeight: "800",
+    color: colors.onImage,
+  },
+  aroundLabel: { color: colors.accentText },
+  badge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+    borderWidth: 1.5,
+    borderColor: colors.onImage,
+  },
+});
