@@ -2,13 +2,13 @@ import { useCallback, useState } from "react";
 import { FlatList, View, Text, Pressable, RefreshControl, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useQueryClient } from "@tanstack/react-query";
 import { ChannelTiles } from "@/features/channels/components/ChannelTiles";
 import { PostCarousel } from "@/features/feed/components/PostCarousel";
 import { usePostsFeed } from "@/features/feed/posts-queries";
 import type { OverseasPost } from "@/features/feed/posts-api";
 import { Skeleton } from "@/components/Skeleton";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { makeSeed } from "@/lib/seed";
 import { colors, spacing } from "@/constants/theme";
 
 function Header() {
@@ -56,8 +56,7 @@ function Footer() {
 }
 
 export default function HomeScreen() {
-  const queryClient = useQueryClient();
-  const [seed, setSeed] = useState<string | null>(null);
+  const [seed, setSeed] = useState(() => makeSeed());
 
   const {
     data,
@@ -68,18 +67,11 @@ export default function HomeScreen() {
     hasNextPage,
     fetchNextPage,
     refetch,
-  } = usePostsFeed(seed ?? undefined);
-
-  const firstSeed = data?.pages[0]?.seed;
-  if (seed === null && firstSeed) setSeed(firstSeed);
+  } = usePostsFeed(seed);
 
   const posts: OverseasPost[] = data?.pages.flatMap((p) => p.items) ?? [];
 
-  const onRefresh = useCallback(() => {
-    queryClient.removeQueries({ queryKey: ["posts"] });
-    setSeed(null);
-    void refetch();
-  }, [queryClient, refetch]);
+  const onRefresh = useCallback(() => setSeed(makeSeed()), []);
 
   const onEndReached = () => {
     if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
