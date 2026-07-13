@@ -75,12 +75,14 @@ export function RemoteImage({
     if (failedUri !== null) setFailedUri(null);
     if (attempt !== 0) setAttempt(0);
   }
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // Re-key the retry counter to the new uri (incl. A→B→A round-trips, where
+    // onError's own uri-mismatch reset never fires) and drop any stale timer.
+    retryRef.current = { uri: null, count: 0 };
+    return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
-    },
-    [uri],
-  );
+    };
+  }, [uri]);
   const source =
     uri && withUA ? { uri, headers: { "User-Agent": COMMONS_UA } } : uri ? { uri } : { uri: "" };
   const failed = !!uri && failedUri === uri;
