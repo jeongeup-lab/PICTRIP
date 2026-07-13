@@ -146,9 +146,9 @@ async def load_channel_metas(
 ) -> list[ChannelMetaRow]:
     from app.modules.feed.services.kto_channels import load_kto_channel_cached
 
-    hot, hidden, festa, pets, snap = await asyncio.gather(
-        spots_services.load_hot_spots(session, limit=1),
-        spots_services.load_hidden_spots(session, limit=1),
+    hot = await spots_services.load_hot_spots(session, limit=1)
+    hidden = await spots_services.load_hidden_spots(session, limit=1)
+    festa, pets, snap = await asyncio.gather(
         _safe(load_kto_channel_cached(redis, kto, "festa")),
         _safe(load_kto_channel_cached(redis, kto, "pets")),
         _safe(load_kto_channel_cached(redis, kto, "snap")),

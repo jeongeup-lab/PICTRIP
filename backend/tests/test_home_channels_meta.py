@@ -180,3 +180,5 @@ async def test_channels_meta_degrades_on_kto_error(
     assert by_key["festa"]["available"] is False
     assert by_key["hot"]["available"] is True
     assert by_key["hot"]["thumbnailUrl"] == "http://kto/i.jpg"
+    assert by_key["hidden"]["available"] is True
+    assert by_key["hidden"]["thumbnailUrl"] == "http://kto/i.jpg"
