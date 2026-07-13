@@ -1,7 +1,10 @@
 import typer
 
 from pictrip_data.master.load_codes import load_codes
-from pictrip_data.overseas.backfill import backfill_overseas_thumbs
+from pictrip_data.overseas.backfill import (
+    backfill_overseas_descriptions,
+    backfill_overseas_thumbs,
+)
 from pictrip_data.overseas.countries import COUNTRIES
 from pictrip_data.overseas.sync import sync_overseas
 from pictrip_data.sync.daily import sync_daily, sync_full
@@ -42,4 +45,11 @@ def sync_overseas_cmd(
 def backfill_overseas_thumbs_cmd(dry_run: bool = typer.Option(False, "--dry-run")) -> None:
     """Rewrite Special:FilePath image_urls to direct 1200px Commons thumbs; keeps embeddings."""
     result = backfill_overseas_thumbs(dry_run=dry_run)
+    typer.echo(result)
+
+
+@app.command("backfill-overseas-descriptions")
+def backfill_overseas_descriptions_cmd(dry_run: bool = typer.Option(False, "--dry-run")) -> None:
+    """Fill empty overseas description_ko from ko.wikipedia intro extracts."""
+    result = backfill_overseas_descriptions(dry_run=dry_run)
     typer.echo(result)
