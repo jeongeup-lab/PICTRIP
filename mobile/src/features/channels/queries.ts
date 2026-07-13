@@ -43,7 +43,10 @@ const useSeenStore = create<SeenState>((set, get) => ({
     const today = todayKst();
     if (get().day === today) return;
     const keys = await loadSeen(today);
-    set({ seen: new Set(keys as ChannelKey[]), day: today });
+    set((s) => ({
+      seen: new Set<ChannelKey>([...(keys as ChannelKey[]), ...(s.day === today ? s.seen : [])]),
+      day: today,
+    }));
   },
   markSeen: (k) => {
     const today = todayKst();

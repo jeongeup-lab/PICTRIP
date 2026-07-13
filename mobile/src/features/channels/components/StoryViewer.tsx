@@ -45,7 +45,10 @@ export function StoryViewer({ start }: Props) {
   const isAround = channelKey === "around";
   const needCoords = isAround && !coords;
 
-  const { data: cardData } = useChannelCards(channelKey, coords ?? undefined);
+  const { data: cardData, isLoading: cardsLoading } = useChannelCards(
+    channelKey,
+    coords ?? undefined,
+  );
   const cards = cardData?.cards ?? [];
   const cardCount = cards.length;
   const shownIdx = cardCount > 0 ? Math.min(cardIdx, cardCount - 1) : 0;
@@ -93,11 +96,13 @@ export function StoryViewer({ start }: Props) {
   };
 
   const rightTap = () => {
+    if (cardsLoading) return;
     if (shownIdx < cardCount - 1) setCardIdx(shownIdx + 1);
     else nextChannel();
   };
 
   const leftTap = () => {
+    if (cardsLoading) return;
     if (shownIdx > 0) setCardIdx(shownIdx - 1);
     else prevChannel();
   };
@@ -125,6 +130,7 @@ export function StoryViewer({ start }: Props) {
     onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 12 || g.dy > 12,
     onPanResponderRelease: (_e, g) => {
       if (g.dy > 90 && g.dy > Math.abs(g.dx)) close();
+      else if (cardsLoading) return;
       else if (g.dx < -50) nextChannel();
       else if (g.dx > 50) prevChannel();
     },
