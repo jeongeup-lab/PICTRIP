@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   View,
   FlatList,
@@ -15,6 +14,7 @@ import { useExploreFeed } from "@/features/explore/queries";
 import { toGridBlocks, type GridBlock } from "@/features/explore/lib/grid-blocks";
 import { PostModal } from "@/features/explore/components/PostModal";
 import type { OverseasPost } from "@/features/feed/posts-api";
+import { makeSeed } from "@/lib/seed";
 import { colors } from "@/constants/theme";
 
 const GAP = 2;
@@ -22,29 +22,23 @@ const SCRIM_HEIGHT = 92;
 
 export function ExploreGrid() {
   const { width } = useWindowDimensions();
-  const queryClient = useQueryClient();
-  const [seed, setSeed] = useState<string | null>(null);
+  const [seed, setSeed] = useState(() => makeSeed());
   const [selected, setSelected] = useState<OverseasPost | null>(null);
 
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isRefetching, refetch } =
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isRefetching } =
     useExploreFeed(seed);
 
-  const firstSeed = data?.pages[0]?.seed;
-  if (seed === null && firstSeed) setSeed(firstSeed);
-
-  const blocks = useMemo(() => {
+  const { blocks, leftover } = useMemo(() => {
     const items = data?.pages.flatMap((p) => p.items) ?? [];
-    return toGridBlocks(items).blocks;
+    return toGridBlocks(items);
   }, [data]);
+
+  const tailItems = hasNextPage ? [] : leftover;
 
   const unit = (width - GAP * 2) / 3;
   const bigSize = unit * 2 + GAP;
 
-  const onRefresh = useCallback(() => {
-    queryClient.removeQueries({ queryKey: ["explore"] });
-    setSeed(null);
-    void refetch();
-  }, [queryClient, refetch]);
+  const onRefresh = useCallback(() => setSeed(makeSeed()), []);
 
   const onEndReached = () => {
     if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
@@ -88,6 +82,11 @@ export function ExploreGrid() {
         showsVerticalScrollIndicator={false}
         onEndReached={onEndReached}
         onEndReachedThreshold={0.6}
+        ListFooterComponent={
+          tailItems.length > 0 ? (
+            <View style={styles.row}>{tailItems.map((p) => tile(p, unit))}</View>
+          ) : null
+        }
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
