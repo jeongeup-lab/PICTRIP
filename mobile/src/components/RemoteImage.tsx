@@ -25,7 +25,16 @@ interface RemoteImageProps {
    * defaults to RN's "cover".
    */
   resizeMode?: ImageResizeMode;
+  /**
+   * Send the Wikimedia hotlink User-Agent with the request. Off by default so
+   * every existing KTO caller is untouched. Turn on ONLY for Commons images
+   * (upload.wikimedia.org / commons.wikimedia.org) — Android okhttp's default UA
+   * is 403-blocked by Wikimedia's robot policy.
+   */
+  withUA?: boolean;
 }
+
+const COMMONS_UA = "PicTrip/1.0 (https://pictrip.org)";
 
 // KTO watermark band is roughly the bottom ~12% of the source frame. The image is
 // rendered oversized and top-anchored inside an overflow-clipped box so that slice
@@ -38,8 +47,11 @@ export function RemoteImage({
   radius = 0,
   cropBanner = true,
   resizeMode,
+  withUA = false,
 }: RemoteImageProps) {
   const [failed, setFailed] = useState(false);
+  const source =
+    uri && withUA ? { uri, headers: { "User-Agent": COMMONS_UA } } : uri ? { uri } : { uri: "" };
   if (!uri || failed) {
     return (
       <View
@@ -53,7 +65,7 @@ export function RemoteImage({
   if (!cropBanner) {
     return (
       <Image
-        source={{ uri }}
+        source={source}
         onError={() => setFailed(true)}
         resizeMode={resizeMode}
         style={[{ borderRadius: radius }, style]}
@@ -68,7 +80,7 @@ export function RemoteImage({
       ]}
     >
       <Image
-        source={{ uri }}
+        source={source}
         onError={() => setFailed(true)}
         resizeMode="cover"
         style={{
