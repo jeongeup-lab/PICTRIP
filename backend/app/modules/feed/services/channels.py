@@ -12,7 +12,6 @@ from app.core.exceptions import ResourceNotFound, ValidationFailed
 from app.core.kto_client import KtoClient
 from app.modules.map import services as map_services
 from app.modules.map.schemas import NearbySpotCard
-from app.modules.spots import services as spots_services
 
 CHANNEL_LABELS = {
     "around": "Around",
@@ -85,29 +84,12 @@ async def load_channel_cards(
             )
             for c in cards[:_CARD_COUNT]
         ]
-    if key == "hot":
-        hot_rows = await spots_services.load_hot_spots(session, limit=_CARD_COUNT)
-        return [
-            ChannelCardRow(
-                content_id=r.content_id,
-                title=r.title,
-                region_label=r.region_label,
-                image_url=r.first_image_url,
-                rank=r.rank,
-            )
-            for r in hot_rows
-        ]
-    if key == "hidden":
-        hidden_rows = await spots_services.load_hidden_spots(session, limit=_CARD_COUNT)
-        return [
-            ChannelCardRow(
-                content_id=r.content_id,
-                title=r.title,
-                region_label=r.region_label,
-                image_url=r.first_image_url,
-            )
-            for r in hidden_rows
-        ]
+    if key in ("hot", "hidden"):
+        from app.modules.feed.services.concentration_channels import (
+            load_concentration_channel_cached,
+        )
+
+        return await load_concentration_channel_cached(session, redis, key)
     return await _load_kto_channel(redis, kto, key)
 
 
@@ -145,11 +127,18 @@ def _meta_or_unavailable(key: str, rows: list[Any] | None) -> ChannelMetaRow:
 async def load_channel_metas(
     session: AsyncSession, redis: Redis, kto: KtoClient
 ) -> list[ChannelMetaRow]:
+    from app.modules.feed.services.concentration_channels import (
+        load_concentration_channel_cached,
+    )
     from app.modules.feed.services.kto_channels import load_kto_channel_cached
 
-    hot = await spots_services.load_hot_spots(session, limit=1)
-    hidden = await spots_services.load_hidden_spots(session, limit=1)
-    festa, pets, snap = await asyncio.gather(
+    async def _concentration_metas() -> tuple[list[ChannelCardRow], list[ChannelCardRow]]:
+        hot = await load_concentration_channel_cached(session, redis, "hot")
+        hidden = await load_concentration_channel_cached(session, redis, "hidden")
+        return hot, hidden
+
+    (hot, hidden), festa, pets, snap = await asyncio.gather(
+        _concentration_metas(),
         _safe(asyncio.wait_for(load_kto_channel_cached(redis, kto, "festa"), _META_TIMEOUT)),
         _safe(asyncio.wait_for(load_kto_channel_cached(redis, kto, "pets"), _META_TIMEOUT)),
         _safe(asyncio.wait_for(load_kto_channel_cached(redis, kto, "snap"), _META_TIMEOUT)),
