@@ -70,9 +70,10 @@ async def fetch_festa_cards(kto: KtoClient, *, today: date | None = None) -> lis
     )
     cards: list[ChannelCardRow] = []
     for it in items:
+        start = _parse_ymd(it.get("eventstartdate"))
         end = _parse_ymd(it.get("eventenddate"))
         img = it.get("firstimage") or None
-        if not img or end is None or end < today:
+        if not img or start is None or end is None or start > today or end < today:
             continue
         days = max((end - today).days, 0)
         line = f"{end.month}월 {end.day}일까지"
