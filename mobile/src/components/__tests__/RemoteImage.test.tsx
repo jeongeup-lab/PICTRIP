@@ -72,4 +72,27 @@ describe("RemoteImage", () => {
     expect(imgs).toHaveLength(1);
     expect(imgs[0].props.source.uri).toBe("https://example.com/b.jpg");
   });
+
+  it("gives a new uri a fresh retry cycle after the previous uri exhausted retries", async () => {
+    let r: renderer.ReactTestRenderer;
+    await act(async () => {
+      r = renderer.create(<RemoteImage uri="https://example.com/a.jpg" />);
+    });
+    await failAllRetries(r!);
+    expect(images(r!)).toHaveLength(0);
+
+    await act(async () => {
+      r!.update(<RemoteImage uri="https://example.com/b.jpg" />);
+    });
+    // A single error on the new uri must retry (stay mounted), not inherit the
+    // previous uri's exhausted retry count and drop straight to the placeholder.
+    await act(async () => {
+      images(r!)[0].props.onError();
+    });
+    expect(images(r!)).toHaveLength(1);
+    await act(async () => {
+      jest.advanceTimersByTime(900);
+    });
+    expect(images(r!)[0].props.source.uri).toBe("https://example.com/b.jpg");
+  });
 });
