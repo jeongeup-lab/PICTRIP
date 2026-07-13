@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from app.core.kto_images import https_kto_image
 
 
 class OverseasPost(BaseModel):
@@ -30,6 +32,11 @@ class MatchCard(BaseModel):
     imageUrl: str
     overviewFirst: str | None
 
+    @field_validator("imageUrl")
+    @classmethod
+    def _upgrade_image(cls, v: str) -> str:
+        return https_kto_image(v) or v
+
 
 class MatchesResponse(BaseModel):
     overseasId: int
@@ -48,6 +55,11 @@ class ChannelCard(BaseModel):
     tag: str | None = None
     saveable: bool = True
 
+    @field_validator("imageUrl")
+    @classmethod
+    def _upgrade_image(cls, v: str | None) -> str | None:
+        return https_kto_image(v)
+
 
 class ChannelCardsResponse(BaseModel):
     key: str
@@ -60,6 +72,11 @@ class ChannelMeta(BaseModel):
     label: str
     thumbnailUrl: str | None
     available: bool
+
+    @field_validator("thumbnailUrl")
+    @classmethod
+    def _upgrade_thumbnail(cls, v: str | None) -> str | None:
+        return https_kto_image(v)
 
 
 class ChannelsResponse(BaseModel):
