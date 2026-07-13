@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { getMatches, getPosts } from "@/features/feed/posts-api";
 
 export function usePostsFeed(seed?: string) {
@@ -7,6 +7,7 @@ export function usePostsFeed(seed?: string) {
     queryFn: ({ pageParam }) => getPosts({ seed, cursor: pageParam ?? undefined, limit: 6 }),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => (last.hasMore ? last.nextCursor : undefined),
+    placeholderData: keepPreviousData,
   });
 }
 
