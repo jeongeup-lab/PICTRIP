@@ -99,7 +99,9 @@ async def load_channel_cards(
 
 
 async def _load_kto_channel(redis: Redis, kto: KtoClient, key: str) -> list[ChannelCardRow]:
-    return []
+    from app.modules.feed.services.kto_channels import load_kto_channel_cached
+
+    return await load_kto_channel_cached(redis, kto, key)
 
 
 def _region(card: NearbySpotCard) -> str:
