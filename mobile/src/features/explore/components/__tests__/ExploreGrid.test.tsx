@@ -156,7 +156,17 @@ describe("ExploreGrid", () => {
   });
 
   it("does not fetch the next page while one is already loading", async () => {
-    setFeed({ isFetchingNextPage: true });
+    setFeed({ isFetchingNextPage: true, isFetching: true });
+    const r = await mount();
+    const list = r.root.findAllByType(FlatList)[0];
+    await act(async () => {
+      list.props.onEndReached();
+    });
+    expect(fetchNextPage).not.toHaveBeenCalled();
+  });
+
+  it("does not fetch the next page during a seed refresh", async () => {
+    setFeed({ isFetching: true, isLoading: false, isFetchingNextPage: false });
     const r = await mount();
     const list = r.root.findAllByType(FlatList)[0];
     await act(async () => {

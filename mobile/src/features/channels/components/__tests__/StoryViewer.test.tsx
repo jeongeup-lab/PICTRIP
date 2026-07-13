@@ -279,6 +279,13 @@ describe("StoryViewer", () => {
     r.root.findByProps({ testID: "story-empty-close" });
   });
 
+  it("shows a no-channels message (not a spinner) when loaded but none are available", async () => {
+    (useChannels as jest.Mock).mockReturnValue({ data: { channels: [] } });
+    const r = await mount("hot");
+    expect(JSON.stringify(r.toJSON())).toContain("지금은 열 수 있는 채널이 없어요");
+    r.root.findByProps({ testID: "story-empty-close" });
+  });
+
   it("does not override manual navigation after the initial start resolves", async () => {
     (useChannels as jest.Mock).mockReturnValue({ data: undefined });
     cardsByKey.hot = [card({ title: "A" })];

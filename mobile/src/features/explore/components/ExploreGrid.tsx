@@ -41,7 +41,7 @@ export function ExploreGrid() {
   const onRefresh = useCallback(() => setSeed(makeSeed()), []);
 
   const onEndReached = () => {
-    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+    if (hasNextPage && !isFetching) void fetchNextPage();
   };
 
   const tile = (post: OverseasPost, size: number) => (
