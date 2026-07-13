@@ -157,6 +157,16 @@ describe("StoryViewer", () => {
     expect(JSON.stringify(r.toJSON())).not.toContain("Hidden");
   });
 
+  it("blocks channel navigation and renders an error card when the cards fail to load", async () => {
+    setChannels([meta("hot", "Hot"), meta("hidden", "Hidden")]);
+    (useChannelCards as jest.Mock).mockReturnValue({ data: undefined, isError: true });
+    const r = await mount("hot");
+    expect(JSON.stringify(r.toJSON())).toContain("채널을 불러오지 못했어요");
+    expect(r.root.findAllByProps({ testID: "story-tap-right" })).toHaveLength(0);
+    expect(mockMarkSeen).not.toHaveBeenCalled();
+    expect(JSON.stringify(r.toJSON())).not.toContain("Hidden");
+  });
+
   it("advances to the next channel and marks it seen once the cards have loaded", async () => {
     setChannels([meta("hot", "Hot"), meta("hidden", "Hidden")]);
     cardsByKey.hot = [card({ title: "A" })];
