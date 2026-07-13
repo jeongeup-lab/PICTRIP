@@ -117,8 +117,8 @@ class Settings(BaseSettings):
     KTO_BASE_URL_TARRLTE: str = "https://apis.data.go.kr/B551011/TarRlteTarService1"
     KTO_BASE_URL_CNCTR: str = "https://apis.data.go.kr/B551011/TatsCnctrRateService"
     KTO_BASE_URL_DATALAB: str = "https://apis.data.go.kr/B551011/DataLabService"
-    KTO_BASE_URL_PET: str = "http://apis.data.go.kr/B551011/KorPetTourService2"
-    KTO_BASE_URL_GALLERY: str = "http://apis.data.go.kr/B551011/PhotoGalleryService1"
+    KTO_BASE_URL_PET: str = "https://apis.data.go.kr/B551011/KorPetTourService2"
+    KTO_BASE_URL_GALLERY: str = "https://apis.data.go.kr/B551011/PhotoGalleryService1"
     KTO_MOBILE_APP: str = "PicTrip"
 
     # --- Embedding ---

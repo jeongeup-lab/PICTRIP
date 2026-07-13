@@ -27,7 +27,7 @@ Task B0 산출물. **B1의 base URL·enum, B4의 오퍼레이션명·필드명�
 
 ## 2. Snap — `PhotoGalleryService1/galleryList1` ✅ 등록·정상
 
-- Base URL: `http://apis.data.go.kr/B551011/PhotoGalleryService1`
+- Base URL: `https://apis.data.go.kr/B551011/PhotoGalleryService1`
 - **오퍼레이션 = `galleryList1`** (keyword 불필요). 계획 예시의 `gallerySearchList1`은 `keyword`
   필수 파라미터라 목록 채널에 부적합(누락 시 resultCode `11 NO_MANDATORY_REQUEST_PARAMETERS_ERROR1`).
 - resultCode `0000`. `arrange=A`(제목순) 등 정렬 지원.
@@ -42,7 +42,7 @@ Task B0 산출물. **B1의 base URL·enum, B4의 오퍼레이션명·필드명�
 
 ## 3. Pets — `KorPetTourService2/areaBasedList2` ✅ LIVE (전파 완료·재프로브 200)
 
-- Base URL: `http://apis.data.go.kr/B551011/KorPetTourService2` (**버전 접미사 `2` 필수** — 계획 예시의
+- Base URL: `https://apis.data.go.kr/B551011/KorPetTourService2` (**버전 접미사 `2` 필수** — 계획 예시의
   `KorPetTourService`(무버전)는 `API not found`, `KorPetTourService1`은 `Unexpected errors`).
 - 활용신청 페이지: https://www.data.go.kr/data/15135102/openapi.do
 - 현재 상태: **재프로브 resultCode `0000` 확인** — 게이트웨이 전파 완료, `Forbidden` 해소. `areaBasedList2`
@@ -73,8 +73,8 @@ Task B0 산출물. **B1의 base URL·enum, B4의 오퍼레이션명·필드명�
 
 | 설정 | 값 |
 |---|---|
-| `KTO_BASE_URL_PET` | `http://apis.data.go.kr/B551011/KorPetTourService2` |
-| `KTO_BASE_URL_GALLERY` | `http://apis.data.go.kr/B551011/PhotoGalleryService1` |
+| `KTO_BASE_URL_PET` | `https://apis.data.go.kr/B551011/KorPetTourService2` |
+| `KTO_BASE_URL_GALLERY` | `https://apis.data.go.kr/B551011/PhotoGalleryService1` |
 | `KtoService.PET` | `"KorPetTourService2"` |
 | `KtoService.GALLERY` | `"PhotoGalleryService1"` |
 
