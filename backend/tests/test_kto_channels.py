@@ -65,6 +65,18 @@ FESTA_BAD_ROWS = [
     },
 ]
 
+FESTA_FUTURE_START = [
+    {
+        "contentid": "F6",
+        "title": "아직 시작 안 한 축제",
+        "addr1": "경기 수원시 팔달구",
+        "firstimage": "http://tong.visitkorea.or.kr/f6.jpg",
+        "eventstartdate": "20260717",
+        "eventenddate": "20260725",
+        "cpyrhtDivCd": "Type3",
+    },
+]
+
 PETS_ITEMS = [
     {
         "contentid": f"P{i}",
@@ -156,6 +168,12 @@ async def test_festa_excludes_ended_and_imageless(kto_mock_with_bad_rows: KtoCli
     cards = await fetch_festa_cards(kto_mock_with_bad_rows, today=TODAY)
     assert all(c.image_url for c in cards)
     assert [c.content_id for c in cards] == ["F5"]
+
+
+async def test_festa_excludes_not_yet_started() -> None:
+    kto = _kto_returning(FESTA_FUTURE_START)
+    cards = await fetch_festa_cards(kto, today=TODAY)
+    assert [c.content_id for c in cards] == []
 
 
 async def test_pets_static_tag_and_saveable(kto_mock_pets: KtoClient) -> None:
