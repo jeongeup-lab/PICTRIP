@@ -161,8 +161,24 @@ async def test_hidden_returns_cards_without_rank_exposure(
     assert all(c["rank"] is None for c in cards)
 
 
-async def test_kto_channel_returns_empty_cards(db_session, client) -> None:
-    _override(db_session)
+async def test_kto_channel_returns_kto_cards(db_session, client) -> None:
+    from unittest.mock import AsyncMock
+
+    festa_items = [
+        {
+            "contentid": "F1",
+            "title": "무주 반딧불 축제",
+            "addr1": "전북 무주군 무주읍",
+            "firstimage": "http://tong.visitkorea.or.kr/f1.jpg",
+            "eventstartdate": "20260101",
+            "eventenddate": "20991231",
+        }
+    ]
+    kto = AsyncMock()
+    kto.call = AsyncMock(return_value=festa_items)
+    app.dependency_overrides[get_db] = lambda: db_session
+    app.dependency_overrides[get_redis] = lambda: FakeRedis(decode_responses=True)
+    app.dependency_overrides[get_kto] = lambda: kto
     try:
         res = await client.get("/v1/home/channels/festa")
     finally:
@@ -170,7 +186,8 @@ async def test_kto_channel_returns_empty_cards(db_session, client) -> None:
     assert res.status_code == 200
     body = res.json()["data"]
     assert body["label"] == "Festa"
-    assert body["cards"] == []
+    assert len(body["cards"]) == 1
+    assert body["cards"][0]["contentId"] == "F1"
 
 
 async def test_unknown_channel_404(db_session, client) -> None:
