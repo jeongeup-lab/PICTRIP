@@ -34,3 +34,22 @@ class MatchCard(BaseModel):
 class MatchesResponse(BaseModel):
     overseasId: int
     matches: list[MatchCard]
+
+
+class ChannelCard(BaseModel):
+    contentId: str | None
+    title: str
+    regionLabel: str
+    imageUrl: str | None
+    dist: float | None = None
+    rank: int | None = None
+    dday: str | None = None
+    line: str | None = None
+    tag: str | None = None
+    saveable: bool = True
+
+
+class ChannelCardsResponse(BaseModel):
+    key: str
+    label: str
+    cards: list[ChannelCard]
