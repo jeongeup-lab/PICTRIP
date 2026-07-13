@@ -62,7 +62,7 @@ export default function HomeScreen() {
     data,
     isLoading,
     isError,
-    isRefetching,
+    isFetching,
     isFetchingNextPage,
     hasNextPage,
     fetchNextPage,
@@ -116,7 +116,7 @@ export default function HomeScreen() {
           onEndReachedThreshold={0.8}
           refreshControl={
             <RefreshControl
-              refreshing={isRefetching}
+              refreshing={isFetching && !isLoading && !isFetchingNextPage}
               onRefresh={onRefresh}
               tintColor={colors.ter}
             />
