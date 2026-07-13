@@ -26,7 +26,7 @@ const BG = "#141216";
 
 export function StoryViewer({ start }: Props) {
   const insets = useSafeAreaInsets();
-  const { data: channelData } = useChannels();
+  const { data: channelData, isError: channelsError } = useChannels();
   const { markSeen } = useSeenChannels();
   const channels = (channelData?.channels ?? []).filter((c) => c.available);
 
@@ -137,8 +137,14 @@ export function StoryViewer({ start }: Props) {
   if (channels.length === 0) {
     return (
       <View style={[styles.root, styles.errorRoot, { backgroundColor: BG }]} {...pan.panHandlers}>
-        <ActivityIndicator color={colors.onImage} />
-        <Text style={styles.loadingText}>채널을 불러오는 중이에요</Text>
+        {channelsError ? (
+          <Text style={styles.loadingText}>채널을 불러오지 못했어요</Text>
+        ) : (
+          <>
+            <ActivityIndicator color={colors.onImage} />
+            <Text style={styles.loadingText}>채널을 불러오는 중이에요</Text>
+          </>
+        )}
         <Pressable
           testID="story-empty-close"
           style={[styles.close, styles.closeFloat, { top: insets.top + 12 }]}
