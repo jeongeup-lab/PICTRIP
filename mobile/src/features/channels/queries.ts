@@ -42,8 +42,8 @@ export const useSeenStore = create<SeenState>((set, get) => ({
   day: null,
   hydrated: false,
   hydrate: async () => {
-    if (get().hydrated) return;
     const today = todayKst();
+    if (get().hydrated && get().day === today) return;
     const keys = await loadSeen(today);
     const merged = new Set<ChannelKey>([
       ...(keys as ChannelKey[]),
@@ -63,11 +63,14 @@ export const useSeenStore = create<SeenState>((set, get) => ({
 }));
 
 export function useSeenChannels(): { seen: Set<ChannelKey>; markSeen: (k: ChannelKey) => void } {
-  const seen = useSeenStore((s) => s.seen);
+  const storeSeen = useSeenStore((s) => s.seen);
+  const storeDay = useSeenStore((s) => s.day);
   const markSeen = useSeenStore((s) => s.markSeen);
   const hydrate = useSeenStore((s) => s.hydrate);
+  const today = todayKst();
   useEffect(() => {
     void hydrate();
-  }, [hydrate]);
+  }, [hydrate, today]);
+  const seen = storeDay === today ? storeSeen : new Set<ChannelKey>();
   return { seen, markSeen };
 }
