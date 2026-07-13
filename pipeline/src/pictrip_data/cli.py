@@ -1,6 +1,7 @@
 import typer
 
 from pictrip_data.master.load_codes import load_codes
+from pictrip_data.overseas.backfill import backfill_overseas_thumbs
 from pictrip_data.overseas.countries import COUNTRIES
 from pictrip_data.overseas.sync import sync_overseas
 from pictrip_data.sync.daily import sync_daily, sync_full
@@ -35,3 +36,10 @@ def sync_overseas_cmd(
     """Sync overseas spots from Wikidata + Commons into overseas_spots."""
     selected = [c for c in COUNTRIES if c.code in country] if country else None
     sync_overseas(countries=selected, limit=limit, dry_run=dry_run)
+
+
+@app.command("backfill-overseas-thumbs")
+def backfill_overseas_thumbs_cmd(dry_run: bool = typer.Option(False, "--dry-run")) -> None:
+    """Rewrite Special:FilePath image_urls to direct 1200px Commons thumbs; keeps embeddings."""
+    result = backfill_overseas_thumbs(dry_run=dry_run)
+    typer.echo(result)
