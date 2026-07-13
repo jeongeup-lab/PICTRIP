@@ -21,6 +21,8 @@ KST = timezone(timedelta(hours=9))
 _ROWS = 30
 _CARD_COUNT = 10
 _FESTA_WINDOW_DAYS = 90
+_FESTA_MAX_PAGES = 5
+_FESTA_PAGE_ROWS = 100
 _PETS_TAG = "반려동물 동반 가능"
 
 
@@ -61,13 +63,19 @@ def _https(url: Any) -> str | None:
 async def fetch_festa_cards(kto: KtoClient, *, today: date | None = None) -> list[ChannelCardRow]:
     today = today or _today()
     window_start = (today - timedelta(days=_FESTA_WINDOW_DAYS)).strftime("%Y%m%d")
-    items = await kto.call(
-        KtoService.KOR,
-        "searchFestival2",
-        eventStartDate=window_start,
-        numOfRows=_ROWS,
-        arrange="C",
-    )
+    items: list[dict[str, Any]] = []
+    for page in range(1, _FESTA_MAX_PAGES + 1):
+        page_items = await kto.call(
+            KtoService.KOR,
+            "searchFestival2",
+            eventStartDate=window_start,
+            numOfRows=_FESTA_PAGE_ROWS,
+            pageNo=page,
+            arrange="C",
+        )
+        items.extend(page_items)
+        if len(page_items) < _FESTA_PAGE_ROWS:
+            break
     cards: list[ChannelCardRow] = []
     for it in items:
         start = _parse_ymd(it.get("eventstartdate"))
@@ -120,8 +128,9 @@ async def fetch_snap_cards(kto: KtoClient, *, today: date | None = None) -> list
         ChannelCardRow(
             content_id=None,
             title=it["galTitle"],
-            region_label=str(it.get("galPhotographyLocation") or ""),
+            region_label="",
             image_url=img,
+            line=str(it.get("galPhotographyLocation") or "") or None,
             saveable=False,
         )
         for it in items
