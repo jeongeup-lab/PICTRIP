@@ -49,9 +49,10 @@ export function RemoteImage({
   resizeMode,
   withUA = false,
 }: RemoteImageProps) {
-  const [failed, setFailed] = useState(false);
+  const [failedUri, setFailedUri] = useState<string | null>(null);
   const source =
     uri && withUA ? { uri, headers: { "User-Agent": COMMONS_UA } } : uri ? { uri } : { uri: "" };
+  const failed = !!uri && failedUri === uri;
   if (!uri || failed) {
     return (
       <View
@@ -66,7 +67,7 @@ export function RemoteImage({
     return (
       <Image
         source={source}
-        onError={() => setFailed(true)}
+        onError={() => setFailedUri(uri)}
         resizeMode={resizeMode}
         style={[{ borderRadius: radius }, style]}
       />
@@ -81,7 +82,7 @@ export function RemoteImage({
     >
       <Image
         source={source}
-        onError={() => setFailed(true)}
+        onError={() => setFailedUri(uri)}
         resizeMode="cover"
         style={{
           position: "absolute",

@@ -29,7 +29,13 @@ function slidesFor(post: OverseasPost, matches: ReturnType<typeof useMatches>["d
   ];
 }
 
-export function PostCarousel({ post }: { post: OverseasPost }) {
+export function PostCarousel({
+  post,
+  onNavigate,
+}: {
+  post: OverseasPost;
+  onNavigate?: () => void;
+}) {
   const { width } = useWindowDimensions();
   const cardWidth = width - 32;
   const [index, setIndex] = useState(0);
@@ -64,6 +70,7 @@ export function PostCarousel({ post }: { post: OverseasPost }) {
               width={cardWidth}
               counter={`${i + 1}/${slides.length}`}
               onInfo={() => setCreditOpen(true)}
+              onNavigate={onNavigate}
             />
           )}
         />

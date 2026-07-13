@@ -19,15 +19,22 @@ interface Props {
   width: number;
   counter: string;
   onInfo: () => void;
+  onNavigate?: () => void;
 }
 
-export function PostSlide({ slide, width, counter, onInfo }: Props) {
+export function PostSlide({ slide, width, counter, onInfo, onNavigate }: Props) {
   switch (slide.kind) {
     case "hero":
       return <HeroSlide post={slide.post} width={width} counter={counter} onInfo={onInfo} />;
     case "match":
       return (
-        <MatchSlide match={slide.match} number={slide.number} width={width} counter={counter} />
+        <MatchSlide
+          match={slide.match}
+          number={slide.number}
+          width={width}
+          counter={counter}
+          onNavigate={onNavigate}
+        />
       );
     case "empty":
       return <EmptySlide width={width} counter={counter} />;
@@ -104,11 +111,13 @@ function MatchSlide({
   number,
   width,
   counter,
+  onNavigate,
 }: {
   match: MatchCard;
   number: number;
   width: number;
   counter: string;
+  onNavigate?: () => void;
 }) {
   const { saved, toggle } = useSaveOptimistic(match.contentId);
 
@@ -117,7 +126,10 @@ function MatchSlide({
       testID="match-card"
       style={[styles.slide, { width }]}
       onPressIn={() => prefetchSpot(match.contentId)}
-      onPress={() => router.push(`/spots/${match.contentId}`)}
+      onPress={() => {
+        onNavigate?.();
+        router.push(`/spots/${match.contentId}`);
+      }}
     >
       <RemoteImage uri={match.imageUrl} style={StyleSheet.absoluteFill as object} />
       <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">

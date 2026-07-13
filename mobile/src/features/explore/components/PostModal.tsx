@@ -17,7 +17,7 @@ export function PostModal({ post, onClose }: { post: OverseasPost; onClose: () =
         >
           <Icon name="close" size={20} color={colors.onImage} strokeWidth={1.8} />
         </Pressable>
-        <PostCarousel post={post} />
+        <PostCarousel post={post} onNavigate={onClose} />
       </View>
     </Modal>
   );
