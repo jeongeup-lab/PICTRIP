@@ -1,9 +1,16 @@
 import { useEffect, useState } from "react";
-import { View, Text, Pressable, PanResponder, StyleSheet, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  PanResponder,
+  StyleSheet,
+  ActivityIndicator,
+  Image,
+} from "react-native";
 import Svg, { Defs, LinearGradient, Stop, Rect } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { RemoteImage } from "@/components/RemoteImage";
 import { Icon } from "@/components/Icon";
 import { useChannelCards, useChannels, useSeenChannels } from "@/features/channels/queries";
 import type { ChannelKey } from "@/features/channels/api";
@@ -15,6 +22,7 @@ import {
 } from "@/features/map/usecases/request-location";
 import { PermissionPrimer } from "@/features/map/components/PermissionPrimer";
 import { StoryCard } from "@/features/channels/components/StoryCard";
+import { StoryImage } from "@/features/channels/components/StoryImage";
 import { colors } from "@/constants/theme";
 
 interface Props {
@@ -51,6 +59,19 @@ export function StoryViewer({ start }: Props) {
   const cardCount = cards.length;
   const shownIdx = cardCount > 0 ? Math.min(cardIdx, cardCount - 1) : 0;
   const currentCard = cards[shownIdx];
+
+  const nextUrl = cards[shownIdx + 1]?.imageUrl ?? null;
+  const afterUrl = cards[shownIdx + 2]?.imageUrl ?? null;
+  useEffect(() => {
+    for (const url of [nextUrl, afterUrl]) {
+      if (!url) continue;
+      try {
+        void Image.prefetch(url);
+      } catch {
+        continue;
+      }
+    }
+  }, [nextUrl, afterUrl]);
 
   useEffect(() => {
     if (!needCoords) return;
@@ -191,7 +212,7 @@ export function StoryViewer({ start }: Props) {
 
   return (
     <View style={[styles.root, { backgroundColor: BG }]} {...pan.panHandlers}>
-      <RemoteImage uri={currentCard?.imageUrl ?? null} style={StyleSheet.absoluteFill} />
+      <StoryImage uri={currentCard?.imageUrl ?? null} />
       <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
         <Defs>
           <LinearGradient id="storyScrim" x1="0" y1="0" x2="0" y2="1">
