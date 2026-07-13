@@ -84,4 +84,5 @@ Task B0 산출물. **B1의 base URL·enum, B4의 오퍼레이션명·필드명�
 ## 미결/후속
 
 - ~~**[블로커→B4]** KorPetTourService2 게이트웨이 전파~~ → **해소**: 재프로브 `0000` LIVE, B4 착수(§3 참조).
-- **[B6]** CT110 `spot_concentration` `max(base_ymd)` 신선도 확정 + 일일 크론 복원.
+- **[B6]** 크론 2종 배선 완료: `concentration-sync.yml`(일일 04:30 KST, CT112 컨테이너 `sync_concentration`) + `overseas-sync.yml`(월간 1일 03:00 KST, CT111 `sync-overseas` → CT112 `embed_overseas`).
+  - **후속(첫 실행 검증, dev 머지·배포 직후 필수)**: schedule 은 default 브랜치 기준으로만 동작하므로, dev 머지 뒤 `gh workflow run concentration-sync` 로 1회 수동 트리거 → CT110 `SELECT max(collected_at) FROM spot_concentration` 가 오늘 날짜인지 확인. (로컬에서는 CT110 ssh 접근이 없어 미실행.)

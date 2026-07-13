@@ -1,0 +1,29 @@
+name: concentration-sync
+# 집중률(spot_concentration) 일일 동기화 — Hot/Hidden 채널(B2/B3)의 신선도 소스.
+# scripts/sync_concentration.py 를 CT112의 라이브 api 컨테이너 안에서 실행한다
+# (CT110 DB로 가는 경로를 가진 유일한 호스트). schedule 은 default 브랜치 기준으로
+# 동작하므로 dev 머지 후부터 유효.
+on:
+  schedule:
+    - cron: "30 19 * * *" # 04:30 KST (UTC+9)
+  workflow_dispatch:
+
+# 최소 권한: 파이썬 스크립트만 실행하고 git/API 쓰기에 GITHUB_TOKEN 을 쓰지 않는다.
+permissions: {}
+
+# 하루 한 번짜리 작업이 겹치지 않게 가드. 진행 중인 실행은 취소하지 않는다.
+concurrency:
+  group: concentration-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: [self-hosted, ct112]
+    steps:
+      # 이미지·/app/.env 마운트·DB 경로를 이미 가진 실행 중인 compose api 컨테이너
+      # (이름은 api-host[-_]api[-_]N, :8000 퍼블리시)에 exec 한다. 새 컨테이너를
+      # 띄우지 않는다.
+      - run: |
+          cid="$(docker ps -q --filter "publish=8000" | head -n1)"
+          if [ -z "$cid" ]; then echo "api container not found on :8000"; exit 1; fi
+          docker exec "$cid" python -m scripts.sync_concentration
