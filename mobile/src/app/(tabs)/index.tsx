@@ -1,18 +1,89 @@
-import { ScrollView, View, Text, Pressable, RefreshControl, StyleSheet } from "react-native";
+import { useCallback, useState } from "react";
+import { FlatList, View, Text, Pressable, RefreshControl, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useHomeFeed } from "@/features/feed/queries";
-import { HeroCarousel } from "@/features/feed/components/HeroCarousel";
-import { MoodRail } from "@/features/feed/components/MoodRail";
+import { useQueryClient } from "@tanstack/react-query";
+import { ChannelTiles } from "@/features/channels/components/ChannelTiles";
+import { PostCarousel } from "@/features/feed/components/PostCarousel";
+import { usePostsFeed } from "@/features/feed/posts-queries";
+import type { OverseasPost } from "@/features/feed/posts-api";
 import { Skeleton } from "@/components/Skeleton";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { colors, spacing } from "@/constants/theme";
 
-export default function HomeScreen() {
-  const { data, isLoading, isError, isRefetching, refetch } = useHomeFeed();
+function Header() {
+  return (
+    <View style={styles.headerBlock}>
+      <ChannelTiles onOpen={(key) => router.push(`/channels?start=${key}`)} />
+    </View>
+  );
+}
 
-  // Backend drops unresolvable heroes and thin rails — both can come back empty.
-  const isEmpty = !!data && data.heroes.length === 0 && data.rails.length === 0;
+function Footer() {
+  return (
+    <View style={styles.footer}>
+      <View style={styles.footerLinks}>
+        <Pressable
+          testID="footer-terms"
+          accessibilityRole="link"
+          hitSlop={8}
+          onPress={() => router.push("/legal/terms")}
+        >
+          <Text style={styles.footerLink}>이용약관</Text>
+        </Pressable>
+        <View style={styles.footerSep} />
+        <Pressable
+          testID="footer-privacy"
+          accessibilityRole="link"
+          hitSlop={8}
+          onPress={() => router.push("/legal/privacy")}
+        >
+          <Text style={styles.footerLinkStrong}>개인정보처리방침</Text>
+        </Pressable>
+        <View style={styles.footerSep} />
+        <Pressable
+          testID="footer-data-source"
+          accessibilityRole="link"
+          hitSlop={8}
+          onPress={() => router.push("/legal/data-sources")}
+        >
+          <Text style={styles.footerLink}>데이터 출처</Text>
+        </Pressable>
+      </View>
+      <Text style={styles.footerNote}>ⓒ PicTrip</Text>
+    </View>
+  );
+}
+
+export default function HomeScreen() {
+  const queryClient = useQueryClient();
+  const [seed, setSeed] = useState<string | null>(null);
+
+  const {
+    data,
+    isLoading,
+    isError,
+    isRefetching,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+    refetch,
+  } = usePostsFeed(seed ?? undefined);
+
+  const firstSeed = data?.pages[0]?.seed;
+  if (seed === null && firstSeed) setSeed(firstSeed);
+
+  const posts: OverseasPost[] = data?.pages.flatMap((p) => p.items) ?? [];
+
+  const onRefresh = useCallback(() => {
+    queryClient.removeQueries({ queryKey: ["posts"] });
+    setSeed(null);
+    void refetch();
+  }, [queryClient, refetch]);
+
+  const onEndReached = () => {
+    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  };
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -25,79 +96,40 @@ export default function HomeScreen() {
 
       {isLoading ? (
         <View style={styles.loading}>
-          <Skeleton height={280} radius={12} />
-          <Skeleton height={20} width="40%" style={{ marginTop: spacing.xxl }} />
-          <Skeleton height={140} style={{ marginTop: spacing.md }} />
+          <View style={styles.tileRow}>
+            <Skeleton width={86} height={110} radius={14} />
+            <Skeleton width={86} height={110} radius={14} />
+            <Skeleton width={86} height={110} radius={14} />
+          </View>
+          <Skeleton height={520} radius={16} style={{ marginTop: spacing.xxl }} />
         </View>
       ) : isError || !data ? (
         <View style={styles.error}>
           <Text style={styles.errorText}>피드를 불러오지 못했어요.</Text>
-          <PrimaryButton label="다시 시도" onPress={() => refetch()} />
+          <PrimaryButton testID="home-retry" label="다시 시도" onPress={() => refetch()} />
         </View>
       ) : (
-        <ScrollView
+        <FlatList
+          data={posts}
+          keyExtractor={(post) => String(post.id)}
+          renderItem={({ item }) => (
+            <View style={styles.cardBlock}>
+              <PostCarousel post={item} />
+            </View>
+          )}
+          ListHeaderComponent={Header}
+          ListFooterComponent={Footer}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={isEmpty ? styles.emptyGrow : undefined}
+          onEndReached={onEndReached}
+          onEndReachedThreshold={0.8}
           refreshControl={
             <RefreshControl
               refreshing={isRefetching}
-              onRefresh={() => void refetch()}
+              onRefresh={onRefresh}
               tintColor={colors.ter}
             />
           }
-        >
-          {isEmpty ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyText}>곧 새로운 큐레이션을 준비할게요</Text>
-            </View>
-          ) : (
-            <>
-              {data.heroes.length > 0 ? (
-                <View style={{ paddingTop: spacing.md }}>
-                  <HeroCarousel heroes={data.heroes} />
-                </View>
-              ) : null}
-              {data.rails.map((rail, i) => (
-                <View key={rail.id}>
-                  {i > 0 ? <View style={styles.band} /> : null}
-                  <MoodRail rail={rail} />
-                </View>
-              ))}
-            </>
-          )}
-
-          <View style={styles.footer}>
-            <View style={styles.footerLinks}>
-              <Pressable
-                testID="footer-terms"
-                accessibilityRole="link"
-                hitSlop={8}
-                onPress={() => router.push("/legal/terms")}
-              >
-                <Text style={styles.footerLink}>이용약관</Text>
-              </Pressable>
-              <View style={styles.footerSep} />
-              <Pressable
-                testID="footer-privacy"
-                accessibilityRole="link"
-                hitSlop={8}
-                onPress={() => router.push("/legal/privacy")}
-              >
-                <Text style={styles.footerLinkStrong}>개인정보처리방침</Text>
-              </Pressable>
-              <View style={styles.footerSep} />
-              <Pressable
-                testID="footer-data-source"
-                accessibilityRole="link"
-                hitSlop={8}
-                onPress={() => router.push("/legal/data-sources")}
-              >
-                <Text style={styles.footerLink}>데이터 출처</Text>
-              </Pressable>
-            </View>
-            <Text style={styles.footerNote}>ⓒ PicTrip</Text>
-          </View>
-        </ScrollView>
+        />
       )}
     </SafeAreaView>
   );
@@ -122,7 +154,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     backgroundColor: colors.accent,
   },
+  headerBlock: { paddingTop: spacing.md, paddingBottom: spacing.sm },
+  cardBlock: { paddingBottom: spacing.xxl },
   loading: { padding: spacing.lg },
+  tileRow: { flexDirection: "row", gap: 10 },
   error: {
     flex: 1,
     alignItems: "center",
@@ -131,21 +166,6 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
   errorText: { fontSize: 15, color: colors.sec },
-  emptyGrow: { flexGrow: 1 },
-  empty: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: spacing.xl,
-  },
-  emptyText: { fontSize: 15, color: colors.sec },
-  band: {
-    height: 8,
-    backgroundColor: colors.inset,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.fill,
-  },
   footer: {
     backgroundColor: colors.inset,
     borderTopWidth: 1,
