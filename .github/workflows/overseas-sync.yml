@@ -1,0 +1,40 @@
+name: overseas-sync
+# 해외(overseas) 월간 파이프라인 — Plan A Wikidata ETL 뒤에 CLIP 임베딩 배치를 연쇄.
+#   etl:   CT111 러너에서 배포된 pictrip-data CLI(`sync-overseas`) 실행.
+#   embed: etl 성공 후 CT112 라이브 api 컨테이너에서 scripts/embed_overseas.py 실행.
+# schedule 은 default 브랜치 기준으로 동작하므로 dev 머지 후부터 유효.
+on:
+  schedule:
+    - cron: "0 18 1 * *" # 매월 2일 03:00 KST (18:00 UTC 1일 + 9h); 월 1회 실행이 목적
+  workflow_dispatch:
+
+# 최소 권한: git/API 쓰기 없이 CLI/스크립트만 실행.
+permissions: {}
+
+# 월간 실행이 겹치지 않게 가드. 진행 중인 실행은 취소하지 않는다.
+concurrency:
+  group: overseas-sync
+  cancel-in-progress: false
+
+jobs:
+  etl:
+    runs-on: [self-hosted, ct111]
+    steps:
+      # pipeline-deploy 가 rsync 로 유지하는 배포 경로에서 실행. .env(DATABASE_URL·
+      # KTO_API_KEY)와 .venv 는 배포마다 보존되므로 여기서 config 가 자동 로드된다.
+      - name: Run sync-overseas
+        run: |
+          set -euo pipefail
+          cd /opt/pictrip-pipeline/pipeline
+          /usr/local/bin/uv run pictrip-data sync-overseas
+
+  embed:
+    needs: etl
+    runs-on: [self-hosted, ct112]
+    steps:
+      # 이미지·/app/.env 마운트·DB 경로를 이미 가진 실행 중인 compose api 컨테이너
+      # (이름은 api-host[-_]api[-_]N, :8000 퍼블리시)에 exec 한다.
+      - run: |
+          cid="$(docker ps -q --filter "publish=8000" | head -n1)"
+          if [ -z "$cid" ]; then echo "api container not found on :8000"; exit 1; fi
+          docker exec "$cid" python -m scripts.embed_overseas
