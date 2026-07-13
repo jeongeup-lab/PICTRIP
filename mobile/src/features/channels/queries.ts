@@ -16,13 +16,17 @@ export function useChannels() {
   });
 }
 
+export function channelCardsKey(key: ChannelKey, coords?: { lat: number; lng: number }) {
+  return [
+    "channel-cards",
+    key,
+    coords ? [Math.round(coords.lat * 1000), Math.round(coords.lng * 1000)] : null,
+  ];
+}
+
 export function useChannelCards(key: ChannelKey, coords?: { lat: number; lng: number }) {
   return useQuery({
-    queryKey: [
-      "channel-cards",
-      key,
-      coords ? [Math.round(coords.lat * 1000), Math.round(coords.lng * 1000)] : null,
-    ],
+    queryKey: channelCardsKey(key, coords),
     queryFn: () => getChannelCards(key, coords),
     enabled: key !== "around" || !!coords,
   });
