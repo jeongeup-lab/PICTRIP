@@ -13,9 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.config import settings
+from app.core.kto_client import get_kto
 from app.core.redis import get_redis
 from app.main import app
-from app.modules.spots.kto_client import get_kto
 
 
 class FakeKto:
