@@ -272,6 +272,13 @@ describe("StoryViewer", () => {
     expect(router.back).toHaveBeenCalled();
   });
 
+  it("shows an error (not an endless spinner) when the channel list fails", async () => {
+    (useChannels as jest.Mock).mockReturnValue({ data: undefined, isError: true });
+    const r = await mount("hot");
+    expect(JSON.stringify(r.toJSON())).toContain("채널을 불러오지 못했어요");
+    r.root.findByProps({ testID: "story-empty-close" });
+  });
+
   it("does not override manual navigation after the initial start resolves", async () => {
     (useChannels as jest.Mock).mockReturnValue({ data: undefined });
     cardsByKey.hot = [card({ title: "A" })];
