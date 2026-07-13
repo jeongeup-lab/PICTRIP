@@ -176,6 +176,43 @@ async def test_festa_excludes_not_yet_started() -> None:
     assert [c.content_id for c in cards] == []
 
 
+async def test_festa_paginates_to_find_ongoing_on_second_page() -> None:
+    page1 = [
+        {
+            "contentid": f"OLD{i}",
+            "title": f"이미 끝난 축제 {i}",
+            "addr1": "서울 종로구",
+            "firstimage": f"http://tong.visitkorea.or.kr/old{i}.jpg",
+            "eventstartdate": "20260401",
+            "eventenddate": "20260410",
+            "cpyrhtDivCd": "Type3",
+        }
+        for i in range(100)
+    ]
+    page2 = [
+        {
+            "contentid": "ONGOING2",
+            "title": "2페이지 진행 중 축제",
+            "addr1": "강원 속초시",
+            "firstimage": "http://tong.visitkorea.or.kr/ongoing2.jpg",
+            "eventstartdate": "20260710",
+            "eventenddate": "20260716",
+            "cpyrhtDivCd": "Type3",
+        }
+    ]
+
+    async def _paged(*_args: object, pageNo: int = 1, **_kwargs: object) -> list[dict]:
+        return {1: page1, 2: page2}.get(pageNo, [])
+
+    kto = AsyncMock(spec=KtoClient)
+    kto.call = AsyncMock(side_effect=_paged)
+
+    cards = await fetch_festa_cards(kto, today=TODAY)
+
+    assert [c.content_id for c in cards] == ["ONGOING2"]
+    assert kto.call.await_count == 2
+
+
 async def test_pets_static_tag_and_saveable(kto_mock_pets: KtoClient) -> None:
     cards = await fetch_pets_cards(kto_mock_pets)
     assert len(cards) == 10
@@ -196,8 +233,8 @@ async def test_snap_cards_are_view_only(kto_mock_snap: KtoClient) -> None:
     assert cards[0].content_id is None
     assert cards[0].saveable is False
     assert cards[0].title == "노을 진 통영 앞바다"
-    assert cards[0].region_label == "경남 통영시"
-    assert cards[0].line is None
+    assert cards[0].region_label == ""
+    assert cards[0].line == "경남 통영시"
 
 
 async def test_snap_upgrades_image_to_https(kto_mock_snap: KtoClient) -> None:
