@@ -59,7 +59,9 @@ export function StoryViewer({ start }: Props) {
       if (!alive) return;
       if (status === "granted") {
         const c = await getCurrentCoords();
-        if (alive && c) setCoords(c);
+        if (!alive) return;
+        if (c) setCoords(c);
+        else setPrimer(true);
       } else {
         setPrimer(true);
       }

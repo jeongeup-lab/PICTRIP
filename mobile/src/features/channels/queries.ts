@@ -18,7 +18,11 @@ export function useChannels() {
 
 export function useChannelCards(key: ChannelKey, coords?: { lat: number; lng: number }) {
   return useQuery({
-    queryKey: ["channel-cards", key],
+    queryKey: [
+      "channel-cards",
+      key,
+      coords ? [Math.round(coords.lat * 1000), Math.round(coords.lng * 1000)] : null,
+    ],
     queryFn: () => getChannelCards(key, coords),
     enabled: key !== "around" || !!coords,
   });
