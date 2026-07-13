@@ -154,8 +154,8 @@ async def test_channels_meta_order_and_shape(client, seeded_concentration, kto_a
     assert chans[1]["thumbnailUrl"] == "http://kto/i.jpg"
     by_key = {c["key"]: c for c in chans}
     assert by_key["festa"]["available"] is True
-    assert by_key["festa"]["thumbnailUrl"] == "http://tong.visitkorea.or.kr/f1.jpg"
-    assert by_key["pets"]["thumbnailUrl"] == "http://tong.visitkorea.or.kr/p1.jpg"
+    assert by_key["festa"]["thumbnailUrl"] == "https://tong.visitkorea.or.kr/f1.jpg"
+    assert by_key["pets"]["thumbnailUrl"] == "https://tong.visitkorea.or.kr/p1.jpg"
     assert by_key["snap"]["thumbnailUrl"] == "https://tong.visitkorea.or.kr/s1.jpg"
     assert by_key["snap"]["label"] == "Snap"
 
