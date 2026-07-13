@@ -5,7 +5,7 @@ from pictrip_data.overseas.upsert import upsert_overseas
 from pictrip_data.overseas.wikidata import RawSpot
 
 JP = Country("Q17", "JP", "일본")
-SPOT = RawSpot("QBF1", "교토", "Kyoto", "옛 수도", "Kyoto Temple.jpg", 90, 35.0, 135.7, JP)
+SPOT = RawSpot("QTESTBF1", "교토", "Kyoto", "옛 수도", "Kyoto Temple.jpg", 90, 35.0, 135.7, JP)
 DIRECT = "https://upload.wikimedia.org/wikipedia/commons/thumb/k/Kyoto.jpg/1200px-Kyoto.jpg"
 
 
@@ -28,11 +28,11 @@ def test_backfill_rewrites_filepath_and_preserves_embedding(db_conn):
         upsert_overseas(cur, SPOT, Credit("A", "CC", None, None))
         cur.execute(
             "UPDATE overseas_spots SET embedding = array_fill(0.2::real, ARRAY[512])::halfvec "
-            "WHERE wikidata_id = 'QBF1'"
+            "WHERE wikidata_id = 'QTESTBF1'"
         )
     db_conn.commit()
     with db_conn.cursor() as cur:
-        cur.execute("SELECT image_url FROM overseas_spots WHERE wikidata_id = 'QBF1'")
+        cur.execute("SELECT image_url FROM overseas_spots WHERE wikidata_id = 'QTESTBF1'")
         assert "Special:FilePath" in cur.fetchone()[0]
 
     result = backfill_overseas_thumbs(commons=FakeCommons(DIRECT), conn=db_conn)
@@ -40,7 +40,7 @@ def test_backfill_rewrites_filepath_and_preserves_embedding(db_conn):
     assert result["updated"] == 1
     with db_conn.cursor() as cur:
         cur.execute(
-            "SELECT image_url, embedding IS NULL FROM overseas_spots WHERE wikidata_id = 'QBF1'"
+            "SELECT image_url, embedding IS NULL FROM overseas_spots WHERE wikidata_id = 'QTESTBF1'"
         )
         assert cur.fetchone() == (DIRECT, False)
 
@@ -55,5 +55,5 @@ def test_backfill_skips_when_thumb_missing(db_conn):
     assert result["skipped"] == 1
     assert result["updated"] == 0
     with db_conn.cursor() as cur:
-        cur.execute("SELECT image_url FROM overseas_spots WHERE wikidata_id = 'QBF1'")
+        cur.execute("SELECT image_url FROM overseas_spots WHERE wikidata_id = 'QTESTBF1'")
         assert "Special:FilePath" in cur.fetchone()[0]
