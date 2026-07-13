@@ -1,13 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  Pressable,
-  PanResponder,
-  StyleSheet,
-  ActivityIndicator,
-  Image,
-} from "react-native";
+import { View, Text, Pressable, PanResponder, StyleSheet, ActivityIndicator } from "react-native";
 import Svg, { Defs, LinearGradient, Stop, Rect } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -59,19 +51,6 @@ export function StoryViewer({ start }: Props) {
   const cardCount = cards.length;
   const shownIdx = cardCount > 0 ? Math.min(cardIdx, cardCount - 1) : 0;
   const currentCard = cards[shownIdx];
-
-  const nextUrl = cards[shownIdx + 1]?.imageUrl ?? null;
-  const afterUrl = cards[shownIdx + 2]?.imageUrl ?? null;
-  useEffect(() => {
-    for (const url of [nextUrl, afterUrl]) {
-      if (!url) continue;
-      try {
-        void Image.prefetch(url);
-      } catch {
-        continue;
-      }
-    }
-  }, [nextUrl, afterUrl]);
 
   useEffect(() => {
     if (!needCoords) return;
