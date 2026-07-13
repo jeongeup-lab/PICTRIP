@@ -1,16 +1,18 @@
 import renderer, { act } from "react-test-renderer";
 import { StyleSheet } from "react-native";
 import { ChannelTiles } from "@/features/channels/components/ChannelTiles";
-import { useChannels, useSeenChannels } from "@/features/channels/queries";
+import { prefetchChannelCards, useChannels, useSeenChannels } from "@/features/channels/queries";
 import type { ChannelKey, ChannelMeta } from "@/features/channels/api";
 
 jest.mock("@/features/channels/queries", () => ({
   useChannels: jest.fn(),
   useSeenChannels: jest.fn(),
+  prefetchChannelCards: jest.fn(),
 }));
 
 const mockChannels = useChannels as jest.Mock;
 const mockSeen = useSeenChannels as jest.Mock;
+const mockPrefetch = prefetchChannelCards as jest.Mock;
 
 function setChannels(channels: ChannelMeta[]) {
   mockChannels.mockReturnValue({ data: { channels } });
@@ -83,6 +85,14 @@ describe("ChannelTiles", () => {
     setSeen([]);
     const r = await mount(() => {});
     expect(r.root.findAllByProps({ testID: "channel-new-dot" }).length).toBeGreaterThan(0);
+  });
+
+  it("pressing in a tile prefetches its cards", async () => {
+    setChannels([meta("around"), meta("hot")]);
+    setSeen([]);
+    const r = await mount(() => {});
+    await act(async () => tiles(r)[1].props.onPressIn());
+    expect(mockPrefetch).toHaveBeenCalledWith("hot");
   });
 
   it("tapping a tile calls onOpen with its key", async () => {

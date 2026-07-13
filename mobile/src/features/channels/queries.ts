@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { getChannelCards, getChannels, type ChannelKey } from "@/features/channels/api";
 import { loadSeen, saveSeen } from "@/features/channels/lib/seen-store";
 import { todayKst } from "@/features/channels/lib/kst";
+import { queryClient } from "@/lib/query-client";
 
 export function useChannels() {
   return useQuery({
@@ -26,6 +27,14 @@ export function useChannelCards(key: ChannelKey, coords?: { lat: number; lng: nu
     queryKey: channelCardsKey(key, coords),
     queryFn: () => getChannelCards(key, coords),
     enabled: key !== "around" || !!coords,
+  });
+}
+
+export function prefetchChannelCards(key: ChannelKey) {
+  if (key === "around") return;
+  void queryClient.prefetchQuery({
+    queryKey: channelCardsKey(key),
+    queryFn: () => getChannelCards(key),
   });
 }
 

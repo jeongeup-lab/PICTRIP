@@ -1,7 +1,7 @@
 import renderer, { act } from "react-test-renderer";
 import { FlatList } from "react-native";
 import HomeScreen from "@/app/(tabs)/index";
-import { usePostsFeed } from "@/features/feed/posts-queries";
+import { prefetchMatches, usePostsFeed } from "@/features/feed/posts-queries";
 import type { OverseasPost } from "@/features/feed/posts-api";
 
 let seedCounter = 0;
@@ -12,7 +12,10 @@ jest.mock("expo-router", () => ({
 jest.mock("react-native-safe-area-context", () => ({
   SafeAreaView: (props: { children?: unknown }) => props.children,
 }));
-jest.mock("@/features/feed/posts-queries", () => ({ usePostsFeed: jest.fn() }));
+jest.mock("@/features/feed/posts-queries", () => ({
+  usePostsFeed: jest.fn(),
+  prefetchMatches: jest.fn(),
+}));
 jest.mock("@/features/channels/components/ChannelTiles", () => {
   const React = require("react");
   const { Pressable } = require("react-native");
@@ -34,6 +37,7 @@ jest.mock("@/features/feed/components/PostCarousel", () => {
 });
 
 const usePostsFeedMock = usePostsFeed as jest.Mock;
+const prefetchMatchesMock = prefetchMatches as jest.Mock;
 const { router } = jest.requireMock("expo-router") as { router: { push: jest.Mock } };
 
 function posts(n: number): OverseasPost[] {
@@ -190,5 +194,21 @@ describe("HomeScreen", () => {
     const r = await mount();
     const list = r.root.findAllByType(FlatList)[0];
     expect(list.props.refreshControl.props.refreshing).toBe(true);
+  });
+
+  it("prefetches matches for posts as they become viewable", async () => {
+    setFeed();
+    const r = await mount();
+    const list = r.root.findAllByType(FlatList)[0];
+    await act(async () => {
+      list.props.onViewableItemsChanged({
+        viewableItems: [
+          { item: posts(2)[0], index: 0, isViewable: true, key: "1" },
+          { item: posts(2)[1], index: 1, isViewable: true, key: "2" },
+        ],
+      });
+    });
+    expect(prefetchMatchesMock).toHaveBeenCalledWith(1);
+    expect(prefetchMatchesMock).toHaveBeenCalledWith(2);
   });
 });

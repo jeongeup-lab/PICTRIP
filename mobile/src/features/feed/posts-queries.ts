@@ -1,5 +1,8 @@
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { getMatches, getPosts } from "@/features/feed/posts-api";
+import { queryClient } from "@/lib/query-client";
+
+const MATCHES_STALE = 6 * 60 * 60 * 1000;
 
 export function usePostsFeed(seed?: string) {
   return useInfiniteQuery({
@@ -16,6 +19,14 @@ export function useMatches(id: number, opts: { enabled: boolean }) {
     queryKey: ["matches", id],
     queryFn: () => getMatches(id),
     enabled: opts.enabled,
-    staleTime: 6 * 60 * 60 * 1000,
+    staleTime: MATCHES_STALE,
+  });
+}
+
+export function prefetchMatches(id: number) {
+  void queryClient.prefetchQuery({
+    queryKey: ["matches", id],
+    queryFn: () => getMatches(id),
+    staleTime: MATCHES_STALE,
   });
 }

@@ -1,15 +1,25 @@
 import { useCallback, useState } from "react";
-import { FlatList, View, Text, Pressable, RefreshControl, StyleSheet } from "react-native";
+import {
+  FlatList,
+  View,
+  Text,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  type ViewToken,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { ChannelTiles } from "@/features/channels/components/ChannelTiles";
 import { PostCarousel } from "@/features/feed/components/PostCarousel";
-import { usePostsFeed } from "@/features/feed/posts-queries";
+import { prefetchMatches, usePostsFeed } from "@/features/feed/posts-queries";
 import type { OverseasPost } from "@/features/feed/posts-api";
 import { Skeleton } from "@/components/Skeleton";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { makeSeed } from "@/lib/seed";
 import { colors, spacing } from "@/constants/theme";
+
+const VIEWABILITY = { itemVisiblePercentThreshold: 30 };
 
 function Header() {
   return (
@@ -73,6 +83,16 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(() => setSeed(makeSeed()), []);
 
+  const onViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      for (const token of viewableItems) {
+        const post = token.item as OverseasPost | undefined;
+        if (post) prefetchMatches(post.id);
+      }
+    },
+    [],
+  );
+
   const onEndReached = () => {
     if (hasNextPage && !isFetching) void fetchNextPage();
   };
@@ -112,6 +132,8 @@ export default function HomeScreen() {
           ListHeaderComponent={Header}
           ListFooterComponent={Footer}
           showsVerticalScrollIndicator={false}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={VIEWABILITY}
           onEndReached={onEndReached}
           onEndReachedThreshold={0.8}
           refreshControl={
