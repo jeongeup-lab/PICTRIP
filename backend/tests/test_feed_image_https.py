@@ -44,3 +44,12 @@ def test_non_kto_and_null_untouched() -> None:
         == commons
     )
     assert ChannelCard(contentId=None, title="t", regionLabel="", imageUrl=None).imageUrl is None
+
+
+def test_non_kto_https_preserved_on_channels() -> None:
+    # snap uses non-KTO https URLs (galWebImageUrl) — must be kept, not nulled.
+    ext = "https://cdn.example.com/gallery/1.jpg"
+    assert ChannelCard(contentId=None, title="t", regionLabel="", imageUrl=ext).imageUrl == ext
+    assert (
+        ChannelMeta(key="snap", label="Snap", thumbnailUrl=ext, available=True).thumbnailUrl == ext
+    )

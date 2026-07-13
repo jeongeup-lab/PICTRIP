@@ -58,7 +58,7 @@ class ChannelCard(BaseModel):
     @field_validator("imageUrl")
     @classmethod
     def _upgrade_image(cls, v: str | None) -> str | None:
-        return https_kto_image(v)
+        return https_kto_image(v) or v
 
 
 class ChannelCardsResponse(BaseModel):
@@ -76,7 +76,7 @@ class ChannelMeta(BaseModel):
     @field_validator("thumbnailUrl")
     @classmethod
     def _upgrade_thumbnail(cls, v: str | None) -> str | None:
-        return https_kto_image(v)
+        return https_kto_image(v) or v
 
 
 class ChannelsResponse(BaseModel):
