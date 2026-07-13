@@ -85,6 +85,30 @@ describe("useSeenChannels day reset", () => {
     expect(mockSaveSeen).toHaveBeenLastCalledWith(["festa"], "2026-07-14");
   });
 
+  it("shows no seen channels after midnight even without a new markSeen", async () => {
+    let hook: ReturnType<typeof useSeenChannels> | undefined;
+    function Harness() {
+      hook = useSeenChannels();
+      return null;
+    }
+
+    mockKst.day = "2026-07-13";
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = mountHarness(Harness);
+    });
+    await act(async () => {
+      hook!.markSeen("hot");
+    });
+    expect(hook!.seen.has("hot")).toBe(true);
+
+    mockKst.day = "2026-07-14";
+    await act(async () => {
+      tree!.update(<Harness />);
+    });
+    expect(hook!.seen.size).toBe(0);
+  });
+
   it("merges a concurrent markSeen instead of overwriting it when hydrate resolves", async () => {
     let resolveLoad: ((keys: string[]) => void) | undefined;
     mockLoadSeen.mockImplementationOnce(
