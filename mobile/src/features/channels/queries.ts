@@ -3,10 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { create } from "zustand";
 import { getChannelCards, getChannels, type ChannelKey } from "@/features/channels/api";
 import { loadSeen, saveSeen } from "@/features/channels/lib/seen-store";
-
-function todayKst(): string {
-  return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
-}
+import { todayKst } from "@/features/channels/lib/kst";
 
 export function useChannels() {
   return useQuery({
@@ -34,24 +31,27 @@ export function useChannelCards(key: ChannelKey, coords?: { lat: number; lng: nu
 
 interface SeenState {
   seen: Set<ChannelKey>;
-  hydrated: boolean;
+  day: string | null;
   hydrate: () => Promise<void>;
   markSeen: (k: ChannelKey) => void;
 }
 
 const useSeenStore = create<SeenState>((set, get) => ({
   seen: new Set(),
-  hydrated: false,
+  day: null,
   hydrate: async () => {
-    if (get().hydrated) return;
-    const keys = await loadSeen(todayKst());
-    set({ seen: new Set(keys as ChannelKey[]), hydrated: true });
+    const today = todayKst();
+    if (get().day === today) return;
+    const keys = await loadSeen(today);
+    set({ seen: new Set(keys as ChannelKey[]), day: today });
   },
   markSeen: (k) => {
-    const next = new Set(get().seen);
+    const today = todayKst();
+    const base = get().day === today ? get().seen : new Set<ChannelKey>();
+    const next = new Set(base);
     next.add(k);
-    set({ seen: next });
-    void saveSeen([...next], todayKst());
+    set({ seen: next, day: today });
+    void saveSeen([...next], today);
   },
 }));
 
