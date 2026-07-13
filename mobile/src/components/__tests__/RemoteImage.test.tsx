@@ -4,6 +4,23 @@ import { RemoteImage } from "@/components/RemoteImage";
 
 const images = (r: renderer.ReactTestRenderer) => r.root.findAllByType(Image);
 
+async function failAllRetries(r: renderer.ReactTestRenderer) {
+  for (const delay of [900, 1800]) {
+    await act(async () => {
+      images(r)[0].props.onError();
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(delay);
+    });
+  }
+  await act(async () => {
+    images(r)[0].props.onError();
+  });
+}
+
+beforeEach(() => jest.useFakeTimers());
+afterEach(() => jest.useRealTimers());
+
 describe("RemoteImage", () => {
   it("renders the image for a valid uri", async () => {
     let r: renderer.ReactTestRenderer;
@@ -15,7 +32,7 @@ describe("RemoteImage", () => {
     expect(imgs[0].props.source.uri).toBe("https://example.com/a.jpg");
   });
 
-  it("shows the placeholder after the image errors", async () => {
+  it("keeps the image mounted and retries after a transient error", async () => {
     let r: renderer.ReactTestRenderer;
     await act(async () => {
       r = renderer.create(<RemoteImage uri="https://example.com/a.jpg" />);
@@ -23,6 +40,20 @@ describe("RemoteImage", () => {
     await act(async () => {
       images(r!)[0].props.onError();
     });
+    expect(images(r!)).toHaveLength(1);
+    await act(async () => {
+      jest.advanceTimersByTime(900);
+    });
+    expect(images(r!)).toHaveLength(1);
+    expect(images(r!)[0].props.source.uri).toBe("https://example.com/a.jpg");
+  });
+
+  it("shows the placeholder once retries are exhausted", async () => {
+    let r: renderer.ReactTestRenderer;
+    await act(async () => {
+      r = renderer.create(<RemoteImage uri="https://example.com/a.jpg" />);
+    });
+    await failAllRetries(r!);
     expect(images(r!)).toHaveLength(0);
   });
 
@@ -31,9 +62,7 @@ describe("RemoteImage", () => {
     await act(async () => {
       r = renderer.create(<RemoteImage uri="https://example.com/a.jpg" />);
     });
-    await act(async () => {
-      images(r!)[0].props.onError();
-    });
+    await failAllRetries(r!);
     expect(images(r!)).toHaveLength(0);
 
     await act(async () => {
