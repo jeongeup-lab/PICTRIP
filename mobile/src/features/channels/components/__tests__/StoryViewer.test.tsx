@@ -1,3 +1,4 @@
+import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { router } from "expo-router";
 import { StoryViewer } from "@/features/channels/components/StoryViewer";
@@ -86,6 +87,9 @@ const tap = async (r: renderer.ReactTestRenderer, side: "right" | "left") => {
   });
 };
 
+const saveIconName = (r: renderer.ReactTestRenderer) =>
+  r.root.findByProps({ testID: "story-save" }).findByProps({ size: 20 }).props.name as string;
+
 describe("StoryViewer", () => {
   it("renders progress segments equal to card count and the English channel title", async () => {
     setChannels([meta("hot", "Hot"), meta("hidden", "Hidden")]);
@@ -171,5 +175,53 @@ describe("StoryViewer", () => {
     await act(async () => {});
     expect(getCurrentCoords).toHaveBeenCalled();
     expect(title(r)).toBe("AR");
+  });
+
+  it("does not leak an optimistic save from one card onto the next", async () => {
+    setChannels([meta("hot", "Hot")]);
+    cardsByKey.hot = [card({ title: "A", contentId: "a1" }), card({ title: "B", contentId: "b1" })];
+    (useSaveOptimistic as jest.Mock).mockImplementation(() => {
+      const [saved, setSaved] = React.useState(false);
+      return { saved, toggle: async () => setSaved((s) => !s) };
+    });
+    const r = await mount("hot");
+    await act(async () => {
+      r.root.findByProps({ testID: "story-save" }).props.onPress();
+    });
+    expect(saveIconName(r)).toBe("bookmark-fill");
+    await tap(r, "right");
+    expect(title(r)).toBe("B");
+    expect(saveIconName(r)).toBe("bookmark");
+  });
+
+  it("reconciles to the start channel once channels load on a cold entry", async () => {
+    (useChannels as jest.Mock).mockReturnValue({ data: undefined });
+    cardsByKey.hot = [card({ title: "A" })];
+    cardsByKey.hidden = [card({ title: "H1" })];
+    const r = await mount("hidden");
+    await act(async () => {
+      setChannels([meta("hot", "Hot"), meta("hidden", "Hidden")]);
+      r.update(<StoryViewer start="hidden" />);
+    });
+    expect(JSON.stringify(r.toJSON())).toContain("Hidden");
+    expect(title(r)).toBe("H1");
+  });
+
+  it("does not override manual navigation after the initial start resolves", async () => {
+    (useChannels as jest.Mock).mockReturnValue({ data: undefined });
+    cardsByKey.hot = [card({ title: "A" })];
+    cardsByKey.hidden = [card({ title: "H1" })];
+    const r = await mount("hidden");
+    await act(async () => {
+      setChannels([meta("hot", "Hot"), meta("hidden", "Hidden")]);
+      r.update(<StoryViewer start="hidden" />);
+    });
+    expect(title(r)).toBe("H1");
+    await tap(r, "left");
+    expect(title(r)).toBe("A");
+    await act(async () => {
+      r.update(<StoryViewer start="hidden" />);
+    });
+    expect(title(r)).toBe("A");
   });
 });
