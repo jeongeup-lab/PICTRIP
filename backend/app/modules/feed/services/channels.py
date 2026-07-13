@@ -24,6 +24,7 @@ CHANNEL_LABELS = {
 }
 _CARD_COUNT = 10
 _AROUND_RADIUS_M = 5000
+_META_TIMEOUT = 4.0
 _T = TypeVar("_T")
 
 
@@ -149,9 +150,9 @@ async def load_channel_metas(
     hot = await spots_services.load_hot_spots(session, limit=1)
     hidden = await spots_services.load_hidden_spots(session, limit=1)
     festa, pets, snap = await asyncio.gather(
-        _safe(load_kto_channel_cached(redis, kto, "festa")),
-        _safe(load_kto_channel_cached(redis, kto, "pets")),
-        _safe(load_kto_channel_cached(redis, kto, "snap")),
+        _safe(asyncio.wait_for(load_kto_channel_cached(redis, kto, "festa"), _META_TIMEOUT)),
+        _safe(asyncio.wait_for(load_kto_channel_cached(redis, kto, "pets"), _META_TIMEOUT)),
+        _safe(asyncio.wait_for(load_kto_channel_cached(redis, kto, "snap"), _META_TIMEOUT)),
     )
     metas = [ChannelMetaRow("around", CHANNEL_LABELS["around"], None, True)]
     metas.append(_meta_from_rows("hot", hot))
