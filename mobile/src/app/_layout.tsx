@@ -1,10 +1,21 @@
+import { useEffect } from "react";
+import { AppState } from "react-native";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import { Stack } from "expo-router";
 import { queryClient } from "@/lib/query-client";
+import { warmConnection } from "@/lib/warm-connection";
 import { AuthPromptSheet } from "@/features/auth/components/AuthPromptSheet";
 
 export default function RootLayout() {
+  useEffect(() => {
+    warmConnection();
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") warmConnection();
+    });
+    return () => sub.remove();
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
