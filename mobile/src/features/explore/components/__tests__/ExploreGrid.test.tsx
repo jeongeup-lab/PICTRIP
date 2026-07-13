@@ -4,6 +4,10 @@ import { ExploreGrid } from "@/features/explore/components/ExploreGrid";
 import { useExploreFeed } from "@/features/explore/queries";
 import type { OverseasPost } from "@/features/feed/posts-api";
 
+const mockRemoveQueries = jest.fn();
+jest.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({ removeQueries: mockRemoveQueries }),
+}));
 jest.mock("@/features/explore/queries", () => ({ useExploreFeed: jest.fn() }));
 jest.mock("@/features/feed/components/PostCarousel", () => {
   const React = require("react");
@@ -108,6 +112,24 @@ describe("ExploreGrid", () => {
     });
     expect(refetch).toHaveBeenCalled();
     expect((useExploreFeed as jest.Mock).mock.calls.some((c) => c[0] === null)).toBe(true);
+  });
+
+  it("pull-to-refresh evicts the explore cache so the next fetch mints a new seed", async () => {
+    setFeed();
+    const r = await mount();
+    const list = r.root.findAllByType(FlatList)[0];
+    await act(async () => {
+      list.props.refreshControl.props.onRefresh();
+    });
+    expect(mockRemoveQueries).toHaveBeenCalledWith({ queryKey: ["explore"] });
+    expect((useExploreFeed as jest.Mock).mock.calls.some((c) => c[0] === null)).toBe(true);
+  });
+
+  it("shows the refresh spinner while a refetch is in flight", async () => {
+    setFeed({ isRefetching: true });
+    const r = await mount();
+    const list = r.root.findAllByType(FlatList)[0];
+    expect(list.props.refreshControl.props.refreshing).toBe(true);
   });
 
   it("fetches the next page when the list end is reached", async () => {
