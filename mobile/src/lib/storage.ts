@@ -3,6 +3,7 @@ import { File, Paths } from "expo-file-system";
 
 const REFRESH_KEY = "refresh_token";
 const ONBOARDING_KEY = "onboarding_seen";
+const SEEN_CHANNELS_KEY = "seen_channels";
 const INSTALL_MARKER = "install.marker";
 
 const refreshOptions = {
@@ -27,6 +28,14 @@ export async function getOnboardingSeen(): Promise<boolean> {
 
 export async function setOnboardingSeen(): Promise<void> {
   await SecureStore.setItemAsync(ONBOARDING_KEY, "1");
+}
+
+export async function getSeenChannelsRaw(): Promise<string | null> {
+  return SecureStore.getItemAsync(SEEN_CHANNELS_KEY);
+}
+
+export async function setSeenChannelsRaw(value: string): Promise<void> {
+  await SecureStore.setItemAsync(SEEN_CHANNELS_KEY, value);
 }
 
 /**
