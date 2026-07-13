@@ -7,9 +7,9 @@ from typing import Any
 from fastapi import APIRouter, status
 
 from app.core.db import DbSession
+from app.core.kto_client import KtoDep
 from app.core.redis import RedisDep
 from app.core.schemas import ok
-from app.modules.spots.kto_client import KtoDep
 from app.modules.spots.schemas import (
     CurationDetailResponse,
     HomeFeedResponse,
