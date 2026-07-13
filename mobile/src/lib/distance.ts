@@ -1,4 +1,3 @@
-/** Shared distance formatter (photo-search + map). */
 export function formatDistance(meters: number): string {
   if (meters < 1000) {
     return `${Math.round(meters)}m`;

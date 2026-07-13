@@ -37,49 +37,6 @@ export interface SpotCard {
   category: string | null;
 }
 
-export interface PhotoMatch extends SpotCard {
-  similarity: number; // 0..1 (1 - cosine distance)
-  distance?: number | null; // metres; present only when query carried lat/lng
-  regionName?: string | null;
-  sigunguName?: string | null;
-}
-
-export interface PhotoSearchResult {
-  matches: PhotoMatch[];
-  queryHadLocation: boolean;
-}
-
-export interface HeroTile {
-  id: number;
-  slug: string;
-  title: string; // keeps \n — render multi-line
-  subtitle: string | null;
-  coverUrl: string | null;
-}
-
-export interface MoodRailDto {
-  id: number;
-  title: string;
-  subtitle: string | null;
-  spots: SpotCard[];
-}
-
-export interface HomeFeed {
-  heroes: HeroTile[];
-  rails: MoodRailDto[];
-}
-
-export interface CurationDetail {
-  id: number;
-  type: string;
-  slug: string;
-  title: string;
-  lead: string | null;
-  intro: string | null;
-  coverUrl: string | null;
-  spots: SpotCard[];
-}
-
 export interface SpotImage {
   originImageUrl: string;
   smallImageUrl: string | null;
