@@ -10,6 +10,7 @@ from pictrip_data.overseas.wikidata import USER_AGENT, _is_transient
 API = "https://commons.wikimedia.org/w/api.php"
 _TAG = re.compile(r"<[^>]+>")
 _BATCH = 50
+THUMB_WIDTH = 1200
 
 
 @dataclass(frozen=True)
@@ -17,10 +18,13 @@ class Credit:
     author: str | None
     license: str | None
     license_url: str | None
+    thumb: str | None
 
 
 def thumb_url(filename: str) -> str:
-    return f"https://commons.wikimedia.org/wiki/Special:FilePath/{quote(filename)}?width=800"
+    return (
+        f"https://commons.wikimedia.org/wiki/Special:FilePath/{quote(filename)}?width={THUMB_WIDTH}"
+    )
 
 
 def source_url(filename: str) -> str:
@@ -46,6 +50,7 @@ def parse_credits(payload: dict) -> dict[str, Credit]:
             author=_clean(meta.get("Artist", {}).get("value")),
             license=_clean(meta.get("LicenseShortName", {}).get("value")),
             license_url=_clean(meta.get("LicenseUrl", {}).get("value")),
+            thumb=info[0].get("thumburl"),
         )
     return credits
 
@@ -69,7 +74,8 @@ class CommonsClient:
                 "action": "query",
                 "format": "json",
                 "prop": "imageinfo",
-                "iiprop": "extmetadata",
+                "iiprop": "url|extmetadata",
+                "iiurlwidth": THUMB_WIDTH,
                 "titles": "|".join(titles),
             },
         )

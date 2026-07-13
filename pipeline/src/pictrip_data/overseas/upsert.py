@@ -36,7 +36,9 @@ def upsert_overseas(cur, spot: RawSpot, credit: Credit | None) -> bool:
             "country_code": spot.country.code,
             "country_name_ko": spot.country.name_ko,
             "description_ko": spot.description_ko,
-            "image_url": thumb_url(spot.image_filename),
+            "image_url": (
+                credit.thumb if credit and credit.thumb else thumb_url(spot.image_filename)
+            ),
             "image_author": credit.author if credit else None,
             "image_license": credit.license if credit else None,
             "image_license_url": credit.license_url if credit else None,
