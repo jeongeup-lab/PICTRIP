@@ -166,6 +166,17 @@ describe("StoryViewer", () => {
     expect(getCurrentCoords).not.toHaveBeenCalled();
   });
 
+  it("falls back to the permission primer when granted coords resolve null", async () => {
+    setChannels([meta("around", "Around")]);
+    cardsByKey.around = [card({ title: "AR" })];
+    (getPermissionStatus as jest.Mock).mockResolvedValue("granted");
+    (getCurrentCoords as jest.Mock).mockResolvedValue(null);
+    const r = await mount("around");
+    await act(async () => {});
+    expect(getCurrentCoords).toHaveBeenCalled();
+    expect(JSON.stringify(r.toJSON())).toContain("위치 허용하기");
+  });
+
   it("reads current coords for the around channel when permission is already granted", async () => {
     setChannels([meta("around", "Around")]);
     cardsByKey.around = [card({ title: "AR" })];

@@ -4,10 +4,6 @@ import { ExploreGrid } from "@/features/explore/components/ExploreGrid";
 import { useExploreFeed } from "@/features/explore/queries";
 import type { OverseasPost } from "@/features/feed/posts-api";
 
-const mockRemoveQueries = jest.fn();
-jest.mock("@tanstack/react-query", () => ({
-  useQueryClient: () => ({ removeQueries: mockRemoveQueries }),
-}));
 jest.mock("@/features/explore/queries", () => ({ useExploreFeed: jest.fn() }));
 jest.mock("@/features/feed/components/PostCarousel", () => {
   const React = require("react");
@@ -102,27 +98,36 @@ describe("ExploreGrid", () => {
     expect(hosts(r, "carousel").length).toBe(0);
   });
 
-  it("pull-to-refresh resets the seed to null and refetches", async () => {
+  it("pull-to-refresh hands useExploreFeed a fresh seed to reshuffle", async () => {
     setFeed();
     const r = await mount();
     const list = r.root.findAllByType(FlatList)[0];
-    (useExploreFeed as jest.Mock).mockClear();
+    const seedBefore = (useExploreFeed as jest.Mock).mock.calls.at(-1)![0];
     await act(async () => {
       list.props.refreshControl.props.onRefresh();
     });
-    expect(refetch).toHaveBeenCalled();
-    expect((useExploreFeed as jest.Mock).mock.calls.some((c) => c[0] === null)).toBe(true);
+    const seedAfter = (useExploreFeed as jest.Mock).mock.calls.at(-1)![0];
+    expect(typeof seedBefore).toBe("string");
+    expect(typeof seedAfter).toBe("string");
+    expect(seedAfter).not.toBe(seedBefore);
   });
 
-  it("pull-to-refresh evicts the explore cache so the next fetch mints a new seed", async () => {
-    setFeed();
-    const r = await mount();
-    const list = r.root.findAllByType(FlatList)[0];
-    await act(async () => {
-      list.props.refreshControl.props.onRefresh();
+  it("renders the trailing leftover tiles on the last page", async () => {
+    setFeed({
+      data: { pages: [{ seed: "seed-abc", items: posts(10), nextCursor: null, hasMore: false }] },
+      hasNextPage: false,
     });
-    expect(mockRemoveQueries).toHaveBeenCalledWith({ queryKey: ["explore"] });
-    expect((useExploreFeed as jest.Mock).mock.calls.some((c) => c[0] === null)).toBe(true);
+    const r = await mount();
+    expect(hosts(r, "explore-tile").length).toBe(10);
+  });
+
+  it("drops the leftover while more pages remain", async () => {
+    setFeed({
+      data: { pages: [{ seed: "seed-abc", items: posts(10), nextCursor: "c1", hasMore: true }] },
+      hasNextPage: true,
+    });
+    const r = await mount();
+    expect(hosts(r, "explore-tile").length).toBe(9);
   });
 
   it("shows the refresh spinner while a refetch is in flight", async () => {
