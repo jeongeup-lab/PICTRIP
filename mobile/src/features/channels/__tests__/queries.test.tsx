@@ -1,6 +1,6 @@
 import renderer, { act } from "react-test-renderer";
 import { channelCardsKey, useSeenChannels } from "@/features/channels/queries";
-import { saveSeen } from "@/features/channels/lib/seen-store";
+import { loadSeen, saveSeen } from "@/features/channels/lib/seen-store";
 
 const mockKst = { day: "2026-07-13" };
 
@@ -14,6 +14,7 @@ jest.mock("@/features/channels/lib/seen-store", () => ({
 }));
 
 const mockSaveSeen = saveSeen as jest.Mock;
+const mockLoadSeen = loadSeen as jest.Mock;
 
 describe("channelCardsKey", () => {
   it("puts different locations in different keys", () => {
@@ -61,5 +62,38 @@ describe("useSeenChannels day reset", () => {
     expect([...hook!.seen]).toEqual(["festa"]);
     expect(hook!.seen.has("hot")).toBe(false);
     expect(mockSaveSeen).toHaveBeenLastCalledWith(["festa"], "2026-07-14");
+  });
+
+  it("merges a concurrent markSeen instead of overwriting it when hydrate resolves", async () => {
+    let resolveLoad: ((keys: string[]) => void) | undefined;
+    mockLoadSeen.mockImplementationOnce(
+      () =>
+        new Promise<string[]>((resolve) => {
+          resolveLoad = resolve;
+        }),
+    );
+
+    mockKst.day = "2026-07-15";
+    let hook: ReturnType<typeof useSeenChannels> | undefined;
+    function Harness() {
+      hook = useSeenChannels();
+      return null;
+    }
+    await act(async () => {
+      renderer.create(<Harness />);
+    });
+
+    await act(async () => {
+      hook!.markSeen("hot");
+    });
+    expect(hook!.seen.has("hot")).toBe(true);
+
+    await act(async () => {
+      resolveLoad!(["hidden"]);
+      await Promise.resolve();
+    });
+
+    expect(hook!.seen.has("hot")).toBe(true);
+    expect(hook!.seen.has("hidden")).toBe(true);
   });
 });

@@ -134,6 +134,26 @@ describe("StoryViewer", () => {
     expect(title(r)).toBe("H1");
   });
 
+  it("ignores a channel-advancing tap while the current channel's cards are loading", async () => {
+    setChannels([meta("hot", "Hot"), meta("hidden", "Hidden")]);
+    (useChannelCards as jest.Mock).mockReturnValue({ data: undefined, isLoading: true });
+    const r = await mount("hot");
+    await tap(r, "right");
+    expect(mockMarkSeen).not.toHaveBeenCalled();
+    expect(JSON.stringify(r.toJSON())).toContain("Hot");
+    expect(JSON.stringify(r.toJSON())).not.toContain("Hidden");
+  });
+
+  it("advances to the next channel and marks it seen once the cards have loaded", async () => {
+    setChannels([meta("hot", "Hot"), meta("hidden", "Hidden")]);
+    cardsByKey.hot = [card({ title: "A" })];
+    cardsByKey.hidden = [card({ title: "H1" })];
+    const r = await mount("hot");
+    await tap(r, "right");
+    expect(mockMarkSeen).toHaveBeenCalledWith("hot");
+    expect(title(r)).toBe("H1");
+  });
+
   it("hides the save and detail buttons on a non-saveable snap card", async () => {
     setChannels([meta("snap", "Snap")]);
     cardsByKey.snap = [card({ title: "S1", saveable: false, contentId: null })];
