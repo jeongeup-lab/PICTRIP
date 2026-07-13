@@ -21,7 +21,7 @@ function slidesFor(post: OverseasPost, matches: ReturnType<typeof useMatches>["d
     return [hero, { kind: "skeleton" }, { kind: "skeleton" }, { kind: "skeleton" }];
   }
   if (matches.matches.length === 0) {
-    return [hero, { kind: "empty" }];
+    return [hero];
   }
   return [
     hero,
@@ -60,6 +60,7 @@ export function PostCarousel({
           keyExtractor={(s, i) => `${s.kind}-${i}`}
           horizontal
           pagingEnabled
+          scrollEnabled={slides.length > 1}
           showsHorizontalScrollIndicator={false}
           getItemLayout={(_, i) => ({ length: cardWidth, offset: cardWidth * i, index: i })}
           onScrollBeginDrag={onScrollBeginDrag}
@@ -68,7 +69,7 @@ export function PostCarousel({
             <PostSlide
               slide={item}
               width={cardWidth}
-              counter={`${i + 1}/${slides.length}`}
+              counter={slides.length > 1 ? `${i + 1}/${slides.length}` : ""}
               onInfo={() => setCreditOpen(true)}
               onNavigate={onNavigate}
             />
@@ -76,14 +77,16 @@ export function PostCarousel({
         />
       </View>
 
-      <View style={styles.dots}>
-        {slides.map((s, i) => (
-          <View
-            key={`${s.kind}-${i}`}
-            style={[styles.dot, i === index ? styles.dotActive : styles.dotIdle]}
-          />
-        ))}
-      </View>
+      {slides.length > 1 ? (
+        <View style={styles.dots}>
+          {slides.map((s, i) => (
+            <View
+              key={`${s.kind}-${i}`}
+              style={[styles.dot, i === index ? styles.dotActive : styles.dotIdle]}
+            />
+          ))}
+        </View>
+      ) : null}
 
       <CreditSheet visible={creditOpen} post={post} onClose={() => setCreditOpen(false)} />
     </View>
