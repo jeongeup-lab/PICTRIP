@@ -32,21 +32,25 @@ export function useChannelCards(key: ChannelKey, coords?: { lat: number; lng: nu
 interface SeenState {
   seen: Set<ChannelKey>;
   day: string | null;
+  hydrated: boolean;
   hydrate: () => Promise<void>;
   markSeen: (k: ChannelKey) => void;
 }
 
-const useSeenStore = create<SeenState>((set, get) => ({
+export const useSeenStore = create<SeenState>((set, get) => ({
   seen: new Set(),
   day: null,
+  hydrated: false,
   hydrate: async () => {
+    if (get().hydrated) return;
     const today = todayKst();
-    if (get().day === today) return;
     const keys = await loadSeen(today);
-    set((s) => ({
-      seen: new Set<ChannelKey>([...(keys as ChannelKey[]), ...(s.day === today ? s.seen : [])]),
-      day: today,
-    }));
+    const merged = new Set<ChannelKey>([
+      ...(keys as ChannelKey[]),
+      ...(get().day === today ? get().seen : []),
+    ]);
+    set({ seen: merged, day: today, hydrated: true });
+    void saveSeen([...merged], today);
   },
   markSeen: (k) => {
     const today = todayKst();
@@ -54,7 +58,7 @@ const useSeenStore = create<SeenState>((set, get) => ({
     const next = new Set(base);
     next.add(k);
     set({ seen: next, day: today });
-    void saveSeen([...next], today);
+    if (get().hydrated) void saveSeen([...next], today);
   },
 }));
 

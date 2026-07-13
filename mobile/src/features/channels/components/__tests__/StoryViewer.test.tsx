@@ -261,6 +261,17 @@ describe("StoryViewer", () => {
     expect(title(r)).toBe("H1");
   });
 
+  it("renders a closeable fallback instead of null when channels are empty or still loading", async () => {
+    (useChannels as jest.Mock).mockReturnValue({ data: undefined });
+    const r = await mount("hot");
+    expect(r.toJSON()).not.toBeNull();
+    const closeBtn = r.root.findByProps({ testID: "story-empty-close" });
+    await act(async () => {
+      closeBtn.props.onPress();
+    });
+    expect(router.back).toHaveBeenCalled();
+  });
+
   it("does not override manual navigation after the initial start resolves", async () => {
     (useChannels as jest.Mock).mockReturnValue({ data: undefined });
     cardsByKey.hot = [card({ title: "A" })];
