@@ -2,7 +2,9 @@ import renderer, { act } from "react-test-renderer";
 import { Image } from "react-native";
 import { RemoteImage } from "@/components/RemoteImage";
 
-const images = (r: renderer.ReactTestRenderer) => r.root.findAllByType(Image);
+const images = (r: renderer.ReactTestRenderer) =>
+  r.root.findAllByType(Image).filter((n) => n.props.onError);
+const allImages = (r: renderer.ReactTestRenderer) => r.root.findAllByType(Image);
 
 async function failAllRetries(r: renderer.ReactTestRenderer) {
   for (const delay of [900, 1800]) {
@@ -164,6 +166,36 @@ describe("RemoteImage", () => {
     const imgs = images(r!);
     expect(imgs).toHaveLength(1);
     expect(imgs[0].props.source.uri).toBe(KTO_MID);
+  });
+
+  it("paints a blurred KTO mid-size preview behind the hi-res original", async () => {
+    let r: renderer.ReactTestRenderer;
+    await act(async () => {
+      r = renderer.create(<RemoteImage uri={KTO_HIRES} />);
+    });
+    const preview = allImages(r!).find((n) => !n.props.onError);
+    expect(preview?.props.source.uri).toBe(KTO_MID);
+    expect(preview?.props.blurRadius).toBe(6);
+    expect(images(r!)[0].props.source.uri).toBe(KTO_HIRES);
+  });
+
+  it("drops the preview once the original degrades to the mid-size", async () => {
+    let r: renderer.ReactTestRenderer;
+    await act(async () => {
+      r = renderer.create(<RemoteImage uri={KTO_HIRES} />);
+    });
+    await act(async () => {
+      images(r!)[0].props.onError();
+    });
+    expect(allImages(r!).every((n) => n.props.onError)).toBe(true);
+  });
+
+  it("shows no preview for a non-KTO uri", async () => {
+    let r: renderer.ReactTestRenderer;
+    await act(async () => {
+      r = renderer.create(<RemoteImage uri="https://example.com/a.jpg" />);
+    });
+    expect(allImages(r!)).toHaveLength(1);
   });
 
   it("does not degrade a non-KTO url that merely contains _image1_1", async () => {

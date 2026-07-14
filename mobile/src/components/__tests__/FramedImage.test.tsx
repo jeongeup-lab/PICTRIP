@@ -5,7 +5,8 @@ import { FramedImage } from "@/components/FramedImage";
 const KTO_HIRES = "https://tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg";
 const KTO_MID = "https://tong.visitkorea.or.kr/cms/resource/98/3045598_image2_1.jpg";
 
-const images = (r: renderer.ReactTestRenderer) => r.root.findAllByType(Image);
+const images = (r: renderer.ReactTestRenderer) =>
+  r.root.findAllByType(Image).filter((n) => n.props.onError);
 
 const layout = async (r: renderer.ReactTestRenderer, width: number, height: number) => {
   await act(async () => {
