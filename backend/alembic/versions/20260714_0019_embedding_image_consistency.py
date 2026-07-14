@@ -1,4 +1,4 @@
-"""Keep domestic embeddings aligned with their source images.
+"""Keep embeddings aligned with their source images.
 
 Revision ID: 0019_embedding_image_consistency
 Revises: 0018_overseas_spots
@@ -19,7 +19,8 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     op.execute(
-        "LOCK TABLE spots, spot_embeddings, embedding_failures IN SHARE ROW EXCLUSIVE MODE"
+        "LOCK TABLE spots, spot_embeddings, embedding_failures, overseas_spots "
+        "IN SHARE ROW EXCLUSIVE MODE"
     )
     op.execute(
         """
@@ -30,7 +31,11 @@ def upgrade() -> None:
         BEGIN
             DELETE FROM spot_embeddings
             WHERE content_id = NEW.content_id
-              AND image_url IS DISTINCT FROM NEW.first_image_url;
+              AND (
+                  NEW.first_image_url IS NULL
+                  OR NEW.first_image_url = ''
+                  OR image_url IS DISTINCT FROM NEW.first_image_url
+              );
             IF NEW.first_image_url IS NULL OR NEW.first_image_url = '' THEN
                 DELETE FROM embedding_failures
                 WHERE content_id = NEW.content_id;
@@ -41,6 +46,19 @@ def upgrade() -> None:
                 SET reason = EXCLUDED.reason,
                     last_error = EXCLUDED.last_error;
             END IF;
+            RETURN NEW;
+        END;
+        $$
+        """
+    )
+    op.execute(
+        """
+        CREATE FUNCTION invalidate_overseas_spot_embedding()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            NEW.embedding = NULL;
             RETURN NEW;
         END;
         $$
@@ -80,14 +98,29 @@ def upgrade() -> None:
     )
     op.execute(
         """
+        CREATE TRIGGER trg_overseas_spots_invalidate_embedding
+        BEFORE UPDATE OF image_url ON overseas_spots
+        FOR EACH ROW
+        WHEN (OLD.image_url IS DISTINCT FROM NEW.image_url)
+        EXECUTE FUNCTION invalidate_overseas_spot_embedding()
+        """
+    )
+    op.execute(
+        """
         DELETE FROM spot_embeddings AS embedding
         USING spots AS spot
         WHERE embedding.content_id = spot.content_id
-          AND embedding.image_url IS DISTINCT FROM spot.first_image_url
+          AND (
+              spot.first_image_url IS NULL
+              OR spot.first_image_url = ''
+              OR embedding.image_url IS DISTINCT FROM spot.first_image_url
+          )
         """
     )
 
 
 def downgrade() -> None:
+    op.execute("DROP TRIGGER IF EXISTS trg_overseas_spots_invalidate_embedding ON overseas_spots")
     op.execute("DROP TRIGGER IF EXISTS trg_spots_invalidate_image_derivatives ON spots")
+    op.execute("DROP FUNCTION IF EXISTS invalidate_overseas_spot_embedding()")
     op.execute("DROP FUNCTION IF EXISTS invalidate_spot_image_derivatives()")
