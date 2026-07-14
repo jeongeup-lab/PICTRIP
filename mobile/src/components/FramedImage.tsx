@@ -66,7 +66,7 @@ export function FramedImage({ uri }: { uri: string | null }) {
         uri={uri}
         style={StyleSheet.absoluteFill}
         cropBanner={false}
-        blurRadius={BACKDROP_BLUR}
+        blurRadius={frame ? BACKDROP_BLUR : undefined}
         onLoad={onImageLoad}
       />
       <View style={styles.veil} />

@@ -37,9 +37,10 @@ describe("FramedImage", () => {
     expect(Math.round(style.height as number)).toBe(229);
     expect(style.top).toBeGreaterThan(0);
     expect(images(r!).map((image) => image.props.source.uri)).toEqual([KTO_HIRES, KTO_HIRES]);
+    expect(images(r!)[0].props.blurRadius).toBe(26);
   });
 
-  it("shows only the blurred backdrop until its load dimensions resolve", async () => {
+  it("shows one sharp fallback backdrop until its load dimensions resolve", async () => {
     let r: renderer.ReactTestRenderer;
     await act(async () => {
       r = renderer.create(<FramedImage uri={KTO_HIRES} />);
@@ -47,7 +48,32 @@ describe("FramedImage", () => {
     await layout(r!, 390, 780);
     expect(r!.root.findAllByProps({ testID: "framed-image-frame" })).toHaveLength(0);
     expect(images(r!)).toHaveLength(1);
+    expect(images(r!)[0].props.blurRadius).toBeUndefined();
     expect(Image.getSize).not.toHaveBeenCalled();
+  });
+
+  it("keeps a successful image sharp when web dimensions cannot be resolved", async () => {
+    jest
+      .spyOn(Image, "getSize")
+      .mockImplementation((_uri, _success, failure) => failure?.(new Error("unavailable")));
+    let r: renderer.ReactTestRenderer;
+    await act(async () => {
+      r = renderer.create(<FramedImage uri={KTO_HIRES} />);
+    });
+    await layout(r!, 390, 780);
+    await act(async () => {
+      images(r!)[0].props.onLoad({ nativeEvent: {} });
+    });
+
+    expect(Image.getSize).toHaveBeenCalledWith(
+      KTO_HIRES,
+      expect.any(Function),
+      expect.any(Function),
+    );
+    expect(r!.root.findAllByProps({ testID: "framed-image-frame" })).toHaveLength(0);
+    expect(images(r!)).toHaveLength(1);
+    expect(images(r!)[0].props.source.uri).toBe(KTO_HIRES);
+    expect(images(r!)[0].props.blurRadius).toBeUndefined();
   });
 
   it("renders the sharp frame from react-native-web load dimensions", async () => {
@@ -76,14 +102,17 @@ describe("FramedImage", () => {
     await act(async () => {
       r = renderer.create(<FramedImage uri={KTO_HIRES} />);
     });
+    const firstImage = images(r!)[0];
     const firstOnLoad = images(r!)[0].props.onLoad;
     const firstSource = images(r!)[0].props.source;
     await layout(r!, 390, 780);
     expect(images(r!)[0].props.onLoad).toBe(firstOnLoad);
     expect(images(r!)[0].props.source).toBe(firstSource);
     await load(r!, KTO_HIRES, 940, 626);
+    expect(images(r!)[0]).toBe(firstImage);
     expect(images(r!)[0].props.onLoad).toBe(firstOnLoad);
     expect(images(r!)[0].props.source).toBe(firstSource);
+    expect(images(r!)[0].props.blurRadius).toBe(26);
   });
 
   it("uses the successful mid-size fallback for both backdrop and frame", async () => {
