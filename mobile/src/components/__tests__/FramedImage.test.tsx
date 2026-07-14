@@ -1,12 +1,13 @@
 import renderer, { act } from "react-test-renderer";
 import { Image, StyleSheet, View } from "react-native";
+import { Image as ExpoImage } from "expo-image";
 import { FramedImage } from "@/components/FramedImage";
 
 const KTO_HIRES = "https://tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg";
 const KTO_MID = "https://tong.visitkorea.or.kr/cms/resource/98/3045598_image2_1.jpg";
 
 const images = (r: renderer.ReactTestRenderer) =>
-  r.root.findAllByType(Image).filter((n) => n.props.onError);
+  r.root.findAllByType(ExpoImage).filter((n) => n.props.onError);
 
 const layout = async (r: renderer.ReactTestRenderer, width: number, height: number) => {
   await act(async () => {
@@ -16,7 +17,7 @@ const layout = async (r: renderer.ReactTestRenderer, width: number, height: numb
 
 const load = async (r: renderer.ReactTestRenderer, uri: string, width: number, height: number) => {
   await act(async () => {
-    images(r)[0].props.onLoad({ nativeEvent: { source: { uri, width, height } } });
+    images(r)[0].props.onLoad({ source: { url: uri, width, height } });
   });
 };
 
@@ -63,7 +64,7 @@ describe("FramedImage", () => {
     });
     await layout(r!, 390, 780);
     await act(async () => {
-      images(r!)[0].props.onLoad({ nativeEvent: {} });
+      images(r!)[0].props.onLoad({});
     });
 
     expect(Image.getSize).toHaveBeenCalledWith(
@@ -85,9 +86,7 @@ describe("FramedImage", () => {
     });
     await layout(r!, 390, 780);
     await act(async () => {
-      images(r!)[0].props.onLoad({
-        nativeEvent: {},
-      });
+      images(r!)[0].props.onLoad({});
     });
     expect(Image.getSize).toHaveBeenCalledWith(
       KTO_HIRES,

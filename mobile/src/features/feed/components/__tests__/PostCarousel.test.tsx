@@ -1,5 +1,6 @@
 import renderer, { act } from "react-test-renderer";
-import { FlatList, Image } from "react-native";
+import { FlatList } from "react-native";
+import { Image } from "expo-image";
 import { router } from "expo-router";
 import { PostCarousel } from "@/features/feed/components/PostCarousel";
 import { FramedImage } from "@/components/FramedImage";
@@ -86,7 +87,9 @@ describe("PostCarousel", () => {
       match({ contentId: "101", imageUrl: "https://tong.visitkorea.or.kr/b_image1_1.jpg" }),
     ]);
     await mount();
-    expect(prefetch).toHaveBeenCalledWith("https://tong.visitkorea.or.kr/a_image1_1.jpg");
+    expect(prefetch).toHaveBeenCalledWith("https://tong.visitkorea.or.kr/a_image1_1.jpg", {
+      cachePolicy: "memory-disk",
+    });
   });
 
   it("after swipe, match slides render number, name, region, overview", async () => {
