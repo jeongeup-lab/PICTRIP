@@ -2,7 +2,6 @@ import { View, Text, Pressable, StyleSheet } from "react-native";
 import Svg, { Defs, LinearGradient, Stop, Rect } from "react-native-svg";
 import { router } from "expo-router";
 import { RemoteImage } from "@/components/RemoteImage";
-import { FramedImage } from "@/components/FramedImage";
 import { Icon } from "@/components/Icon";
 import { useSaveOptimistic } from "@/features/saved/hooks/use-save-optimistic";
 import { prefetchSpot } from "@/features/spots/queries";
@@ -125,7 +124,7 @@ function MatchSlide({
         router.push(`/spots/${match.contentId}`);
       }}
     >
-      <FramedImage uri={match.imageUrl} />
+      <RemoteImage uri={match.imageUrl} midSize style={StyleSheet.absoluteFill} />
       <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
         <Defs>
           <LinearGradient id="matchScrim" x1="0" y1="0" x2="0" y2="1">

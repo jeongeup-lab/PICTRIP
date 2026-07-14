@@ -3,7 +3,6 @@ import { FlatList } from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { PostCarousel } from "@/features/feed/components/PostCarousel";
-import { FramedImage } from "@/components/FramedImage";
 import { useMatches } from "@/features/feed/posts-queries";
 import { useSaveOptimistic } from "@/features/saved/hooks/use-save-optimistic";
 import type { MatchCard, OverseasPost } from "@/features/feed/posts-api";
@@ -80,14 +79,14 @@ describe("PostCarousel", () => {
     expect(useMatches).toHaveBeenCalledWith(7, { enabled: false });
   });
 
-  it("prefetches the first match image bytes once matches arrive (warms the ~1620px original)", async () => {
+  it("prefetches the first match image bytes once matches arrive (warms the ~940px mid-size shown in the feed)", async () => {
     const prefetch = jest.spyOn(Image, "prefetch").mockResolvedValue(true);
     setMatches([
       match({ contentId: "100", imageUrl: "https://tong.visitkorea.or.kr/a_image1_1.jpg" }),
       match({ contentId: "101", imageUrl: "https://tong.visitkorea.or.kr/b_image1_1.jpg" }),
     ]);
     await mount();
-    expect(prefetch).toHaveBeenCalledWith("https://tong.visitkorea.or.kr/a_image1_1.jpg", {
+    expect(prefetch).toHaveBeenCalledWith("https://tong.visitkorea.or.kr/a_image2_1.jpg", {
       cachePolicy: "memory-disk",
     });
   });
@@ -105,10 +104,18 @@ describe("PostCarousel", () => {
     expect(r.root.findAllByProps({ testID: "match-number" }).length).toBeGreaterThan(0);
   });
 
-  it("match slides render via the blur-fill FramedImage (sharp, not raw cover)", async () => {
-    setMatches([match()]);
+  it("match slides render the KTO mid-size cover-fill (single image, no blur-up preview)", async () => {
+    setMatches([match({ imageUrl: "https://tong.visitkorea.or.kr/a_image1_1.jpg" })]);
     const r = await mount();
-    expect(r.root.findAllByType(FramedImage).length).toBeGreaterThan(0);
+    const ktoImages = r.root
+      .findAllByType(Image)
+      .filter(
+        (n) =>
+          typeof n.props.source?.uri === "string" &&
+          n.props.source.uri.includes("tong.visitkorea.or.kr"),
+      );
+    expect(ktoImages.length).toBe(1);
+    expect(ktoImages[0].props.source.uri).toBe("https://tong.visitkorea.or.kr/a_image2_1.jpg");
   });
 
   it("match slide bookmark toggles via save hook", async () => {

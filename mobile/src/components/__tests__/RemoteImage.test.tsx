@@ -248,6 +248,57 @@ describe("RemoteImage", () => {
     expect(images(r!)).toHaveLength(0);
   });
 
+  it("midSize renders the KTO mid-size as the main image with no blur preview", async () => {
+    let r: renderer.ReactTestRenderer;
+    await act(async () => {
+      r = renderer.create(<RemoteImage uri={KTO_HIRES} midSize />);
+    });
+    expect(allImages(r!)).toHaveLength(1);
+    expect(images(r!)[0].props.source.uri).toBe(KTO_MID);
+  });
+
+  it("midSize on a non-KTO uri leaves it untouched", async () => {
+    let r: renderer.ReactTestRenderer;
+    await act(async () => {
+      r = renderer.create(<RemoteImage uri="https://example.com/a.jpg" midSize />);
+    });
+    expect(allImages(r!)).toHaveLength(1);
+    expect(images(r!)[0].props.source.uri).toBe("https://example.com/a.jpg");
+  });
+
+  const COMMONS_THUMB =
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Kyoto.jpg/1200px-Kyoto.jpg";
+  const COMMONS_FILEPATH =
+    "https://commons.wikimedia.org/wiki/Special:FilePath/Kyoto.jpg?width=1200";
+
+  it("commonsWidth rewrites a direct upload.wikimedia thumb width", async () => {
+    let r: renderer.ReactTestRenderer;
+    await act(async () => {
+      r = renderer.create(<RemoteImage uri={COMMONS_THUMB} commonsWidth={320} />);
+    });
+    expect(images(r!)[0].props.source.uri).toBe(
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Kyoto.jpg/320px-Kyoto.jpg",
+    );
+  });
+
+  it("commonsWidth rewrites a Special:FilePath width param", async () => {
+    let r: renderer.ReactTestRenderer;
+    await act(async () => {
+      r = renderer.create(<RemoteImage uri={COMMONS_FILEPATH} commonsWidth={480} />);
+    });
+    expect(images(r!)[0].props.source.uri).toBe(
+      "https://commons.wikimedia.org/wiki/Special:FilePath/Kyoto.jpg?width=480",
+    );
+  });
+
+  it("commonsWidth leaves a non-wikimedia uri untouched", async () => {
+    let r: renderer.ReactTestRenderer;
+    await act(async () => {
+      r = renderer.create(<RemoteImage uri={KTO_HIRES} commonsWidth={320} />);
+    });
+    expect(images(r!)[0].props.source.uri).toBe(KTO_HIRES);
+  });
+
   it("retries again after an A→B→A round-trip back to a previously-failed uri", async () => {
     const A = "https://example.com/a.jpg";
     const B = "https://example.com/b.jpg";
