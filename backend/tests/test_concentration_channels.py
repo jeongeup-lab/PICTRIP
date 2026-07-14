@@ -23,7 +23,8 @@ async def _seed(session: AsyncSession, cid: str, *, rate: str, overview: str | N
     await session.execute(
         text(
             "INSERT INTO spots (content_id, content_type_id, title, first_image_url, "
-            "show_flag, ldong_regn_cd) VALUES (:cid, 12, :t, 'http://kto/i.jpg', 1, '26')"
+            "show_flag, ldong_regn_cd, lcls_systm1) "
+            "VALUES (:cid, 12, :t, 'http://kto/i.jpg', 1, '26', 'NA')"
         ),
         {"cid": cid, "t": f"t-{cid}"},
     )

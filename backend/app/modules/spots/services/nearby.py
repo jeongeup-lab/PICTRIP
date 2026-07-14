@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -73,6 +74,24 @@ def category_predicate(cat: NearbyCategory) -> ColumnElement[bool]:
     )
 
 
+def all_categories_predicate() -> ColumnElement[bool]:
+    """Union of the 5 defined categories — uncategorized spots (숙박/축제/공연 등)
+    excluded. The taxonomy SSOT for every "tourist-worthy spots only" gate."""
+    return or_(*(category_predicate(c) for c in NearbyCategory))
+
+
+def all_categories_sql() -> str:
+    """all_categories_predicate rendered as raw SQL for text() queries that join
+    the ``spots`` table by its real name (no alias). Generated from the ORM
+    predicate so the category taxonomy stays single-source."""
+    return str(
+        all_categories_predicate().compile(
+            dialect=postgresql.dialect(),  # type: ignore[no-untyped-call]
+            compile_kwargs={"literal_binds": True},
+        )
+    )
+
+
 def derive_category(l1: str | None, l2: str | None, l3: str | None) -> str | None:
     """lcls values -> chip code. Order cafe before food: FD030100 is excluded from
     food but included in cafe."""
@@ -131,7 +150,7 @@ def _base_select(dist: ColumnElement[float], category: NearbyCategory | None):  
     if category is not None:
         return inner.where(category_predicate(category))
     # "All" = union of the 5 categories; uncategorized spots excluded.
-    return inner.where(or_(*(category_predicate(c) for c in NearbyCategory)))
+    return inner.where(all_categories_predicate())
 
 
 def _materialize(result: object) -> list[NearbySpotRow]:

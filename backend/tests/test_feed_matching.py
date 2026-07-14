@@ -60,15 +60,16 @@ async def _insert_spot(
     *,
     overview: str | None,
     show_flag: int = 1,
+    lcls1: str | None = "NA",
 ) -> None:
     await session.execute(
         text(
             "INSERT INTO spots (content_id, content_type_id, title, first_image_url, "
-            "addr1, mapx, mapy, show_flag) "
-            "VALUES (:cid, 12, :t, 'http://kto/p.jpg', 'addr1', 127.0, 37.0, :show) "
+            "addr1, mapx, mapy, show_flag, lcls_systm1) "
+            "VALUES (:cid, 12, :t, 'http://kto/p.jpg', 'addr1', 127.0, 37.0, :show, :lcls1) "
             "ON CONFLICT (content_id) DO NOTHING"
         ),
-        {"cid": content_id, "t": f"title-{content_id}", "show": show_flag},
+        {"cid": content_id, "t": f"title-{content_id}", "show": show_flag, "lcls1": lcls1},
     )
     await session.execute(
         text(
@@ -272,6 +273,33 @@ async def test_neighbor_search_excludes_inactive_spots(db_session):
 
     assert "mt_active_neighbor" in content_ids
     assert "mt_hidden_neighbor" not in content_ids
+
+
+async def test_neighbor_search_excludes_uncategorized_spots(db_session):
+    oid = await _insert_overseas(db_session, embedding=_CLOSE)
+    await _insert_spot(db_session, "mt_categorized", _CLOSE, overview=None, lcls1="NA")
+    await _insert_spot(db_session, "mt_uncategorized", _CLOSE, overview=None, lcls1=None)
+
+    neighbors = await repositories.find_domestic_neighbors(db_session, oid, limit=10_000)
+    content_ids = {content_id for content_id, _image_url, _distance in neighbors}
+
+    assert "mt_categorized" in content_ids
+    assert "mt_uncategorized" not in content_ids
+
+
+async def test_cached_match_state_drops_uncategorized_spot(db_session):
+    oid = await _insert_overseas(db_session, embedding=_CLOSE)
+    await _insert_spot(db_session, "mt_state_cat", _CLOSE, overview=None, lcls1="NA")
+    await _insert_spot(db_session, "mt_state_uncat", _CLOSE, overview=None, lcls1=None)
+
+    state = await repositories.get_cached_match_state(
+        db_session, oid, ["mt_state_cat", "mt_state_uncat"]
+    )
+
+    assert state is not None
+    _has_embedding, current = state
+    assert "mt_state_cat" in current
+    assert "mt_state_uncat" not in current
 
 
 async def test_neighbor_search_returns_empty_without_overseas_embedding(db_session):
