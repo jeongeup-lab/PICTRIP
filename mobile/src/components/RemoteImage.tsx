@@ -42,6 +42,19 @@ interface RemoteImageProps {
   withUA?: boolean;
   /** Native blur applied to the image (story letterbox backdrop). */
   blurRadius?: number;
+  /**
+   * Render the KTO ~940px mid-size (`_image2_1`) as the main image instead of the
+   * ~1620px original, skipping the blur-up preview. Use on feed surfaces where the
+   * mid-size is sharp enough and the original's slower load isn't worth the two-stage
+   * fade. No-op for non-KTO uris.
+   */
+  midSize?: boolean;
+  /**
+   * Rewrite a Wikimedia Commons thumbnail to this pixel width before loading. Cuts
+   * bytes for small grid tiles that would otherwise download the stored 1200px thumb.
+   * No-op for non-Commons uris.
+   */
+  commonsWidth?: number;
   onLoad?: (image: RemoteImageLoad) => void;
 }
 
@@ -76,6 +89,35 @@ const isKtoUrl = (u: string): boolean => {
 const ktoFallback = (u: string): string | null =>
   isKtoUrl(u) && u.includes(KTO_HIRES) ? u.replace(KTO_HIRES, KTO_MID) : null;
 
+export const ktoMidSizeUrl = (u: string): string => ktoFallback(u) ?? u;
+
+const COMMONS_HOSTS = new Set(["upload.wikimedia.org", "commons.wikimedia.org"]);
+const isCommonsUrl = (u: string): boolean => {
+  const authority = /^https?:\/\/([^/?#]+)/i.exec(u);
+  return !!authority && COMMONS_HOSTS.has(authority[1].toLowerCase());
+};
+const commonsThumb = (u: string, width: number): string => {
+  if (u.includes("/thumb/")) return u.replace(/\/(\d+)px-([^/]+)$/, `/${width}px-$2`);
+  if (/\/wiki\/Special:FilePath\//i.test(u)) {
+    return /[?&]width=\d+/.test(u)
+      ? u.replace(/([?&]width=)\d+/, `$1${width}`)
+      : `${u}${u.includes("?") ? "&" : "?"}width=${width}`;
+  }
+  return u;
+};
+
+const resolveSource = (
+  raw: string | null,
+  midSize: boolean,
+  commonsWidth: number | undefined,
+): string | null => {
+  if (!raw) return raw;
+  const midResolved = midSize ? ktoMidSizeUrl(raw) : raw;
+  return commonsWidth && isCommonsUrl(midResolved)
+    ? commonsThumb(midResolved, commonsWidth)
+    : midResolved;
+};
+
 const contentFitFor = (mode?: ImageResizeMode): ImageContentFit => {
   switch (mode) {
     case "contain":
@@ -90,15 +132,18 @@ const contentFitFor = (mode?: ImageResizeMode): ImageContentFit => {
 };
 
 export function RemoteImage({
-  uri,
+  uri: rawUri,
   style,
   radius = 0,
   cropBanner = true,
   resizeMode,
   withUA = false,
   blurRadius,
+  midSize = false,
+  commonsWidth,
   onLoad,
 }: RemoteImageProps) {
+  const uri = resolveSource(rawUri, midSize, commonsWidth);
   const [failedUri, setFailedUri] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   // The KTO original URI whose _image1_1 has failed and been degraded. Keyed by URI (not a
