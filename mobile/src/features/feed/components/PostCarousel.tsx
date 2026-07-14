@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   FlatList,
+  Image,
   useWindowDimensions,
   StyleSheet,
   type NativeSyntheticEvent,
@@ -39,17 +40,20 @@ export function PostCarousel({
   const { width } = useWindowDimensions();
   const cardWidth = width - 32;
   const [index, setIndex] = useState(0);
-  const [armed, setArmed] = useState(false);
   const [creditOpen, setCreditOpen] = useState(false);
 
-  const { data } = useMatches(post.id, { enabled: armed });
+  const { data } = useMatches(post.id, { enabled: true });
   const slides = useMemo(() => slidesFor(post, data), [post, data]);
 
-  const onScrollBeginDrag = () => setArmed(true);
+  useEffect(() => {
+    for (const m of data?.matches.slice(0, 2) ?? []) {
+      if (m.imageUrl) void Image.prefetch(m.imageUrl);
+    }
+  }, [data]);
+
   const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const i = cardWidth > 0 ? Math.round(e.nativeEvent.contentOffset.x / cardWidth) : 0;
     if (i !== index) setIndex(i);
-    if (i >= 1) setArmed(true);
   };
 
   return (
@@ -63,7 +67,6 @@ export function PostCarousel({
           scrollEnabled={slides.length > 1}
           showsHorizontalScrollIndicator={false}
           getItemLayout={(_, i) => ({ length: cardWidth, offset: cardWidth * i, index: i })}
-          onScrollBeginDrag={onScrollBeginDrag}
           onMomentumScrollEnd={onMomentumEnd}
           renderItem={({ item, index: i }) => (
             <PostSlide

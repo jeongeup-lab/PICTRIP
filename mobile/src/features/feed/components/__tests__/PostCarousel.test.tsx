@@ -1,5 +1,5 @@
 import renderer, { act } from "react-test-renderer";
-import { FlatList } from "react-native";
+import { FlatList, Image } from "react-native";
 import { router } from "expo-router";
 import { PostCarousel } from "@/features/feed/components/PostCarousel";
 import { useMatches } from "@/features/feed/posts-queries";
@@ -73,9 +73,19 @@ describe("PostCarousel", () => {
     expect(text(r)).toContain("1/4");
   });
 
-  it("matches query stays disabled until first swipe", async () => {
+  it("loads matches eagerly so KTO slides appear without a swipe", async () => {
     await mount();
-    expect(useMatches).toHaveBeenCalledWith(7, { enabled: false });
+    expect(useMatches).toHaveBeenCalledWith(7, { enabled: true });
+  });
+
+  it("prefetches the first match image bytes once matches arrive", async () => {
+    const prefetch = jest.spyOn(Image, "prefetch").mockResolvedValue(true);
+    setMatches([
+      match({ contentId: "100", imageUrl: "https://tong.visitkorea.or.kr/a.jpg" }),
+      match({ contentId: "101", imageUrl: "https://tong.visitkorea.or.kr/b.jpg" }),
+    ]);
+    await mount();
+    expect(prefetch).toHaveBeenCalledWith("https://tong.visitkorea.or.kr/a.jpg");
   });
 
   it("after swipe, match slides render number, name, region, overview", async () => {
