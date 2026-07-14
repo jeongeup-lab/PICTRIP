@@ -43,14 +43,15 @@ async def _seed_spot(
     show: int = 1,
     img: str | None = "http://kto/i.jpg",
     overview: str | None = None,
+    lcls1: str | None = "NA",
 ) -> None:
     await session.execute(
         text(
             "INSERT INTO spots (content_id, content_type_id, title, first_image_url, "
-            "show_flag, ldong_regn_cd, ldong_signgu_cd) "
-            "VALUES (:cid, 12, :t, :img, :show, '26', '26380')"
+            "show_flag, ldong_regn_cd, ldong_signgu_cd, lcls_systm1) "
+            "VALUES (:cid, 12, :t, :img, :show, '26', '26380', :lcls1)"
         ),
-        {"cid": cid, "t": f"t-{cid}", "img": img, "show": show},
+        {"cid": cid, "t": f"t-{cid}", "img": img, "show": show, "lcls1": lcls1},
     )
     await session.execute(
         text(
@@ -113,3 +114,17 @@ async def test_hot_respects_limit(
 ) -> None:
     rows = await load_hot_spots(db_session, limit=2)
     assert [r.content_id for r in rows] == ["c90", "c60"]
+
+
+async def test_hot_and_hidden_exclude_uncategorized(db_session: AsyncSession) -> None:
+    await _seed_region(db_session)
+    await _seed_spot(db_session, "cat_hot", rate="99.00", overview="설명", lcls1="NA")
+    await _seed_spot(db_session, "uncat_hot", rate="98.00", overview="설명", lcls1=None)
+    await db_session.flush()
+
+    hot = [r.content_id for r in await load_hot_spots(db_session, limit=10)]
+    hidden = [r.content_id for r in await load_hidden_spots(db_session, limit=10)]
+
+    assert "cat_hot" in hot
+    assert "uncat_hot" not in hot
+    assert "uncat_hot" not in hidden

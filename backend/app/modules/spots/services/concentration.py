@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.spots.models import Spot, SpotConcentration, SpotDetail
 from app.modules.spots.services.cards import load_region_meta
+from app.modules.spots.services.nearby import all_categories_predicate
 
 
 @dataclass(frozen=True)
@@ -49,6 +50,7 @@ async def _load(
             Spot.show_flag == 1,
             Spot.first_image_url.is_not(None),
             Spot.first_image_url != "",
+            all_categories_predicate(),
         )
     )
     if require_overview:
