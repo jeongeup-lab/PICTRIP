@@ -130,7 +130,13 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
 
 ## Prohibitions
 
-- **DO NOT download or store KTO images** — URLs only (`cpyrhtDivCd Type3`).
+- **DO NOT download, store, resize, or re-host KTO images** — URLs only. This is
+  KTO's official 공모전 guidance (2026-05-20 설명회: 이미지는 URL만·다운로드 금지,
+  파일데이터/콘텐츠랩 다운로드 사용 = **실격**), not mere `cpyrhtDivCd Type3` caution —
+  so a **server-side resize/thumbnail/proxy/CDN-cache of KTO images is out** — don't
+  re-propose it. The one image touch this repo makes is the embedding path below
+  (`DO NOT persist user-uploaded images`). Source lives in the design vault, not this
+  repo: `~/Documents/Obsidian Vault/PicTrip-공모전/8_레퍼런스/공모전-설명회-요약.md`.
 - **DO NOT persist user-uploaded images** — CLIP runs in memory, bytes discarded.
 - **DO NOT modify KTO `overview` text** — store and display verbatim.
 - **DO NOT put secrets in code or commits** — `.env` only; mobile gets only
