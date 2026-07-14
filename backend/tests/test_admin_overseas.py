@@ -223,14 +223,15 @@ async def test_hide_invalidates_match_cache(
     try:
         primed = await client.get(f"/v1/overseas/{oid}/matches")
         assert primed.status_code == 200
-        assert await redis_client_fake.get(f"match:{oid}") is not None
+        assert await redis_client_fake.get(f"match:0:{oid}") is not None
 
         res = await client.put(
             f"/admin/api/overseas/{oid}/visibility", json={"isHidden": True}, headers=_AUTH
         )
         assert res.status_code == 200
 
-        assert await redis_client_fake.get(f"match:{oid}") is None
+        assert await redis_client_fake.get("matching:revision") == "1"
+        assert await redis_client_fake.get(f"match:0:{oid}") is not None
 
         stale = await client.get(f"/v1/overseas/{oid}/matches")
         assert stale.status_code == 404

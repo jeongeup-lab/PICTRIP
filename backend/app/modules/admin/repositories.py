@@ -46,7 +46,12 @@ async def count_spots(session: AsyncSession) -> int:
 
 async def count_embeddings(session: AsyncSession) -> int:
     """Spots with a CLIP embedding (spot_embeddings is the vector store)."""
-    result = await session.execute(text("SELECT count(*) FROM spot_embeddings"))
+    result = await session.execute(
+        text(
+            "SELECT count(*) FROM spot_embeddings e JOIN spots s "
+            "ON s.content_id = e.content_id AND s.first_image_url = e.image_url"
+        )
+    )
     return int(result.scalar_one())
 
 
@@ -115,9 +120,17 @@ async def embedding_totals(session: AsyncSession) -> Row[Any]:
             "   AND first_image_url <> '') AS with_image, "
             "(SELECT count(*) FROM spots s WHERE s.first_image_url IS NOT NULL "
             "   AND s.first_image_url <> '' AND NOT EXISTS "
-            "   (SELECT 1 FROM spot_embeddings e WHERE e.content_id = s.content_id)) AS missing, "
-            "(SELECT count(*) FROM embedding_failures) AS failed, "
-            "(SELECT max(computed_at) FROM spot_embeddings) AS last_computed_at"
+            "   (SELECT 1 FROM spot_embeddings e WHERE e.content_id = s.content_id "
+            "      AND e.image_url = s.first_image_url)) AS missing, "
+            "(SELECT count(*) FROM embedding_failures f JOIN spots s "
+            "   ON s.content_id = f.content_id "
+            " WHERE s.first_image_url IS NOT NULL AND s.first_image_url <> '' "
+            "   AND NOT EXISTS (SELECT 1 FROM spot_embeddings e "
+            "     WHERE e.content_id = s.content_id "
+            "       AND e.image_url = s.first_image_url)) AS failed, "
+            "(SELECT max(e.computed_at) FROM spot_embeddings e JOIN spots s "
+            "   ON s.content_id = e.content_id AND s.first_image_url = e.image_url) "
+            "AS last_computed_at"
         )
     )
     return result.one()
@@ -126,7 +139,14 @@ async def embedding_totals(session: AsyncSession) -> Row[Any]:
 async def embedding_failures_by_reason(session: AsyncSession) -> list[Row[Any]]:
     """(reason, count) rollup of the live failure backlog."""
     result = await session.execute(
-        text("SELECT reason, count(*) AS n FROM embedding_failures GROUP BY reason ORDER BY reason")
+        text(
+            "SELECT f.reason, count(*) AS n FROM embedding_failures f JOIN spots s "
+            "ON s.content_id = f.content_id "
+            "WHERE s.first_image_url IS NOT NULL AND s.first_image_url <> '' "
+            "AND NOT EXISTS (SELECT 1 FROM spot_embeddings e "
+            "  WHERE e.content_id = s.content_id AND e.image_url = s.first_image_url) "
+            "GROUP BY f.reason ORDER BY f.reason"
+        )
     )
     return list(result.all())
 
@@ -142,7 +162,8 @@ async def embedding_recent_window(session: AsyncSession, since: Any) -> Row[Any]
             "count(*) FILTER (WHERE first_image_url IS NOT NULL AND first_image_url <> '') "
             "  AS target, "
             "count(*) FILTER (WHERE first_image_url IS NOT NULL AND first_image_url <> '' "
-            "  AND EXISTS (SELECT 1 FROM spot_embeddings e WHERE e.content_id = s.content_id)) "
+            "  AND EXISTS (SELECT 1 FROM spot_embeddings e WHERE e.content_id = s.content_id "
+            "    AND e.image_url = s.first_image_url)) "
             "  AS embedded "
             "FROM spots s WHERE s.synced_at >= :since"
         ),

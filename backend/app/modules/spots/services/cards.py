@@ -29,6 +29,15 @@ def image_bearing_spots_stmt(*, since: datetime | None = None) -> Select[tuple[s
     return stmt
 
 
+async def lock_current_spot_image(session: AsyncSession, content_id: str, image_url: str) -> bool:
+    locked_content_id = await session.scalar(
+        select(Spot.content_id)
+        .where(Spot.content_id == content_id, Spot.first_image_url == image_url)
+        .with_for_update()
+    )
+    return locked_content_id is not None
+
+
 async def load_region_meta(
     session: AsyncSession,
     content_ids: list[str],

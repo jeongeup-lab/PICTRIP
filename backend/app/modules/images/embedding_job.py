@@ -43,6 +43,7 @@ _embed_lock = asyncio.Lock()
 OK = "ok"
 DOWNLOAD_FAILED = "download_failed"
 CLIP_ERROR = "clip_error"
+SOURCE_CHANGED = "source_changed"
 
 
 @dataclass
@@ -51,12 +52,15 @@ class EmbedResult:
 
     written: int = 0
     failed: int = 0
+    skipped: int = 0
     by_status: dict[str, int] = field(default_factory=dict)
 
     def record(self, status: str) -> None:
         self.by_status[status] = self.by_status.get(status, 0) + 1
         if status == OK:
             self.written += 1
+        elif status == SOURCE_CHANGED:
+            self.skipped += 1
         else:
             self.failed += 1
 
@@ -65,6 +69,7 @@ async def collect_targets(
     session: AsyncSession,
     *,
     only_failed: bool = False,
+    failure_reason: str | None = None,
     since: datetime | None = None,
     limit: int | None = None,
 ) -> list[tuple[str, str]]:
@@ -80,18 +85,21 @@ async def collect_targets(
     from app.modules.spots.services import image_bearing_spots_stmt
 
     spots = image_bearing_spots_stmt(since=since).subquery()
-    has_embedding = select(SpotEmbedding.content_id).where(
-        SpotEmbedding.content_id == spots.c.content_id
+    has_current_embedding = select(SpotEmbedding.content_id).where(
+        SpotEmbedding.content_id == spots.c.content_id,
+        SpotEmbedding.image_url == spots.c.first_image_url,
     )
     stmt = (
         select(spots.c.content_id, spots.c.first_image_url)
-        .where(~has_embedding.exists())
+        .where(~has_current_embedding.exists())
         .order_by(spots.c.content_id)
     )
-    if only_failed:
+    if only_failed or failure_reason is not None:
         has_failure = select(EmbeddingFailure.content_id).where(
             EmbeddingFailure.content_id == spots.c.content_id
         )
+        if failure_reason is not None:
+            has_failure = has_failure.where(EmbeddingFailure.reason == failure_reason)
         stmt = stmt.where(has_failure.exists())
     if limit:
         stmt = stmt.limit(limit)
@@ -126,7 +134,11 @@ async def _embed_one(
 
 async def _record_success(
     session: AsyncSession, content_id: str, image_url: str, vector: list[float]
-) -> None:
+) -> bool:
+    from app.modules.spots.services import lock_current_spot_image
+
+    if not await lock_current_spot_image(session, content_id, image_url):
+        return False
     stmt = (
         pg_insert(SpotEmbedding)
         .values(content_id=content_id, embedding=vector, image_url=image_url)
@@ -138,11 +150,20 @@ async def _record_success(
     await session.execute(stmt)
     # Clear any prior failure record — this spot is now embedded.
     await session.execute(delete(EmbeddingFailure).where(EmbeddingFailure.content_id == content_id))
+    return True
 
 
 async def _record_failure(
-    session: AsyncSession, content_id: str, reason: str, detail: str | None
-) -> None:
+    session: AsyncSession,
+    content_id: str,
+    image_url: str,
+    reason: str,
+    detail: str | None,
+) -> bool:
+    from app.modules.spots.services import lock_current_spot_image
+
+    if not await lock_current_spot_image(session, content_id, image_url):
+        return False
     stmt = (
         pg_insert(EmbeddingFailure)
         .values(content_id=content_id, reason=reason, attempts=1, last_error=detail)
@@ -157,6 +178,7 @@ async def _record_failure(
         )
     )
     await session.execute(stmt)
+    return True
 
 
 async def embed_spots(
@@ -179,11 +201,12 @@ async def embed_spots(
 
     outcomes = await asyncio.gather(*(_embed_one(cid, url, client, dl_sem) for cid, url in targets))
     for content_id, image_url, vector, status, detail in outcomes:
-        result.record(status)
         if status == OK and vector is not None:
-            await _record_success(session, content_id, image_url, vector)
+            written = await _record_success(session, content_id, image_url, vector)
+            result.record(OK if written else SOURCE_CHANGED)
         else:
-            await _record_failure(session, content_id, status, detail)
+            recorded = await _record_failure(session, content_id, image_url, status, detail)
+            result.record(status if recorded else SOURCE_CHANGED)
     await session.flush()
     return result
 
@@ -191,6 +214,7 @@ async def embed_spots(
 async def run_embedding_job(
     *,
     only_failed: bool = False,
+    failure_reason: str | None = None,
     since: datetime | None = None,
     limit: int | None = None,
     batch_size: int = 50,
@@ -202,8 +226,19 @@ async def run_embedding_job(
     BackgroundTask after the request session has closed). Commits per batch.
     """
     async with session_factory() as session:
-        targets = await collect_targets(session, only_failed=only_failed, since=since, limit=limit)
-    logger.info("embed.job.start", targets=len(targets), only_failed=only_failed)
+        targets = await collect_targets(
+            session,
+            only_failed=only_failed,
+            failure_reason=failure_reason,
+            since=since,
+            limit=limit,
+        )
+    logger.info(
+        "embed.job.start",
+        targets=len(targets),
+        only_failed=only_failed,
+        failure_reason=failure_reason,
+    )
     result = EmbedResult()
     if not targets:
         return result
@@ -216,7 +251,11 @@ async def run_embedding_job(
                 await embed_spots(session, batch, client=client, dl_sem=dl_sem, result=result)
                 await session.commit()
     logger.info(
-        "embed.job.done", written=result.written, failed=result.failed, by_status=result.by_status
+        "embed.job.done",
+        written=result.written,
+        failed=result.failed,
+        skipped=result.skipped,
+        by_status=result.by_status,
     )
     return result
 
@@ -229,7 +268,8 @@ async def count_missing(session: AsyncSession) -> int:
                 text(
                     "SELECT count(*) FROM spots s WHERE s.first_image_url IS NOT NULL "
                     "AND s.first_image_url <> '' AND NOT EXISTS "
-                    "(SELECT 1 FROM spot_embeddings e WHERE e.content_id = s.content_id)"
+                    "(SELECT 1 FROM spot_embeddings e WHERE e.content_id = s.content_id "
+                    "AND e.image_url = s.first_image_url)"
                 )
             )
         ).scalar_one()
