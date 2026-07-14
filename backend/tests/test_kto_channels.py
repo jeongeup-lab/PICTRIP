@@ -301,3 +301,35 @@ async def test_festa_calls_kor_searchfestival2(kto_mock: KtoClient) -> None:
     call_args, _ = kto_mock.call.call_args
     assert call_args[0] == KtoService.KOR
     assert call_args[1] == "searchFestival2"
+
+
+async def test_warm_all_channels_populates_every_key(
+    redis_client_fake, kto_mock_snap: KtoClient
+) -> None:
+    from app.modules.feed.services.kto_channels import warm_all_channels
+
+    await warm_all_channels(redis_client_fake, kto_mock_snap)
+
+    for key in ("festa", "pets", "snap"):
+        raw = await redis_client_fake.get(_cache_key(key))
+        assert raw is not None
+        assert json.loads(raw)["date"] == _today().isoformat()
+
+
+async def test_warm_all_channels_is_fail_soft_per_channel(redis_client_fake) -> None:
+    from app.modules.feed.services.kto_channels import warm_all_channels
+
+    async def _call(service: object, operation: object, *_a: object, **_k: object) -> list[dict]:
+        if "Festival" in str(operation):
+            raise RuntimeError("kto down")
+        return SNAP_ITEMS
+
+    kto = AsyncMock(spec=KtoClient)
+    kto.call = AsyncMock(side_effect=_call)
+
+    result = await warm_all_channels(redis_client_fake, kto)
+
+    assert result["festa"] is False
+    assert result["snap"] is True
+    assert await redis_client_fake.get(_cache_key("festa")) is None
+    assert await redis_client_fake.get(_cache_key("snap")) is not None

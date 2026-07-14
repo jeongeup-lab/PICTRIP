@@ -185,6 +185,20 @@ def _spawn_refresh(redis: Redis, kto: KtoClient, key: str) -> None:
     task.add_done_callback(_bg_tasks.discard)
 
 
+async def warm_all_channels(redis: Redis, kto: KtoClient) -> dict[str, bool]:
+    async def _one(key: str) -> bool:
+        try:
+            await _fetch_and_store(redis, kto, key)
+        except Exception as exc:
+            logger.warning("feed.channel.warm_failed", key=key, error=str(exc))
+            return False
+        return True
+
+    keys = list(_FETCHERS)
+    outcomes = await asyncio.gather(*(_one(key) for key in keys))
+    return dict(zip(keys, outcomes, strict=True))
+
+
 async def load_kto_channel_cached(redis: Redis, kto: KtoClient, key: str) -> list[ChannelCardRow]:
     try:
         raw = await redis.get(_cache_key(key))
