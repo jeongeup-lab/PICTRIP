@@ -1,5 +1,5 @@
 import renderer, { act } from "react-test-renderer";
-import { FlatList } from "react-native";
+import { FlatList, Image } from "react-native";
 import { router } from "expo-router";
 import { PostCarousel } from "@/features/feed/components/PostCarousel";
 import { FramedImage } from "@/components/FramedImage";
@@ -77,6 +77,16 @@ describe("PostCarousel", () => {
   it("matches query stays disabled until first swipe", async () => {
     await mount();
     expect(useMatches).toHaveBeenCalledWith(7, { enabled: false });
+  });
+
+  it("prefetches the first match image bytes once matches arrive (warms the ~1620px original)", async () => {
+    const prefetch = jest.spyOn(Image, "prefetch").mockResolvedValue(true);
+    setMatches([
+      match({ contentId: "100", imageUrl: "https://tong.visitkorea.or.kr/a_image1_1.jpg" }),
+      match({ contentId: "101", imageUrl: "https://tong.visitkorea.or.kr/b_image1_1.jpg" }),
+    ]);
+    await mount();
+    expect(prefetch).toHaveBeenCalledWith("https://tong.visitkorea.or.kr/a_image1_1.jpg");
   });
 
   it("after swipe, match slides render number, name, region, overview", async () => {
