@@ -5,6 +5,24 @@ cd "$(dirname "$0")"
 
 PREV_TAG="$(grep -E '^IMAGE_TAG=' .deploy.env | cut -d= -f2 || true)"
 NEW_TAG="${1:-${GITHUB_SHA:-latest}}"
+PREV_REVISION=""
+
+for _cid in $(docker ps --filter "publish=8000" -q); do
+  _name="$(docker inspect -f '{{.Name}}' "$_cid" | sed 's#^/##')"
+  case "$_name" in
+    api-host[-_]api[-_]*)
+      if _revision="$(docker exec "$_cid" alembic current 2>/dev/null | awk 'NR == 1 { print $1 }')"; then
+        PREV_REVISION="$_revision"
+      fi
+      break
+      ;;
+  esac
+done
+
+if [ -n "${PREV_TAG}" ] && [ -z "${PREV_REVISION}" ]; then
+  echo "ERROR: previous database revision could not be read from the running api container"
+  exit 1
+fi
 
 echo "deploy: ${PREV_TAG:-<none>} -> ${NEW_TAG}"
 sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${NEW_TAG}/" .deploy.env || echo "IMAGE_TAG=${NEW_TAG}" >> .deploy.env
@@ -33,6 +51,15 @@ smoke_ok() {
   curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1 &&
     curl -fsS https://api.pictrip.org/health >/dev/null 2>&1
 }
+wait_local() {
+  for _ in $(seq 1 30); do
+    if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
+}
 _ok=0
 for _ in $(seq 1 30); do
   if smoke_ok; then
@@ -43,9 +70,21 @@ for _ in $(seq 1 30); do
 done
 if [ "${_ok}" -ne 1 ]; then
   echo "smoke FAILED after ~60s — rolling back to ${PREV_TAG:-<none>}"
-  if [ -n "${PREV_TAG}" ]; then
+  if [ -n "${PREV_TAG}" ] \
+     && docker compose --env-file .deploy.env stop api \
+     && docker compose --env-file .deploy.env run --rm --no-deps \
+       --entrypoint alembic api downgrade "${PREV_REVISION}"; then
     sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${PREV_TAG}/" .deploy.env
-    docker compose --env-file .deploy.env up -d
+    if docker compose --env-file .deploy.env up -d && wait_local; then
+      echo "rollback OK: ${PREV_TAG} at database revision ${PREV_REVISION}"
+    else
+      echo "rollback image failed health check; restarting ${NEW_TAG}"
+      sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${NEW_TAG}/" .deploy.env
+      docker compose --env-file .deploy.env up -d || true
+    fi
+  elif [ -n "${PREV_TAG}" ]; then
+    echo "database downgrade failed; restarting ${NEW_TAG} instead of an incompatible old image"
+    docker compose --env-file .deploy.env up -d || true
   fi
   exit 1
 fi
