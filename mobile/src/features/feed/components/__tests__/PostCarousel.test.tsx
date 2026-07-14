@@ -2,6 +2,7 @@ import renderer, { act } from "react-test-renderer";
 import { FlatList } from "react-native";
 import { router } from "expo-router";
 import { PostCarousel } from "@/features/feed/components/PostCarousel";
+import { FramedImage } from "@/components/FramedImage";
 import { useMatches } from "@/features/feed/posts-queries";
 import { useSaveOptimistic } from "@/features/saved/hooks/use-save-optimistic";
 import type { MatchCard, OverseasPost } from "@/features/feed/posts-api";
@@ -89,6 +90,12 @@ describe("PostCarousel", () => {
     expect(text(r)).toContain("서울 용산구");
     expect(text(r)).toContain("서울의 전망 명소");
     expect(r.root.findAllByProps({ testID: "match-number" }).length).toBeGreaterThan(0);
+  });
+
+  it("match slides render via the blur-fill FramedImage (sharp, not raw cover)", async () => {
+    setMatches([match()]);
+    const r = await mount();
+    expect(r.root.findAllByType(FramedImage).length).toBeGreaterThan(0);
   });
 
   it("match slide bookmark toggles via save hook", async () => {

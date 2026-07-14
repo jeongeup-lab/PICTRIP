@@ -14,7 +14,7 @@ import {
 } from "@/features/map/usecases/request-location";
 import { PermissionPrimer } from "@/features/map/components/PermissionPrimer";
 import { StoryCard } from "@/features/channels/components/StoryCard";
-import { StoryImage } from "@/features/channels/components/StoryImage";
+import { FramedImage } from "@/components/FramedImage";
 import { colors } from "@/constants/theme";
 
 interface Props {
@@ -191,7 +191,7 @@ export function StoryViewer({ start }: Props) {
 
   return (
     <View style={[styles.root, { backgroundColor: BG }]} {...pan.panHandlers}>
-      <StoryImage uri={currentCard?.imageUrl ?? null} />
+      <FramedImage uri={currentCard?.imageUrl ?? null} />
       <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
         <Defs>
           <LinearGradient id="storyScrim" x1="0" y1="0" x2="0" y2="1">

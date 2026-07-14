@@ -28,7 +28,7 @@ interface Measure {
   failed: boolean;
 }
 
-export function StoryImage({ uri }: { uri: string | null }) {
+export function FramedImage({ uri }: { uri: string | null }) {
   const [measure, setMeasure] = useState<Measure>({ uri: "", img: null, failed: false });
   const [box, setBox] = useState<Size | null>(null);
 
@@ -76,7 +76,7 @@ export function StoryImage({ uri }: { uri: string | null }) {
       />
       <View style={styles.veil} />
       {frame ? (
-        <View testID="story-image-frame" style={[styles.frame, frame]}>
+        <View testID="framed-image-frame" style={[styles.frame, frame]}>
           <RemoteImage uri={uri} style={StyleSheet.absoluteFill} />
         </View>
       ) : null}

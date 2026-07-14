@@ -1,6 +1,6 @@
 import renderer, { act } from "react-test-renderer";
 import { Image, StyleSheet, View } from "react-native";
-import { StoryImage } from "@/features/channels/components/StoryImage";
+import { FramedImage } from "@/components/FramedImage";
 
 const layout = async (r: renderer.ReactTestRenderer, width: number, height: number) => {
   await act(async () => {
@@ -10,15 +10,15 @@ const layout = async (r: renderer.ReactTestRenderer, width: number, height: numb
 
 afterEach(() => jest.restoreAllMocks());
 
-describe("StoryImage", () => {
+describe("FramedImage", () => {
   it("letterboxes the image to its watermark-cropped aspect ratio", async () => {
     jest.spyOn(Image, "getSize").mockImplementation((_uri, ok) => ok(940, 626));
     let r: renderer.ReactTestRenderer;
     await act(async () => {
-      r = renderer.create(<StoryImage uri="https://tong.visitkorea.or.kr/a.jpg" />);
+      r = renderer.create(<FramedImage uri="https://tong.visitkorea.or.kr/a.jpg" />);
     });
     await layout(r!, 390, 780);
-    const frame = r!.root.findByProps({ testID: "story-image-frame" });
+    const frame = r!.root.findByProps({ testID: "framed-image-frame" });
     const style = StyleSheet.flatten(frame.props.style);
     expect(style.width).toBe(390);
     expect(Math.round(style.height as number)).toBe(229);
@@ -29,10 +29,10 @@ describe("StoryImage", () => {
     jest.spyOn(Image, "getSize").mockImplementation(() => {});
     let r: renderer.ReactTestRenderer;
     await act(async () => {
-      r = renderer.create(<StoryImage uri="https://tong.visitkorea.or.kr/a.jpg" />);
+      r = renderer.create(<FramedImage uri="https://tong.visitkorea.or.kr/a.jpg" />);
     });
     await layout(r!, 390, 780);
-    expect(r!.root.findAllByProps({ testID: "story-image-frame" })).toHaveLength(0);
+    expect(r!.root.findAllByProps({ testID: "framed-image-frame" })).toHaveLength(0);
     expect(r!.root.findAllByType(Image).length).toBeGreaterThan(0);
   });
 
@@ -40,9 +40,9 @@ describe("StoryImage", () => {
     jest.spyOn(Image, "getSize").mockImplementation((_uri, _ok, fail) => fail?.(new Error("nope")));
     let r: renderer.ReactTestRenderer;
     await act(async () => {
-      r = renderer.create(<StoryImage uri="https://tong.visitkorea.or.kr/a.jpg" />);
+      r = renderer.create(<FramedImage uri="https://tong.visitkorea.or.kr/a.jpg" />);
     });
-    expect(r!.root.findAllByProps({ testID: "story-image-frame" })).toHaveLength(0);
+    expect(r!.root.findAllByProps({ testID: "framed-image-frame" })).toHaveLength(0);
     expect(r!.root.findAllByType(Image)).toHaveLength(1);
   });
 });
