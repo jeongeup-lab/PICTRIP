@@ -20,6 +20,8 @@ from app.modules.spots.services.detail import load_spot_detail
 from app.modules.spots.services.nearby import (
     NearbyCategory,
     NearbySpotRow,
+    all_categories_predicate,
+    all_categories_sql,
     category_predicate,
     derive_category,
     find_nearby_spots,
@@ -39,6 +41,8 @@ __all__ = [
     "SpotCardRow",
     "SpotDetailRow",
     "SpotImageRow",
+    "all_categories_predicate",
+    "all_categories_sql",
     "category_predicate",
     "curations",
     "derive_category",

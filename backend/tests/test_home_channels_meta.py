@@ -59,8 +59,8 @@ async def _seed_concentration(session: AsyncSession, cid: str, *, rate: str, ove
     await session.execute(
         text(
             "INSERT INTO spots (content_id, content_type_id, title, first_image_url, "
-            "show_flag, ldong_regn_cd, ldong_signgu_cd) "
-            "VALUES (:cid, 12, :t, 'http://kto/i.jpg', 1, '26', '26380')"
+            "show_flag, ldong_regn_cd, ldong_signgu_cd, lcls_systm1) "
+            "VALUES (:cid, 12, :t, 'http://kto/i.jpg', 1, '26', '26380', 'NA')"
         ),
         {"cid": cid, "t": f"t-{cid}"},
     )

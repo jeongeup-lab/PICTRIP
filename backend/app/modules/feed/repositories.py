@@ -5,6 +5,10 @@ from dataclasses import dataclass
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.spots.services import all_categories_sql
+
+_CATEGORY_SQL = all_categories_sql()
+
 _KEY_EXPR = (
     "power(greatest("
     "((('x' || left(md5((:seed)::text || wikidata_id), 8))::bit(32)::int)::bigint + 2147483648)"
@@ -42,15 +46,16 @@ class OverseasPostRow:
     shuffle_key: float
 
 
-_NEIGHBORS_SQL = """
+_NEIGHBORS_SQL = f"""
 SELECT se.content_id, se.image_url,
        (se.embedding <=> (SELECT embedding FROM overseas_spots WHERE id = :oid))::float AS distance
 FROM spot_embeddings se
-JOIN spots s ON s.content_id = se.content_id
-            AND s.first_image_url = se.image_url
-            AND s.show_flag = 1
-            AND s.first_image_url IS NOT NULL
-            AND s.first_image_url <> ''
+JOIN spots ON spots.content_id = se.content_id
+          AND spots.first_image_url = se.image_url
+          AND spots.show_flag = 1
+          AND spots.first_image_url IS NOT NULL
+          AND spots.first_image_url <> ''
+          AND ({_CATEGORY_SQL})
 WHERE EXISTS (
     SELECT 1 FROM overseas_spots o
     WHERE o.id = :oid AND o.is_hidden = false AND o.embedding IS NOT NULL
@@ -90,12 +95,13 @@ async def get_cached_match_state(
                 "current_spot.content_id, current_spot.first_image_url "
                 "FROM overseas_spots o "
                 "LEFT JOIN LATERAL ("
-                "SELECT s.content_id, s.first_image_url "
-                "FROM spots s JOIN spot_embeddings e "
-                "ON e.content_id = s.content_id AND e.image_url = s.first_image_url "
-                "WHERE s.content_id = ANY(CAST(:content_ids AS text[])) "
-                "AND s.show_flag = 1 AND s.first_image_url IS NOT NULL "
-                "AND s.first_image_url <> ''"
+                "SELECT spots.content_id, spots.first_image_url "
+                "FROM spots JOIN spot_embeddings e "
+                "ON e.content_id = spots.content_id AND e.image_url = spots.first_image_url "
+                "WHERE spots.content_id = ANY(CAST(:content_ids AS text[])) "
+                "AND spots.show_flag = 1 AND spots.first_image_url IS NOT NULL "
+                "AND spots.first_image_url <> '' "
+                f"AND ({_CATEGORY_SQL})"
                 ") AS current_spot ON true "
                 "WHERE o.id = :oid AND o.is_hidden = false"
             ),
