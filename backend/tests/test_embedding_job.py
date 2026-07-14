@@ -17,7 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.embedding import ClipEmbedder
-from app.modules.images.embedding_job import collect_targets, embed_spots
+from app.modules.images.embedding_job import collect_targets, count_missing, embed_spots
 
 
 @pytest.fixture
@@ -138,6 +138,88 @@ async def test_embed_spots_increments_attempts_on_repeat_failure(
 
 
 @pytest.mark.asyncio
+async def test_embed_spots_replaces_stale_embedding(
+    db_session: AsyncSession, httpx_mock, fake_clip: None
+) -> None:
+    await _seed_spot(db_session, "replace-stale", "https://img/new.jpg")
+    await db_session.execute(
+        text(
+            "INSERT INTO spot_embeddings (content_id, embedding, image_url) "
+            "VALUES ('replace-stale', :v, 'https://img/old.jpg')"
+        ),
+        {"v": "[" + ",".join(["0.0"] * 512) + "]"},
+    )
+    await db_session.flush()
+    httpx_mock.add_response(url="https://img/new.jpg", content=b"\xff\xd8new")
+
+    async with AsyncClient() as client:
+        result = await embed_spots(
+            db_session,
+            [("replace-stale", "https://img/new.jpg")],
+            client=client,
+            dl_sem=asyncio.Semaphore(1),
+        )
+
+    assert result.written == 1
+    assert (
+        await db_session.scalar(
+            text("SELECT image_url FROM spot_embeddings WHERE content_id = 'replace-stale'")
+        )
+        == "https://img/new.jpg"
+    )
+
+
+@pytest.mark.asyncio
+async def test_embed_spots_skips_result_when_source_changed(
+    db_session: AsyncSession, httpx_mock, fake_clip: None
+) -> None:
+    await _seed_spot(db_session, "source-changed", "https://img/current.jpg")
+    await db_session.flush()
+    httpx_mock.add_response(url="https://img/old.jpg", content=b"\xff\xd8old")
+
+    async with AsyncClient() as client:
+        result = await embed_spots(
+            db_session,
+            [("source-changed", "https://img/old.jpg")],
+            client=client,
+            dl_sem=asyncio.Semaphore(1),
+        )
+
+    assert result.written == 0
+    assert result.failed == 0
+    assert result.skipped == 1
+    assert result.by_status == {"source_changed": 1}
+    assert (
+        await db_session.scalar(
+            text("SELECT count(*) FROM spot_embeddings WHERE content_id = 'source-changed'")
+        )
+        == 0
+    )
+
+
+@pytest.mark.asyncio
+async def test_embed_spots_does_not_record_failure_for_changed_source(
+    db_session: AsyncSession, httpx_mock
+) -> None:
+    await _seed_spot(db_session, "failed-source-changed", "https://img/current.jpg")
+    await db_session.flush()
+    httpx_mock.add_response(url="https://img/old.jpg", status_code=404)
+
+    async with AsyncClient() as client:
+        result = await embed_spots(
+            db_session,
+            [("failed-source-changed", "https://img/old.jpg")],
+            client=client,
+            dl_sem=asyncio.Semaphore(1),
+        )
+
+    assert result.failed == 0
+    assert result.skipped == 1
+    assert result.by_status == {"source_changed": 1}
+    assert await db_session.scalar(text("SELECT count(*) FROM embedding_failures")) == 0
+
+
+@pytest.mark.asyncio
 async def test_collect_targets_scopes(db_session: AsyncSession) -> None:
     # image-bearing, no embedding → target
     await _seed_spot(db_session, "miss-old", "https://img/a.jpg", days_ago=10)
@@ -147,23 +229,61 @@ async def test_collect_targets_scopes(db_session: AsyncSession) -> None:
     # already embedded → excluded
     await _seed_spot(db_session, "done", "https://img/c.jpg")
     await db_session.execute(
-        text("INSERT INTO spot_embeddings (content_id, embedding) VALUES ('done', :v)"),
+        text(
+            "INSERT INTO spot_embeddings (content_id, embedding, image_url) "
+            "VALUES ('done', :v, 'https://img/c.jpg')"
+        ),
+        {"v": "[" + ",".join(["0.0"] * 512) + "]"},
+    )
+    await _seed_spot(db_session, "stale", "https://img/new.jpg", days_ago=2)
+    await db_session.execute(
+        text(
+            "INSERT INTO spot_embeddings (content_id, embedding, image_url) "
+            "VALUES ('stale', :v, 'https://img/old.jpg')"
+        ),
         {"v": "[" + ",".join(["0.0"] * 512) + "]"},
     )
     # a failure record on miss-old
     await db_session.execute(
         text(
-            "INSERT INTO embedding_failures (content_id, reason) VALUES ('miss-old', 'clip_error')"
+            "INSERT INTO embedding_failures (content_id, reason) VALUES "
+            "('miss-old', 'clip_error'), ('stale', 'source_changed')"
         )
     )
     await db_session.flush()
 
     all_targets = {c for c, _ in await collect_targets(db_session)}
-    assert all_targets == {"miss-old", "miss-new"}
+    assert all_targets == {"miss-old", "miss-new", "stale"}
 
     failed_only = {c for c, _ in await collect_targets(db_session, only_failed=True)}
-    assert failed_only == {"miss-old"}
+    assert failed_only == {"miss-old", "stale"}
+
+    source_changed = {
+        c for c, _ in await collect_targets(db_session, failure_reason="source_changed")
+    }
+    assert source_changed == {"stale"}
 
     since = datetime.now(tz=UTC) - timedelta(days=1)
     recent = {c for c, _ in await collect_targets(db_session, since=since)}
     assert recent == {"miss-new"}
+
+
+@pytest.mark.asyncio
+async def test_count_missing_includes_stale_embeddings(db_session: AsyncSession) -> None:
+    before = await count_missing(db_session)
+    vector = "[" + ",".join(["0.0"] * 512) + "]"
+    await _seed_spot(db_session, "count-current", "https://img/current.jpg")
+    await _seed_spot(db_session, "count-missing", "https://img/missing.jpg")
+    await _seed_spot(db_session, "count-stale", "https://img/new.jpg")
+    await _seed_spot(db_session, "count-no-img", None)
+    await db_session.execute(
+        text(
+            "INSERT INTO spot_embeddings (content_id, embedding, image_url) VALUES "
+            "('count-current', :v, 'https://img/current.jpg'), "
+            "('count-stale', :v, 'https://img/old.jpg')"
+        ),
+        {"v": vector},
+    )
+    await db_session.flush()
+
+    assert await count_missing(db_session) == before + 2

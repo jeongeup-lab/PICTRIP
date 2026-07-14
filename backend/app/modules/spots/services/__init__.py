@@ -9,6 +9,7 @@ from app.modules.spots.services.cards import (
     load_overview_map,
     load_region_meta,
     load_spot_cards_by_ids,
+    lock_current_spot_image,
 )
 from app.modules.spots.services.concentration import (
     ConcentrationCardRow,
@@ -53,6 +54,7 @@ __all__ = [
     "load_region_meta",
     "load_spot_cards_by_ids",
     "load_spot_detail",
+    "lock_current_spot_image",
     "save_spot",
     "unsave_spot",
 ]

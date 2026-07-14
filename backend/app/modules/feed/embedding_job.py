@@ -23,7 +23,7 @@ _MAX_BACKOFF_SECONDS = 120.0
 _TARGETS_SQL = "SELECT id, image_url FROM overseas_spots WHERE embedding IS NULL ORDER BY id"
 _WRITE_SQL = text(
     "UPDATE overseas_spots SET embedding = CAST(:emb AS halfvec(512)), "
-    "updated_at = now() WHERE id = :oid"
+    "updated_at = now() WHERE id = :oid AND image_url = :image_url RETURNING id"
 )
 
 
@@ -73,20 +73,20 @@ async def _embed_one(
     dl_sem: asyncio.Semaphore,
     download_pace: float,
     backoff_base: float,
-) -> tuple[int, list[float] | None]:
+) -> tuple[int, str, list[float] | None]:
     try:
         resp = await _download(image_url, client, dl_sem, download_pace, backoff_base)
         if resp.status_code != 200 or not resp.content:
             logger.warning(
                 "overseas.embed.download_failed", overseas_id=oid, status=resp.status_code
             )
-            return (oid, None)
+            return (oid, image_url, None)
         async with _embed_lock:
             vector = await asyncio.to_thread(embedder.embed_image, resp.content)
-        return (oid, vector)
+        return (oid, image_url, vector)
     except Exception as exc:
         logger.warning("overseas.embed.failed", overseas_id=oid, error=str(exc))
-        return (oid, None)
+        return (oid, image_url, None)
 
 
 async def run_overseas_embedding_job(
@@ -100,7 +100,7 @@ async def run_overseas_embedding_job(
 ) -> dict[str, int]:
     async with session_factory() as session:
         targets = await collect_overseas_targets(session, limit=limit)
-    counters = {"targets": len(targets), "embedded": 0, "failed": 0}
+    counters = {"targets": len(targets), "embedded": 0, "failed": 0, "skipped": 0}
     logger.info("overseas.embed.start", targets=len(targets))
     if not targets:
         return counters
@@ -116,18 +116,27 @@ async def run_overseas_embedding_job(
                 )
             )
             async with session_factory() as session:
-                for oid, vector in outcomes:
+                for oid, image_url, vector in outcomes:
                     if vector is None:
                         counters["failed"] += 1
                         continue
                     literal = "[" + ",".join(f"{v:.8f}" for v in vector) + "]"
-                    await session.execute(_WRITE_SQL, {"emb": literal, "oid": oid})
-                    counters["embedded"] += 1
+                    written_id = (
+                        await session.execute(
+                            _WRITE_SQL,
+                            {"emb": literal, "oid": oid, "image_url": image_url},
+                        )
+                    ).scalar_one_or_none()
+                    if written_id is None:
+                        counters["skipped"] += 1
+                    else:
+                        counters["embedded"] += 1
                 await session.commit()
     logger.info(
         "overseas.embed.done",
         targets=counters["targets"],
         embedded=counters["embedded"],
         failed=counters["failed"],
+        skipped=counters["skipped"],
     )
     return counters
