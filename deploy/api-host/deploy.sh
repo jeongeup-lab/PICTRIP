@@ -207,6 +207,9 @@ fi
 record_success "${NEW_TAG}" "${NEW_REVISION}"
 echo "deploy OK: ${NEW_TAG}"
 
+echo "warming channel caches"
+compose_with_tag "${NEW_TAG}" exec -T api python -m scripts.warm_channels || echo "channel warm skipped (non-fatal)"
+
 docker images "${IMAGE_REPO}" --format '{{.Tag}}' | while read -r _tag; do
   case "${_tag}" in
     "${NEW_TAG}"|"${PREV_TAG}") ;;
