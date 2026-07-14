@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import {
   View,
   FlatList,
-  Image,
   useWindowDimensions,
   StyleSheet,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
 } from "react-native";
+import { Image } from "expo-image";
 import { useMatches } from "@/features/feed/posts-queries";
 import type { OverseasPost } from "@/features/feed/posts-api";
 import { PostSlide, type Slide } from "@/features/feed/components/PostSlide";
@@ -48,7 +48,7 @@ export function PostCarousel({
 
   useEffect(() => {
     for (const m of data?.matches.slice(0, 2) ?? []) {
-      if (m.imageUrl) void Image.prefetch(m.imageUrl);
+      if (m.imageUrl) void Image.prefetch(m.imageUrl, { cachePolicy: "memory-disk" });
     }
   }, [data]);
 

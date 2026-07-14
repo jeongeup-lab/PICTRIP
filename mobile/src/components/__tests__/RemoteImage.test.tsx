@@ -1,10 +1,11 @@
 import renderer, { act } from "react-test-renderer";
 import { Image } from "react-native";
+import { Image as ExpoImage } from "expo-image";
 import { RemoteImage } from "@/components/RemoteImage";
 
 const images = (r: renderer.ReactTestRenderer) =>
-  r.root.findAllByType(Image).filter((n) => n.props.onError);
-const allImages = (r: renderer.ReactTestRenderer) => r.root.findAllByType(Image);
+  r.root.findAllByType(ExpoImage).filter((n) => n.props.onError);
+const allImages = (r: renderer.ReactTestRenderer) => r.root.findAllByType(ExpoImage);
 
 async function failAllRetries(r: renderer.ReactTestRenderer) {
   for (const delay of [900, 1800]) {
@@ -42,9 +43,7 @@ describe("RemoteImage", () => {
       r = renderer.create(<RemoteImage uri="https://example.com/a.jpg" onLoad={onLoad} />);
     });
     await act(async () => {
-      images(r!)[0].props.onLoad({
-        nativeEvent: {},
-      });
+      images(r!)[0].props.onLoad({});
     });
     expect(Image.getSize).toHaveBeenCalledWith(
       "https://example.com/a.jpg",
@@ -69,11 +68,11 @@ describe("RemoteImage", () => {
       r = renderer.create(<RemoteImage uri="https://example.com/a.jpg" onLoad={onLoad} />);
     });
     await act(async () => {
-      images(r!)[0].props.onLoad({ nativeEvent: {} });
+      images(r!)[0].props.onLoad({});
       r!.update(<RemoteImage uri="https://example.com/b.jpg" onLoad={onLoad} />);
     });
     await act(async () => {
-      images(r!)[0].props.onLoad({ nativeEvent: {} });
+      images(r!)[0].props.onLoad({});
       callbacks[1](800, 1200);
       callbacks[0](1200, 800);
     });
