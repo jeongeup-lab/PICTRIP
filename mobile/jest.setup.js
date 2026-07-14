@@ -1,4 +1,7 @@
 // Silence noisy native warnings in tests; add module mocks here as needed.
+const { Image } = require("react-native");
+Image.getSize = jest.fn((_uri, success) => success?.(320, 240));
+
 jest.mock("expo-secure-store", () => ({
   getItemAsync: jest.fn(),
   setItemAsync: jest.fn(),
