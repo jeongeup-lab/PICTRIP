@@ -55,6 +55,8 @@ const BANNER_FRACTION = 0.12;
 
 const FADE_MS = 220;
 
+const PREVIEW_BLUR = 6;
+
 // Wikimedia rate-limits bursts (429) while fast-scrolling; a couple of delayed
 // remounts recovers those instead of leaving a permanent gray box.
 const MAX_RETRIES = 2;
@@ -107,6 +109,7 @@ export function RemoteImage({
   }
   // Effective source: the KTO mid-size only for the exact uri that has been degraded.
   const eff = uri && degradedUri === uri ? (ktoFallback(uri) ?? uri) : uri;
+  const lowUri = eff && isKtoUrl(eff) && eff.includes(KTO_HIRES) ? ktoFallback(eff) : null;
   useLayoutEffect(() => {
     activeUriRef.current = eff;
   }, [eff]);
@@ -208,6 +211,14 @@ export function RemoteImage({
           style as StyleProp<ViewStyle>,
         ]}
       >
+        {lowUri && (
+          <Image
+            source={{ uri: lowUri }}
+            resizeMode={resizeMode}
+            blurRadius={PREVIEW_BLUR}
+            style={[StyleSheet.absoluteFill, { borderRadius: radius }]}
+          />
+        )}
         <Animated.View style={[StyleSheet.absoluteFill, { opacity }]}>
           <Image
             key={attemptKey}
@@ -230,6 +241,20 @@ export function RemoteImage({
         style as StyleProp<ViewStyle>,
       ]}
     >
+      {lowUri && (
+        <Image
+          source={{ uri: lowUri }}
+          resizeMode="cover"
+          blurRadius={PREVIEW_BLUR}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: `${100 / (1 - BANNER_FRACTION)}%`,
+          }}
+        />
+      )}
       <Animated.View style={[StyleSheet.absoluteFill, { opacity }]}>
         <Image
           key={attemptKey}
