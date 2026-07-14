@@ -108,9 +108,15 @@ async def test_first_image_change_invalidates_embedding_and_queues_retry(
     assert queued_failure.last_error is None
 
 
-@pytest.mark.parametrize(("new_url", "suffix"), [(None, "null"), ("", "empty")])
+@pytest.mark.parametrize(
+    ("new_url", "embedding_url", "suffix"),
+    [(None, None, "null"), ("", "", "empty")],
+)
 async def test_removing_first_image_clears_embedding_and_failure(
-    db_session: AsyncSession, new_url: str | None, suffix: str
+    db_session: AsyncSession,
+    new_url: str | None,
+    embedding_url: str | None,
+    suffix: str,
 ) -> None:
     content_id = f"trigger-image-{suffix}"
     vector = "[" + ",".join(["0.0"] * 512) + "]"
@@ -125,9 +131,9 @@ async def test_removing_first_image_clears_embedding_and_failure(
     await db_session.execute(
         text(
             "INSERT INTO spot_embeddings (content_id, embedding, image_url) "
-            "VALUES (:cid, :v, 'https://img/old.jpg')"
+            "VALUES (:cid, :v, :embedding_url)"
         ),
-        {"cid": content_id, "v": vector},
+        {"cid": content_id, "v": vector, "embedding_url": embedding_url},
     )
     await db_session.execute(
         text("INSERT INTO embedding_failures (content_id, reason) VALUES (:cid, 'clip_error')"),
@@ -155,6 +161,41 @@ async def test_removing_first_image_clears_embedding_and_failure(
     )
 
 
+async def test_overseas_image_change_invalidates_embedding(
+    db_session: AsyncSession,
+) -> None:
+    vector = "[" + ",".join(["0.0"] * 512) + "]"
+    overseas_id = await db_session.scalar(
+        text(
+            "INSERT INTO overseas_spots "
+            "(wikidata_id, name_ko, country_code, country_name_ko, image_url, "
+            "image_source_url, embedding) VALUES "
+            "('Q-trigger-overseas', '해외 테스트', 'FR', '프랑스', "
+            "'https://img/overseas-old.jpg', 'https://source/overseas', "
+            "CAST(:v AS halfvec(512))) RETURNING id"
+        ),
+        {"v": vector},
+    )
+
+    await db_session.execute(
+        text("UPDATE overseas_spots SET image_url = 'https://img/overseas-old.jpg' WHERE id = :id"),
+        {"id": overseas_id},
+    )
+    assert await db_session.scalar(
+        text("SELECT embedding IS NOT NULL FROM overseas_spots WHERE id = :id"),
+        {"id": overseas_id},
+    )
+
+    await db_session.execute(
+        text("UPDATE overseas_spots SET image_url = 'https://img/overseas-new.jpg' WHERE id = :id"),
+        {"id": overseas_id},
+    )
+    assert not await db_session.scalar(
+        text("SELECT embedding IS NOT NULL FROM overseas_spots WHERE id = :id"),
+        {"id": overseas_id},
+    )
+
+
 async def test_migration_queues_stale_preserves_valid_and_clears_no_image(
     db_session: AsyncSession,
 ) -> None:
@@ -178,8 +219,8 @@ async def test_migration_queues_stale_preserves_valid_and_clears_no_image(
         text(
             "INSERT INTO spot_embeddings (content_id, embedding, image_url) VALUES "
             "('migration-stale', :v, 'https://img/old.jpg'), "
-            "('migration-null-image', :v, 'https://img/old.jpg'), "
-            "('migration-empty-image', :v, 'https://img/old.jpg')"
+            "('migration-null-image', :v, NULL), "
+            "('migration-empty-image', :v, '')"
         ),
         {"v": vector},
     )
@@ -235,3 +276,36 @@ async def test_migration_queues_stale_preserves_valid_and_clears_no_image(
         )
         == 0
     )
+
+
+async def test_downgrade_removes_image_invalidation_database_objects(
+    db_session: AsyncSession,
+) -> None:
+    revision = _load_revision()
+    connection = await db_session.connection()
+    await connection.run_sync(
+        lambda sync_connection: _run_revision(sync_connection, revision.downgrade)
+    )
+    try:
+        trigger_count = await db_session.scalar(
+            text(
+                "SELECT count(*) FROM pg_trigger "
+                "WHERE tgname IN "
+                "('trg_spots_invalidate_image_derivatives', "
+                "'trg_overseas_spots_invalidate_embedding') "
+                "AND NOT tgisinternal"
+            )
+        )
+        domestic_function = await db_session.scalar(
+            text("SELECT to_regprocedure('invalidate_spot_image_derivatives()')")
+        )
+        overseas_function = await db_session.scalar(
+            text("SELECT to_regprocedure('invalidate_overseas_spot_embedding()')")
+        )
+        assert trigger_count == 0
+        assert domestic_function is None
+        assert overseas_function is None
+    finally:
+        await connection.run_sync(
+            lambda sync_connection: _run_revision(sync_connection, revision.upgrade)
+        )
