@@ -1,7 +1,10 @@
 name: backend-ci
 on:
   pull_request:
-    paths: ["backend/**", ".github/workflows/backend-ci.yml"]
+    paths:
+      - "backend/**"
+      - "deploy/api-host/**"
+      - ".github/workflows/backend-ci.yml"
 # Successive pushes to the same PR cancel the in-flight run — only the latest
 # commit's result matters here (deploy workflows keep cancel-in-progress: false).
 concurrency:
@@ -28,6 +31,8 @@ jobs:
           --health-timeout 5s --health-retries 5
     steps:
       - uses: actions/checkout@v4
+      - run: bash -n deploy/api-host/deploy.sh
+        working-directory: .
       - uses: astral-sh/setup-uv@v5
       - run: uv sync
       - run: uv run ruff check .

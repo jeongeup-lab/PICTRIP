@@ -1,0 +1,58 @@
+name: backend-backfill-embeddings
+
+on:
+  workflow_dispatch:
+    inputs:
+      write:
+        description: "Write embeddings after reviewing the dry-run count"
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: backend-deploy
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: [self-hosted, ct112]
+    timeout-minutes: 180
+    steps:
+      - name: Verify deployed backend
+        shell: bash
+        run: |
+          mapfile -t containers < <(docker ps -q --filter "publish=8000")
+          if [ "${#containers[@]}" -ne 1 ]; then
+            echo "expected exactly one api container on :8000"
+            exit 1
+          fi
+          cid="${containers[0]}"
+          if [ "$(docker inspect --format '{{.State.Health.Status}}' "$cid")" != "healthy" ]; then
+            echo "api container is not healthy"
+            exit 1
+          fi
+          docker exec "$cid" alembic current | grep -F "0019_embedding_image_consistency"
+          echo "API_CONTAINER=$cid" >> "$GITHUB_ENV"
+
+      - name: Backfill current-image embeddings
+        shell: bash
+        run: |
+          if [ "$WRITE" = "true" ]; then
+            docker exec "$API_CONTAINER" python -m scripts.backfill_embeddings \
+              --only-failed \
+              --failure-reason source_changed \
+              --concurrency 2 \
+              --batch-size 25
+          else
+            docker exec "$API_CONTAINER" python -m scripts.backfill_embeddings \
+              --dry-run \
+              --only-failed \
+              --failure-reason source_changed
+          fi
+        env:
+          WRITE: ${{ inputs.write }}
+
+      - name: Verify backend health
+        shell: bash
+        run: curl -fsS http://127.0.0.1:8000/health
