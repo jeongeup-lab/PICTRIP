@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Image,
@@ -8,8 +8,15 @@ import {
   type ImageStyle,
   type ViewStyle,
   type ImageResizeMode,
+  type ImageLoadEvent,
 } from "react-native";
 import { colors } from "@/constants/theme";
+
+export interface RemoteImageLoad {
+  uri: string;
+  width: number;
+  height: number;
+}
 
 interface RemoteImageProps {
   uri: string | null;
@@ -36,6 +43,7 @@ interface RemoteImageProps {
   withUA?: boolean;
   /** Native blur applied to the image (story letterbox backdrop). */
   blurRadius?: number;
+  onLoad?: (image: RemoteImageLoad) => void;
 }
 
 const COMMONS_UA = "PicTrip/1.0 (https://pictrip.org)";
@@ -75,6 +83,7 @@ export function RemoteImage({
   resizeMode,
   withUA = false,
   blurRadius,
+  onLoad,
 }: RemoteImageProps) {
   const [failedUri, setFailedUri] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -85,6 +94,8 @@ export function RemoteImage({
   const [prevUri, setPrevUri] = useState(uri);
   const retryRef = useRef<{ uri: string | null; count: number }>({ uri: null, count: 0 });
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeUriRef = useRef<string | null>(null);
+  const mountedRef = useRef(false);
   const [opacity] = useState(() => new Animated.Value(0));
   // Reset per-uri retry state when the component is reused for a different image
   // (list/story recycling) so a prior image's failure/attempts don't carry over.
@@ -96,6 +107,15 @@ export function RemoteImage({
   }
   // Effective source: the KTO mid-size only for the exact uri that has been degraded.
   const eff = uri && degradedUri === uri ? (ktoFallback(uri) ?? uri) : uri;
+  useLayoutEffect(() => {
+    activeUriRef.current = eff;
+  }, [eff]);
+  useLayoutEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   useEffect(() => {
     // Re-key the retry counter to the new uri (incl. A→B→A round-trips, where
     // onError's own uri-mismatch reset never fires) and drop any stale timer.
@@ -104,31 +124,52 @@ export function RemoteImage({
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [uri]);
-  const source =
-    eff && withUA
-      ? { uri: eff, headers: { "User-Agent": COMMONS_UA } }
-      : eff
-        ? { uri: eff }
-        : { uri: "" };
-  const failed = !!eff && failedUri === eff;
-  if (!uri || failed) {
-    return (
-      <View
-        style={[
-          { backgroundColor: colors.inset, borderRadius: radius } as ViewStyle,
-          style as StyleProp<ViewStyle>,
-        ]}
-      />
-    );
-  }
-  const resetFade = () => opacity.setValue(0);
-  const fadeIn = () =>
-    Animated.timing(opacity, { toValue: 1, duration: FADE_MS, useNativeDriver: true }).start();
-  const onError = () => {
+  const source = useMemo(
+    () =>
+      eff && withUA
+        ? { uri: eff, headers: { "User-Agent": COMMONS_UA } }
+        : eff
+          ? { uri: eff }
+          : { uri: "" },
+    [eff, withUA],
+  );
+  const resetFade = useCallback(() => opacity.setValue(0), [opacity]);
+  const fadeIn = useCallback(
+    () =>
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: FADE_MS,
+        useNativeDriver: true,
+      }).start(),
+    [opacity],
+  );
+  const handleLoad = useCallback(
+    (event: ImageLoadEvent) => {
+      if (!eff || activeUriRef.current !== eff) return;
+      fadeIn();
+      if (!onLoad) return;
+      const loadedSource = event.nativeEvent.source;
+      if (loadedSource?.width && loadedSource.height) {
+        onLoad({ uri: eff, width: loadedSource.width, height: loadedSource.height });
+        return;
+      }
+      Image.getSize(
+        eff,
+        (width, height) => {
+          if (mountedRef.current && activeUriRef.current === eff) {
+            onLoad({ uri: eff, width, height });
+          }
+        },
+        () => undefined,
+      );
+    },
+    [eff, fadeIn, onLoad],
+  );
+  const onError = useCallback(() => {
     // KTO original (_image1_1) missing → degrade to the mid-size once, no backoff.
     if (uri && degradedUri !== uri && ktoFallback(uri)) {
       setDegradedUri(uri);
-      if (attempt !== 0) setAttempt(0);
+      setAttempt(0);
       retryRef.current = { uri: null, count: 0 };
       return;
     }
@@ -143,7 +184,18 @@ export function RemoteImage({
       () => setAttempt((a) => a + 1),
       RETRY_BASE_MS * 2 ** (retryRef.current.count - 1),
     );
-  };
+  }, [degradedUri, eff, uri]);
+  const failed = !!eff && failedUri === eff;
+  if (!uri || failed) {
+    return (
+      <View
+        style={[
+          { backgroundColor: colors.inset, borderRadius: radius } as ViewStyle,
+          style as StyleProp<ViewStyle>,
+        ]}
+      />
+    );
+  }
   const attemptKey = `${eff}#${attempt}`;
 
   if (!cropBanner) {
@@ -161,7 +213,7 @@ export function RemoteImage({
             key={attemptKey}
             source={source}
             onLoadStart={resetFade}
-            onLoad={fadeIn}
+            onLoad={handleLoad}
             onError={onError}
             resizeMode={resizeMode}
             blurRadius={blurRadius}
@@ -183,7 +235,7 @@ export function RemoteImage({
           key={attemptKey}
           source={source}
           onLoadStart={resetFade}
-          onLoad={fadeIn}
+          onLoad={handleLoad}
           onError={onError}
           resizeMode="cover"
           blurRadius={blurRadius}

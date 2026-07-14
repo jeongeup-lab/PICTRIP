@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { Image, StyleSheet, View, type LayoutChangeEvent } from "react-native";
-import { RemoteImage } from "@/components/RemoteImage";
+import { useCallback, useState } from "react";
+import { StyleSheet, View, type LayoutChangeEvent } from "react-native";
+import { RemoteImage, type RemoteImageLoad } from "@/components/RemoteImage";
 
 const CROP = 0.12;
 const BACKDROP_BLUR = 26;
@@ -23,48 +23,42 @@ function fitFrame(img: Size, box: Size) {
 }
 
 interface Measure {
-  uri: string;
-  img: Size | null;
-  failed: boolean;
+  requestedUri: string;
+  image: RemoteImageLoad;
 }
 
 export function FramedImage({ uri }: { uri: string | null }) {
-  const [measure, setMeasure] = useState<Measure>({ uri: "", img: null, failed: false });
+  const [measure, setMeasure] = useState<Measure | null>(null);
   const [box, setBox] = useState<Size | null>(null);
 
-  useEffect(() => {
-    if (!uri) return;
-    let alive = true;
-    Image.getSize(
-      uri,
-      (width, height) => {
-        if (!alive) return;
-        const ok = width > 0 && height > 0;
-        setMeasure({ uri, img: ok ? { width, height } : null, failed: !ok });
-      },
-      () => {
-        if (alive) setMeasure({ uri, img: null, failed: true });
-      },
-    );
-    return () => {
-      alive = false;
-    };
-  }, [uri]);
+  const measured = measure?.requestedUri === uri ? measure.image : null;
 
-  const measured = measure.uri === uri ? measure : null;
-  const img = measured?.img ?? null;
-  const sizeFailed = measured?.failed ?? false;
-
-  const onLayout = (e: LayoutChangeEvent) => {
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
-    setBox({ width, height });
-  };
+    setBox((current) =>
+      current?.width === width && current.height === height ? current : { width, height },
+    );
+  }, []);
 
-  if (sizeFailed) {
-    return <RemoteImage uri={uri} style={StyleSheet.absoluteFill} />;
-  }
+  const onImageLoad = useCallback(
+    (image: RemoteImageLoad) => {
+      if (image.width <= 0 || image.height <= 0 || !uri) return;
+      setMeasure((current) => {
+        if (
+          current?.requestedUri === uri &&
+          current.image.uri === image.uri &&
+          current.image.width === image.width &&
+          current.image.height === image.height
+        ) {
+          return current;
+        }
+        return { requestedUri: uri, image };
+      });
+    },
+    [uri],
+  );
 
-  const frame = img && box ? fitFrame(img, box) : null;
+  const frame = measured && box ? fitFrame(measured, box) : null;
 
   return (
     <View style={StyleSheet.absoluteFill} onLayout={onLayout}>
@@ -73,11 +67,12 @@ export function FramedImage({ uri }: { uri: string | null }) {
         style={StyleSheet.absoluteFill}
         cropBanner={false}
         blurRadius={BACKDROP_BLUR}
+        onLoad={onImageLoad}
       />
       <View style={styles.veil} />
       {frame ? (
         <View testID="framed-image-frame" style={[styles.frame, frame]}>
-          <RemoteImage uri={uri} style={StyleSheet.absoluteFill} />
+          <RemoteImage uri={measured?.uri ?? null} style={StyleSheet.absoluteFill} />
         </View>
       ) : null}
     </View>
