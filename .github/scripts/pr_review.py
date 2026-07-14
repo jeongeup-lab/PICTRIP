@@ -17,6 +17,8 @@ import urllib.request
 GH_API = "https://api.github.com"
 MAX_DIFF_CHARS = 200_000
 SEVERITY_ORDER = {"P1": 0, "P2": 1, "P3": 2}
+SEV_EMOJI = {"P1": "🔴", "P2": "🟡", "P3": "🔵"}
+ALERT_BY_TOP = {"P1": "CAUTION", "P2": "WARNING", "P3": "NOTE"}
 
 
 def env(name: str, default: str | None = None) -> str:
@@ -199,7 +201,7 @@ def main() -> None:
     findings.sort(key=lambda f: SEVERITY_ORDER.get(str(f.get("severity", "")).upper(), 9))
 
     inline: list[dict] = []
-    unplaced: list[str] = []
+    unplaced_cards: list[str] = []
     counts = {"P1": 0, "P2": 0, "P3": 0}
     for f in findings:
         sev = str(f.get("severity", "")).upper()
@@ -214,32 +216,47 @@ def main() -> None:
         except (TypeError, ValueError):
             line = -1
         counts[sev] += 1
-        body = f"**{sev} · {title}**\n\n{comment}" if title else f"**{sev}**\n\n{comment}"
+        dot = SEV_EMOJI[sev]
+        loc = f"`{path}`" + (f":{line}" if line > 0 else "")
         if path in commentable and line in commentable[path].get(side, set()):
-            inline.append({"path": path, "line": line, "side": side, "body": body})
+            label = f"{dot} **{sev}** · {title}" if title else f"{dot} **{sev}**"
+            inline.append({"path": path, "line": line, "side": side, "body": f"{label}\n\n{comment}"})
         else:
-            loc = f"`{path}`" + (f":{line}" if line > 0 else "")
-            unplaced.append(f"- {loc} — {body}")
+            heading = f"{dot} {sev} · {title}" if title else f"{dot} {sev} · {loc}"
+            unplaced_cards.append(
+                f"<details>\n<summary>{heading}</summary>\n\n{loc} — {comment}\n\n</details>"
+            )
 
-    header = f"🤖 **자동 코드 리뷰** (codexproxy · {model})\n\n"
+    top = next((s for s in ("P1", "P2", "P3") if counts[s]), None)
+    kind = ALERT_BY_TOP.get(top, "TIP")
+    alert_lines: list[str] = []
     if summary:
-        header += summary + "\n\n"
-    header += f"지적: P1 {counts['P1']} · P2 {counts['P2']} · P3 {counts['P3']}"
+        alert_lines.extend(summary.splitlines())
+    if findings:
+        if alert_lines:
+            alert_lines.append("")
+        alert_lines.append(f"**P1 {counts['P1']} · P2 {counts['P2']} · P3 {counts['P3']}**")
+    else:
+        alert_lines.append("지적 사항 없음.")
     if truncated:
-        header += "\n\n> ⚠️ diff가 커서 일부만 리뷰했습니다."
-    if not findings:
-        header += "\n\n✅ 지적 사항 없음."
-    if unplaced:
-        header += "\n\n---\n### diff 범위 밖 지적 (인라인 불가)\n" + "\n".join(unplaced)
+        alert_lines += ["", "_diff가 커서 일부만 리뷰했습니다._"]
 
-    code, msg = post_review(repo, pr, token, {"event": "COMMENT", "body": header, "comments": inline})
+    parts = [f"> [!{kind}]"]
+    parts += [f"> {ln}" if ln else ">" for ln in alert_lines]
+    body_md = "## Automated Code Review\n\n" + "\n".join(parts)
+    if unplaced_cards:
+        body_md += "\n\n### diff 범위 밖 지적 (인라인 불가)\n\n" + "\n\n".join(unplaced_cards)
+
+    code, msg = post_review(repo, pr, token, {"event": "COMMENT", "body": body_md, "comments": inline})
     if code == 200:
-        print(f"[pr_review] 리뷰 게시 완료 — 인라인 {len(inline)}건, 요약수록 {len(unplaced)}건")
+        print(f"[pr_review] 리뷰 게시 완료 — 인라인 {len(inline)}건, 요약수록 {len(unplaced_cards)}건")
         return
 
     print(f"[pr_review] 인라인 리뷰 실패({code}): {msg[:300]}")
-    fallback = header + "\n\n---\n### 인라인 게시 실패로 본문에 수록\n" + "\n".join(
-        f"- `{c['path']}`:{c['line']} — {c['body']}" for c in inline
+    fallback = body_md + "\n\n### 인라인 게시 실패로 본문에 수록\n\n" + "\n\n".join(
+        f"<details>\n<summary>{c['body'].splitlines()[0]}</summary>\n\n"
+        f"`{c['path']}`:{c['line']}\n\n{c['body']}\n\n</details>"
+        for c in inline
     )
     code2, msg2 = post_review(repo, pr, token, {"event": "COMMENT", "body": fallback})
     print(f"[pr_review] 폴백 요약 게시: {code2} {msg2[:200]}")
