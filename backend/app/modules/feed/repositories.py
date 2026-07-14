@@ -43,9 +43,18 @@ class OverseasPostRow:
 
 
 _NEIGHBORS_SQL = """
-SELECT se.content_id,
+SELECT se.content_id, se.image_url,
        (se.embedding <=> (SELECT embedding FROM overseas_spots WHERE id = :oid))::float AS distance
 FROM spot_embeddings se
+JOIN spots s ON s.content_id = se.content_id
+            AND s.first_image_url = se.image_url
+            AND s.show_flag = 1
+            AND s.first_image_url IS NOT NULL
+            AND s.first_image_url <> ''
+WHERE EXISTS (
+    SELECT 1 FROM overseas_spots o
+    WHERE o.id = :oid AND o.is_hidden = false AND o.embedding IS NOT NULL
+)
 ORDER BY se.embedding <=> (SELECT embedding FROM overseas_spots WHERE id = :oid)
 LIMIT :lim
 """
@@ -66,9 +75,38 @@ async def get_overseas_brief(session: AsyncSession, overseas_id: int) -> tuple[i
 
 async def find_domestic_neighbors(
     session: AsyncSession, overseas_id: int, *, limit: int
-) -> list[tuple[str, float]]:
+) -> list[tuple[str, str, float]]:
     result = await session.execute(text(_NEIGHBORS_SQL), {"oid": overseas_id, "lim": limit})
-    return [(r.content_id, r.distance) for r in result]
+    return [(r.content_id, r.image_url, r.distance) for r in result]
+
+
+async def get_cached_match_state(
+    session: AsyncSession, overseas_id: int, content_ids: list[str]
+) -> tuple[bool, dict[str, str]] | None:
+    rows = (
+        await session.execute(
+            text(
+                "SELECT o.embedding IS NOT NULL AS has_embedding, "
+                "current_spot.content_id, current_spot.first_image_url "
+                "FROM overseas_spots o "
+                "LEFT JOIN LATERAL ("
+                "SELECT s.content_id, s.first_image_url "
+                "FROM spots s JOIN spot_embeddings e "
+                "ON e.content_id = s.content_id AND e.image_url = s.first_image_url "
+                "WHERE s.content_id = ANY(CAST(:content_ids AS text[])) "
+                "AND s.show_flag = 1 AND s.first_image_url IS NOT NULL "
+                "AND s.first_image_url <> ''"
+                ") AS current_spot ON true "
+                "WHERE o.id = :oid AND o.is_hidden = false"
+            ),
+            {"oid": overseas_id, "content_ids": content_ids},
+        )
+    ).all()
+    if not rows:
+        return None
+    return bool(rows[0].has_embedding), {
+        row.content_id: row.first_image_url for row in rows if row.content_id is not None
+    }
 
 
 async def fetch_posts_page(

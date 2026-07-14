@@ -60,7 +60,7 @@ from app.modules.admin.schemas import (
     TriggerResult,
 )
 from app.modules.admin.triggers import get_collection_trigger
-from app.modules.feed.services.matching import invalidate_match_cache
+from app.modules.feed.services import invalidate_all_match_cache, invalidate_match_cache
 from app.modules.images import services as image_services
 from app.modules.spots.services.curations import (
     invalidate_curation_cache,
@@ -80,8 +80,6 @@ _MAX_HANDPICKS = 8
 # and the concurrency guard for the button (SET NX). TTL auto-releases a crashed
 # job. The "missing" (full-backlog) scope is capped so a background run never pins
 # the serving process — larger backlogs go through scripts.backfill_embeddings.
-_EMBED_LOCK_KEY = "admin:embed:running"
-_EMBED_LOCK_TTL = 1800  # seconds (30 min)
 _EMBED_TRIGGER_MAX = 2000
 
 _logger = get_logger(__name__)
@@ -152,7 +150,7 @@ async def get_embedding_status(session: AsyncSession, redis: Redis) -> Embedding
         await session.rollback()
         since = None
 
-    running = bool(await redis.exists(_EMBED_LOCK_KEY))
+    running = bool(await redis.exists(image_services.EMBEDDING_JOB_LOCK_NAME))
 
     return EmbeddingStatus(
         totalSpots=totals.total_spots,
@@ -192,26 +190,36 @@ async def trigger_embedding(
             details=[{"field": "scope", "issue": "scope는 failed 또는 missing이어야 합니다."}]
         )
 
-    acquired = await redis.set(_EMBED_LOCK_KEY, actor, nx=True, ex=_EMBED_LOCK_TTL)
-    if not acquired:
+    lock = await image_services.acquire_embedding_job_lock(redis)
+    if lock is None:
         _audit_embed(actor, accepted=False, scope=scope, reason="already-running")
         raise AdminTriggerFailed("이미 임베딩이 진행 중입니다.")
 
     only_failed = scope == "failed"
     limit = None if only_failed else _EMBED_TRIGGER_MAX
-    background_tasks.add_task(_run_embed_job, redis, only_failed, limit)
+    background_tasks.add_task(_run_embed_job, redis, only_failed, limit, lock)
     _audit_embed(actor, accepted=True, scope=scope, reason=None)
     return EmbeddingTriggerResult(job=f"embed-{scope}", scope=scope, accepted=True)
 
 
-async def _run_embed_job(redis: Redis, only_failed: bool, limit: int | None) -> None:
+async def _run_embed_job(
+    redis: Redis,
+    only_failed: bool,
+    limit: int | None,
+    lock: image_services.EmbeddingJobLock,
+) -> None:
     """Background worker: run the embed job, always releasing the Redis lock."""
     try:
+        await invalidate_all_match_cache(redis)
         await image_services.run_embedding_job(only_failed=only_failed, limit=limit)
     except Exception:  # never let a background failure leave the lock dangling
         _logger.exception("embed.job.error")
     finally:
-        await redis.delete(_EMBED_LOCK_KEY)
+        await invalidate_all_match_cache(redis)
+        try:
+            await image_services.release_embedding_job_lock(lock)
+        except Exception as exc:
+            _logger.warning("embed.lock.release_failed", error=str(exc))
 
 
 def _audit_embed(actor: str, *, accepted: bool, scope: str, reason: str | None) -> None:

@@ -15,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.embedding import ClipEmbedder
+from app.modules.feed import embedding_job
 from app.modules.feed.embedding_job import run_overseas_embedding_job
 
 _UA = "PicTrip/1.0 (https://pictrip.org)"
@@ -72,6 +73,7 @@ async def test_job_embeds_missing_rows(
     assert counters["targets"] == 1
     assert counters["embedded"] == 1
     assert counters["failed"] == 0
+    assert counters["skipped"] == 0
 
     row = (
         await db_session.execute(
@@ -145,3 +147,39 @@ async def test_job_counts_download_failure(
         )
     ).scalar()
     assert still_null is True
+
+
+@pytest.mark.asyncio
+async def test_job_skips_embedding_when_source_image_changes(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    old_url = "https://commons/source-old.jpg"
+    new_url = "https://commons/source-new.jpg"
+    await _seed(db_session, "QS1", old_url, embedded=False)
+    await db_session.flush()
+
+    async def change_source(
+        oid: int, image_url: str, *args: object
+    ) -> tuple[int, str, list[float]]:
+        await db_session.execute(
+            text("UPDATE overseas_spots SET image_url = :url WHERE id = :oid"),
+            {"url": new_url, "oid": oid},
+        )
+        await db_session.commit()
+        return oid, image_url, [0.1] * 512
+
+    monkeypatch.setattr(embedding_job, "_embed_one", change_source)
+
+    counters = await run_overseas_embedding_job(session_factory=make_factory(db_session))
+
+    row = (
+        await db_session.execute(
+            text(
+                "SELECT image_url, embedding IS NULL AS embedding_is_null "
+                "FROM overseas_spots WHERE wikidata_id = 'QS1'"
+            )
+        )
+    ).one()
+    assert counters == {"targets": 1, "embedded": 0, "failed": 0, "skipped": 1}
+    assert row.image_url == new_url
+    assert row.embedding_is_null is True

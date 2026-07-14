@@ -80,16 +80,33 @@ async def seed(db_session: AsyncSession) -> None:
     await _seed_spot(db_session, "noimg", None, days_ago=0)  # no image → excluded
 
     # 2 embeddings.
-    for cid in ("emb-old", "emb-new"):
+    for cid, image_url in (
+        ("emb-old", "https://img/1.jpg"),
+        ("emb-new", "https://img/2.jpg"),
+    ):
         await db_session.execute(
-            text("INSERT INTO spot_embeddings (content_id, embedding) VALUES (:c, :v)"),
-            {"c": cid, "v": _VEC},
+            text(
+                "INSERT INTO spot_embeddings (content_id, embedding, image_url) VALUES (:c, :v, :u)"
+            ),
+            {"c": cid, "v": _VEC, "u": image_url},
         )
-    # 1 recorded failure.
+    await db_session.execute(
+        text(
+            "INSERT INTO spot_embeddings (content_id, embedding, image_url) "
+            "VALUES ('pend-1', :v, 'https://img/stale.jpg')"
+        ),
+        {"v": _VEC},
+    )
     await db_session.execute(
         text(
             "INSERT INTO embedding_failures (content_id, reason, attempts) "
             "VALUES ('fail-1', 'download_failed', 3)"
+        )
+    )
+    await db_session.execute(
+        text(
+            "INSERT INTO embedding_failures (content_id, reason, attempts) "
+            "VALUES ('noimg', 'clip_error', 2)"
         )
     )
     await db_session.flush()
@@ -188,11 +205,14 @@ async def test_trigger_happy_path_schedules_job(
     calls: dict[str, object] = {}
 
     async def fake_job(**kwargs: object) -> object:
+        assert await redis_client_fake.get("matching:revision") == "1"
         calls.update(kwargs)
+        await redis_client_fake.set("match:1:during", "cached")
         return None
 
     # patch where run_embedding_job is looked up (images.services re-export).
     monkeypatch.setattr(services.image_services, "run_embedding_job", fake_job)
+    await redis_client_fake.set("match:0:before", "cached")
 
     _override(db_session, redis_client_fake)
     try:
@@ -205,11 +225,37 @@ async def test_trigger_happy_path_schedules_job(
     assert data == {"job": "embed-failed", "scope": "failed", "accepted": True}
     # background task ran (TestClient/ASGI executes background tasks after response)
     assert calls.get("only_failed") is True
+    assert await redis_client_fake.get("matching:revision") == "2"
+    assert await redis_client_fake.get("match:1:during") == "cached"
     # lock released by the job's finally
     assert await redis_client_fake.exists("admin:embed:running") == 0
     out = capsys.readouterr().out
     assert "embedding.trigger" in out
     assert "result=accepted" in out
+
+
+@pytest.mark.asyncio
+async def test_embed_job_runs_when_match_cache_revision_bump_fails(
+    redis_client_fake, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ran = False
+
+    async def broken_incr(*args: object, **kwargs: object) -> int:
+        raise ConnectionError("redis unavailable")
+
+    async def fake_job(**kwargs: object) -> None:
+        nonlocal ran
+        ran = True
+
+    monkeypatch.setattr(redis_client_fake, "incr", broken_incr)
+    monkeypatch.setattr(services.image_services, "run_embedding_job", fake_job)
+    lock = await services.image_services.acquire_embedding_job_lock(redis_client_fake)
+    assert lock is not None
+
+    await services._run_embed_job(redis_client_fake, only_failed=False, limit=10, lock=lock)
+
+    assert ran is True
+    assert await redis_client_fake.exists("admin:embed:running") == 0
 
 
 @pytest.mark.asyncio
