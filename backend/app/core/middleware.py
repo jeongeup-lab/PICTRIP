@@ -15,6 +15,8 @@ from app.core.time import kst_now, seconds_until_kst_midnight
 
 logger = get_logger(__name__)
 
+_CHANNELS_MAX_AGE = 600
+
 
 class TraceIdMiddleware(BaseHTTPMiddleware):
     """Assign or propagate X-Trace-Id, expose it in response + structlog context."""
@@ -62,6 +64,7 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp, prefix: str) -> None:
         super().__init__(app)
         self._feed = f"{prefix}/home/feed"
+        self._channels = f"{prefix}/home/channels"
         self._regions_tree = f"{prefix}/map/regions-tree"
         self._curations_prefix = f"{prefix}/curations/"
         # Admin console CSS/JS/logo: never cache at the edge or browser, so a deploy
@@ -86,6 +89,8 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
         if path == self._feed or path.startswith(self._curations_prefix):
             ttl = seconds_until_kst_midnight(kst_now())
             response.headers["Cache-Control"] = f"public, s-maxage={ttl}"
+        elif path == self._channels:
+            response.headers["Cache-Control"] = f"public, s-maxage={_CHANNELS_MAX_AGE}"
         elif path == self._regions_tree:
             response.headers["Cache-Control"] = "public, s-maxage=86400"
         return response

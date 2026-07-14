@@ -160,6 +160,22 @@ async def test_channels_meta_order_and_shape(client, seeded_concentration, kto_a
     assert by_key["snap"]["label"] == "Snap"
 
 
+async def test_channels_meta_sets_short_edge_cache_header(
+    client, seeded_concentration, kto_all_mocked
+) -> None:
+    res = await client.get("/v1/home/channels")
+    assert res.status_code == 200
+    assert res.headers["cache-control"] == "public, s-maxage=600"
+
+
+async def test_channel_cards_endpoint_is_not_edge_cached(
+    client, seeded_concentration, kto_all_mocked
+) -> None:
+    res = await client.get("/v1/home/channels/festa")
+    assert res.status_code == 200
+    assert "cache-control" not in res.headers
+
+
 async def test_channels_meta_hides_festa_when_empty(
     client, seeded_concentration, kto_festa_empty
 ) -> None:
