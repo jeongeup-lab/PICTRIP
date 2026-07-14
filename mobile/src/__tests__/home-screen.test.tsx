@@ -3,6 +3,7 @@ import { FlatList } from "react-native";
 import HomeScreen from "@/app/(tabs)/index";
 import { prefetchMatches, usePostsFeed } from "@/features/feed/posts-queries";
 import type { OverseasPost } from "@/features/feed/posts-api";
+import { queryClient } from "@/lib/query-client";
 
 let seedCounter = 0;
 jest.mock("@/lib/seed", () => ({ makeSeed: () => `seed-${(seedCounter += 1)}` }));
@@ -176,6 +177,7 @@ describe("HomeScreen", () => {
   });
 
   it("pull-to-refresh generates a new client seed for a fresh shuffle", async () => {
+    const invalidate = jest.spyOn(queryClient, "invalidateQueries");
     setFeed();
     const r = await mount();
     const list = r.root.findAllByType(FlatList)[0];
@@ -187,6 +189,8 @@ describe("HomeScreen", () => {
     expect(typeof before).toBe("string");
     expect(typeof after).toBe("string");
     expect(after).not.toBe(before);
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["matches"] });
+    invalidate.mockRestore();
   });
 
   it("shows the refresh spinner while a refetch is in flight", async () => {

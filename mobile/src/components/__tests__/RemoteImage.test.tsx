@@ -32,6 +32,58 @@ describe("RemoteImage", () => {
     expect(imgs[0].props.source.uri).toBe("https://example.com/a.jpg");
   });
 
+  it("reads image dimensions from a web load event without nativeEvent.source", async () => {
+    const onLoad = jest.fn();
+    jest.spyOn(Image, "getSize").mockImplementation((_uri, success) => success(1200, 800));
+    let r: renderer.ReactTestRenderer;
+    await act(async () => {
+      r = renderer.create(<RemoteImage uri="https://example.com/a.jpg" onLoad={onLoad} />);
+    });
+    await act(async () => {
+      images(r!)[0].props.onLoad({
+        nativeEvent: {},
+      });
+    });
+    expect(Image.getSize).toHaveBeenCalledWith(
+      "https://example.com/a.jpg",
+      expect.any(Function),
+      expect.any(Function),
+    );
+    expect(onLoad).toHaveBeenCalledWith({
+      uri: "https://example.com/a.jpg",
+      width: 1200,
+      height: 800,
+    });
+  });
+
+  it("ignores a stale web dimension callback after the uri changes", async () => {
+    const callbacks: ((width: number, height: number) => void)[] = [];
+    const onLoad = jest.fn();
+    jest.spyOn(Image, "getSize").mockImplementation((_uri, success) => {
+      callbacks.push(success);
+    });
+    let r: renderer.ReactTestRenderer;
+    await act(async () => {
+      r = renderer.create(<RemoteImage uri="https://example.com/a.jpg" onLoad={onLoad} />);
+    });
+    await act(async () => {
+      images(r!)[0].props.onLoad({ nativeEvent: {} });
+      r!.update(<RemoteImage uri="https://example.com/b.jpg" onLoad={onLoad} />);
+    });
+    await act(async () => {
+      images(r!)[0].props.onLoad({ nativeEvent: {} });
+      callbacks[1](800, 1200);
+      callbacks[0](1200, 800);
+    });
+
+    expect(onLoad).toHaveBeenCalledTimes(1);
+    expect(onLoad).toHaveBeenCalledWith({
+      uri: "https://example.com/b.jpg",
+      width: 800,
+      height: 1200,
+    });
+  });
+
   it("keeps the image mounted and retries after a transient error", async () => {
     let r: renderer.ReactTestRenderer;
     await act(async () => {

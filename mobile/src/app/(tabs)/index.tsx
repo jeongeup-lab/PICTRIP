@@ -16,6 +16,7 @@ import { prefetchMatches, usePostsFeed } from "@/features/feed/posts-queries";
 import type { OverseasPost } from "@/features/feed/posts-api";
 import { Skeleton } from "@/components/Skeleton";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { queryClient } from "@/lib/query-client";
 import { makeSeed } from "@/lib/seed";
 import { colors, spacing } from "@/constants/theme";
 
@@ -81,7 +82,10 @@ export default function HomeScreen() {
 
   const posts: OverseasPost[] = data?.pages.flatMap((p) => p.items) ?? [];
 
-  const onRefresh = useCallback(() => setSeed(makeSeed()), []);
+  const onRefresh = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ["matches"] });
+    setSeed(makeSeed());
+  }, []);
 
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
