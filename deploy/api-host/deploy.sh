@@ -6,12 +6,14 @@ cd "$(dirname "$0")"
 PREV_TAG="$(grep -E '^IMAGE_TAG=' .deploy.env | cut -d= -f2 || true)"
 NEW_TAG="${1:-${GITHUB_SHA:-latest}}"
 PREV_REVISION=""
+RUNNING_API_FOUND=0
 
 for _cid in $(docker ps --filter "publish=8000" -q); do
   _name="$(docker inspect -f '{{.Name}}' "$_cid" | sed 's#^/##')"
   case "$_name" in
     api-host[-_]api[-_]*)
-      if _revision="$(docker exec "$_cid" alembic current 2>/dev/null | awk 'NR == 1 { print $1 }')"; then
+      RUNNING_API_FOUND=1
+      if _revision="$(docker exec "$_cid" alembic current 2>/dev/null | awk 'NF { print $1; exit }')"; then
         PREV_REVISION="$_revision"
       fi
       break
@@ -19,15 +21,30 @@ for _cid in $(docker ps --filter "publish=8000" -q); do
   esac
 done
 
-if [ -n "${PREV_TAG}" ] && [ -z "${PREV_REVISION}" ]; then
+if [ -n "${PREV_TAG}" ] \
+   && [ "${RUNNING_API_FOUND}" -eq 1 ] \
+   && [ -z "${PREV_REVISION}" ]; then
   echo "ERROR: previous database revision could not be read from the running api container"
   exit 1
 fi
 
 echo "deploy: ${PREV_TAG:-<none>} -> ${NEW_TAG}"
-sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${NEW_TAG}/" .deploy.env || echo "IMAGE_TAG=${NEW_TAG}" >> .deploy.env
+IMAGE_TAG="${NEW_TAG}" docker compose --env-file .deploy.env pull api
 
-docker compose --env-file .deploy.env pull api
+if [ -n "${PREV_TAG}" ] && [ "${RUNNING_API_FOUND}" -eq 0 ]; then
+  if ! PREV_REVISION="$(
+    IMAGE_TAG="${NEW_TAG}" \
+      docker compose --env-file .deploy.env run --rm --no-deps \
+        --entrypoint alembic api current 2>/dev/null |
+      awk '
+        $1 ~ /^[0-9][0-9][0-9][0-9]_[[:alnum:]_]+$/ { revision=$1 }
+        END { print revision }
+      '
+  )" || [ -z "${PREV_REVISION}" ]; then
+    echo "ERROR: previous database revision could not be read with the new image"
+    exit 1
+  fi
+fi
 
 for _cid in $(docker ps --filter "publish=8000" -q); do
   _name="$(docker inspect -f '{{.Name}}' "$_cid" | sed 's#^/##')"
@@ -45,12 +62,14 @@ if ! docker ps --filter "publish=8000" -q | grep -q . \
   exit 1
 fi
 
-docker compose --env-file .deploy.env up -d
-
-smoke_ok() {
-  curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1 &&
-    curl -fsS https://api.pictrip.org/health >/dev/null 2>&1
+set_image_tag() {
+  if grep -q '^IMAGE_TAG=' .deploy.env; then
+    sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$1/" .deploy.env
+  else
+    printf 'IMAGE_TAG=%s\n' "$1" >> .deploy.env
+  fi
 }
+
 wait_local() {
   for _ in $(seq 1 30); do
     if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1; then
@@ -60,6 +79,48 @@ wait_local() {
   done
   return 1
 }
+
+restart_new() {
+  set_image_tag "${NEW_TAG}"
+  docker compose --env-file .deploy.env up -d || true
+}
+
+rollback_failed_deploy() {
+  if [ -z "${PREV_TAG}" ]; then
+    echo "no previous image is available; stopping the failed deployment"
+    docker compose --env-file .deploy.env stop api || true
+    return
+  fi
+
+  if docker compose --env-file .deploy.env stop api \
+     && IMAGE_TAG="${NEW_TAG}" \
+       docker compose --env-file .deploy.env run --rm --no-deps \
+         --entrypoint alembic api downgrade "${PREV_REVISION}"; then
+    set_image_tag "${PREV_TAG}"
+    if docker compose --env-file .deploy.env up -d && wait_local; then
+      echo "rollback OK: ${PREV_TAG} at database revision ${PREV_REVISION}"
+    else
+      echo "rollback image failed health check; restarting ${NEW_TAG}"
+      restart_new
+    fi
+  else
+    echo "database downgrade or api stop failed; restarting ${NEW_TAG} instead of an incompatible old image"
+    restart_new
+  fi
+}
+
+smoke_ok() {
+  curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1 &&
+    curl -fsS https://api.pictrip.org/health >/dev/null 2>&1
+}
+
+set_image_tag "${NEW_TAG}"
+if ! docker compose --env-file .deploy.env up -d; then
+  echo "ERROR: api container failed to start"
+  rollback_failed_deploy
+  exit 1
+fi
+
 _ok=0
 for _ in $(seq 1 30); do
   if smoke_ok; then
@@ -70,22 +131,7 @@ for _ in $(seq 1 30); do
 done
 if [ "${_ok}" -ne 1 ]; then
   echo "smoke FAILED after ~60s — rolling back to ${PREV_TAG:-<none>}"
-  if [ -n "${PREV_TAG}" ] \
-     && docker compose --env-file .deploy.env stop api \
-     && docker compose --env-file .deploy.env run --rm --no-deps \
-       --entrypoint alembic api downgrade "${PREV_REVISION}"; then
-    sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${PREV_TAG}/" .deploy.env
-    if docker compose --env-file .deploy.env up -d && wait_local; then
-      echo "rollback OK: ${PREV_TAG} at database revision ${PREV_REVISION}"
-    else
-      echo "rollback image failed health check; restarting ${NEW_TAG}"
-      sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${NEW_TAG}/" .deploy.env
-      docker compose --env-file .deploy.env up -d || true
-    fi
-  elif [ -n "${PREV_TAG}" ]; then
-    echo "database downgrade failed; restarting ${NEW_TAG} instead of an incompatible old image"
-    docker compose --env-file .deploy.env up -d || true
-  fi
+  rollback_failed_deploy
   exit 1
 fi
 echo "deploy OK: ${NEW_TAG}"
