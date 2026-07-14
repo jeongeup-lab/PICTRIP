@@ -1,4 +1,9 @@
 // Silence noisy native warnings in tests; add module mocks here as needed.
+jest.mock("expo-image", () => {
+  const React = require("react");
+  return { Image: (props) => React.createElement("ExpoImage", props) };
+});
+
 jest.mock("expo-secure-store", () => ({
   getItemAsync: jest.fn(),
   setItemAsync: jest.fn(),

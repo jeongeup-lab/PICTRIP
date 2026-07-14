@@ -1,15 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  Animated,
-  Image,
-  StyleSheet,
-  View,
-  type StyleProp,
-  type ImageStyle,
-  type ViewStyle,
-  type ImageResizeMode,
-} from "react-native";
+import { StyleSheet, View, type StyleProp, type ImageStyle, type ViewStyle } from "react-native";
+import { Image, type ImageContentFit } from "expo-image";
 import { colors } from "@/constants/theme";
+
+type LegacyResizeMode = "cover" | "contain" | "stretch" | "center";
 
 interface RemoteImageProps {
   uri: string | null;
@@ -22,11 +16,11 @@ interface RemoteImageProps {
    */
   cropBanner?: boolean;
   /**
-   * Image `resizeMode`. Only honoured when `cropBanner` is false (the crop path
-   * needs its own oversized "cover"). Use "contain" to letterbox (PhotoViewer);
-   * defaults to RN's "cover".
+   * Legacy RN `resizeMode`, mapped to expo-image `contentFit`. Only honoured when
+   * `cropBanner` is false (the crop path needs its own oversized "cover"). Use
+   * "contain" to letterbox (PhotoViewer); defaults to "cover".
    */
-  resizeMode?: ImageResizeMode;
+  resizeMode?: LegacyResizeMode;
   /**
    * Send the Wikimedia hotlink User-Agent with the request. Off by default so
    * every existing KTO caller is untouched. Turn on ONLY for Commons images
@@ -52,6 +46,10 @@ const FADE_MS = 220;
 const MAX_RETRIES = 2;
 const RETRY_BASE_MS = 900;
 
+function contentFitFor(resizeMode: LegacyResizeMode | undefined): ImageContentFit {
+  return resizeMode === "contain" ? "contain" : "cover";
+}
+
 export function RemoteImage({
   uri,
   style,
@@ -66,7 +64,6 @@ export function RemoteImage({
   const [prevUri, setPrevUri] = useState(uri);
   const retryRef = useRef<{ uri: string | null; count: number }>({ uri: null, count: 0 });
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [opacity] = useState(() => new Animated.Value(0));
   // Reset per-uri retry state when the component is reused for a different image
   // (list/story recycling) so a prior image's failure/attempts don't carry over.
   // onError re-keys retryRef by uri; the [uri] effect clears any pending timer.
@@ -83,8 +80,7 @@ export function RemoteImage({
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [uri]);
-  const source =
-    uri && withUA ? { uri, headers: { "User-Agent": COMMONS_UA } } : uri ? { uri } : { uri: "" };
+
   const failed = !!uri && failedUri === uri;
   if (!uri || failed) {
     return (
@@ -96,9 +92,8 @@ export function RemoteImage({
       />
     );
   }
-  const resetFade = () => opacity.setValue(0);
-  const fadeIn = () =>
-    Animated.timing(opacity, { toValue: 1, duration: FADE_MS, useNativeDriver: true }).start();
+
+  const source = withUA ? { uri, headers: { "User-Agent": COMMONS_UA } } : { uri };
   const onError = () => {
     if (retryRef.current.uri !== uri) retryRef.current = { uri, count: 0 };
     if (retryRef.current.count >= MAX_RETRIES) {
@@ -124,18 +119,17 @@ export function RemoteImage({
           style as StyleProp<ViewStyle>,
         ]}
       >
-        <Animated.View style={[StyleSheet.absoluteFill, { opacity }]}>
-          <Image
-            key={attemptKey}
-            source={source}
-            onLoadStart={resetFade}
-            onLoad={fadeIn}
-            onError={onError}
-            resizeMode={resizeMode}
-            blurRadius={blurRadius}
-            style={[StyleSheet.absoluteFill, { borderRadius: radius }]}
-          />
-        </Animated.View>
+        <Image
+          key={attemptKey}
+          source={source}
+          onError={onError}
+          contentFit={contentFitFor(resizeMode)}
+          blurRadius={blurRadius}
+          transition={FADE_MS}
+          cachePolicy="memory-disk"
+          recyclingKey={uri}
+          style={[StyleSheet.absoluteFill, { borderRadius: radius }]}
+        />
       </View>
     );
   }
@@ -146,24 +140,24 @@ export function RemoteImage({
         style as StyleProp<ViewStyle>,
       ]}
     >
-      <Animated.View style={[StyleSheet.absoluteFill, { opacity }]}>
-        <Image
-          key={attemptKey}
-          source={source}
-          onLoadStart={resetFade}
-          onLoad={fadeIn}
-          onError={onError}
-          resizeMode="cover"
-          blurRadius={blurRadius}
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: `${100 / (1 - BANNER_FRACTION)}%`,
-          }}
-        />
-      </Animated.View>
+      <Image
+        key={attemptKey}
+        source={source}
+        onError={onError}
+        contentFit="cover"
+        contentPosition="top"
+        blurRadius={blurRadius}
+        transition={FADE_MS}
+        cachePolicy="memory-disk"
+        recyclingKey={uri}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: `${100 / (1 - BANNER_FRACTION)}%`,
+        }}
+      />
     </View>
   );
 }

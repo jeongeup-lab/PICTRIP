@@ -1,5 +1,6 @@
 import renderer, { act } from "react-test-renderer";
-import { Image, StyleSheet, View } from "react-native";
+import { Image as RNImage, StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
 import { StoryImage } from "@/features/channels/components/StoryImage";
 
 const layout = async (r: renderer.ReactTestRenderer, width: number, height: number) => {
@@ -12,7 +13,7 @@ afterEach(() => jest.restoreAllMocks());
 
 describe("StoryImage", () => {
   it("letterboxes the image to its watermark-cropped aspect ratio", async () => {
-    jest.spyOn(Image, "getSize").mockImplementation((_uri, ok) => ok(940, 626));
+    jest.spyOn(RNImage, "getSize").mockImplementation((_uri, ok) => ok(940, 626));
     let r: renderer.ReactTestRenderer;
     await act(async () => {
       r = renderer.create(<StoryImage uri="https://tong.visitkorea.or.kr/a.jpg" />);
@@ -26,7 +27,7 @@ describe("StoryImage", () => {
   });
 
   it("shows only the blurred backdrop until dimensions resolve", async () => {
-    jest.spyOn(Image, "getSize").mockImplementation(() => {});
+    jest.spyOn(RNImage, "getSize").mockImplementation(() => {});
     let r: renderer.ReactTestRenderer;
     await act(async () => {
       r = renderer.create(<StoryImage uri="https://tong.visitkorea.or.kr/a.jpg" />);
@@ -37,7 +38,9 @@ describe("StoryImage", () => {
   });
 
   it("falls back to a plain full-bleed image when sizing fails", async () => {
-    jest.spyOn(Image, "getSize").mockImplementation((_uri, _ok, fail) => fail?.(new Error("nope")));
+    jest
+      .spyOn(RNImage, "getSize")
+      .mockImplementation((_uri, _ok, fail) => fail?.(new Error("nope")));
     let r: renderer.ReactTestRenderer;
     await act(async () => {
       r = renderer.create(<StoryImage uri="https://tong.visitkorea.or.kr/a.jpg" />);

@@ -1,5 +1,5 @@
 import renderer, { act } from "react-test-renderer";
-import { Image } from "react-native";
+import { Image } from "expo-image";
 import { RemoteImage } from "@/components/RemoteImage";
 
 const images = (r: renderer.ReactTestRenderer) => r.root.findAllByType(Image);

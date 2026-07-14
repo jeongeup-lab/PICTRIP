@@ -135,8 +135,12 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
 - **DO NOT modify KTO `overview` text** — store and display verbatim.
 - **DO NOT put secrets in code or commits** — `.env` only; mobile gets only
   `EXPO_PUBLIC_*`.
-- **DO NOT add emoji or new native modules to mobile** — use line-SVG `<Icon>` /
-  `expo-symbols`. Map = KakaoWebMap (WebView + JS SDK), never `@react-native-kakao/map`.
+- **DO NOT add emoji or new *third-party* native modules to mobile** — use line-SVG
+  `<Icon>` / `expo-symbols`. Map = KakaoWebMap (WebView + JS SDK), never
+  `@react-native-kakao/map`. Exception: 1st-party Expo SDK modules added via
+  `npx expo install` (version-pinned to the SDK, e.g. `expo-image`) are allowed —
+  they track ExpoModulesCore and don't break the native tree. Adding one still
+  requires a native rebuild (not OTA), so it rides the next EAS/TestFlight build.
 - **DO NOT add `sync_runs` to backend Alembic** — pipeline owns it.
 - **DO NOT write code comments** — 코드에 주석을 달지 않는다. 의도는 이름·구조로
   드러내고, 문맥은 커밋 메시지/PR에 남긴다. (shebang·라이선스 헤더 등 도구가 요구하는
