@@ -41,6 +41,8 @@ jobs:
           --health-timeout 5s --health-retries 5
     steps:
       - uses: actions/checkout@v4
+      - run: bash deploy/api-host/test-deploy.sh
+        working-directory: .
       - uses: astral-sh/setup-uv@v5
       - run: uv sync
       - run: uv run ruff check .
@@ -101,3 +103,5 @@ jobs:
       # deploy.sh: pin tag -> compose pull -> up -d (entrypoint runs
       # `alembic upgrade head`) -> local+public smoke -> rollback on fail.
       - run: ./deploy/api-host/deploy.sh "${{ github.sha }}"
+        env:
+          DEPLOY_ENV: ${{ github.workspace }}/../.pictrip-api.deploy.env
