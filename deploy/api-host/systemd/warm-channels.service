@@ -1,0 +1,8 @@
+[Unit]
+Description=Warm festa/pets/snap channel caches (avoid cold live-KTO fetch on home)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash -c 'docker exec "$(docker ps -q -f name=api-host-api)" python -m scripts.warm_channels'
