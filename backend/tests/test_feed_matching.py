@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
 import pytest
@@ -213,6 +214,46 @@ async def test_source_change_between_neighbor_search_and_hydration_is_filtered(
     assert changed_content_id not in content_ids
     assert len(content_ids) == 3
     assert await redis_client_fake.get("matching:revision") == "1"
+
+
+async def test_source_change_after_hydration_backfills_from_remaining_candidates(
+    client,
+    db_session,
+    seeded_matching,
+    redis_client_fake,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    await _insert_spot(db_session, "mt_late_race_c", _CLOSE, overview=None)
+    await _insert_spot(db_session, "mt_late_race_d", _CLOSE, overview=None)
+    original_get_state = matching.repositories.get_cached_match_state
+    changed_content_id: str | None = None
+
+    async def change_then_get_state(session, overseas_id, content_ids):
+        nonlocal changed_content_id
+        changed_content_id = content_ids[0]
+        await session.execute(
+            text(
+                "UPDATE spots SET first_image_url = 'http://kto/late-raced.jpg' "
+                "WHERE content_id = :cid"
+            ),
+            {"cid": changed_content_id},
+        )
+        await session.flush()
+        return await original_get_state(session, overseas_id, content_ids)
+
+    monkeypatch.setattr(matching.repositories, "get_cached_match_state", change_then_get_state)
+
+    response = await client.get(f"/v1/overseas/{seeded_matching.overseas_id}/matches")
+
+    matches = response.json()["data"]["matches"]
+    content_ids = {row["contentId"] for row in matches}
+    cached = await redis_client_fake.get(f"match:1:{seeded_matching.overseas_id}")
+    assert response.status_code == 200
+    assert changed_content_id is not None
+    assert changed_content_id not in content_ids
+    assert len(content_ids) == 3
+    assert cached is not None
+    assert len(json.loads(cached)) == 3
 
 
 async def test_neighbor_search_excludes_inactive_spots(db_session):
