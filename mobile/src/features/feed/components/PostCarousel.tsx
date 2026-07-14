@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   FlatList,
+  Image,
   useWindowDimensions,
   StyleSheet,
   type NativeSyntheticEvent,
@@ -44,6 +45,12 @@ export function PostCarousel({
 
   const { data } = useMatches(post.id, { enabled: armed });
   const slides = useMemo(() => slidesFor(post, data), [post, data]);
+
+  useEffect(() => {
+    for (const m of data?.matches.slice(0, 2) ?? []) {
+      if (m.imageUrl) void Image.prefetch(m.imageUrl);
+    }
+  }, [data]);
 
   const onScrollBeginDrag = () => setArmed(true);
   const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
