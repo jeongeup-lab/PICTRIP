@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, field_validator
 
-from app.core.kto_images import https_kto_image
+from app.core.kto_images import hires_kto_image, https_kto_image
 
 
 class OverseasPost(BaseModel):
@@ -35,7 +35,7 @@ class MatchCard(BaseModel):
     @field_validator("imageUrl")
     @classmethod
     def _upgrade_image(cls, v: str) -> str:
-        return https_kto_image(v) or v
+        return hires_kto_image(v) or v
 
 
 class MatchesResponse(BaseModel):
@@ -58,7 +58,7 @@ class ChannelCard(BaseModel):
     @field_validator("imageUrl")
     @classmethod
     def _upgrade_image(cls, v: str | None) -> str | None:
-        return https_kto_image(v) or v
+        return hires_kto_image(v) or v
 
 
 class ChannelCardsResponse(BaseModel):
