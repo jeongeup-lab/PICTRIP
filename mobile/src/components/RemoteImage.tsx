@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
-  Animated,
-  Image,
+  Image as MeasureImage,
   StyleSheet,
   View,
   type StyleProp,
   type ImageStyle,
   type ViewStyle,
   type ImageResizeMode,
-  type ImageLoadEvent,
 } from "react-native";
+import { Image, type ImageContentFit, type ImageLoadEventData } from "expo-image";
 import { colors } from "@/constants/theme";
 
 export interface RemoteImageLoad {
@@ -31,7 +30,7 @@ interface RemoteImageProps {
   /**
    * Image `resizeMode`. Only honoured when `cropBanner` is false (the crop path
    * needs its own oversized "cover"). Use "contain" to letterbox (PhotoViewer);
-   * defaults to RN's "cover".
+   * defaults to "cover".
    */
   resizeMode?: ImageResizeMode;
   /**
@@ -77,6 +76,19 @@ const isKtoUrl = (u: string): boolean => {
 const ktoFallback = (u: string): string | null =>
   isKtoUrl(u) && u.includes(KTO_HIRES) ? u.replace(KTO_HIRES, KTO_MID) : null;
 
+const contentFitFor = (mode?: ImageResizeMode): ImageContentFit => {
+  switch (mode) {
+    case "contain":
+      return "contain";
+    case "stretch":
+      return "fill";
+    case "center":
+      return "none";
+    default:
+      return "cover";
+  }
+};
+
 export function RemoteImage({
   uri,
   style,
@@ -98,7 +110,6 @@ export function RemoteImage({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeUriRef = useRef<string | null>(null);
   const mountedRef = useRef(false);
-  const [opacity] = useState(() => new Animated.Value(0));
   // Reset per-uri retry state when the component is reused for a different image
   // (list/story recycling) so a prior image's failure/attempts don't carry over.
   // onError re-keys retryRef by uri; the [uri] effect clears any pending timer.
@@ -136,27 +147,16 @@ export function RemoteImage({
           : { uri: "" },
     [eff, withUA],
   );
-  const resetFade = useCallback(() => opacity.setValue(0), [opacity]);
-  const fadeIn = useCallback(
-    () =>
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: FADE_MS,
-        useNativeDriver: true,
-      }).start(),
-    [opacity],
-  );
   const handleLoad = useCallback(
-    (event: ImageLoadEvent) => {
+    (event: ImageLoadEventData) => {
       if (!eff || activeUriRef.current !== eff) return;
-      fadeIn();
       if (!onLoad) return;
-      const loadedSource = event.nativeEvent.source;
-      if (loadedSource?.width && loadedSource.height) {
-        onLoad({ uri: eff, width: loadedSource.width, height: loadedSource.height });
+      const loaded = event.source;
+      if (loaded?.width && loaded.height) {
+        onLoad({ uri: eff, width: loaded.width, height: loaded.height });
         return;
       }
-      Image.getSize(
+      MeasureImage.getSize(
         eff,
         (width, height) => {
           if (mountedRef.current && activeUriRef.current === eff) {
@@ -166,7 +166,7 @@ export function RemoteImage({
         () => undefined,
       );
     },
-    [eff, fadeIn, onLoad],
+    [eff, onLoad],
   );
   const onError = useCallback(() => {
     // KTO original (_image1_1) missing → degrade to the mid-size once, no backoff.
@@ -199,9 +199,10 @@ export function RemoteImage({
       />
     );
   }
-  const attemptKey = `${eff}#${attempt}`;
+  const recyclingKey = `${eff}#${attempt}`;
 
   if (!cropBanner) {
+    const contentFit = contentFitFor(resizeMode);
     const showBackground = resizeMode !== "contain";
     return (
       <View
@@ -214,23 +215,23 @@ export function RemoteImage({
         {lowUri && (
           <Image
             source={{ uri: lowUri }}
-            resizeMode={resizeMode}
+            cachePolicy="memory-disk"
+            contentFit={contentFit}
             blurRadius={PREVIEW_BLUR}
             style={[StyleSheet.absoluteFill, { borderRadius: radius }]}
           />
         )}
-        <Animated.View style={[StyleSheet.absoluteFill, { opacity }]}>
-          <Image
-            key={attemptKey}
-            source={source}
-            onLoadStart={resetFade}
-            onLoad={handleLoad}
-            onError={onError}
-            resizeMode={resizeMode}
-            blurRadius={blurRadius}
-            style={[StyleSheet.absoluteFill, { borderRadius: radius }]}
-          />
-        </Animated.View>
+        <Image
+          recyclingKey={recyclingKey}
+          source={source}
+          cachePolicy="memory-disk"
+          transition={FADE_MS}
+          onLoad={handleLoad}
+          onError={onError}
+          contentFit={contentFit}
+          blurRadius={blurRadius}
+          style={[StyleSheet.absoluteFill, { borderRadius: radius }]}
+        />
       </View>
     );
   }
@@ -244,7 +245,8 @@ export function RemoteImage({
       {lowUri && (
         <Image
           source={{ uri: lowUri }}
-          resizeMode="cover"
+          cachePolicy="memory-disk"
+          contentFit="cover"
           blurRadius={PREVIEW_BLUR}
           style={{
             position: "absolute",
@@ -255,24 +257,23 @@ export function RemoteImage({
           }}
         />
       )}
-      <Animated.View style={[StyleSheet.absoluteFill, { opacity }]}>
-        <Image
-          key={attemptKey}
-          source={source}
-          onLoadStart={resetFade}
-          onLoad={handleLoad}
-          onError={onError}
-          resizeMode="cover"
-          blurRadius={blurRadius}
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: `${100 / (1 - BANNER_FRACTION)}%`,
-          }}
-        />
-      </Animated.View>
+      <Image
+        recyclingKey={recyclingKey}
+        source={source}
+        cachePolicy="memory-disk"
+        transition={FADE_MS}
+        onLoad={handleLoad}
+        onError={onError}
+        contentFit="cover"
+        blurRadius={blurRadius}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: `${100 / (1 - BANNER_FRACTION)}%`,
+        }}
+      />
     </View>
   );
 }

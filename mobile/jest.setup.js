@@ -2,6 +2,12 @@
 const { Image } = require("react-native");
 Image.getSize = jest.fn((_uri, success) => success?.(320, 240));
 
+jest.mock("expo-image", () => {
+  const Image = () => null;
+  Image.prefetch = jest.fn(() => Promise.resolve(true));
+  return { Image };
+});
+
 jest.mock("expo-secure-store", () => ({
   getItemAsync: jest.fn(),
   setItemAsync: jest.fn(),
