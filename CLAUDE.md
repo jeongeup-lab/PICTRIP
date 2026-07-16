@@ -138,13 +138,14 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
 
 ## Prohibitions
 
-- **DO NOT download, store, resize, or re-host KTO images** — URLs only. This is
-  KTO's official 공모전 guidance (2026-05-20 설명회: 이미지는 URL만·다운로드 금지,
-  파일데이터/콘텐츠랩 다운로드 사용 = **실격**), not mere `cpyrhtDivCd Type3` caution —
-  so a **server-side resize/thumbnail/proxy/CDN-cache of KTO images is out** — don't
-  re-propose it. The one image touch this repo makes is the embedding path below
-  (`DO NOT persist user-uploaded images`). Source lives in the design vault, not this
-  repo: `~/Documents/Obsidian Vault/PicTrip-공모전/8_레퍼런스/공모전-설명회-요약.md`.
+- **KTO 이미지 프록시/CDN 캐싱 허용** — 2026-07-16 공모전 운영사무국 확인으로 구
+  "다운로드·재호스팅 금지" 조항 폐기 (구 조항은 콘텐츠랩 파일데이터 규정과 이미지
+  규정을 혼동한 것 — 2026 설명회·OT자료 원문 재분석으로 확인). 경계는 공공누리
+  라이선스: `cpyrhtDivCd=Type1`(출처표시)은 리사이즈·포맷 변환 가능, `Type3`
+  (변경금지)는 **원본 무변형 pass-through만**. 출처(한국관광공사) 표기 유지.
+- **데이터 소스는 OpenAPI 호출이어야 한다** — 콘텐츠랩 파일데이터·맞춤형 데이터
+  다운로드를 데이터 소스로 쓰면 공모전에서 OpenAPI 활용으로 **인정되지 않는다**
+  (2026 OT자료 1차 심사 유의사항·설명회 슬라이드 3).
 - **DO NOT persist user-uploaded images** — CLIP runs in memory, bytes discarded.
 - **Wikimedia Commons images: URL only + 표기 의무** — 저작자·라이선스명에 더해
   라이선스 전문 URL·원본 파일 페이지 URL을 저장·노출한다 (S13 §5.4·§7.1).
@@ -172,8 +173,9 @@ skip minor style nits. Focus on:
   byte-identical copy of `admin/mockups/`.
 - JSend envelope (`ok()`/`err()`) and `AppError` subclasses — mobile must branch
   on `err.code`, never `err.message`.
-- KTO compliance (see Prohibitions): no image downloads/storage, no persisted
-  user uploads, `overview` text verbatim, no secrets in code.
+- KTO compliance (see Prohibitions): `cpyrhtDivCd=Type3` 이미지 변형(리사이즈 등)
+  금지·출처표시 유지, no persisted user uploads, `overview` text verbatim, no
+  secrets in code.
 
 ## Workflow
 
