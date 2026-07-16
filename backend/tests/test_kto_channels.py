@@ -227,6 +227,12 @@ async def test_pets_static_tag_and_saveable(kto_mock_pets: KtoClient) -> None:
     assert all(c.image_url for c in cards)
 
 
+async def test_pets_requests_attractions_only(kto_mock_pets: KtoClient) -> None:
+    await fetch_pets_cards(kto_mock_pets)
+    _, call_kwargs = kto_mock_pets.call.call_args
+    assert call_kwargs["contentTypeId"] == 12
+
+
 async def test_pets_excludes_imageless() -> None:
     kto = _kto_returning(PETS_WITH_IMAGELESS)
     cards = await fetch_pets_cards(kto)
