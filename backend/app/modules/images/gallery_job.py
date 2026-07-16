@@ -79,8 +79,8 @@ async def collect_gallery_targets(
         .where(~has_current_gallery.exists())
         .order_by(spots.c.content_id)
     )
-    if limit:
-        stmt = stmt.limit(limit)
+    if limit is not None:
+        stmt = stmt.limit(max(0, limit))
     rows = (await session.execute(stmt)).all()
     return [(cid, url) for cid, url in rows]
 
