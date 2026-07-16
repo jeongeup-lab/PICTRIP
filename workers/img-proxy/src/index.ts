@@ -14,18 +14,19 @@ export default {
       return new Response("not found", { status: 404 });
     }
 
+    const headOnly = request.method === "HEAD";
     const cache = caches.default;
     const cacheKey = new Request(url.toString());
     const cached = await cache.match(cacheKey);
     if (cached) {
-      const hit = new Response(cached.body, cached);
+      const hit = new Response(headOnly ? null : cached.body, cached);
       hit.headers.set("x-img-proxy", "hit");
       return hit;
     }
 
     const origin = await fetch(upstream, { headers: { "User-Agent": WIKIMEDIA_UA } });
     if (!origin.ok) {
-      return new Response(origin.body, {
+      return new Response(headOnly ? null : origin.body, {
         status: origin.status,
         statusText: origin.statusText,
       });
@@ -35,6 +36,10 @@ export default {
     miss.headers.set("Cache-Control", `public, max-age=${CACHE_TTL_SECONDS}, immutable`);
     miss.headers.set("x-img-proxy", "miss");
     miss.headers.delete("Set-Cookie");
+    if (headOnly) {
+      ctx.waitUntil(cache.put(cacheKey, miss));
+      return new Response(null, { status: miss.status, headers: miss.headers });
+    }
     ctx.waitUntil(cache.put(cacheKey, miss.clone()));
     return miss;
   },
