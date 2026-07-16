@@ -11,7 +11,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.core.logging import get_logger, set_trace_id
-from app.core.time import kst_now, seconds_until_kst_midnight
 
 logger = get_logger(__name__)
 
@@ -57,7 +56,7 @@ class TraceIdMiddleware(BaseHTTPMiddleware):
 class CacheControlMiddleware(BaseHTTPMiddleware):
     """Cache-Control on public 200 GETs so a CDN can serve them from the edge.
 
-    Curations expire at the next KST midnight; regions-tree after 24h.
+    Channels expire after 10 minutes; regions-tree after 24h.
     Requires a matching Cloudflare Cache Rule to take effect.
     """
 
@@ -65,7 +64,6 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self._channels = f"{prefix}/home/channels"
         self._regions_tree = f"{prefix}/map/regions-tree"
-        self._curations_prefix = f"{prefix}/curations/"
         # Admin console CSS/JS/logo: never cache at the edge or browser, so a deploy
         # is visible immediately without a Cloudflare purge (assets are tiny).
         self._admin_assets = "/admin/assets"
@@ -85,10 +83,7 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
             return response
 
         path = request.url.path
-        if path.startswith(self._curations_prefix):
-            ttl = seconds_until_kst_midnight(kst_now())
-            response.headers["Cache-Control"] = f"public, s-maxage={ttl}"
-        elif path == self._channels:
+        if path == self._channels:
             response.headers["Cache-Control"] = f"public, s-maxage={_CHANNELS_MAX_AGE}"
         elif path == self._regions_tree:
             response.headers["Cache-Control"] = "public, s-maxage=86400"
@@ -111,7 +106,7 @@ class ApiV1CompatMiddleware:
     """
 
     # First path segment of every route mounted under the /v1 prefix.
-    _SEGMENTS = frozenset({"auth", "users", "curations", "home", "spots", "map", "meta"})
+    _SEGMENTS = frozenset({"auth", "users", "home", "spots", "map", "meta"})
 
     def __init__(self, app: ASGIApp, prefix: str) -> None:
         self.app = app

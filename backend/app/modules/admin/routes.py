@@ -1,6 +1,6 @@
 """admin routes — /admin (HTML) + /admin/api/* (JSON).
 
-Serves the static console pages (운영 개요 · 수집 이력 · 서비스 헬스 · 홈 큐레이션) and
+Serves the static console pages (운영 개요 · 수집 이력 · 서비스 헬스 · 게시물 관리) and
 the read-only JSON API (A01 §3). Auth is a login page + signed-cookie session:
 HTML pages redirect to /admin/login when logged out; /admin/api/* raises 401
 (``AdminAuth``). Routes do HTTP I/O only — aggregation lives in ``services``.
@@ -20,12 +20,7 @@ from app.core.ratelimit import rate_limit
 from app.core.redis import RedisDep
 from app.core.schemas import ok
 from app.modules.admin import services
-from app.modules.admin.schemas import (
-    CurationUpdate,
-    OverseasVisibilityUpdate,
-    PositionsUpdate,
-    SpotsUpdate,
-)
+from app.modules.admin.schemas import OverseasVisibilityUpdate
 from app.modules.admin.security import SESSION_KEY, AdminAuth, authenticate
 
 _STATIC_DIR = Path(__file__).parent / "static"
@@ -114,14 +109,6 @@ async def admin_health(request: Request) -> Response:
     return _page("health.html")
 
 
-@router.get("/curation")
-async def admin_curation(request: Request) -> Response:
-    """홈 큐레이션 편집기 (curation.html; ADM-017)."""
-    if not _logged_in(request):
-        return RedirectResponse("/admin/login", status_code=303)
-    return _page("curation.html")
-
-
 @router.get("/overseas")
 async def admin_overseas(request: Request) -> Response:
     """게시물(해외 스팟) 숨김 관리 (overseas.html; A7)."""
@@ -189,54 +176,7 @@ async def api_health(_: AdminAuth, db: DbSession) -> dict[str, Any]:
     return ok(await services.get_health(db))
 
 
-# --- Curation editor (A01 §7 / ADM-012~015) — admin's scoped write surface ----
-@router.get("/api/curations")
-async def api_curations_list(_: AdminAuth, db: DbSession) -> dict[str, Any]:
-    """CurationList — heroes/rails grouped, each by position (ADM-012)."""
-    return ok(await services.list_curations(db))
-
-
-# Declared BEFORE the /api/curations/{curation_id} routes: "positions" must
-# never be captured by the int path param.
-@router.put("/api/curations/positions")
-async def api_curation_positions(
-    _: AdminAuth, db: DbSession, body: PositionsUpdate
-) -> dict[str, Any]:
-    """Atomic per-type reorder (position = array index) + audit; returns the board."""
-    return ok(await services.update_curation_positions(db, body))
-
-
-@router.get("/api/curations/{curation_id}")
-async def api_curation_detail(_: AdminAuth, db: DbSession, curation_id: int) -> dict[str, Any]:
-    """CurationDetail — copy/cover/handpicks; 404 ADMIN_CURATION_NOT_FOUND (ADM-012)."""
-    return ok(await services.get_curation_detail(db, curation_id))
-
-
-@router.get("/api/curations/{curation_id}/preview")
-async def api_curation_preview(
-    _: AdminAuth, db: DbSession, redis: RedisDep, curation_id: int
-) -> dict[str, Any]:
-    """Resolved display spots (handpick else quality-gate auto-fill) — truthful preview."""
-    return ok(await services.get_curation_preview(db, redis, curation_id))
-
-
-@router.put("/api/curations/{curation_id}")
-async def api_curation_update(
-    _: AdminAuth, db: DbSession, redis: RedisDep, curation_id: int, body: CurationUpdate
-) -> dict[str, Any]:
-    """Edit copy/cover/position; on-write cache DEL + audit (ADM-013/016)."""
-    return ok(await services.update_curation(db, redis, curation_id, body))
-
-
-@router.put("/api/curations/{curation_id}/spots")
-async def api_curation_spots(
-    _: AdminAuth, db: DbSession, redis: RedisDep, curation_id: int, body: SpotsUpdate
-) -> dict[str, Any]:
-    """Replace handpicks (≤8, ordered); cache DEL + audit (ADM-014/016)."""
-    return ok(await services.set_curation_spots(db, redis, curation_id, body))
-
-
-# --- 게시물(해외 스팟) 숨김 관리 (A7) — admin's 2nd scoped write surface --------
+# --- 게시물(해외 스팟) 숨김 관리 (A7) — admin's scoped write surface -----------
 @router.get("/api/overseas")
 async def api_overseas_list(
     _: AdminAuth,
@@ -255,22 +195,3 @@ async def api_overseas_visibility(
 ) -> dict[str, Any]:
     """Toggle overseas_spots.is_hidden; 404 ADMIN_OVERSEAS_NOT_FOUND if absent."""
     return ok(await services.set_overseas_visibility(db, redis, overseas_id, body.isHidden))
-
-
-@router.get("/api/spots/search")
-async def api_spots_search(
-    _: AdminAuth,
-    db: DbSession,
-    q: str | None = Query(None),
-    region: str | None = Query(None),
-    sigungu: str | None = Query(None),
-    category: str | None = Query(None),
-    offset: int = Query(0, ge=0),
-) -> dict[str, Any]:
-    """Admin-only spot picker — trgm ILIKE title/addr1 (q optional), show_flag=1,
-    region/sigungu/category filters, page of 20 + total/hasMore (ADM-015)."""
-    return ok(
-        await services.search_spots(
-            db, q=q, region=region, sigungu=sigungu, category=category, limit=20, offset=offset
-        )
-    )

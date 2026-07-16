@@ -57,7 +57,7 @@ async def test_login_page_is_public(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("path", ["/admin", "/admin/", "/admin/history", "/admin/curation"])
+@pytest.mark.parametrize("path", ["/admin", "/admin/", "/admin/history", "/admin/overseas"])
 async def test_protected_page_redirects_to_login_when_logged_out(
     client: AsyncClient, path: str
 ) -> None:
