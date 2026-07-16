@@ -8,7 +8,7 @@ import {
   type NativeScrollEvent,
 } from "react-native";
 import { Image } from "expo-image";
-import { ktoMidSizeUrl } from "@/components/RemoteImage";
+import { midSizeSourceUri } from "@/components/RemoteImage";
 import { useMatches } from "@/features/feed/posts-queries";
 import type { OverseasPost } from "@/features/feed/posts-api";
 import { PostSlide, type Slide } from "@/features/feed/components/PostSlide";
@@ -50,7 +50,7 @@ export function PostCarousel({
   useEffect(() => {
     for (const m of data?.matches.slice(0, 2) ?? []) {
       if (m.imageUrl)
-        void Image.prefetch(ktoMidSizeUrl(m.imageUrl), { cachePolicy: "memory-disk" });
+        void Image.prefetch(midSizeSourceUri(m.imageUrl), { cachePolicy: "memory-disk" });
     }
   }, [data]);
 
