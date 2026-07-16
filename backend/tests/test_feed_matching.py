@@ -99,6 +99,25 @@ async def _insert_spot(
     await session.commit()
 
 
+async def _insert_gallery(
+    session: AsyncSession,
+    content_id: str,
+    vec: list[float],
+    *,
+    image_url: str = "http://kto/p.jpg",
+    image_count: int = 3,
+) -> None:
+    await session.execute(
+        text(
+            "INSERT INTO spot_embeddings_gallery (content_id, embedding, image_url, image_count) "
+            "VALUES (:cid, CAST(:emb AS halfvec(512)), :url, :cnt) "
+            "ON CONFLICT (content_id) DO NOTHING"
+        ),
+        {"cid": content_id, "emb": _literal(vec), "url": image_url, "cnt": image_count},
+    )
+    await session.commit()
+
+
 @dataclass
 class Seeded:
     overseas_id: int
@@ -309,6 +328,41 @@ async def test_neighbor_search_excludes_non_attraction_categories(db_session):
 
     assert "mt_attraction" in content_ids
     assert content_ids.isdisjoint({"mt_shopping", "mt_food", "mt_cafe", "mt_leisure"})
+
+
+async def test_neighbor_search_uses_gallery_distance_when_closer(db_session):
+    oid = await _insert_overseas(db_session, embedding=_CLOSE)
+    await _insert_spot(db_session, "mt_gal_far_single", _FAR, overview=None)
+    await _insert_gallery(db_session, "mt_gal_far_single", _NEAR)
+
+    neighbors = await repositories.find_domestic_neighbors(db_session, oid, limit=10_000)
+    rows = {content_id: distance for content_id, _image_url, distance in neighbors}
+
+    assert "mt_gal_far_single" in rows
+    assert [cid for cid, _url, _d in neighbors].count("mt_gal_far_single") == 1
+    assert rows["mt_gal_far_single"] < 0.1
+
+
+async def test_neighbor_search_gallery_respects_attraction_gate(db_session):
+    oid = await _insert_overseas(db_session, embedding=_CLOSE)
+    await _insert_spot(db_session, "mt_gal_shop", _FAR, overview=None, lcls1="SH")
+    await _insert_gallery(db_session, "mt_gal_shop", _CLOSE)
+
+    neighbors = await repositories.find_domestic_neighbors(db_session, oid, limit=10_000)
+    content_ids = {content_id for content_id, _image_url, _distance in neighbors}
+
+    assert "mt_gal_shop" not in content_ids
+
+
+async def test_neighbor_search_ignores_stale_gallery_row(db_session):
+    oid = await _insert_overseas(db_session, embedding=_CLOSE)
+    await _insert_spot(db_session, "mt_gal_stale", _FAR, overview=None)
+    await _insert_gallery(db_session, "mt_gal_stale", _CLOSE, image_url="http://kto/old.jpg")
+
+    neighbors = await repositories.find_domestic_neighbors(db_session, oid, limit=10_000)
+    rows = {content_id: distance for content_id, _image_url, distance in neighbors}
+
+    assert rows["mt_gal_stale"] > 0.1
 
 
 async def test_cached_match_state_drops_non_attraction_spot(db_session):

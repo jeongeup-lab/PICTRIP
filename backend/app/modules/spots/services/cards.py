@@ -9,7 +9,7 @@ from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.spots.models import LclsSystmCode, Region, Sigungu, Spot, SpotDetail
-from app.modules.spots.services.nearby import derive_category
+from app.modules.spots.services.nearby import NearbyCategory, category_predicate, derive_category
 from app.modules.spots.services.rows import SpotCardRow
 
 
@@ -27,6 +27,18 @@ def image_bearing_spots_stmt(*, since: datetime | None = None) -> Select[tuple[s
     if since is not None:
         stmt = stmt.where(Spot.synced_at >= since)
     return stmt
+
+
+def attraction_image_spots_stmt() -> Select[tuple[str, str | None]]:
+    """(content_id, first_image_url) selectable for visible attraction-bucket spots
+    with an image — the gallery-embedding target pool. Mirrors the matching
+    candidate gate (attraction only) so gallery KTO calls are never spent on
+    spots that can't surface as matches.
+    """
+    return image_bearing_spots_stmt().where(
+        Spot.show_flag == 1,
+        category_predicate(NearbyCategory.attraction),
+    )
 
 
 async def lock_current_spot_image(session: AsyncSession, content_id: str, image_url: str) -> bool:
