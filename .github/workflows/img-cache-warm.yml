@@ -1,0 +1,30 @@
+name: img-cache-warm
+# img.pictrip.org 엣지 캐시 워밍 — 탐색 카탈로그 전체의 썸네일 변형(폭 4종)을 프록시로 훑는다.
+# Cloudflare Cache API 는 콜로 단위 저장이라, KR 사용자가 붙는 콜로(무료 플랜 기준 LAX)를
+# 데우려면 국내 망의 ct111 러너에서 실행해야 한다. GitHub 호스티드 러너(미국)는 엉뚱한
+# 콜로를 데우므로 사용하지 않는다.
+# 트리거: 주간 재워밍(캐시 축출 대비) + overseas-sync 후 신규 이미지 워밍(workflow_call).
+on:
+  schedule:
+    - cron: "0 19 * * 0" # 매주 월요일 04:00 KST (일 19:00 UTC + 9h)
+  workflow_call:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: img-cache-warm
+  cancel-in-progress: false
+
+jobs:
+  warm:
+    runs-on: [self-hosted, ct111]
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node workers/img-proxy/scripts/warm.mjs
