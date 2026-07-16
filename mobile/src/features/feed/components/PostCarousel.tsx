@@ -46,6 +46,7 @@ export function PostCarousel({
 
   const { data } = useMatches(post.id, { enabled: armed });
   const slides = useMemo(() => slidesFor(post, data), [post, data]);
+  const counted = !!data && slides.length > 1;
 
   useEffect(() => {
     for (const m of data?.matches.slice(0, 2) ?? []) {
@@ -78,7 +79,7 @@ export function PostCarousel({
             <PostSlide
               slide={item}
               width={cardWidth}
-              counter={slides.length > 1 ? `${i + 1}/${slides.length}` : ""}
+              counter={counted ? `${i + 1}/${slides.length}` : ""}
               onInfo={() => setCreditOpen(true)}
               onNavigate={onNavigate}
             />
@@ -86,7 +87,7 @@ export function PostCarousel({
         />
       </View>
 
-      {slides.length > 1 ? (
+      {counted ? (
         <View style={styles.dots}>
           {slides.map((s, i) => (
             <View

@@ -71,7 +71,19 @@ describe("PostCarousel", () => {
     expect(text(r)).toContain("일본");
     expect(text(r)).toContain("도쿄의 상징적인 전망 타워");
     expect(r.root.findAllByProps({ testID: "credit-info" }).length).toBeGreaterThan(0);
-    expect(text(r)).toContain("1/4");
+  });
+
+  it("hides the counter and dots until the real match count is known", async () => {
+    const r = await mount();
+    expect(text(r)).not.toContain("1/4");
+    expect(r.root.findAllByProps({ testID: "post-counter" })).toHaveLength(0);
+  });
+
+  it("shows the counter from the actual match count once loaded", async () => {
+    setMatches([match({ contentId: "100" }), match({ contentId: "101" })]);
+    const r = await mount();
+    expect(text(r)).toContain("1/3");
+    expect(text(r)).not.toContain("1/4");
   });
 
   it("matches query stays disabled until first swipe", async () => {
