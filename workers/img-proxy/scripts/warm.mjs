@@ -1,6 +1,9 @@
 const API = "https://api.pictrip.org/v1/explore";
+const CHANNELS_API = "https://api.pictrip.org/v1/home/channels";
 const PROXY = "https://img.pictrip.org";
 const WIDTHS = [330, 500, 960, 1280];
+const CHANNEL_KEYS = ["hot", "hidden", "festa", "pets", "snap"];
+const KTO_HOST = "tong.visitkorea.or.kr";
 const CONCURRENCY = 4;
 const RETRY_DELAYS_MS = [3000, 8000, 20000];
 
@@ -30,6 +33,27 @@ async function collectImageUrls() {
   return urls;
 }
 
+async function collectChannelImageUrls() {
+  const urls = [];
+  try {
+    const res = await fetch(CHANNELS_API);
+    const { data } = await res.json();
+    urls.push(...(data?.channels ?? []).map((c) => c.thumbnailUrl));
+  } catch (e) {
+    console.log("channel metas skipped:", e.message);
+  }
+  for (const key of CHANNEL_KEYS) {
+    try {
+      const res = await fetch(`${CHANNELS_API}/${key}`);
+      const { data } = await res.json();
+      urls.push(...(data?.cards ?? []).map((c) => c.imageUrl));
+    } catch (e) {
+      console.log(`channel ${key} skipped:`, e.message);
+    }
+  }
+  return urls.filter(Boolean);
+}
+
 function variants(url) {
   const m = /^(.*)\/(\d+)px-([^/]+)$/.exec(url);
   if (!m) return [url];
@@ -40,9 +64,25 @@ function toProxy(url) {
   return url.replace(/^https?:\/\//, `${PROXY}/`);
 }
 
-const urls = await collectImageUrls();
-const targets = [...new Set(urls.flatMap(variants).map(toProxy))];
-console.log(`warming ${targets.length} urls from ${urls.length} images`);
+function channelTargets(url) {
+  if (url.startsWith(`${PROXY}/`)) return [url];
+  if (!url.includes(`//${KTO_HOST}/`)) return [];
+  const targets = [toProxy(url)];
+  if (url.includes("_image1_1")) targets.push(toProxy(url.replace("_image1_1", "_image2_1")));
+  return targets;
+}
+
+const exploreUrls = await collectImageUrls();
+const channelUrls = await collectChannelImageUrls();
+const targets = [
+  ...new Set([
+    ...exploreUrls.flatMap(variants).map(toProxy),
+    ...channelUrls.flatMap(channelTargets),
+  ]),
+];
+console.log(
+  `warming ${targets.length} urls from ${exploreUrls.length} explore + ${channelUrls.length} channel images`,
+);
 
 const counts = {};
 let done = 0;
