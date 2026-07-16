@@ -42,8 +42,10 @@
 
 - 프로덕션 DB: `spots ~68k` + CLIP 임베딩 `~64%`(`spot_embeddings`, halfvec(512),
   HNSW). **새 스키마는 이 위에 얹는다 — 자산 폐기 금지, 매핑/마이그레이션 경로 명시.**
-- KTO 컴플라이언스: 이미지 다운로드/저장 금지(URL만), `overview` verbatim,
-  임베딩 `halfvec(512)`(`... <=> $1::halfvec(512)` 캐스팅).
+- KTO 컴플라이언스: `overview` verbatim, 임베딩 `halfvec(512)`
+  (`... <=> $1::halfvec(512)` 캐스팅). 이미지는 공공누리 경계 — Type1 변형 가능,
+  Type3 원본 무변형만, 출처표시 유지 (구 "다운로드/저장 금지(URL만)"는 2026-07-16
+  폐기, 결정 로그 참조).
 - 인프라: Proxmox 홈서버(FastAPI+Redis CT112, Postgres CT110), Cloudflare 터널
   `https://api.pictrip.org`, GitHub Actions + self-hosted runner, GHCR. **No AWS.**
 - 모바일 네이티브: 지도=KakaoWebMap(WebView+JS SDK), `@react-native-kakao/map` 뷰
@@ -266,6 +268,17 @@ DB/인프라/API 세션은 화면 세션들의 data needs를 종합해 형식화
   라우트·어드민 편집기·웹 폴백) 제거 — `curations`/`curation_spots` 테이블은 보존.
   모듈 구성 정정: `users · spots · feed · images · map · system · admin`. 기존 공유
   링크는 `web/_redirects`의 `/curations/* → /` 302 폴백으로 착지.
+
+- **KTO 이미지 정책 폐기·재정의 (2026-07-16)** — 운영사무국 확인으로 "이미지
+  다운로드/저장 금지(URL만) = 실격" 조항 폐기. 근거: 2026 설명회 자료(46p)·공모전
+  OT자료(24p)·활용매뉴얼 v4.4 원문 전수 재분석 결과 이미지 다운로드 금지 조항 부재 —
+  "다운로드 금지"의 실체는 콘텐츠랩 파일데이터/맞춤형 다운로드를 **데이터 소스**로
+  쓰면 OpenAPI 활용으로 불인정한다는 규정(이미지와 무관)이었고 "실격"이라는 단어는
+  어느 문서에도 없음. 새 경계 = 공공누리 `cpyrhtDivCd`: Type1(출처표시) 변형 가능 ·
+  Type3(변경금지) 원본 무변형 pass-through만 · 출처표시 유지 · 데이터 소스는 OpenAPI
+  호출 필수. 사무국 답변 원문은 미보관(사용자 보고, 2026-07-16) — 원문 확보 시 여기에
+  첨부. 구현: `img.pictrip.org` Worker에 KTO 무변형 캐시 라우트, 죽은 원본 주간 검증
+  (`validate-images`).
 
 ## 교차 reconcile 결정 (2026-06-20 심층분석 + 독립 에이전트 패널)
 
