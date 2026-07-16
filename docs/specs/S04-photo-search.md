@@ -1,5 +1,11 @@
 # S4 — 사진 검색 플로우 (08·09·10)
 
+> **⚠️ S13으로 대체됨 (2026-07)** — 사진 검색 기능은
+> [`S13-home-feed-explore-redesign.md`](S13-home-feed-explore-redesign.md)에서
+> **완전 제거**됐다(`POST /taste/photo-search` + taste 모듈 + 모바일 `features/photo`).
+> CLIP 임베딩 인프라는 해외→국내 매칭 엔진(`GET /overseas/{id}/matches`)으로 전환·유지.
+> 이 문서는 기록용으로만 유지하며 갱신하지 않는다.
+
 > 입력: `docs/mockups/08-photo-select.html` · `09-analyzing.html` · `10-result.html`,
 > `docs/specs/DECISIONS.md`(잠긴 결정·제약), `CLAUDE.md`(루트).
 > 설계 원칙: 화면/UX/네비/API 형태는 백지에서 이상적으로. DB·인프라는 후속 세션에서 reconcile.
