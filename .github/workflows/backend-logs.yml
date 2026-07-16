@@ -1,0 +1,38 @@
+name: backend-logs
+# CT112 api 컨테이너 로그 원격 조회 — Tailscale 없이 러너 경유로 grep 한 건씩.
+# 용도 예: Plan D 게이트(구 엔드포인트 잔존 트래픽 카운트), 장애 시 에러 라인 확인.
+# pattern 은 grep -E 정규식. 셸 인젝션 방지를 위해 env 로만 전달한다.
+on:
+  workflow_dispatch:
+    inputs:
+      pattern:
+        description: "grep -E pattern (e.g. 'GET /v1/home/feed')"
+        type: string
+        required: true
+      since:
+        description: "docker logs --since window (e.g. 48h, 30m)"
+        type: string
+        default: "48h"
+      sample:
+        description: "매칭 라인 샘플 출력 수"
+        type: string
+        default: "20"
+
+permissions: {}
+
+jobs:
+  logs:
+    runs-on: [self-hosted, ct112]
+    env:
+      PATTERN: ${{ inputs.pattern }}
+      SINCE: ${{ inputs.since }}
+      SAMPLE: ${{ inputs.sample }}
+    steps:
+      - run: |
+          set -euo pipefail
+          cid="$(docker ps -q --filter "publish=8000" | head -n1)"
+          if [ -z "$cid" ]; then echo "api container not found on :8000"; exit 1; fi
+          echo "=== count (last $SINCE) ==="
+          docker logs --since "$SINCE" "$cid" 2>&1 | grep -cE "$PATTERN" || true
+          echo "=== sample (max $SAMPLE) ==="
+          docker logs --since "$SINCE" "$cid" 2>&1 | grep -E "$PATTERN" | tail -n "$SAMPLE" || echo "(none)"
