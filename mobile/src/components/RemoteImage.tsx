@@ -96,6 +96,21 @@ const isCommonsUrl = (u: string): boolean => {
   const authority = /^https?:\/\/([^/?#]+)/i.exec(u);
   return !!authority && COMMONS_HOSTS.has(authority[1].toLowerCase());
 };
+
+const IMG_PROXY_ORIGIN = "https://img.pictrip.org";
+const proxyCommons = (u: string): string => {
+  const m = /^https?:\/\/([^/?#]+)(.*)$/i.exec(u);
+  const host = m?.[1].toLowerCase();
+  return m && host && COMMONS_HOSTS.has(host) ? `${IMG_PROXY_ORIGIN}/${host}${m[2]}` : u;
+};
+const unproxyCommons = (u: string): string | null => {
+  if (!u.startsWith(`${IMG_PROXY_ORIGIN}/`)) return null;
+  const rest = u.slice(IMG_PROXY_ORIGIN.length + 1);
+  const slash = rest.indexOf("/");
+  if (slash === -1) return null;
+  const host = rest.slice(0, slash);
+  return COMMONS_HOSTS.has(host) ? `https://${host}${rest.slice(slash)}` : null;
+};
 const commonsThumb = (u: string, width: number): string => {
   if (u.includes("/thumb/")) return u.replace(/\/(\d+)px-([^/]+)$/, `/${width}px-$2`);
   if (/\/wiki\/Special:FilePath\//i.test(u)) {
@@ -113,10 +128,14 @@ const resolveSource = (
 ): string | null => {
   if (!raw) return raw;
   const midResolved = midSize ? ktoMidSizeUrl(raw) : raw;
-  return commonsWidth && isCommonsUrl(midResolved)
-    ? commonsThumb(midResolved, commonsWidth)
-    : midResolved;
+  const sized =
+    commonsWidth && isCommonsUrl(midResolved)
+      ? commonsThumb(midResolved, commonsWidth)
+      : midResolved;
+  return proxyCommons(sized);
 };
+
+const sourceFallback = (u: string): string | null => ktoFallback(u) ?? unproxyCommons(u);
 
 const contentFitFor = (mode?: ImageResizeMode): ImageContentFit => {
   switch (mode) {
@@ -146,9 +165,10 @@ export function RemoteImage({
   const uri = resolveSource(rawUri, midSize, commonsWidth);
   const [failedUri, setFailedUri] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
-  // The KTO original URI whose _image1_1 has failed and been degraded. Keyed by URI (not a
-  // bare boolean) so a stale degrade never bleeds onto a newly-assigned uri in the same render
-  // — a fresh uri simply won't match and starts at its own original.
+  // The URI whose primary source has failed and been degraded to its fallback (KTO _image1_1
+  // → _image2_1, proxied Commons → direct Wikimedia). Keyed by URI (not a bare boolean) so a
+  // stale degrade never bleeds onto a newly-assigned uri in the same render — a fresh uri
+  // simply won't match and starts at its own original.
   const [degradedUri, setDegradedUri] = useState<string | null>(null);
   const [prevUri, setPrevUri] = useState(uri);
   const retryRef = useRef<{ uri: string | null; count: number }>({ uri: null, count: 0 });
@@ -163,8 +183,8 @@ export function RemoteImage({
     if (failedUri !== null) setFailedUri(null);
     if (attempt !== 0) setAttempt(0);
   }
-  // Effective source: the KTO mid-size only for the exact uri that has been degraded.
-  const eff = uri && degradedUri === uri ? (ktoFallback(uri) ?? uri) : uri;
+  // Effective source: the fallback only for the exact uri that has been degraded.
+  const eff = uri && degradedUri === uri ? (sourceFallback(uri) ?? uri) : uri;
   const lowUri = eff && isKtoUrl(eff) && eff.includes(KTO_HIRES) ? ktoFallback(eff) : null;
   useLayoutEffect(() => {
     activeUriRef.current = eff;
@@ -214,8 +234,9 @@ export function RemoteImage({
     [eff, onLoad],
   );
   const onError = useCallback(() => {
-    // KTO original (_image1_1) missing → degrade to the mid-size once, no backoff.
-    if (uri && degradedUri !== uri && ktoFallback(uri)) {
+    // Primary source failed → degrade to its fallback once, no backoff (KTO original →
+    // mid-size, proxied Commons → direct Wikimedia).
+    if (uri && degradedUri !== uri && sourceFallback(uri)) {
       setDegradedUri(uri);
       setAttempt(0);
       retryRef.current = { uri: null, count: 0 };
