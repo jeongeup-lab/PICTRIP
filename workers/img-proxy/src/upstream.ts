@@ -24,3 +24,26 @@ export function ktoFallbackUpstream(upstream: string): string | null {
   if (url.hostname !== KTO_HOST || !url.pathname.includes(KTO_HIRES)) return null;
   return upstream.replace(KTO_HIRES, KTO_MID);
 }
+
+const T1_PATTERN = /^\/t1\/(\d+)\/([0-9a-f]{64})(\/.+)$/;
+const T1_MIN_WIDTH = 16;
+const T1_MAX_WIDTH = 1620;
+
+export interface T1Upstream {
+  upstream: string;
+  width: number;
+  sig: string;
+  payload: string;
+}
+
+export function resolveT1(url: URL): T1Upstream | null {
+  const m = T1_PATTERN.exec(url.pathname);
+  if (!m) return null;
+  const width = Number(m[1]);
+  if (width < T1_MIN_WIDTH || width > T1_MAX_WIDTH) return null;
+  const upstream = resolveUpstream(new URL(`${url.origin}${m[3]}${url.search}`));
+  if (!upstream) return null;
+  const u = new URL(upstream);
+  if (u.hostname !== KTO_HOST) return null;
+  return { upstream, width, sig: m[2], payload: `${width}/${u.hostname}${u.pathname}${u.search}` };
+}

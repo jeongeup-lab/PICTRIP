@@ -59,7 +59,7 @@ async def overseas_matches(
                     contentId=r.content_id,
                     title=r.title,
                     regionLabel=r.region_label,
-                    imageUrl=r.image_url,
+                    imageUrl=matching.display_image_url(r),
                     overviewFirst=r.overview_first,
                 )
                 for r in rows

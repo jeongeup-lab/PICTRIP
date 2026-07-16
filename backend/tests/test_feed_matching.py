@@ -7,6 +7,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.db import get_db
 from app.core.redis import get_redis
 from app.main import app
@@ -319,3 +320,34 @@ async def test_matches_unknown_id_404(client):
 async def test_matches_without_embedding_returns_empty(client, seeded_overseas_no_embedding):
     res = await client.get(f"/v1/overseas/{seeded_overseas_no_embedding}/matches")
     assert res.json()["data"]["matches"] == []
+
+
+def _match_row(cpyrht_div_cd: str | None) -> matching.MatchRow:
+    return matching.MatchRow(
+        content_id="1",
+        title="t",
+        region_label="강원",
+        image_url="https://tong.visitkorea.or.kr/cms/resource/98/3045598_image2_1.jpg",
+        overview_first=None,
+        cpyrht_div_cd=cpyrht_div_cd,
+    )
+
+
+def test_display_image_url_type1_returns_signed_transform(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "IMG_PROXY_T1_SECRET", "s3cret")
+    url = matching.display_image_url(_match_row("Type1"))
+    assert url.startswith("https://img.pictrip.org/t1/1080/")
+    assert url.endswith("/tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg")
+
+
+def test_display_image_url_type3_and_unknown_pass_through(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "IMG_PROXY_T1_SECRET", "s3cret")
+    raw = "https://tong.visitkorea.or.kr/cms/resource/98/3045598_image2_1.jpg"
+    assert matching.display_image_url(_match_row("Type3")) == raw
+    assert matching.display_image_url(_match_row(None)) == raw
+
+
+def test_display_image_url_without_secret_passes_through(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "IMG_PROXY_T1_SECRET", "")
+    raw = "https://tong.visitkorea.or.kr/cms/resource/98/3045598_image2_1.jpg"
+    assert matching.display_image_url(_match_row("Type1")) == raw

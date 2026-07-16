@@ -129,6 +129,13 @@ class Settings(BaseSettings):
     MATCH_DISTANCE_MAX: float = 0.32
     MATCH_CANDIDATES: int = 40
 
+    # --- Image proxy (img.pictrip.org) ---
+    # SECRET — set in .env only, and mirror into the worker via
+    # ``wrangler secret put T1_SECRET``. Empty = signed Type1 transforms disabled
+    # (feed falls back to the untransformed hires URL).
+    IMG_PROXY_ORIGIN: str = "https://img.pictrip.org"
+    IMG_PROXY_T1_SECRET: str = ""
+
     # --- Admin console (A01) ---
     # Auth is DB-backed (admin_users table), NOT an env var (decision 2026-06-27):
     # the credential lives in the shared CT110 DB so it needs no CT112 .env/shell to

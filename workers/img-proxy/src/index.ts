@@ -1,17 +1,39 @@
-import { ktoFallbackUpstream, resolveUpstream } from "./upstream";
+import { verifyT1Signature } from "./sign";
+import { ktoFallbackUpstream, resolveT1, resolveUpstream } from "./upstream";
 
 const PROXY_UA = "PicTrip/1.0 (https://pictrip.org)";
 const CACHE_TTL_SECONDS = 2_592_000;
 
+interface Env {
+  T1_SECRET?: string;
+}
+
+function upstreamInit(width?: number): RequestInit {
+  if (!width) return { headers: { "User-Agent": PROXY_UA } };
+  return {
+    headers: { "User-Agent": PROXY_UA },
+    cf: { image: { width, fit: "scale-down", quality: 82, format: "webp" } },
+  };
+}
+
 export default {
-  async fetch(request, _env, ctx): Promise<Response> {
+  async fetch(request, env, ctx): Promise<Response> {
     if (request.method !== "GET" && request.method !== "HEAD") {
       return new Response("method not allowed", { status: 405 });
     }
     const url = new URL(request.url);
-    const upstream = resolveUpstream(url);
+    let upstream = resolveUpstream(url);
+    let width: number | undefined;
     if (!upstream) {
-      return new Response("not found", { status: 404 });
+      const t1 = resolveT1(url);
+      if (!t1) {
+        return new Response("not found", { status: 404 });
+      }
+      if (!env.T1_SECRET || !(await verifyT1Signature(env.T1_SECRET, t1.payload, t1.sig))) {
+        return new Response("forbidden", { status: 403 });
+      }
+      upstream = t1.upstream;
+      width = t1.width;
     }
 
     const headOnly = request.method === "HEAD";
@@ -24,11 +46,11 @@ export default {
       return hit;
     }
 
-    let origin = await fetch(upstream, { headers: { "User-Agent": PROXY_UA } });
+    let origin = await fetch(upstream, upstreamInit(width));
     if (origin.status === 404) {
       const fallback = ktoFallbackUpstream(upstream);
       if (fallback) {
-        const mid = await fetch(fallback, { headers: { "User-Agent": PROXY_UA } });
+        const mid = await fetch(fallback, upstreamInit(width));
         if (mid.ok) origin = mid;
       }
     }
@@ -50,4 +72,4 @@ export default {
     ctx.waitUntil(cache.put(cacheKey, miss.clone()));
     return miss;
   },
-} satisfies ExportedHandler;
+} satisfies ExportedHandler<Env>;
