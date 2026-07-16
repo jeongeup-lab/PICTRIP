@@ -12,56 +12,15 @@ from app.core.redis import RedisDep
 from app.core.schemas import ok
 from app.modules.spots.schemas import (
     CurationDetailResponse,
-    HomeFeedResponse,
-    HomeHero,
-    HomeRail,
     SpotCard,
     SpotDetailResponse,
     SpotImageOut,
     SpotIntro,
 )
 from app.modules.spots.services import curations as curation_svc
-from app.modules.spots.services import feed, load_spot_detail
+from app.modules.spots.services import load_spot_detail
 
 router = APIRouter(tags=["SPT · spots"])
-
-
-@router.get("/home/feed", summary="Home feed (6 region heroes + 3 mood rails)")
-async def home_feed(session: DbSession, redis: RedisDep) -> dict[str, Any]:
-    row = await feed.assemble_home_feed(session, redis)
-    payload = HomeFeedResponse(
-        heroes=[
-            HomeHero(
-                id=h.id,
-                slug=h.slug,
-                title=h.title,
-                subtitle=h.subtitle,
-                coverUrl=h.cover_url,
-            )
-            for h in row.heroes
-        ],
-        rails=[
-            HomeRail(
-                id=rail.id,
-                title=rail.title,
-                subtitle=rail.subtitle,
-                spots=[
-                    SpotCard(
-                        contentId=s.content_id,
-                        title=s.title,
-                        firstImageUrl=s.first_image_url,
-                        addr1=s.addr1,
-                        mapx=s.mapx,
-                        mapy=s.mapy,
-                        category=s.lcls_systm3_nm,
-                    )
-                    for s in rail.spots
-                ],
-            )
-            for rail in row.rails
-        ],
-    )
-    return ok(payload)
 
 
 @router.get("/curations/{slug}", summary="Region/curation detail (≤8 spots)")

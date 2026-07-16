@@ -26,7 +26,6 @@ from app.modules.images import models as _images_models
 from app.modules.map import models as _map_models
 from app.modules.spots import models as _spots_models
 from app.modules.system import models as _system_models
-from app.modules.taste import models as _taste_models
 from app.modules.users import models as _users_models
 
 config = context.config

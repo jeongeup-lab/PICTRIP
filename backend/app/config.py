@@ -125,11 +125,6 @@ class Settings(BaseSettings):
     CLIP_MODEL_NAME: str = "openai/clip-vit-base-patch32"
     CLIP_DEVICE: Literal["cpu", "cuda", "mps"] = "cpu"
 
-    # --- Photo search (TST) ---
-    # Cosine-similarity floor (S07 §10); soft top-N floor keeps a sparse result non-empty.
-    PHOTO_SEARCH_SIMILARITY_FLOOR: float = 0.60
-    PHOTO_SEARCH_MAX: int = 30
-
     # --- Overseas → domestic matching (S13) ---
     MATCH_DISTANCE_MAX: float = 0.32
     MATCH_CANDIDATES: int = 40
