@@ -57,6 +57,12 @@
 | A10 | **임베딩 현황 카드 + 재임베딩 채택 — read-write 확장** (2026-06-28, 사용자 승인) | 수집(`spots`)과 임베딩(CLIP→`spot_embeddings`)은 분리된 단계인데 현황 페이지엔 수집만 보였음. 임베딩 커버리지·실패 백로그·이번 수집분 진행을 노출하고, 실패/백로그를 **인프로세스 BackgroundTask**로 재임베딩(Celery 없음, Redis `SET NX` 락=동시성 가드+running 표시). 실패 영속화용 `embedding_failures` 신설(백엔드 소유). 쓰기는 `images.services` 경유(어드민이 모델 직접 쓰지 않음). `GET /admin/api/embedding` · `POST /admin/api/embedding/trigger?scope=failed\|missing` → 수집 현황 아래 카드 |
 | A11 | **큐레이션 하드닝 — 발행 토글 제거 · 보드 DnD 단일화** (2026-07-08, 사용자 승인) | 편성=시드된 고정 히어로6+레일3이라 발행/미발행 운영 개념이 무의미 — 어드민 API/UI에서 `isPublished` 노출·수정 완전 제거(`is_published` 컬럼·피드 필터는 DB 내부 계약으로 잔존, `seed_curations.py`가 전량 published 보장). 에디토리얼 그룹·UI 제거(목록=`{heroes, rails}`, DB CHECK의 'editorial' 타입은 잔존). 순서=`PUT /admin/api/curations/positions`(type별 전체 순열·단일 트랜잭션·응답=보드) 보드 DnD 단일 경로(슬라이드오버 스테퍼 제거). 손픽 품질 게이트=커버와 동일(존재+`show_flag=1`+이미지 비어있지 않음, 등록 422+서빙 필터). `…/{id}/preview` 정식 문서화, 피커=q 선택화+시군구/카테고리/offset, `/admin/login` 레이트리밋 5회/분/IP → §7 |
 
+> **[은퇴 — S13, 2026-07]** A9·A11의 큐레이션 편집기 표면(라우트·UI·시드·피커
+> `/admin/api/spots/search`)은 S13 홈 개편으로 **제거**됐다(`curations`/`curation_spots`
+> 테이블은 보존, `/admin/login` 레이트리밋은 잔존) — §7 배너 참조. 어드민의 유일한
+> 쓰기는 이제 해외 게시물 모더레이션(`PUT /admin/api/overseas/{id}/visibility`,
+> `overseas_spots.is_hidden`)뿐.
+
 **미정(blocking은 트리거뿐):** A7 트리거 메커니즘.
 **제외(스코프 밖):** Redis ping·`rlte:*` 카운트, 취향벡터 보유,
 다른 KTO 수집/가공(상세·이미지·마스터·무드) 트리거, 회원 관리.
@@ -279,6 +285,11 @@ TriggerResult { job: "sync-daily", runId: str|null, accepted: bool }
 ---
 
 ## 7. 홈 큐레이션 편집기 (Phase 4 — read-write 확장, 2026-06-21 채택)
+
+> **🗑 S13에서 은퇴 (2026-07, 테이블은 보존)** — 홈에서 큐레이션이 빠지면서(S13 홈 개편)
+> 이 절의 편집기 표면 전체(`/admin/api/curations*`·`/admin/api/spots/search`·
+> `curation.html`·시드 스크립트)가 제거됐다. `curations`/`curation_spots` 테이블과
+> `/admin/login` 레이트리밋(A11)은 잔존. 이하는 기록용으로만 유지.
 
 > A01 본래 결정(콘텐츠 큐레이션=비목표 · 어드민 read-only)을 **사용자 승인으로 뒤집은**
 > 확장. 근거: 홈은 백엔드 주도 설계(잠긴 결정 2)라 *편성 교체에 앱 재배포가 필요 없도록*

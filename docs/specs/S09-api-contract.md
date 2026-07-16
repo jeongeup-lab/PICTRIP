@@ -1,5 +1,11 @@
 # S9 — API 계약 (화면 → 엔드포인트)
 
+> **🔄 S13 반영 (2026-07)** — 홈·탐색 개편([`S13`](S13-home-feed-explore-redesign.md))으로
+> `POST /taste/photo-search`(taste 모듈째)·`GET /home/feed`·`GET /curations/{slug}`가
+> 제거되고 **feed 모듈**(`/feed`·`/explore`·`/overseas/{id}/matches`·`/home/channels`·
+> `/home/channels/{key}`)이 신설됐다. §4가 신 계약, §5.1·§5.2는 제거 표식만 남김.
+> 그 외 절(auth·spots 상세·map·system)은 계속 유효.
+
 > 세션 S9. 입력 SSOT: `session-context.md`(잠긴 결정·교차 reconcile), 화면 스펙
 > S1·S2·S3·S4·S5·S6, DB 설계 S7, 루트 `CLAUDE.md`(Conventions·Prohibitions).
 > **현 백엔드 코드가 ground truth** — 이 문서는 화면들이 넘긴 data needs를 JSend 계약으로
@@ -66,13 +72,11 @@ SpotCard (코어)  { contentId, title, firstImageUrl: str|null, category: str|nu
 - 엔드포인트별 **확장 필드**(코어에 더함):
   | 확장 필드 | 추가하는 엔드포인트 | 의미 |
   |---|---|---|
-  | `similarity: float`(0~1) | `/taste/photo-search` | 코사인 유사도(클라 ×100 반올림) |
-  | `distance: float`(m) | `/taste/photo-search`(위치 시) | 쿼리 지점 거리 |
   | `dist: float`(m) | `/map/nearby` | 중심점 거리(거리순 정렬 기준) |
-  | `regionName`,`sigunguName: str\|null` | `/taste/photo-search`·`/spots/{id}`·`/map/nearby` | "유형 · 지역" 메타 |
+  | `regionName`,`sigunguName: str\|null` | `/spots/{id}`·`/map/nearby` | "유형 · 지역" 메타 |
   | `addr1`,`mapx`,`mapy` | `/spots/{id}`·`/map/nearby` | 주소·좌표 |
   | `overview: str\|null` | `/map/nearby` | KTO overview 첫 줄(verbatim, null이면 생략) |
-  | `congestion: "low"\|"medium"\|"high"\|null` | `/home/feed`·`/curations/{slug}`·`/spots/{id}`·`/map/nearby`·`/taste/photo-search` | 혼잡도(붐빔도) 텍스트 칩. 데이터 있으면 채움, 없으면 `null`(클라 배지 숨김) |
+  | ~~`congestion: "low"\|"medium"\|"high"\|null`~~ | (철회 — 아래 노트, 어떤 엔드포인트도 직렬화 안 함) | 혼잡도(붐빔도) 텍스트 칩 |
 
   > **[철회 — 2026-07-08 (DECISIONS CH2)]** 아래 congestion 정의는 대회 범위에서
   > 제외 — 어떤 엔드포인트도 직렬화하지 않음(`spot_concentration` 자산은 잔존,
@@ -95,11 +99,10 @@ SpotCard (코어)  { contentId, title, firstImageUrl: str|null, category: str|nu
 ### 1.4 공유 유틸 / 표기 (클라이언트)
 
 - **거리**: `formatDistance(m)` 단일 함수(C2) — `<1km → {정수}m` / `1–10km → 소수1 km` / `≥10km → 정수 km`.
-  서버는 항상 미터(`dist`/`distance`)를 내림. 사진검색(S4)·지도(S5) 동일.
-- **유사도**: 서버는 원시 코사인 `similarity`(0~1)를 내림. **표시는 원시 `round(similarity × 100)%`를 쓰지 않는다**
-  (정정 — S11 §2/§4 D3). 코사인 절대값은 사용자에게 직관적이지 않고 분포가 좁아 % 노출이 오해를 부른다 →
-  클라가 **버킷 라벨**(예 "매우 비슷함/비슷함/관련 있음") 또는 결과 집합 기준 **스트레치(min-max 정규화)**로 변환해
-  표시. 정렬·임계 판단은 원시 `similarity`로 유지.
+  서버는 항상 미터(`dist`)를 내림. 지도(S5)·Around 채널(§4.6) 동일.
+- ~~**유사도** 표시 규칙(버킷 라벨/스트레치)~~ — **[제거 — S13]** `similarity`·`distance`
+  확장 필드는 `/taste/photo-search` 전용이었고 사진 검색 제거로 소멸. 매칭
+  (`/overseas/{id}/matches`)은 유사도를 직렬화하지 않는다(추천 프레이밍만).
 
 ---
 
@@ -118,7 +121,7 @@ SpotCard (코어)  { contentId, title, firstImageUrl: str|null, category: str|nu
 | `PERMISSION_DENIED` | 403 | 권한 없음 |
 | **`RESOURCE_NOT_FOUND`** | 404 | 스팟/큐레이션 없음 |
 | `DUPLICATE_RESOURCE` | 409 | 중복 |
-| **`IMAGE_INVALID`** | 422 | 이미지 형식/크기 |
+| `IMAGE_INVALID` | 422 | (사진 검색 제거로 미사용 — S13) |
 | `RATE_LIMITED` | 429 | 과다 요청 |
 | `KTO_API_UNAVAILABLE` | 502 | KTO API 무응답 |
 | `LBS_CONSENT_REQUIRED` | 403 | 위치 동의 필요 |
@@ -201,52 +204,70 @@ SpotCard (코어)  { contentId, title, firstImageUrl: str|null, category: str|nu
 
 ---
 
-## 4. taste 모듈 — 사진 검색
+## 4. feed 모듈 — 홈 피드 · 탐색 · 채널 (S13 신설, taste 사진 검색 대체)
 
-### 4.1 `POST /v1/taste/photo-search`  ·  게스트
-- 요청: **multipart** `image`(필수, 단일) + 쿼리 `lat?` · `lng?`(위치 권한 **이미 허용** 시에만 첨부 — 흐름 중 팝업 금지, S4).
+### 4.1 ~~`POST /v1/taste/photo-search`~~  ·  **[제거 — S13, 2026-07]**
+- 사진 검색 기능 폐기와 함께 **taste 모듈째 제거**. CLIP 임베딩 인프라는
+  해외→국내 매칭(§4.4)의 엔진으로 전환·유지. 업로드 이미지 표면은 완전 소멸
+  (KTO 컴플라이언스 표면 축소 — S13 §11). 옛 계약은 S04 문서(기록용) 참조.
+
+### 4.2 `GET /v1/feed?seed=&cursor=&limit=`  ·  게스트 (S13)
+- 홈 게시물 피드(해외 훅 → 스와이프 시 국내 매칭 §4.4). 쿼리 `seed?`(셔플 시드,
+  미전송 시 서버 발급) · `cursor?`(불투명) · `limit`(기본 6, 1–20).
 - 응답 200:
   ```
   {
-    matches: [ SpotCard(코어) + {
-      similarity: float,        // 0~1 (원시 코사인; 표시는 클라 버킷/스트레치 — §1.4)
-      distance?: float,         // m, lat/lng 줬을 때만
-      regionName?: str|null,
-      sigunguName?: str|null,
-      congestion?: "low"|"medium"|"high"|null   // 혼잡도(§1.3), 데이터 있을 때만
-    } ],
-    queryHadLocation: bool      // 거리/정렬칩 노출 판단(10)
+    seed: str,
+    items: [ OverseasPost ],
+    nextCursor: str|null, hasMore: bool
   }
+  OverseasPost = { id, nameKo, countryCode, countryNameKo, descriptionKo: str|null,
+                   imageUrl, imageAuthor: str|null, imageLicense: str|null,
+                   imageLicenseUrl: str|null, imageSourceUrl }
   ```
-- 서버 규칙(정정 — S11 §2/§4 D3): 임계는 **고정 0.60이 아니라 캘리브레이션 값**을 쓴다.
-  라벨링 표본에서 **FP/FN 교차점**으로 결정(예상 범위 0.50~0.70)하고, 임계 통과가 적을 때 결과가 비지 않도록
-  **top-N 소프트 플로어**(임계 미달이라도 상위 N개는 내림)를 둔다. **최대 ~30개**, 유사도 내림차순.
-  소프트 플로어로도 0건이면 **정상 빈 200**(에러 아님 → 10 empty 상태). 정렬(유사도↔거리)은 **클라 재정렬**.
-- **KTO 불변 규칙(C2/S4)**: 업로드 바이트는 메모리 추론 후 **즉시 폐기**(DB/디스크/로그/외부전송 금지). 응답에 원본 이미지 URL 없음(결과 히어로=클라 로컬 이미지).
-- 에러: `IMAGE_INVALID(422)` · `VALIDATION_FAILED(422)` · `RATE_LIMITED(429)`. (네트워크/5xx는 09에서 인라인 처리.)
-- *reconcile: 현재 `list[SimilarNeighbor]`(쿼리 `limit`, `distance`만, similarity·lat/lng·queryHadLocation·region 메타 없음, 객체 래핑 없음) → 위 형으로 재구성은 S10. 임계는 캘리브레이션+소프트 플로어로(고정 0.60 폐기, S11 §4 D3). `PhotoSearchResult{sessionId,detectedMoods,topSpots}`(무드 검출형)는 폐기.*
+- 정렬 = 유명도 + 나라·카테고리 다양성 셔플(seed 결정적, 스크롤 중 중복 없음).
+  당겨서 새로고침 = seed 없이 재요청(새 셔플). 숨김(`is_hidden`) 게시물 제외.
+- `imageAuthor`/`imageLicense`/`imageLicenseUrl`/`imageSourceUrl` = Commons 출처
+  시트 3행(S13 §5.4) 소스 — 표기 의무 필드.
+
+### 4.3 `GET /v1/explore?seed=&cursor=&limit=`  ·  게스트 (S13)
+- 탐색 그리드. §4.2와 동일 응답형·동일 풀, `limit`만 기본 30(1–60).
+- 시드 랜덤 3열 그리드(진입 시 세션 시드 → 셔플 커서 페이지네이션).
+
+### 4.4 `GET /v1/overseas/{id}/matches`  ·  게스트 (S13)
+- 스와이프 순간 실시간 매칭 — 사전 계산된 해외 임베딩으로 pgvector halfvec 검색.
+- 응답 200 `{ overseasId: int, matches: [ { contentId, title, regionLabel, imageUrl, overviewFirst: str|null } ] }`.
+  최대 3곳, 미만이면 있는 만큼(0곳 = 정상 빈 배열 — 클라 안내 카드).
+- Redis 캐시 `match:{revision}:{overseasId}` TTL 6h — 임베딩 배치·노출 변경이
+  `matching:revision`을 증가시켜 무효화. 캐시 히트 시에도 이미지·노출 상태 검증.
+- `overviewFirst` = KTO `overview` 첫 문장(verbatim, 표시 절삭은 클라).
+- 에러: 미존재 overseas id → `RESOURCE_NOT_FOUND(404)`.
+
+### 4.5 `GET /v1/home/channels`  ·  게스트 (S13)
+- 채널 타일 6개 메타. 응답 200 `{ channels: [ { key, label, thumbnailUrl: str|null, available: bool } ] }`.
+- `key` ∈ `around·hot·hidden·festa·pets·snap`, `label` = 영어(Around·Hot·…).
+  `available=false`(예: 진행 중 축제 0건인 Festa) 채널은 클라가 타일 숨김.
+
+### 4.6 `GET /v1/home/channels/{key}?lat=&lng=`  ·  게스트 (S13)
+- 채널 스토리 카드(≤10장). `lat`/`lng`는 **Around 전용**(필수) — 나머지 채널은 무시.
+- 응답 200 `{ key, label, cards: [ { contentId: str|null, title, regionLabel, imageUrl: str|null,
+  dist?, rank?, dday?, line?, tag?, saveable: bool } ] }` — 채널 고유 요소(S13 §4.2)는
+  선택 필드로: Around=`dist`, Hot=`rank`, Festa=`dday`+`line`, Pets=`tag`, Snap=`line`.
+- Snap은 `spots` 미매핑 갤러리 사진 → `contentId=null`·`saveable=false`(감상 전용).
+- 에러: 미지 채널 key → `RESOURCE_NOT_FOUND(404)` · Around에 lat/lng 누락 →
+  `VALIDATION_FAILED(422)`.
 
 ---
 
-## 5. spots 모듈 — 홈 · 큐레이션 · 상세 · 배치
+## 5. spots 모듈 — 상세
 
-### 5.1 `GET /v1/home/feed`  ·  게스트 (신규)
-- 응답 200 `{ heroes: [정확히 6], rails: [정확히 3] }` (개수 불변, 서버가 슬롯 큐레이션 교체 — S2).
-  ```
-  heroes[i] = { id, slug, title, subtitle, coverUrl }     // 스팟 목록 없음(가벼움). title은 \n verbatim(pre-line)
-  rails[j]  = { id, title, subtitle, spots: [≤8 SpotCard(코어) + congestion?] }
-  ```
-- 레일 카드는 코어 SpotCard에 데이터 있으면 **`congestion`**(§1.3)을 채움(없으면 null). 히어로는 스팟 카드가 아니라 미적용.
-- `coverUrl` = `cover_spot_id`의 `firstImageUrl`(없으면 `curation_spots[0]` 폴백, S2). 손픽 없으면 테마-일치 랜덤(결정적 seed·일 캐시 S8).
-- 빈 카드/플레이스홀더로 채우지 않음(받은 만큼 ≤8 렌더). pull-to-refresh = 전체 재요청.
-- 에러: 드묾(`INTERNAL_ERROR(500)`). 클라는 풀화면 재시도(S2).
+### 5.1 ~~`GET /v1/home/feed`~~  ·  **[제거 — S13, 2026-07]**
+- 히어로 6 + 무드 레일 3 홈은 §4.2 `GET /feed` + §4.5 `/home/channels`로 대체.
+  옛 계약은 S02 문서(기록용) 참조.
 
-### 5.2 `GET /v1/curations/{slug}`  ·  게스트 (신규)
-- 경로 = **slug**(안정 식별·딥링크 키, `curations.slug` UNIQUE — S7). region 큐레이션 전용 상세(06).
-- 응답 200 `{ id, type, slug, title, lead: str|null, intro: str|null, coverUrl, spots: [≤8 SpotCard(코어) + congestion?] }`.
-  - `spots[]` 카드는 데이터 있으면 **`congestion`**(§1.3)을 채움(없으면 null).
-  - **`subtitle` 생략**(목업 06 무 — B6/S2). `title`은 `\n` verbatim(pre-line).
-- 에러: 미published/삭제 → `RESOURCE_NOT_FOUND(404)`("큐레이션을 찾을 수 없어요").
+### 5.2 ~~`GET /v1/curations/{slug}`~~  ·  **[제거 — S13, 2026-07]**
+- 큐레이션 상세 화면·라우트·어드민 편집기 은퇴(`curations`/`curation_spots`
+  테이블은 보존). 웹 폴백 페이지(`/curations/…`)도 함께 제거.
 
 ### 5.3 `GET /v1/spots/{contentId}`  ·  게스트
 - 응답 200 `SpotDetailResponse` = SpotCard(코어) + :
@@ -255,7 +276,6 @@ SpotCard (코어)  { contentId, title, firstImageUrl: str|null, category: str|nu
   overview: str|null,            // verbatim, 수정 금지
   homepage: str|null, tel: str|null,
   regionName: str|null, sigunguName: str|null,
-  congestion: "low"|"medium"|"high"|null,   // 혼잡도(§1.3), 데이터 없으면 null
   detailStatus: "fresh"|"stale"|"unavailable",
   images: [ { originImageUrl, smallImageUrl? } ],
   intro: { usetime?, restdate?, parking?, infocenter?, firstmenu?, treatmenu? } | null
@@ -282,7 +302,7 @@ SpotCard (코어)  { contentId, title, firstImageUrl: str|null, category: str|nu
   | 카페 | `cafe` | 39 + cat3 카페 |
   | 레저 | `leisure` | 28 |
   | 쇼핑 | `shopping` | 38 |
-- 응답 200 `[ SpotCard(코어) + { addr1, mapx, mapy, dist, regionName?, sigunguName?, overview?, congestion? } ]`, 거리순, **상한 30**.
+- 응답 200 `[ SpotCard(코어) + { addr1, mapx, mapy, dist, regionName?, sigunguName?, overview? } ]`, 거리순, **상한 30**. (`congestion`은 CH2 철회 — §1.3, 직렬화 안 함.)
   - 카드 표시 라벨 `category`(코어) = **세분 `lcls_systm3_nm`**(칩의 coarse 버킷과 다름). 메타 `{지역}` = `sigunguName`/주소 파생.
   - **혼잡도 재도입(정정 — S11 §7-A D1)**: 이전 "`crowd` 필드 제거" 결정은 폐기하고 **`congestion`**(§1.3)으로 **재도입**한다(같은 의도, **텍스트 칩** — 색 배지 아님, 무채색 유지). 데이터 없으면 null(칩 숨김). 단 `crowd`라는 옛 필드명/색 배지는 부활시키지 않음. `firstImage2Url`은 계속 생략.
 - 소비: 지도 리스트(11) · 스팟상세 주변레일(07, 자기 제외). 에러 `VALIDATION_FAILED(422)`(lat/lng 누락). empty = 정상 빈 배열(에러 아님).
@@ -330,7 +350,17 @@ SpotCard (코어)  { contentId, title, firstImageUrl: str|null, category: str|nu
 | `GET/PUT /v1/me/notifications` | 알림 비목표(`notifications` 테이블 드롭 — S7) |
 | `POST /v1/analytics/events` | analytics 비목표(`analytics_events` 드롭 — S7) |
 
-> 결과 백엔드 = **6 모듈**(users·taste·spots·images·map·system). courses·recommendations 모듈째 제거.
+**S13 개편 제거분 (2026-07):**
+
+| 엔드포인트 | 사유 |
+|---|---|
+| `POST /v1/taste/photo-search` (+ **taste 모듈**) | 사진 검색 폐기(S13) — CLIP 임베딩은 매칭 엔진으로 전환(§4.4) |
+| `GET /v1/home/feed` | 히어로·레일 홈 폐기 → `GET /feed` + `/home/channels`(§4) |
+| `GET /v1/curations/{slug}` | 큐레이션 표면 은퇴(테이블은 보존) |
+| `GET /admin/api/curations*` · `GET /admin/api/spots/search` | 어드민 큐레이션 편집기·스팟 피커 은퇴(A01 §7 참조 — 모바일 계약 밖) |
+
+> ~~결과 백엔드 = **6 모듈**(users·taste·spots·images·map·system)~~ **[정정 — S13]**
+> 현 백엔드 = **users·spots·feed·images·map·system**(+admin) — taste 제거, feed 신설.
 
 ### 8.2 API 아님 (E2)
 - **`/legal`** = 백엔드 엔드포인트 아님. 앱 상수 4개 `{ slug, title }`(`features/profile/constants`):
@@ -341,6 +371,11 @@ SpotCard (코어)  { contentId, title, firstImageUrl: str|null, category: str|nu
 ---
 
 ## 9. 역추적표 (화면 → 엔드포인트)
+
+> **[정정 — S13, 2026-07]** 홈·탐색 개편으로 05 홈 = `GET /home/channels`(+`/{key}`) ·
+> `GET /feed` · 스와이프 시 `GET /overseas/{id}/matches`, 신설 탐색 탭 = `GET /explore`.
+> 06 큐레이션 상세·08–10 사진 검색 화면은 제거. 아래 표의 해당 행(05·06·08–10)은
+> 구 화면 체계 기록이며 신 매핑은 S13 §8이 권위.
 
 | 화면(목업) | 엔드포인트 | 비고 |
 |---|---|---|

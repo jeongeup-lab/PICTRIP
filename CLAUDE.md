@@ -4,8 +4,9 @@ Image-based Korea tourism recommendation service. 2026 KTO Data Utilization
 Contest — 1차 deadline **2026-09-21 16:00 KST**.
 
 Monorepo with 5 deploy units + docs (`AGENTS.md` is a symlink to this file).
-Design SSOT is `docs/mockups/` (16 monochrome screens). Full specs in
-`docs/specs/` (flat, stable IDs `S00`–`S12`, sort order = read order);
+Design SSOT is `docs/mockups/` (구 16 monochrome screens; 홈·탐색은 S13 —
+`redesign-2026-07-cc/app-prototype.html`이 우선). Full specs in
+`docs/specs/` (flat, stable IDs `S00`–`S13`, sort order = read order);
 `docs/specs/DECISIONS.md` holds the locked decisions.
 
 ## Repo layout
@@ -43,12 +44,12 @@ uv run ruff check . && uv run pytest
 ## Stack
 
 - **Backend**: Python 3.12 · FastAPI modular monolith (`app/modules/`: users ·
-  taste · spots · images · map · system · admin) · SQLAlchemy 2.0 async ·
-  PostgreSQL + pgvector · Redis · CLIP ViT-B/32 · Claude Haiku.
+  spots · feed · images · map · system · admin) · SQLAlchemy 2.0 async ·
+  PostgreSQL + pgvector · Redis · CLIP ViT-B/32 (LLM 미사용 — S13).
 - **Mobile**: Expo SDK 56 · RN 0.85 · React 19.2 · TypeScript strict · Expo
   Router (typed routes) · Zustand · TanStack Query · axios · expo-secure-store.
 - **Web**: Cloudflare Pages static (legal · `.well-known` deep-link files ·
-  `/{spots|curations}/…` fallback pages). Build root = `web/`.
+  `/spots/…` fallback pages). Build root = `web/`.
 - **Pipeline**: Python CLI `pictrip-data` (KTO `areaBasedSyncList2` → `spots`
   daily sync) + Streamlit dashboard. Owns the `sync_runs` table.
 - **Infra**: Proxmox homeserver — FastAPI + Redis on CT112, Postgres on CT110,
@@ -64,7 +65,7 @@ Backend module layout (uniform per domain):
 app/modules/<code>/
 ├── routes.py    HTTP I/O only — no DB, no business logic
 ├── services.py  business logic + transaction boundaries
-├── repositories.py  (map · users · images · admin) DB queries; spots keeps
+├── repositories.py  (map · users · images · admin · feed) DB queries; spots keeps
 │                    its queries in services/ submodules instead
 ├── models.py    SQLAlchemy ORM — no business methods
 └── schemas.py   Pydantic DTOs — no ORM imports
@@ -73,12 +74,12 @@ app/modules/<code>/
 - Routes import services/schemas/`app.core.*` only — never `models`/`sqlalchemy`.
 - Cross-module reads go through the other module's `services.py`, never `models`.
 - `admin` is the exception: read-only cross-module aggregates via its own
-  `repositories.py`, plus scoped writes to `curations`/`curation_spots`/`overseas_spots.is_hidden` only.
+  `repositories.py`, plus a scoped write to `overseas_spots.is_hidden` only.
 - `app/core/` admission rule: infrastructure plumbing (db, redis, auth,
   middleware, logging, envelope, errors) or utilities imported by **2+ modules**
-  (`embedding`, `passwords`, `kto_images`, `time`). Single-consumer code lives
-  inside its module (e.g. `users/oidc.py`, `spots/kto_client.py`,
-  `map/kakao_local.py`) — don't park it in core.
+  (`embedding`, `passwords`, `kto_client`, `kto_images`). Single-consumer code
+  lives inside its module (e.g. `users/oidc.py`, `map/kakao_local.py`) — don't
+  park it in core.
 
 Mobile layers: `src/app` (thin Expo Router screens) · `src/features/<domain>`
 (api/queries/stores/usecases/components) · `src/lib` · `src/components` · `src/constants` · `src/hooks`.
@@ -123,8 +124,15 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
   `users.taste_vector`). Cast vector literals: `... <=> $1::halfvec(512)`.
 - Related-spots (TarRlteTar) are Redis-only: key `rlte:{contentId}`, TTL 1h.
 - `hnsw.ef_search = 80` is an asyncpg `server_settings` in `app/core/db.py`.
-- Curation is a first-class entity: `curations` + `curation_spots`. Home feed
-  (`/home/feed`) is backend-assembled (hero 6 + mood rails 3).
+- Home feed is `GET /feed` (S13): 해외 게시물 커서 페이지네이션 → 스와이프 시
+  `GET /overseas/{id}/matches`로 국내 매칭 3곳. 구 `/home/feed`(히어로+레일)·
+  `/curations/{slug}`·`/taste/photo-search`는 제거 — `curations`/`curation_spots`
+  테이블은 잔존(서빙 표면 없음).
+- `overseas_spots`는 **백엔드 Alembic 소유**(마이그레이션 0018), 행 적재는
+  `pipeline/` Wikidata ETL. 매칭 캐시는 Redis `match:{revision}:{overseasId}`
+  (TTL 6h, `matching:revision`으로 무효화).
+- `spot_concentration`은 일일 크론 적재(`concentration-sync.yml`, 04:30 KST) —
+  Hot/Hidden 채널(`/home/channels`) 소스.
 - Auth = denylist-only: `denyjti:{jti}` in Redis, fail-open. No session/device
   tables, no refresh rotation. access=memory, refresh=expo-secure-store.
 
@@ -138,6 +146,8 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
   (`DO NOT persist user-uploaded images`). Source lives in the design vault, not this
   repo: `~/Documents/Obsidian Vault/PicTrip-공모전/8_레퍼런스/공모전-설명회-요약.md`.
 - **DO NOT persist user-uploaded images** — CLIP runs in memory, bytes discarded.
+- **Wikimedia Commons images: URL only + 표기 의무** — 저작자·라이선스명에 더해
+  라이선스 전문 URL·원본 파일 페이지 URL을 저장·노출한다 (S13 §5.4·§7.1).
 - **DO NOT modify KTO `overview` text** — store and display verbatim.
 - **DO NOT put secrets in code or commits** — `.env` only; mobile gets only
   `EXPO_PUBLIC_*`.

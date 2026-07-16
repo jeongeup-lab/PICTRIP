@@ -1,5 +1,11 @@
 # S2 — 홈 피드 + 큐레이션 상세 (화면 설계)
 
+> **⚠️ S13으로 대체됨 (2026-07)** — 히어로·무드 레일 홈과 큐레이션 상세는
+> [`S13-home-feed-explore-redesign.md`](S13-home-feed-explore-redesign.md)의
+> 채널 타일 + 해외→국내 피드 구조로 교체됐다. `GET /home/feed`·`GET /curations/{slug}`
+> 라우트와 어드민 큐레이션 편집기는 제거(`curations`/`curation_spots` 테이블은 보존).
+> 이 문서는 기록용으로만 유지하며 갱신하지 않는다.
+
 > 세션 S2. 입력: `session-context.md`(잠긴 결정·제약), `design-brief.md`,
 > 목업 `docs/mockups/05-home.html`·`06-curation.html`. 설계 원칙: 화면/UX/네비/API
 > 형태는 백지에서 이상적으로, DB/인프라는 후속 세션(S7~S10)에서 reconcile.
