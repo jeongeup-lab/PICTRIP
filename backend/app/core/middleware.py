@@ -105,7 +105,10 @@ class ApiV1CompatMiddleware:
     untouched.
     """
 
-    # First path segment of every route mounted under the /v1 prefix.
+    # Only the first segments the v0.4.1 binary could reach — NOT every /v1 route.
+    # Routes added after that build (feed, overseas, ...) have no bare-path callers:
+    # every later client bakes the /v1 base (env.ts fallback included), so they are
+    # deliberately excluded here and removed ones (taste, curations) were dropped.
     _SEGMENTS = frozenset({"auth", "users", "home", "spots", "map", "meta"})
 
     def __init__(self, app: ASGIApp, prefix: str) -> None:
