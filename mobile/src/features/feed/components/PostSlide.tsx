@@ -6,6 +6,7 @@ import { Icon } from "@/components/Icon";
 import { useSaveOptimistic } from "@/features/saved/hooks/use-save-optimistic";
 import { prefetchSpot } from "@/features/spots/queries";
 import type { MatchCard, OverseasPost } from "@/features/feed/posts-api";
+import { commonsWidthFor } from "@/lib/commons-width";
 import { colors } from "@/constants/theme";
 
 export type Slide =
@@ -65,7 +66,13 @@ function HeroSlide({
 }) {
   return (
     <View style={[styles.slide, { width }]}>
-      <RemoteImage uri={post.imageUrl} withUA cropBanner={false} style={StyleSheet.absoluteFill} />
+      <RemoteImage
+        uri={post.imageUrl}
+        withUA
+        cropBanner={false}
+        commonsWidth={commonsWidthFor(width)}
+        style={StyleSheet.absoluteFill}
+      />
       <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
         <Defs>
           <LinearGradient id="postScrim" x1="0" y1="0" x2="0" y2="1">
