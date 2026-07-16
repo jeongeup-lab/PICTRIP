@@ -1,7 +1,19 @@
 const API = "https://api.pictrip.org/v1/explore";
 const PROXY = "https://img.pictrip.org";
 const WIDTHS = [330, 500, 960, 1280];
-const CONCURRENCY = 20;
+const CONCURRENCY = 4;
+const RETRY_DELAYS_MS = [3000, 8000, 20000];
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function fetchWithBackoff(url) {
+  for (const delay of [...RETRY_DELAYS_MS, null]) {
+    const res = await fetch(url);
+    await res.arrayBuffer();
+    if (res.status !== 429 || delay === null) return res.status;
+    await sleep(delay);
+  }
+}
 
 async function collectImageUrls() {
   const urls = [];
@@ -39,9 +51,8 @@ await Promise.all(
   Array.from({ length: CONCURRENCY }, async () => {
     for (let url = queue.shift(); url; url = queue.shift()) {
       try {
-        const res = await fetch(url, { method: "GET" });
-        await res.arrayBuffer();
-        counts[res.status] = (counts[res.status] ?? 0) + 1;
+        const status = await fetchWithBackoff(url);
+        counts[status] = (counts[status] ?? 0) + 1;
       } catch {
         counts.error = (counts.error ?? 0) + 1;
       }
