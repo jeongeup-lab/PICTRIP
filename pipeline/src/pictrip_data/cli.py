@@ -8,6 +8,7 @@ from pictrip_data.overseas.backfill import (
 from pictrip_data.overseas.countries import COUNTRIES
 from pictrip_data.overseas.sync import sync_overseas
 from pictrip_data.sync.daily import sync_daily, sync_full
+from pictrip_data.sync.images import validate_images
 
 app = typer.Typer(help="pictrip-data — KTO ETL CLI")
 
@@ -22,6 +23,16 @@ def sync_daily_cmd() -> None:
 def sync_full_cmd() -> None:
     """Full reconcile — no modifiedtime filter (weekly; quota-aware)."""
     sync_full()
+
+
+@app.command("validate-images")
+def validate_images_cmd(
+    dry_run: bool = typer.Option(False, "--dry-run"),
+    limit: int | None = typer.Option(None, "--limit"),
+) -> None:
+    """Probe spots.first_image_url liveness (weekly cron); dead originals → _image2_1 or NULL."""
+    result = validate_images(dry_run=dry_run, limit=limit)
+    typer.echo(result)
 
 
 @app.command("load-codes")
