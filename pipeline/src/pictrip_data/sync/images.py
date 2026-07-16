@@ -3,8 +3,13 @@
 tong.visitkorea.or.kr rejects HEAD (405), so liveness is a GET with
 `Range: bytes=0-0` — one byte for a live file, 404 for a deleted one.
 Dead `_image1_1` originals fall back to the `_image2_1` mid-size variant
-when that survives, else the URL is nulled. Either write fires the 0019
-trigger on spots.first_image_url: a rewrite queues the spot in
+when that survives; if the variant's liveness is uncertain (5xx/timeout)
+the row is left untouched for the next sweep, and only a confirmed-dead
+variant nulls the URL. The mid-size is KTO's own published rendition of
+the same photo (no bytes are transformed by us), so the swap is fine for
+`cpyrhtDivCd=Type3` (변경금지) too — the shipped mobile client already does
+the same `_image1_1` → `_image2_1` swap on 404. Either write fires the
+0019 trigger on spots.first_image_url: a rewrite queues the spot in
 embedding_failures as source_changed (run backend-backfill-embeddings to
 restore matching), a NULL removes it from matching cleanly.
 """
@@ -72,8 +77,11 @@ def _resolve(client: httpx.Client, url: str) -> tuple[str, str | None, int]:
     mid = mid_size_url(url)
     if mid is None:
         return DEAD, None, 1
-    if probe(client, mid) == ALIVE:
+    mid_state = probe(client, mid)
+    if mid_state == ALIVE:
         return DEAD, mid, 2
+    if mid_state == UNKNOWN:
+        return UNKNOWN, None, 2
     return DEAD, None, 2
 
 
@@ -85,7 +93,7 @@ def _validate(
     limit: int | None,
 ) -> None:
     cur = conn.cursor()
-    if limit:
+    if limit is not None:
         cur.execute(_SELECT + " LIMIT %s", (limit,))
     else:
         cur.execute(_SELECT)

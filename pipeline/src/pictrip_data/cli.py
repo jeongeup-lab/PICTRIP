@@ -28,7 +28,7 @@ def sync_full_cmd() -> None:
 @app.command("validate-images")
 def validate_images_cmd(
     dry_run: bool = typer.Option(False, "--dry-run"),
-    limit: int | None = typer.Option(None, "--limit"),
+    limit: int | None = typer.Option(None, "--limit", min=1),
 ) -> None:
     """Probe spots.first_image_url liveness (weekly cron); dead originals → _image2_1 or NULL."""
     result = validate_images(dry_run=dry_run, limit=limit)
