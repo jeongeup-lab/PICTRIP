@@ -10,6 +10,23 @@ SPARQL_ENDPOINT = "https://query.wikidata.org/sparql"
 USER_AGENT = "PicTripDataBot/1.0 (https://pictrip.org; dev@pictrip.org)"
 MIN_SITELINKS = 10
 _CLASS_QIDS = ["Q570116", "Q33506", "Q16560", "Q23413", "Q4989906", "Q839954", "Q8502"]
+_SETTLEMENT_QIDS = [
+    "Q515",
+    "Q1549591",
+    "Q200250",
+    "Q174844",
+    "Q134626",
+    "Q902814",
+    "Q3957",
+    "Q42744322",
+    "Q133997300",
+    "Q6882870",
+    "Q4946461",
+    "Q990488",
+    "Q12350930",
+]
+_RUINS_EXEMPT_QID = "Q839954"
+_SETTLEMENT_BATCH = 300
 
 _QUERY_TMPL = """SELECT DISTINCT ?item ?ko ?en ?desc ?img ?links ?lat ?lng WHERE {{
   ?item wdt:P17 wd:{country} ; wdt:P18 ?img ; wikibase:sitelinks ?links ; rdfs:label ?ko .
@@ -18,6 +35,13 @@ _QUERY_TMPL = """SELECT DISTINCT ?item ?ko ?en ?desc ?img ?links ?lat ?lng WHERE
   OPTIONAL {{ ?item schema:description ?desc . FILTER(LANG(?desc) = "ko") }}
   OPTIONAL {{ ?item rdfs:label ?en . FILTER(LANG(?en) = "en") }}
   OPTIONAL {{ ?item p:P625/psv:P625 [ wikibase:geoLatitude ?lat ; wikibase:geoLongitude ?lng ] . }}
+}}"""
+
+_SETTLEMENT_QUERY_TMPL = """SELECT DISTINCT ?item WHERE {{
+  VALUES ?item {{ {items} }}
+  VALUES ?settlement {{ {settlements} }}
+  ?item wdt:P31 ?settlement .
+  FILTER NOT EXISTS {{ ?item wdt:P31/wdt:P279* wd:{exempt} . }}
 }}"""
 
 
@@ -37,6 +61,14 @@ class RawSpot:
 def build_query(country: Country) -> str:
     union = "\n  UNION ".join(f"{{ ?item wdt:P31/wdt:P279* wd:{q} . }}" for q in _CLASS_QIDS)
     return _QUERY_TMPL.format(country=country.qid, min_links=MIN_SITELINKS, class_union=union)
+
+
+def build_settlement_query(qids: list[str]) -> str:
+    return _SETTLEMENT_QUERY_TMPL.format(
+        items=" ".join(f"wd:{q}" for q in qids),
+        settlements=" ".join(f"wd:{q}" for q in _SETTLEMENT_QIDS),
+        exempt=_RUINS_EXEMPT_QID,
+    )
 
 
 def _filename_from_image_url(url: str) -> str:
@@ -83,9 +115,20 @@ class WikidataClient:
         retry=retry_if_exception(_is_transient),
         reraise=True,
     )
-    def fetch_country(self, country: Country) -> list[RawSpot]:
-        resp = self._client.post(
-            SPARQL_ENDPOINT, data={"query": build_query(country), "format": "json"}
-        )
+    def _query(self, query: str) -> list[dict]:
+        resp = self._client.post(SPARQL_ENDPOINT, data={"query": query, "format": "json"})
         resp.raise_for_status()
-        return parse_bindings(resp.json()["results"]["bindings"], country)
+        return list(resp.json()["results"]["bindings"])
+
+    def fetch_country(self, country: Country) -> list[RawSpot]:
+        spots = parse_bindings(self._query(build_query(country)), country)
+        settlements = self.fetch_settlement_qids([s.wikidata_id for s in spots])
+        return [s for s in spots if s.wikidata_id not in settlements]
+
+    def fetch_settlement_qids(self, qids: list[str]) -> set[str]:
+        found: set[str] = set()
+        for start in range(0, len(qids), _SETTLEMENT_BATCH):
+            batch = qids[start : start + _SETTLEMENT_BATCH]
+            for b in self._query(build_settlement_query(batch)):
+                found.add(b["item"]["value"].rsplit("/", 1)[-1])
+        return found
