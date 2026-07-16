@@ -1,6 +1,6 @@
-import { resolveUpstream } from "./upstream";
+import { ktoFallbackUpstream, resolveUpstream } from "./upstream";
 
-const WIKIMEDIA_UA = "PicTrip/1.0 (https://pictrip.org)";
+const PROXY_UA = "PicTrip/1.0 (https://pictrip.org)";
 const CACHE_TTL_SECONDS = 2_592_000;
 
 export default {
@@ -24,7 +24,14 @@ export default {
       return hit;
     }
 
-    const origin = await fetch(upstream, { headers: { "User-Agent": WIKIMEDIA_UA } });
+    let origin = await fetch(upstream, { headers: { "User-Agent": PROXY_UA } });
+    if (origin.status === 404) {
+      const fallback = ktoFallbackUpstream(upstream);
+      if (fallback) {
+        const mid = await fetch(fallback, { headers: { "User-Agent": PROXY_UA } });
+        if (mid.ok) origin = mid;
+      }
+    }
     if (!origin.ok) {
       return new Response(headOnly ? null : origin.body, {
         status: origin.status,
