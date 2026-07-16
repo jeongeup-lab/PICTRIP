@@ -131,7 +131,7 @@ function MatchSlide({
         router.push(`/spots/${match.contentId}`);
       }}
     >
-      <RemoteImage uri={match.imageUrl} midSize style={StyleSheet.absoluteFill} />
+      <RemoteImage uri={match.imageUrl} style={StyleSheet.absoluteFill} />
       <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
         <Defs>
           <LinearGradient id="matchScrim" x1="0" y1="0" x2="0" y2="1">
