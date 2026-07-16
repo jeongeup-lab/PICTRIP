@@ -14,7 +14,7 @@ on:
         type: string
         default: "48h"
       sample:
-        description: "매칭 라인 샘플 출력 수"
+        description: "매칭 라인 샘플 출력 수 (최대 50으로 클램프 — 대량 로그 덤프 방지)"
         type: string
         default: "20"
 
@@ -30,6 +30,8 @@ jobs:
     steps:
       - run: |
           set -euo pipefail
+          case "$SAMPLE" in *[!0-9]*|"") SAMPLE=20 ;; esac
+          [ "$SAMPLE" -gt 50 ] && SAMPLE=50
           cid="$(docker ps -q --filter "publish=8000" | head -n1)"
           if [ -z "$cid" ]; then echo "api container not found on :8000"; exit 1; fi
           echo "=== count (last $SINCE) ==="
