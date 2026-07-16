@@ -15,6 +15,7 @@ class SpotCardRow:
     mapy: float | None
     category: str | None = None  # derive_category chip code, NOT lcls_systm3_nm
     lcls_systm3_nm: str | None = None  # KTO subtype label; canonical card category
+    cpyrht_div_cd: str | None = None  # 공공누리 license: Type1 resizable, Type3 verbatim-only
 
 
 @dataclass

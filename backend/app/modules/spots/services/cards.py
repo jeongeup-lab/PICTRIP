@@ -104,6 +104,7 @@ async def load_active_spot_cards_by_ids(
             Spot.lcls_systm1,
             Spot.lcls_systm2,
             Spot.lcls_systm3,
+            Spot.cpyrht_div_cd,
             LclsSystmCode.lcls_systm3_nm,
         )
         .outerjoin(LclsSystmCode, LclsSystmCode.lcls_systm3_cd == Spot.lcls_systm3)
@@ -120,6 +121,7 @@ async def load_active_spot_cards_by_ids(
             mapy=float(r.mapy) if r.mapy is not None else None,
             category=derive_category(r.lcls_systm1, r.lcls_systm2, r.lcls_systm3),
             lcls_systm3_nm=r.lcls_systm3_nm,
+            cpyrht_div_cd=r.cpyrht_div_cd,
         )
         for r in rows
     }

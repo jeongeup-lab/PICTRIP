@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ktoFallbackUpstream, resolveUpstream } from "./upstream";
+import { verifyT1Signature } from "./sign";
+import { ktoFallbackUpstream, resolveT1, resolveUpstream } from "./upstream";
 
 const resolve = (path: string) => resolveUpstream(new URL(`https://img.pictrip.org${path}`));
 
@@ -63,5 +64,45 @@ describe("ktoFallbackUpstream", () => {
     expect(
       ktoFallbackUpstream("https://tong.visitkorea.or.kr/cms/resource/68/3336968_image2_1.jpg"),
     ).toBeNull();
+  });
+});
+
+const SIG = "028d9555b9ae4773de10afb7337628f25fc51e2fd2351dd253b563e25288b6e3";
+const T1_PATH = `/t1/1080/${SIG}/tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg`;
+const resolveT1Path = (path: string) => resolveT1(new URL(`https://img.pictrip.org${path}`));
+
+describe("resolveT1", () => {
+  it("parses width, signature and upstream from a signed transform path", () => {
+    expect(resolveT1Path(T1_PATH)).toEqual({
+      upstream: "https://tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg",
+      width: 1080,
+      sig: SIG,
+      payload: "1080/tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg",
+    });
+  });
+
+  it("rejects non-KTO hosts even with a well-formed signature", () => {
+    expect(resolveT1Path(`/t1/1080/${SIG}/upload.wikimedia.org/foo.jpg`)).toBeNull();
+  });
+
+  it("rejects out-of-range widths and malformed signatures", () => {
+    expect(resolveT1Path(`/t1/9999/${SIG}/tong.visitkorea.or.kr/x.jpg`)).toBeNull();
+    expect(resolveT1Path(`/t1/8/${SIG}/tong.visitkorea.or.kr/x.jpg`)).toBeNull();
+    expect(resolveT1Path("/t1/1080/nothex/tong.visitkorea.or.kr/x.jpg")).toBeNull();
+    expect(resolveT1Path(`/t1/1080/${SIG}`)).toBeNull();
+  });
+});
+
+describe("verifyT1Signature", () => {
+  const payload = "1080/tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg";
+
+  it("accepts the backend-minted signature", async () => {
+    expect(await verifyT1Signature("s3cret", payload, SIG)).toBe(true);
+  });
+
+  it("rejects a tampered payload or wrong secret", async () => {
+    expect(await verifyT1Signature("s3cret", payload.replace("1080", "1620"), SIG)).toBe(false);
+    expect(await verifyT1Signature("other", payload, SIG)).toBe(false);
+    expect(await verifyT1Signature("s3cret", payload, `${SIG.slice(0, 63)}0`)).toBe(false);
   });
 });

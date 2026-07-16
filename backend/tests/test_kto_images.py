@@ -3,7 +3,10 @@
 
 from __future__ import annotations
 
-from app.core.kto_images import hires_kto_image, https_kto_image
+import hashlib
+import hmac
+
+from app.core.kto_images import hires_kto_image, https_kto_image, t1_transform_url
 
 MID_HTTPS = "https://tong.visitkorea.or.kr/cms/resource/98/3045598_image2_1.jpg"
 BIG_HTTPS = "https://tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg"
@@ -56,3 +59,30 @@ def test_https_promotion_only_for_real_kto_host() -> None:
 
 def test_none_untouched() -> None:
     assert hires_kto_image(None) is None
+
+
+def test_t1_transform_url_signs_kto_url() -> None:
+    url = t1_transform_url(BIG_HTTPS, width=1080, secret="s3cret", origin="https://img.pictrip.org")
+    assert url is not None
+    prefix = "https://img.pictrip.org/t1/1080/"
+    assert url.startswith(prefix)
+    sig, _, target = url[len(prefix) :].partition("/")
+    assert target == "tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg"
+    assert sig == hmac.new(b"s3cret", f"1080/{target}".encode(), hashlib.sha256).hexdigest()
+
+
+def test_t1_transform_url_upgrades_http_before_signing() -> None:
+    http_url = "http://tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg"
+    assert t1_transform_url(http_url, width=1080, secret="s", origin="https://o") == (
+        t1_transform_url(BIG_HTTPS, width=1080, secret="s", origin="https://o")
+    )
+
+
+def test_t1_transform_url_disabled_without_secret() -> None:
+    assert t1_transform_url(BIG_HTTPS, width=1080, secret="", origin="https://o") is None
+
+
+def test_t1_transform_url_non_kto_and_none_untouched() -> None:
+    commons = "https://upload.wikimedia.org/wikipedia/commons/a/ab/x.jpg"
+    assert t1_transform_url(commons, width=1080, secret="s", origin="https://o") is None
+    assert t1_transform_url(None, width=1080, secret="s", origin="https://o") is None
