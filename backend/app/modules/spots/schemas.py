@@ -14,42 +14,12 @@ class SpotCard(BaseModel):
     addr1: str | None = None
     mapx: float | None = None
     mapy: float | None = None
-    # Subtype label = lcls_systm3_nm; legacy home routes put the coarse chip code here instead.
     category: str | None = None
 
     @field_validator("firstImageUrl")
     @classmethod
     def _upgrade_first_image(cls, v: str | None) -> str | None:
         return https_kto_image(v)
-
-
-class HomeHero(BaseModel):
-    """Home-feed hero card. title keeps \\n verbatim (client renders pre-line)."""
-
-    id: int
-    slug: str
-    title: str
-    subtitle: str | None = None
-    coverUrl: str | None = None
-
-    @field_validator("coverUrl")
-    @classmethod
-    def _upgrade_cover(cls, v: str | None) -> str | None:
-        return https_kto_image(v)
-
-
-class HomeRail(BaseModel):
-    """Home-feed mood rail: up to 8 SpotCards."""
-
-    id: int
-    title: str
-    subtitle: str | None = None
-    spots: list[SpotCard] = []
-
-
-class HomeFeedResponse(BaseModel):
-    heroes: list[HomeHero] = []
-    rails: list[HomeRail] = []
 
 
 class CurationDetailResponse(BaseModel):

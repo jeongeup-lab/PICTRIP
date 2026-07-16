@@ -57,13 +57,12 @@ class TraceIdMiddleware(BaseHTTPMiddleware):
 class CacheControlMiddleware(BaseHTTPMiddleware):
     """Cache-Control on public 200 GETs so a CDN can serve them from the edge.
 
-    Feed/curations expire at the next KST midnight; regions-tree after 24h.
+    Curations expire at the next KST midnight; regions-tree after 24h.
     Requires a matching Cloudflare Cache Rule to take effect.
     """
 
     def __init__(self, app: ASGIApp, prefix: str) -> None:
         super().__init__(app)
-        self._feed = f"{prefix}/home/feed"
         self._channels = f"{prefix}/home/channels"
         self._regions_tree = f"{prefix}/map/regions-tree"
         self._curations_prefix = f"{prefix}/curations/"
@@ -86,7 +85,7 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
             return response
 
         path = request.url.path
-        if path == self._feed or path.startswith(self._curations_prefix):
+        if path.startswith(self._curations_prefix):
             ttl = seconds_until_kst_midnight(kst_now())
             response.headers["Cache-Control"] = f"public, s-maxage={ttl}"
         elif path == self._channels:
@@ -112,7 +111,7 @@ class ApiV1CompatMiddleware:
     """
 
     # First path segment of every route mounted under the /v1 prefix.
-    _SEGMENTS = frozenset({"auth", "users", "taste", "curations", "home", "spots", "map", "meta"})
+    _SEGMENTS = frozenset({"auth", "users", "curations", "home", "spots", "map", "meta"})
 
     def __init__(self, app: ASGIApp, prefix: str) -> None:
         self.app = app

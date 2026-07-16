@@ -1,6 +1,6 @@
 """Idempotent seeder for the home-feed curations — 6 region heroes + 3 mood rails.
 
-Inserts the first-class ``curations`` rows that back ``GET /home/feed`` (S07
+Inserts the first-class ``curations`` rows that back ``GET /curations/{slug}`` (S07
 §3.1/§3.2). Hero copy (title/subtitle) is taken **verbatim** from the design SSOT
 ``docs/mockups/05-home.html`` — the ``\n`` line break in each hero title is
 preserved exactly (the client renders it with ``white-space: pre-line``).

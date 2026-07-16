@@ -33,7 +33,6 @@ from app.modules.images import router as images_router
 from app.modules.map import router as map_router
 from app.modules.spots import router as spots_router
 from app.modules.system import router as system_router
-from app.modules.taste import router as taste_router
 from app.modules.users import router as users_router
 
 
@@ -122,7 +121,6 @@ def create_app() -> FastAPI:
     # --- Routers under /v1 ---
     prefix = settings.API_V1_PREFIX
     app.include_router(users_router, prefix=prefix)
-    app.include_router(taste_router, prefix=prefix)
     app.include_router(spots_router, prefix=prefix)
     app.include_router(feed_router, prefix=prefix)
     app.include_router(images_router, prefix=prefix)

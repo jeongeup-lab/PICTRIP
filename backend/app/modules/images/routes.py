@@ -1,4 +1,4 @@
-"""IMG routes. Empty router (no endpoints yet); public image flow is served by TST /taste/photo-search."""
+"""IMG routes. Empty router (no endpoints yet)."""
 
 from __future__ import annotations
 

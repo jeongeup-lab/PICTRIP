@@ -26,7 +26,7 @@ def fake_clip(monkeypatch: pytest.MonkeyPatch) -> None:
 
     Must patch the CLASS, not the singleton instance — an instance-attribute
     monkeypatch leaks onto the shared ``embedder`` and shadows the class-level
-    patching other suites (taste/photo-search) rely on.
+    patching other suites rely on.
     """
     monkeypatch.setattr(ClipEmbedder, "embed_image", lambda _self, _b: [0.1] * 512)
 
