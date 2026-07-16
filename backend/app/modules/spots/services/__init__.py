@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.modules.spots.services.cards import (
+    attraction_image_spots_stmt,
     image_bearing_spots_stmt,
     load_active_spot_cards_by_ids,
     load_overview_map,
@@ -44,6 +45,7 @@ __all__ = [
     "all_categories_predicate",
     "all_categories_sql",
     "attraction_category_sql",
+    "attraction_image_spots_stmt",
     "category_predicate",
     "derive_category",
     "find_nearby_spots",

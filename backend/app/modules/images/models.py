@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from pgvector.sqlalchemy import HALFVEC
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, SmallInteger, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -30,6 +30,37 @@ class SpotEmbedding(Base):
     )
     embedding: Mapped[list[float]] = mapped_column(HALFVEC(EMBEDDING_DIM), nullable=False)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class SpotEmbeddingGallery(Base):
+    """Centroid of up to N spot photos (firstimage + detailImage2 originals) —
+    a second, multi-image ANN surface for overseas→domestic matching that
+    smooths out the single-representative-photo lottery. ``image_url`` mirrors
+    ``spots.first_image_url`` at compute time as the staleness anchor (same
+    contract as ``SpotEmbedding``; the 0020 trigger deletes rows on change).
+    ``image_count`` = photos that actually went into the centroid.
+    """
+
+    __tablename__ = "spot_embeddings_gallery"
+    __table_args__ = (
+        Index(
+            "idx_spot_embeddings_gallery_hnsw",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "halfvec_cosine_ops"},
+            postgresql_with={"m": 16, "ef_construction": 128},
+        ),
+    )
+
+    content_id: Mapped[str] = mapped_column(
+        ForeignKey("spots.content_id", ondelete="CASCADE"), primary_key=True
+    )
+    embedding: Mapped[list[float]] = mapped_column(HALFVEC(EMBEDDING_DIM), nullable=False)
+    image_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    image_count: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     computed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

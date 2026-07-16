@@ -47,20 +47,44 @@ class OverseasPostRow:
 
 
 _NEIGHBORS_SQL = f"""
-SELECT se.content_id, se.image_url,
-       (se.embedding <=> (SELECT embedding FROM overseas_spots WHERE id = :oid))::float AS distance
-FROM spot_embeddings se
-JOIN spots ON spots.content_id = se.content_id
-          AND spots.first_image_url = se.image_url
-          AND spots.show_flag = 1
-          AND spots.first_image_url IS NOT NULL
-          AND spots.first_image_url <> ''
-          AND ({_CATEGORY_SQL})
+WITH single AS (
+    SELECT se.content_id, se.image_url,
+           (se.embedding <=> (SELECT embedding FROM overseas_spots WHERE id = :oid))::float
+               AS distance
+    FROM spot_embeddings se
+    JOIN spots ON spots.content_id = se.content_id
+              AND spots.first_image_url = se.image_url
+              AND spots.show_flag = 1
+              AND spots.first_image_url IS NOT NULL
+              AND spots.first_image_url <> ''
+              AND ({_CATEGORY_SQL})
+    ORDER BY se.embedding <=> (SELECT embedding FROM overseas_spots WHERE id = :oid)
+    LIMIT :lim
+), gallery AS (
+    SELECT ge.content_id, ge.image_url,
+           (ge.embedding <=> (SELECT embedding FROM overseas_spots WHERE id = :oid))::float
+               AS distance
+    FROM spot_embeddings_gallery ge
+    JOIN spots ON spots.content_id = ge.content_id
+              AND spots.first_image_url = ge.image_url
+              AND spots.show_flag = 1
+              AND spots.first_image_url IS NOT NULL
+              AND spots.first_image_url <> ''
+              AND ({_CATEGORY_SQL})
+    ORDER BY ge.embedding <=> (SELECT embedding FROM overseas_spots WHERE id = :oid)
+    LIMIT :lim
+)
+SELECT content_id, image_url, distance
+FROM (
+    SELECT DISTINCT ON (content_id) content_id, image_url, distance
+    FROM (SELECT * FROM single UNION ALL SELECT * FROM gallery) candidates
+    ORDER BY content_id, distance
+) best
 WHERE EXISTS (
     SELECT 1 FROM overseas_spots o
     WHERE o.id = :oid AND o.is_hidden = false AND o.embedding IS NOT NULL
 )
-ORDER BY se.embedding <=> (SELECT embedding FROM overseas_spots WHERE id = :oid)
+ORDER BY distance
 LIMIT :lim
 """
 
