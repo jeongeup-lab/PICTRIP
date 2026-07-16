@@ -185,6 +185,11 @@ pictrip.org  (Cloudflare Pages — repo의 web/ 폴더, Git 푸시 시 자동배
 
 ## 4. 딥링크 / 유니버설 링크
 
+> **⚠️ S13으로 대체됨 (2026-07, Plan D)** — 큐레이션 딥링크 표면 제거: §3의
+> `/curations/{slug}` 웹 폴백 페이지, `pictrip://curations/{slug}` 스킴, AASA의
+> `/curations/*` 항목. AASA는 `/spots/*`만 유지하고, 기존 공유 링크는
+> `web/_redirects`의 `/curations/* → /` 302로 착지한다. 이하 큐레이션 서술은 기록용.
+
 | 표면 | URL |
 |---|---|
 | 공유(스팟) | `https://pictrip.org/spots/{contentId}` |

@@ -23,10 +23,16 @@
    editorial 3종을 한 구조로. 홈 히어로 = published region 큐레이션, 무드 레일 =
    mood 큐레이션. 카피/표지/스팟순서는 DB 적재(시드 스크립트). 표지는 spot의 KTO
    URL 참조(다운로드 없음).
+   > **⚠️ S13으로 대체됨 (2026-07)** — 큐레이션 서빙/편집 표면(`/curations/{slug}`
+   > 라우트·어드민 편집기·웹 폴백) 제거. `curations`/`curation_spots` 테이블은 보존.
 2. **홈 = 백엔드 주도.** `/home/feed`가 히어로+레일을 서버에서 조립 → 앱 재배포
    없이 편성 교체. 모바일 features/home 하드코딩 레지스트리를 fetch로 전환.
+   > **⚠️ S13으로 대체됨 (2026-07)** — `/home/feed` 제거, 신 `/feed`(채널 타일 +
+   > 해외→국내 피드)로 대체. `S13-home-feed-explore-redesign.md` 참조.
 3. **사진 검색 = 유사도 + 거리순.** `/taste/photo-search`에 선택적 lat/lng 전달 →
    결과에 distance 포함 → 클라이언트 정렬칩. GPS 동의 시에만 거리칩 활성.
+   > **⚠️ S13으로 대체됨 (2026-07)** — `taste` 모듈·`/taste/photo-search` 제거,
+   > S13 매칭 흐름으로 대체.
 4. **인증 = 3종 계약(kakao·google·apple), lean 구현.** id_token(OIDC) 검증 →
    자체 JWT(access=메모리, refresh=secure-store) 발급 + refresh 회전. **세션/디바이스
    테이블 폐기, Redis jti 덴리스트로만 로그아웃/탈퇴 폐기.** 현재 카카오 인증의
@@ -45,6 +51,8 @@
   로즈 금지). access=메모리/refresh=secure-store.
 - 백엔드 모듈 6개: `users · taste · spots · images · map · system`. (courses·
   recommendations 제거.)
+  > **⚠️ S13으로 정정됨 (2026-07)** — 현행 7모듈: `users · spots · feed · images ·
+  > map · system · admin` (taste 제거, feed·admin 추가).
 
 ## 비목표 (설계에 넣지 않음 — 확정)
 
@@ -252,6 +260,12 @@ DB/인프라/API 세션은 화면 세션들의 data needs를 종합해 형식화
   현 계약). `spot_concentration` 테이블(마이그 0009)·`scripts/sync_concentration.py`는 잔존
   (적재 자산 보존, 재도입 시 재사용). 트렌딩 엔드포인트/화면 컷은 기존대로 유지. S07 §6.2·
   S09 §1.3의 congestion 서술은 이 결정으로 superseded.
+- **S13 (2026-07) 홈/탐색 재설계 — 잠긴 결정 1·2·3 폐기** →
+  `S13-home-feed-explore-redesign.md`. 결정 2·3 폐기: `/home/feed`·`/taste/photo-search`
+  (taste 모듈) 제거, 신 `/feed`·매칭으로 대체. 결정 1의 서빙/편집 표면(`/curations/{slug}`
+  라우트·어드민 편집기·웹 폴백) 제거 — `curations`/`curation_spots` 테이블은 보존.
+  모듈 구성 정정: `users · spots · feed · images · map · system · admin`. 기존 공유
+  링크는 `web/_redirects`의 `/curations/* → /` 302 폴백으로 착지.
 
 ## 교차 reconcile 결정 (2026-06-20 심층분석 + 독립 에이전트 패널)
 

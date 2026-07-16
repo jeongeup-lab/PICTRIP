@@ -254,6 +254,7 @@ name = "Spots service submodules don't directly import other modules' models"
 type = "forbidden"
 source_modules = [
     "app.modules.spots.services.cards",
+    "app.modules.spots.services.concentration",
     "app.modules.spots.services.detail",
     "app.modules.spots.services.nearby",
     "app.modules.spots.services.rows",
