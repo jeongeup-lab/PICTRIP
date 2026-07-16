@@ -271,23 +271,33 @@ describe("RemoteImage", () => {
   const COMMONS_FILEPATH =
     "https://commons.wikimedia.org/wiki/Special:FilePath/Kyoto.jpg?width=1200";
 
-  it("commonsWidth rewrites a direct upload.wikimedia thumb width", async () => {
+  it("routes a Commons uri through the image proxy", async () => {
+    let r: renderer.ReactTestRenderer;
+    await act(async () => {
+      r = renderer.create(<RemoteImage uri={COMMONS_THUMB} />);
+    });
+    expect(images(r!)[0].props.source.uri).toBe(
+      "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Kyoto.jpg/1200px-Kyoto.jpg",
+    );
+  });
+
+  it("commonsWidth rewrites a direct upload.wikimedia thumb width, proxied", async () => {
     let r: renderer.ReactTestRenderer;
     await act(async () => {
       r = renderer.create(<RemoteImage uri={COMMONS_THUMB} commonsWidth={320} />);
     });
     expect(images(r!)[0].props.source.uri).toBe(
-      "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Kyoto.jpg/320px-Kyoto.jpg",
+      "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Kyoto.jpg/320px-Kyoto.jpg",
     );
   });
 
-  it("commonsWidth rewrites a Special:FilePath width param", async () => {
+  it("commonsWidth rewrites a Special:FilePath width param, proxied", async () => {
     let r: renderer.ReactTestRenderer;
     await act(async () => {
       r = renderer.create(<RemoteImage uri={COMMONS_FILEPATH} commonsWidth={480} />);
     });
     expect(images(r!)[0].props.source.uri).toBe(
-      "https://commons.wikimedia.org/wiki/Special:FilePath/Kyoto.jpg?width=480",
+      "https://img.pictrip.org/commons.wikimedia.org/wiki/Special:FilePath/Kyoto.jpg?width=480",
     );
   });
 
@@ -297,6 +307,42 @@ describe("RemoteImage", () => {
       r = renderer.create(<RemoteImage uri={KTO_HIRES} commonsWidth={320} />);
     });
     expect(images(r!)[0].props.source.uri).toBe(KTO_HIRES);
+  });
+
+  it("does not proxy a non-Commons uri", async () => {
+    let r: renderer.ReactTestRenderer;
+    await act(async () => {
+      r = renderer.create(<RemoteImage uri="https://example.com/a.jpg" />);
+    });
+    expect(images(r!)[0].props.source.uri).toBe("https://example.com/a.jpg");
+  });
+
+  it("degrades a proxied Commons uri to the direct url on error, keeping the width", async () => {
+    let r: renderer.ReactTestRenderer;
+    await act(async () => {
+      r = renderer.create(<RemoteImage uri={COMMONS_THUMB} commonsWidth={320} />);
+    });
+    await act(async () => {
+      images(r!)[0].props.onError();
+    });
+    const imgs = images(r!);
+    expect(imgs).toHaveLength(1);
+    expect(imgs[0].props.source.uri).toBe(
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Kyoto.jpg/320px-Kyoto.jpg",
+    );
+  });
+
+  it("after degrading to the direct Commons url, follows normal retry then placeholder", async () => {
+    let r: renderer.ReactTestRenderer;
+    await act(async () => {
+      r = renderer.create(<RemoteImage uri={COMMONS_THUMB} />);
+    });
+    await act(async () => {
+      images(r!)[0].props.onError();
+    });
+    expect(images(r!)[0].props.source.uri).toBe(COMMONS_THUMB);
+    await failAllRetries(r!);
+    expect(images(r!)).toHaveLength(0);
   });
 
   it("retries again after an A→B→A round-trip back to a previously-failed uri", async () => {
