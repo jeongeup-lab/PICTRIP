@@ -25,8 +25,9 @@ _FESTA_WINDOW_DAYS = 90
 _FESTA_MAX_PAGES = 5
 _FESTA_PAGE_ROWS = 100
 _PETS_TAG = "반려동물 동반 가능"
+_PETS_CONTENT_TYPE_ATTRACTION = 12
 
-_CACHE_VERSION = "v3"
+_CACHE_VERSION = "v4"
 _STALE_TTL = 3 * 24 * 3600
 
 _refreshing: set[str] = set()
@@ -106,7 +107,13 @@ async def fetch_festa_cards(kto: KtoClient, *, today: date | None = None) -> lis
 
 
 async def fetch_pets_cards(kto: KtoClient, *, today: date | None = None) -> list[ChannelCardRow]:
-    items = await kto.call(KtoService.PET, "areaBasedList2", numOfRows=_ROWS, arrange="C")
+    items = await kto.call(
+        KtoService.PET,
+        "areaBasedList2",
+        numOfRows=_ROWS,
+        arrange="C",
+        contentTypeId=_PETS_CONTENT_TYPE_ATTRACTION,
+    )
     pool = [
         ChannelCardRow(
             content_id=str(it["contentid"]),
