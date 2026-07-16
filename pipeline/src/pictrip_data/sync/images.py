@@ -2,6 +2,9 @@
 
 tong.visitkorea.or.kr rejects HEAD (405), so liveness is a GET with
 `Range: bytes=0-0` — one byte for a live file, 404 for a deleted one.
+Probes go over https and a 2xx only counts as alive with an `image/*`
+content-type, so WAF/interception pages served as 200 classify as
+unknown instead of masking dead files.
 Dead `_image1_1` originals fall back to the `_image2_1` mid-size variant
 when that survives; if the variant's liveness is uncertain (5xx/timeout)
 the row is left untouched for the next sweep, and only a confirmed-dead
@@ -30,7 +33,7 @@ _HIRES = "_image1_1"
 _MID = "_image2_1"
 _USER_AGENT = "PicTripDataBot/1.0 (+https://pictrip.org)"
 _TIMEOUT = 10.0
-_WORKERS = 12
+_WORKERS = 6
 _COMMIT_EVERY = 500
 
 ALIVE = "alive"
@@ -58,15 +61,20 @@ def mid_size_url(url: str) -> str | None:
     return url.replace(_HIRES, _MID)
 
 
+def _https(url: str) -> str:
+    return "https://" + url.removeprefix("http://") if url.startswith("http://") else url
+
+
 def probe(client: httpx.Client, url: str) -> str:
     try:
-        response = client.get(url, headers={"Range": "bytes=0-0"})
+        response = client.get(_https(url), headers={"Range": "bytes=0-0"})
     except httpx.HTTPError:
         return UNKNOWN
-    if response.status_code in (200, 206):
-        return ALIVE
     if response.status_code in (404, 410):
         return DEAD
+    if response.status_code in (200, 206):
+        content_type = response.headers.get("content-type", "")
+        return ALIVE if content_type.startswith("image/") else UNKNOWN
     return UNKNOWN
 
 

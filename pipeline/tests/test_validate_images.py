@@ -17,12 +17,12 @@ DEAD_MID_FLAKY = "https://tong.visitkorea.or.kr/cms/resource/77/T77_image1_1.jpg
 runner = CliRunner()
 
 
-def _client(statuses: dict[str, int]) -> httpx.Client:
+def _client(statuses: dict[str, int], content_type: str = "image/jpeg") -> httpx.Client:
     def handler(request: httpx.Request) -> httpx.Response:
         code = statuses.get(str(request.url))
         if code is None:
             raise httpx.ConnectError("unreachable", request=request)
-        return httpx.Response(code, content=b"x")
+        return httpx.Response(code, content=b"x", headers={"Content-Type": content_type})
 
     return httpx.Client(transport=httpx.MockTransport(handler))
 
@@ -42,6 +42,16 @@ def test_probe_classification():
     assert probe(client, DEAD_MID_DEAD) == DEAD
     assert probe(client, FLAKY) == UNKNOWN
     assert probe(client, "https://tong.visitkorea.or.kr/timeout.jpg") == UNKNOWN
+
+
+def test_probe_treats_non_image_200_as_unknown():
+    client = _client({LIVE: 200}, content_type="text/html")
+    assert probe(client, LIVE) == UNKNOWN
+
+
+def test_probe_upgrades_http_to_https():
+    client = _client({LIVE: 206})
+    assert probe(client, LIVE.replace("https://", "http://")) == ALIVE
 
 
 def _seed_spot(conn, content_id: str, url: str) -> None:
