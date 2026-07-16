@@ -18,6 +18,7 @@ from app.modules.feed.schemas import (
     PostsResponse,
 )
 from app.modules.feed.services import channels, matching, posts
+from app.modules.feed.services.display import t1_display_url
 
 router = APIRouter(tags=["feed"])
 
@@ -114,7 +115,7 @@ def _channel_card(row: channels.ChannelCardRow) -> ChannelCard:
         contentId=row.content_id,
         title=row.title,
         regionLabel=row.region_label,
-        imageUrl=row.image_url,
+        imageUrl=t1_display_url(row.image_url, row.cpyrht_div_cd),
         dist=row.dist,
         rank=row.rank,
         dday=row.dday,

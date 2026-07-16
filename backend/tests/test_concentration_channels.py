@@ -13,7 +13,9 @@ from app.modules.feed.services.concentration_channels import (
 )
 
 
-async def _seed(session: AsyncSession, cid: str, *, rate: str, overview: str | None) -> None:
+async def _seed(
+    session: AsyncSession, cid: str, *, rate: str, overview: str | None, cpyrht: str | None = None
+) -> None:
     await session.execute(
         text(
             "INSERT INTO regions (ldong_regn_cd, ldong_regn_nm) VALUES ('26', '부산광역시') "
@@ -23,10 +25,10 @@ async def _seed(session: AsyncSession, cid: str, *, rate: str, overview: str | N
     await session.execute(
         text(
             "INSERT INTO spots (content_id, content_type_id, title, first_image_url, "
-            "show_flag, ldong_regn_cd, lcls_systm1) "
-            "VALUES (:cid, 12, :t, 'http://kto/i.jpg', 1, '26', 'NA')"
+            "show_flag, ldong_regn_cd, lcls_systm1, cpyrht_div_cd) "
+            "VALUES (:cid, 12, :t, 'http://kto/i.jpg', 1, '26', 'NA', :cp)"
         ),
-        {"cid": cid, "t": f"t-{cid}"},
+        {"cid": cid, "t": f"t-{cid}", "cp": cpyrht},
     )
     await session.execute(
         text(
@@ -47,7 +49,7 @@ async def _seed(session: AsyncSession, cid: str, *, rate: str, overview: str | N
 
 @pytest_asyncio.fixture
 async def seeded(db_session: AsyncSession) -> None:
-    await _seed(db_session, "h90", rate="90.00", overview="설명 90")
+    await _seed(db_session, "h90", rate="90.00", overview="설명 90", cpyrht="Type1")
     await _seed(db_session, "h10", rate="10.00", overview="설명 10")
     await db_session.flush()
 
@@ -59,6 +61,8 @@ async def test_miss_queries_db_and_populates_cache(db_session, seeded) -> None:
 
     assert cards[0].content_id == "h90"
     assert cards[0].rank == 1
+    assert cards[0].cpyrht_div_cd == "Type1"
+    assert cards[1].cpyrht_div_cd is None
     assert await redis.get(_cache_key("hot")) is not None
 
 

@@ -20,7 +20,7 @@ from app.modules.spots import services as spots_services
 logger = get_logger(__name__)
 
 _CARD_COUNT = 10
-_CACHE_VERSION = "v1"
+_CACHE_VERSION = "v2"
 _TTL = 3600
 
 
@@ -38,6 +38,7 @@ async def _query(session: AsyncSession, key: str) -> list[ChannelCardRow]:
                 region_label=r.region_label,
                 image_url=r.first_image_url,
                 rank=r.rank,
+                cpyrht_div_cd=r.cpyrht_div_cd,
             )
             for r in rows
         ]
@@ -48,6 +49,7 @@ async def _query(session: AsyncSession, key: str) -> list[ChannelCardRow]:
             title=r.title,
             region_label=r.region_label,
             image_url=r.first_image_url,
+            cpyrht_div_cd=r.cpyrht_div_cd,
         )
         for r in rows
     ]
