@@ -6,7 +6,6 @@ import {
   RefreshControl,
   StatusBar,
   useWindowDimensions,
-  PixelRatio,
   StyleSheet,
 } from "react-native";
 import Svg, { Defs, LinearGradient, Stop, Rect } from "react-native-svg";
@@ -16,16 +15,11 @@ import { toGridBlocks, type GridBlock } from "@/features/explore/lib/grid-blocks
 import { PostModal } from "@/features/explore/components/PostModal";
 import type { OverseasPost } from "@/features/feed/posts-api";
 import { makeSeed } from "@/lib/seed";
+import { commonsWidthFor } from "@/lib/commons-width";
 import { colors } from "@/constants/theme";
 
 const GAP = 2;
 const SCRIM_HEIGHT = 92;
-
-const WIDTH_BUCKETS = [240, 320, 480, 640, 800, 960];
-const commonsWidthFor = (dp: number): number => {
-  const physical = dp * PixelRatio.get();
-  return WIDTH_BUCKETS.find((w) => w >= physical) ?? WIDTH_BUCKETS[WIDTH_BUCKETS.length - 1];
-};
 
 export function ExploreGrid() {
   const { width } = useWindowDimensions();
