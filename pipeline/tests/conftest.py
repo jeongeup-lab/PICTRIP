@@ -81,6 +81,22 @@ CREATE TABLE IF NOT EXISTS overseas_spots (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Mirror of backend migration 0019's overseas trigger, so a fresh CI Postgres
+-- behaves like the migrated pictrip_test (image_url change → embedding NULL).
+CREATE OR REPLACE FUNCTION invalidate_overseas_spot_embedding()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    NEW.embedding = NULL;
+    RETURN NEW;
+END;
+$$;
+CREATE OR REPLACE TRIGGER trg_overseas_spots_invalidate_embedding
+BEFORE UPDATE OF image_url ON overseas_spots
+FOR EACH ROW
+WHEN (OLD.image_url IS DISTINCT FROM NEW.image_url)
+EXECUTE FUNCTION invalidate_overseas_spot_embedding();
 """
 
 

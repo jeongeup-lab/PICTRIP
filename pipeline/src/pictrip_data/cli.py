@@ -54,7 +54,10 @@ def sync_overseas_cmd(
 
 @app.command("backfill-overseas-thumbs")
 def backfill_overseas_thumbs_cmd(dry_run: bool = typer.Option(False, "--dry-run")) -> None:
-    """Rewrite Special:FilePath image_urls to direct 1200px Commons thumbs; keeps embeddings."""
+    """Rewrite Special:FilePath image_urls to direct 1200px Commons thumbs.
+
+    URL 변경은 0019 트리거로 embedding 을 NULL 로 무효화한다 — 이후
+    overseas-sync 의 embed 잡(scripts/embed_overseas)으로 재계산할 것."""
     result = backfill_overseas_thumbs(dry_run=dry_run)
     typer.echo(result)
 
