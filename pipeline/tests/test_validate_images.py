@@ -12,6 +12,7 @@ DEAD_MID_ALIVE_MID = "https://tong.visitkorea.or.kr/cms/resource/68/T68_image2_1
 DEAD_MID_DEAD = "https://tong.visitkorea.or.kr/cms/resource/94/T94_image1_1.jpg"
 DEAD_FOREIGN = "https://example.com/T_image1_1.jpg"
 FLAKY = "https://tong.visitkorea.or.kr/cms/resource/50/T50_image1_1.jpg"
+DEAD_MID_FLAKY = "https://tong.visitkorea.or.kr/cms/resource/77/T77_image1_1.jpg"
 
 runner = CliRunner()
 
@@ -64,6 +65,7 @@ def test_validate_images_rewrites_clears_and_records(db_conn):
         ("T3", DEAD_MID_DEAD),
         ("T4", DEAD_FOREIGN),
         ("T5", FLAKY),
+        ("T6", DEAD_MID_FLAKY),
     ]:
         _seed_spot(db_conn, cid, url)
     db_conn.commit()
@@ -76,20 +78,23 @@ def test_validate_images_rewrites_clears_and_records(db_conn):
             DEAD_MID_DEAD.replace("_image1_1", "_image2_1"): 404,
             DEAD_FOREIGN: 404,
             FLAKY: 500,
+            DEAD_MID_FLAKY: 404,
+            DEAD_MID_FLAKY.replace("_image1_1", "_image2_1"): 500,
         }
     )
 
     result = validate_images(conn=db_conn, client=client)
 
-    assert result == {"probed": 5, "rewritten": 1, "cleared": 2, "unknown": 1, "probes": 7}
+    assert result == {"probed": 6, "rewritten": 1, "cleared": 2, "unknown": 2, "probes": 9}
     assert _image_url(db_conn, "T1") == LIVE
     assert _image_url(db_conn, "T2") == DEAD_MID_ALIVE_MID
     assert _image_url(db_conn, "T3") is None
     assert _image_url(db_conn, "T4") is None
     assert _image_url(db_conn, "T5") == FLAKY
+    assert _image_url(db_conn, "T6") == DEAD_MID_FLAKY
     cur = db_conn.cursor()
     cur.execute("SELECT status, mode, fetched, updated, soft_deleted, skipped FROM sync_runs")
-    assert cur.fetchall() == [("success", "validate-images", 5, 1, 2, 1)]
+    assert cur.fetchall() == [("success", "validate-images", 6, 1, 2, 2)]
 
 
 def test_validate_images_dry_run_writes_nothing(db_conn):
@@ -124,3 +129,10 @@ def test_validate_images_command_invokes():
         result = runner.invoke(app, ["validate-images", "--dry-run", "--limit", "10"])
     assert result.exit_code == 0
     m.assert_called_once_with(dry_run=True, limit=10)
+
+
+def test_validate_images_command_rejects_zero_limit():
+    with patch("pictrip_data.cli.validate_images") as m:
+        result = runner.invoke(app, ["validate-images", "--limit", "0"])
+    assert result.exit_code != 0
+    m.assert_not_called()
