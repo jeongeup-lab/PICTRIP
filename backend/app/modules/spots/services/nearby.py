@@ -80,16 +80,26 @@ def all_categories_predicate() -> ColumnElement[bool]:
     return or_(*(category_predicate(c) for c in NearbyCategory))
 
 
-def all_categories_sql() -> str:
-    """all_categories_predicate rendered as raw SQL for text() queries that join
-    the ``spots`` table by its real name (no alias). Generated from the ORM
-    predicate so the category taxonomy stays single-source."""
+def _predicate_sql(predicate: ColumnElement[bool]) -> str:
     return str(
-        all_categories_predicate().compile(
+        predicate.compile(
             dialect=postgresql.dialect(),  # type: ignore[no-untyped-call]
             compile_kwargs={"literal_binds": True},
         )
     )
+
+
+def all_categories_sql() -> str:
+    """all_categories_predicate rendered as raw SQL for text() queries that join
+    the ``spots`` table by its real name (no alias). Generated from the ORM
+    predicate so the category taxonomy stays single-source."""
+    return _predicate_sql(all_categories_predicate())
+
+
+def attraction_category_sql() -> str:
+    """category_predicate(attraction) rendered as raw SQL — the overseas→domestic
+    matching gate: 명소 매칭에는 attraction 버킷만 후보로 허용."""
+    return _predicate_sql(category_predicate(NearbyCategory.attraction))
 
 
 def derive_category(l1: str | None, l2: str | None, l3: str | None) -> str | None:

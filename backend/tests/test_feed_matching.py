@@ -62,15 +62,23 @@ async def _insert_spot(
     overview: str | None,
     show_flag: int = 1,
     lcls1: str | None = "NA",
+    lcls2: str | None = None,
 ) -> None:
     await session.execute(
         text(
             "INSERT INTO spots (content_id, content_type_id, title, first_image_url, "
-            "addr1, mapx, mapy, show_flag, lcls_systm1) "
-            "VALUES (:cid, 12, :t, 'http://kto/p.jpg', 'addr1', 127.0, 37.0, :show, :lcls1) "
+            "addr1, mapx, mapy, show_flag, lcls_systm1, lcls_systm2) "
+            "VALUES (:cid, 12, :t, 'http://kto/p.jpg', 'addr1', 127.0, 37.0, :show, "
+            ":lcls1, :lcls2) "
             "ON CONFLICT (content_id) DO NOTHING"
         ),
-        {"cid": content_id, "t": f"title-{content_id}", "show": show_flag, "lcls1": lcls1},
+        {
+            "cid": content_id,
+            "t": f"title-{content_id}",
+            "show": show_flag,
+            "lcls1": lcls1,
+            "lcls2": lcls2,
+        },
     )
     await session.execute(
         text(
@@ -286,6 +294,36 @@ async def test_neighbor_search_excludes_uncategorized_spots(db_session):
 
     assert "mt_categorized" in content_ids
     assert "mt_uncategorized" not in content_ids
+
+
+async def test_neighbor_search_excludes_non_attraction_categories(db_session):
+    oid = await _insert_overseas(db_session, embedding=_CLOSE)
+    await _insert_spot(db_session, "mt_attraction", _CLOSE, overview=None, lcls1="NA")
+    await _insert_spot(db_session, "mt_shopping", _CLOSE, overview=None, lcls1="SH")
+    await _insert_spot(db_session, "mt_food", _CLOSE, overview=None, lcls1="FD", lcls2="FD01")
+    await _insert_spot(db_session, "mt_cafe", _CLOSE, overview=None, lcls1="FD", lcls2="FD05")
+    await _insert_spot(db_session, "mt_leisure", _CLOSE, overview=None, lcls1="LS")
+
+    neighbors = await repositories.find_domestic_neighbors(db_session, oid, limit=10_000)
+    content_ids = {content_id for content_id, _image_url, _distance in neighbors}
+
+    assert "mt_attraction" in content_ids
+    assert content_ids.isdisjoint({"mt_shopping", "mt_food", "mt_cafe", "mt_leisure"})
+
+
+async def test_cached_match_state_drops_non_attraction_spot(db_session):
+    oid = await _insert_overseas(db_session, embedding=_CLOSE)
+    await _insert_spot(db_session, "mt_state_attr", _CLOSE, overview=None, lcls1="NA")
+    await _insert_spot(db_session, "mt_state_shop", _CLOSE, overview=None, lcls1="SH")
+
+    state = await repositories.get_cached_match_state(
+        db_session, oid, ["mt_state_attr", "mt_state_shop"]
+    )
+
+    assert state is not None
+    _has_embedding, current = state
+    assert "mt_state_attr" in current
+    assert "mt_state_shop" not in current
 
 
 async def test_cached_match_state_drops_uncategorized_spot(db_session):
