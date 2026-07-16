@@ -113,7 +113,7 @@ const unproxyUpstream = (u: string): string | null => {
   return PROXY_HOSTS.has(host) ? `https://${host}${rest.slice(slash)}` : null;
 };
 
-export const midSizeSourceUri = (u: string): string => proxyUpstream(ktoMidSizeUrl(u));
+export const fullSizeSourceUri = (u: string): string => proxyUpstream(u);
 const commonsThumb = (u: string, width: number): string => {
   if (u.includes("/thumb/")) return u.replace(/\/(\d+)px-([^/]+)$/, `/${width}px-$2`);
   if (/\/wiki\/Special:FilePath\//i.test(u)) {

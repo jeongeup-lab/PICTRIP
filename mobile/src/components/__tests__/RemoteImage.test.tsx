@@ -1,7 +1,7 @@
 import renderer, { act } from "react-test-renderer";
 import { Image } from "react-native";
 import { Image as ExpoImage } from "expo-image";
-import { midSizeSourceUri, RemoteImage } from "@/components/RemoteImage";
+import { fullSizeSourceUri, RemoteImage } from "@/components/RemoteImage";
 
 const images = (r: renderer.ReactTestRenderer) =>
   r.root.findAllByType(ExpoImage).filter((n) => n.props.onError);
@@ -337,9 +337,9 @@ describe("RemoteImage", () => {
     expect(images(r!)[0].props.source.uri).toBe("https://example.com/a.jpg");
   });
 
-  it("midSizeSourceUri resolves a KTO original to the proxied mid-size", () => {
-    expect(midSizeSourceUri(KTO_HIRES)).toBe(PROXIED_KTO_MID);
-    expect(midSizeSourceUri("https://example.com/a.jpg")).toBe("https://example.com/a.jpg");
+  it("fullSizeSourceUri proxies a KTO original untouched and skips foreign hosts", () => {
+    expect(fullSizeSourceUri(KTO_HIRES)).toBe(PROXIED_KTO_HIRES);
+    expect(fullSizeSourceUri("https://example.com/a.jpg")).toBe("https://example.com/a.jpg");
   });
 
   it("degrades a proxied Commons uri to the direct url on error, keeping the width", async () => {

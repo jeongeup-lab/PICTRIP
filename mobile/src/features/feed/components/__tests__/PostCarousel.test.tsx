@@ -79,7 +79,7 @@ describe("PostCarousel", () => {
     expect(useMatches).toHaveBeenCalledWith(7, { enabled: false });
   });
 
-  it("prefetches the first match image bytes once matches arrive (warms the ~940px mid-size shown in the feed)", async () => {
+  it("prefetches the first match image bytes once matches arrive (warms the original shown in the feed)", async () => {
     const prefetch = jest.spyOn(Image, "prefetch").mockResolvedValue(true);
     setMatches([
       match({ contentId: "100", imageUrl: "https://tong.visitkorea.or.kr/a_image1_1.jpg" }),
@@ -87,7 +87,7 @@ describe("PostCarousel", () => {
     ]);
     await mount();
     expect(prefetch).toHaveBeenCalledWith(
-      "https://img.pictrip.org/tong.visitkorea.or.kr/a_image2_1.jpg",
+      "https://img.pictrip.org/tong.visitkorea.or.kr/a_image1_1.jpg",
       {
         cachePolicy: "memory-disk",
       },
@@ -107,20 +107,15 @@ describe("PostCarousel", () => {
     expect(r.root.findAllByProps({ testID: "match-number" }).length).toBeGreaterThan(0);
   });
 
-  it("match slides render the KTO mid-size cover-fill (single image, no blur-up preview)", async () => {
+  it("match slides render the KTO original with a mid-size blur-up preview", async () => {
     setMatches([match({ imageUrl: "https://tong.visitkorea.or.kr/a_image1_1.jpg" })]);
     const r = await mount();
-    const ktoImages = r.root
+    const ktoUris = r.root
       .findAllByType(Image)
-      .filter(
-        (n) =>
-          typeof n.props.source?.uri === "string" &&
-          n.props.source.uri.includes("tong.visitkorea.or.kr"),
-      );
-    expect(ktoImages.length).toBe(1);
-    expect(ktoImages[0].props.source.uri).toBe(
-      "https://img.pictrip.org/tong.visitkorea.or.kr/a_image2_1.jpg",
-    );
+      .map((n) => n.props.source?.uri)
+      .filter((uri): uri is string => typeof uri === "string" && uri.includes("tong.visitkorea"));
+    expect(ktoUris).toContain("https://img.pictrip.org/tong.visitkorea.or.kr/a_image1_1.jpg");
+    expect(ktoUris).toContain("https://img.pictrip.org/tong.visitkorea.or.kr/a_image2_1.jpg");
   });
 
   it("match slide bookmark toggles via save hook", async () => {
