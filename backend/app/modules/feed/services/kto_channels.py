@@ -26,7 +26,7 @@ _FESTA_MAX_PAGES = 5
 _FESTA_PAGE_ROWS = 100
 _PETS_TAG = "반려동물 동반 가능"
 
-_CACHE_VERSION = "v2"
+_CACHE_VERSION = "v3"
 _STALE_TTL = 3 * 24 * 3600
 
 _refreshing: set[str] = set()
@@ -98,6 +98,7 @@ async def fetch_festa_cards(kto: KtoClient, *, today: date | None = None) -> lis
                 dday=f"D-{days}",
                 line=line,
                 saveable=True,
+                cpyrht_div_cd=str(it.get("cpyrhtDivCd") or "") or None,
             )
         )
     cards.sort(key=lambda c: int((c.dday or "D-999")[2:]))
@@ -114,6 +115,7 @@ async def fetch_pets_cards(kto: KtoClient, *, today: date | None = None) -> list
             image_url=img,
             tag=_PETS_TAG,
             saveable=True,
+            cpyrht_div_cd=str(it.get("cpyrhtDivCd") or "") or None,
         )
         for it in items
         if (img := it.get("firstimage") or None)

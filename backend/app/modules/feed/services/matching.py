@@ -8,9 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.exceptions import ResourceNotFound
-from app.core.kto_images import hires_kto_image, t1_transform_url
 from app.core.logging import get_logger
 from app.modules.feed import repositories
+from app.modules.feed.services.display import t1_display_url
 from app.modules.feed.text import first_sentence
 from app.modules.spots import services as spots_services
 
@@ -20,7 +20,6 @@ _TTL_SECONDS = 6 * 3600
 _MATCH_COUNT = 3
 _REVISION_KEY = "matching:revision"
 _KEY = "match:{revision}:{overseas_id}"
-_T1_WIDTH = 1080
 
 
 @dataclass(frozen=True)
@@ -34,16 +33,7 @@ class MatchRow:
 
 
 def display_image_url(row: MatchRow) -> str:
-    if row.cpyrht_div_cd == "Type1":
-        transformed = t1_transform_url(
-            hires_kto_image(row.image_url),
-            width=_T1_WIDTH,
-            secret=settings.IMG_PROXY_T1_SECRET,
-            origin=settings.IMG_PROXY_ORIGIN,
-        )
-        if transformed:
-            return transformed
-    return row.image_url
+    return t1_display_url(row.image_url, row.cpyrht_div_cd) or row.image_url
 
 
 async def find_matches(session: AsyncSession, redis: Redis, overseas_id: int) -> list[MatchRow]:

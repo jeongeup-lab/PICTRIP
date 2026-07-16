@@ -336,7 +336,7 @@ def _match_row(cpyrht_div_cd: str | None) -> matching.MatchRow:
 def test_display_image_url_type1_returns_signed_transform(monkeypatch) -> None:
     monkeypatch.setattr(settings, "IMG_PROXY_T1_SECRET", "s3cret")
     url = matching.display_image_url(_match_row("Type1"))
-    assert url.startswith("https://img.pictrip.org/t1/1080/")
+    assert url.startswith("https://img.pictrip.org/t1/1620/")
     assert url.endswith("/tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg")
 
 

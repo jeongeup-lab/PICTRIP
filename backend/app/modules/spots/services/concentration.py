@@ -19,6 +19,7 @@ class ConcentrationCardRow:
     first_image_url: str
     region_label: str
     rank: int
+    cpyrht_div_cd: str | None = None
 
 
 async def load_hot_spots(session: AsyncSession, *, limit: int = 10) -> list[ConcentrationCardRow]:
@@ -44,7 +45,7 @@ async def _load(
         else SpotConcentration.concentration_rate.desc()
     )
     stmt = (
-        select(Spot.content_id, Spot.title, Spot.first_image_url)
+        select(Spot.content_id, Spot.title, Spot.first_image_url, Spot.cpyrht_div_cd)
         .join(SpotConcentration, SpotConcentration.content_id == Spot.content_id)
         .where(
             Spot.show_flag == 1,
@@ -69,6 +70,7 @@ async def _load(
             first_image_url=r.first_image_url,
             region_label=_region_label(meta.get(r.content_id, (None, None))),
             rank=idx,
+            cpyrht_div_cd=r.cpyrht_div_cd,
         )
         for idx, r in enumerate(rows, start=1)
     ]

@@ -10,8 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ResourceNotFound, ValidationFailed
 from app.core.kto_client import KtoClient
+from app.modules.feed.services.display import T1_TILE_WIDTH, t1_display_url
 from app.modules.map import services as map_services
 from app.modules.map.schemas import NearbySpotCard
+from app.modules.spots import services as spots_services
 
 CHANNEL_LABELS = {
     "around": "Around",
@@ -47,6 +49,7 @@ class ChannelCardRow:
     line: str | None = None
     tag: str | None = None
     saveable: bool = True
+    cpyrht_div_cd: str | None = None
 
 
 async def load_channel_cards(
@@ -74,6 +77,10 @@ async def load_channel_cards(
             ne_lat=None,
             ne_lng=None,
         )
+        top = cards[:_CARD_COUNT]
+        spot_cards = await spots_services.load_active_spot_cards_by_ids(
+            session, [c.contentId for c in top]
+        )
         return [
             ChannelCardRow(
                 content_id=c.contentId,
@@ -81,8 +88,11 @@ async def load_channel_cards(
                 region_label=_region(c),
                 image_url=c.firstImageUrl,
                 dist=c.dist,
+                cpyrht_div_cd=(
+                    spot_cards[c.contentId].cpyrht_div_cd if c.contentId in spot_cards else None
+                ),
             )
-            for c in cards[:_CARD_COUNT]
+            for c in top
         ]
     if key in ("hot", "hidden"):
         from app.modules.feed.services.concentration_channels import (
@@ -110,7 +120,7 @@ def _first_image(rows: list[Any]) -> str | None:
     for r in rows:
         img: str | None = getattr(r, "image_url", None) or getattr(r, "first_image_url", None)
         if img:
-            return img
+            return t1_display_url(img, getattr(r, "cpyrht_div_cd", None), width=T1_TILE_WIDTH)
     return None
 
 
