@@ -86,9 +86,12 @@ describe("PostCarousel", () => {
       match({ contentId: "101", imageUrl: "https://tong.visitkorea.or.kr/b_image1_1.jpg" }),
     ]);
     await mount();
-    expect(prefetch).toHaveBeenCalledWith("https://tong.visitkorea.or.kr/a_image2_1.jpg", {
-      cachePolicy: "memory-disk",
-    });
+    expect(prefetch).toHaveBeenCalledWith(
+      "https://img.pictrip.org/tong.visitkorea.or.kr/a_image2_1.jpg",
+      {
+        cachePolicy: "memory-disk",
+      },
+    );
   });
 
   it("after swipe, match slides render number, name, region, overview", async () => {
@@ -115,7 +118,9 @@ describe("PostCarousel", () => {
           n.props.source.uri.includes("tong.visitkorea.or.kr"),
       );
     expect(ktoImages.length).toBe(1);
-    expect(ktoImages[0].props.source.uri).toBe("https://tong.visitkorea.or.kr/a_image2_1.jpg");
+    expect(ktoImages[0].props.source.uri).toBe(
+      "https://img.pictrip.org/tong.visitkorea.or.kr/a_image2_1.jpg",
+    );
   });
 
   it("match slide bookmark toggles via save hook", async () => {

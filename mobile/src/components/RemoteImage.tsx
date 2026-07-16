@@ -98,19 +98,22 @@ const isCommonsUrl = (u: string): boolean => {
 };
 
 const IMG_PROXY_ORIGIN = "https://img.pictrip.org";
-const proxyCommons = (u: string): string => {
+const PROXY_HOSTS = new Set([...COMMONS_HOSTS, KTO_HOST]);
+const proxyUpstream = (u: string): string => {
   const m = /^https?:\/\/([^/?#]+)(.*)$/i.exec(u);
   const host = m?.[1].toLowerCase();
-  return m && host && COMMONS_HOSTS.has(host) ? `${IMG_PROXY_ORIGIN}/${host}${m[2]}` : u;
+  return m && host && PROXY_HOSTS.has(host) ? `${IMG_PROXY_ORIGIN}/${host}${m[2]}` : u;
 };
-const unproxyCommons = (u: string): string | null => {
+const unproxyUpstream = (u: string): string | null => {
   if (!u.startsWith(`${IMG_PROXY_ORIGIN}/`)) return null;
   const rest = u.slice(IMG_PROXY_ORIGIN.length + 1);
   const slash = rest.indexOf("/");
   if (slash === -1) return null;
   const host = rest.slice(0, slash);
-  return COMMONS_HOSTS.has(host) ? `https://${host}${rest.slice(slash)}` : null;
+  return PROXY_HOSTS.has(host) ? `https://${host}${rest.slice(slash)}` : null;
 };
+
+export const midSizeSourceUri = (u: string): string => proxyUpstream(ktoMidSizeUrl(u));
 const commonsThumb = (u: string, width: number): string => {
   if (u.includes("/thumb/")) return u.replace(/\/(\d+)px-([^/]+)$/, `/${width}px-$2`);
   if (/\/wiki\/Special:FilePath\//i.test(u)) {
@@ -132,10 +135,10 @@ const resolveSource = (
     commonsWidth && isCommonsUrl(midResolved)
       ? commonsThumb(midResolved, commonsWidth)
       : midResolved;
-  return proxyCommons(sized);
+  return proxyUpstream(sized);
 };
 
-const sourceFallback = (u: string): string | null => ktoFallback(u) ?? unproxyCommons(u);
+const sourceFallback = (u: string): string | null => ktoFallback(u) ?? unproxyUpstream(u);
 
 const contentFitFor = (mode?: ImageResizeMode): ImageContentFit => {
   switch (mode) {
@@ -185,7 +188,15 @@ export function RemoteImage({
   }
   // Effective source: the fallback only for the exact uri that has been degraded.
   const eff = uri && degradedUri === uri ? (sourceFallback(uri) ?? uri) : uri;
-  const lowUri = eff && isKtoUrl(eff) && eff.includes(KTO_HIRES) ? ktoFallback(eff) : null;
+  // Blur-up preview must survive proxying: unwrap a proxied eff to derive the KTO
+  // mid-size variant, then re-wrap only if eff itself is proxied (a degraded direct
+  // eff means the proxy just failed — keep its preview direct too).
+  const effDirect = eff ? (unproxyUpstream(eff) ?? eff) : null;
+  const lowDirect =
+    effDirect && isKtoUrl(effDirect) && effDirect.includes(KTO_HIRES)
+      ? ktoFallback(effDirect)
+      : null;
+  const lowUri = lowDirect && effDirect !== eff ? proxyUpstream(lowDirect) : lowDirect;
   useLayoutEffect(() => {
     activeUriRef.current = eff;
   }, [eff]);

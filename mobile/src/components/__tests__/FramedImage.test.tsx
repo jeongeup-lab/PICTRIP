@@ -4,7 +4,8 @@ import { Image as ExpoImage } from "expo-image";
 import { FramedImage } from "@/components/FramedImage";
 
 const KTO_HIRES = "https://tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg";
-const KTO_MID = "https://tong.visitkorea.or.kr/cms/resource/98/3045598_image2_1.jpg";
+const PROXIED_KTO_HIRES =
+  "https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg";
 
 const images = (r: renderer.ReactTestRenderer) =>
   r.root.findAllByType(ExpoImage).filter((n) => n.props.onError);
@@ -38,7 +39,10 @@ describe("FramedImage", () => {
     expect(style.width).toBe(390);
     expect(Math.round(style.height as number)).toBe(229);
     expect(style.top).toBeGreaterThan(0);
-    expect(images(r!).map((image) => image.props.source.uri)).toEqual([KTO_HIRES, KTO_HIRES]);
+    expect(images(r!).map((image) => image.props.source.uri)).toEqual([
+      PROXIED_KTO_HIRES,
+      PROXIED_KTO_HIRES,
+    ]);
     expect(images(r!)[0].props.blurRadius).toBe(26);
   });
 
@@ -68,13 +72,13 @@ describe("FramedImage", () => {
     });
 
     expect(Image.getSize).toHaveBeenCalledWith(
-      KTO_HIRES,
+      PROXIED_KTO_HIRES,
       expect.any(Function),
       expect.any(Function),
     );
     expect(r!.root.findAllByProps({ testID: "framed-image-frame" })).toHaveLength(0);
     expect(images(r!)).toHaveLength(1);
-    expect(images(r!)[0].props.source.uri).toBe(KTO_HIRES);
+    expect(images(r!)[0].props.source.uri).toBe(PROXIED_KTO_HIRES);
     expect(images(r!)[0].props.blurRadius).toBeUndefined();
   });
 
@@ -89,7 +93,7 @@ describe("FramedImage", () => {
       images(r!)[0].props.onLoad({});
     });
     expect(Image.getSize).toHaveBeenCalledWith(
-      KTO_HIRES,
+      PROXIED_KTO_HIRES,
       expect.any(Function),
       expect.any(Function),
     );
@@ -115,7 +119,7 @@ describe("FramedImage", () => {
     expect(images(r!)[0].props.blurRadius).toBe(26);
   });
 
-  it("uses the successful mid-size fallback for both backdrop and frame", async () => {
+  it("after a backdrop degrade the frame still renders via the proxy", async () => {
     let r: renderer.ReactTestRenderer;
     await act(async () => {
       r = renderer.create(<FramedImage uri={KTO_HIRES} />);
@@ -125,10 +129,13 @@ describe("FramedImage", () => {
       images(r!)[0].props.onError();
     });
     expect(images(r!)).toHaveLength(1);
-    expect(images(r!)[0].props.source.uri).toBe(KTO_MID);
-    await load(r!, KTO_MID, 940, 626);
+    expect(images(r!)[0].props.source.uri).toBe(KTO_HIRES);
+    await load(r!, KTO_HIRES, 940, 626);
     expect(r!.root.findByProps({ testID: "framed-image-frame" })).toBeTruthy();
-    expect(images(r!).map((image) => image.props.source.uri)).toEqual([KTO_MID, KTO_MID]);
+    expect(images(r!).map((image) => image.props.source.uri)).toEqual([
+      KTO_HIRES,
+      PROXIED_KTO_HIRES,
+    ]);
     expect(Image.getSize).not.toHaveBeenCalled();
   });
 });
