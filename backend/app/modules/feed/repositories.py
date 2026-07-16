@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.spots.services import all_categories_sql
+from app.modules.spots.services import attraction_category_sql
 
-_CATEGORY_SQL = all_categories_sql()
+_CATEGORY_SQL = attraction_category_sql()
 
 _KEY_EXPR = (
     "power(greatest("
