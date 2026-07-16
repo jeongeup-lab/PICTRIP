@@ -1,15 +1,17 @@
 name: img-cache-warm
-# img.pictrip.org 엣지 캐시 워밍 — 탐색 카탈로그 전체의 썸네일 변형(폭 4종)을 프록시로 훑는다.
+# img.pictrip.org 엣지 캐시 워밍 — 탐색 카탈로그(Commons 썸네일 폭 4종) + 홈 채널
+# 카드·타일(KTO)을 프록시로 훑는다.
 # Cloudflare Cache API 는 콜로 단위 저장이라, KR 사용자가 붙는 콜로(무료 플랜 기준 LAX)를
 # 데우려면 국내 망의 ct111 러너에서 실행해야 한다. GitHub 호스티드 러너(미국)는 엉뚱한
 # 콜로를 데우므로 사용하지 않는다.
-# 트리거: 주간 재워밍(캐시 축출 대비) + overseas-sync 후 신규 이미지 워밍(workflow_call).
-# KTO 컴플라이언스: 이 워밍과 프록시는 Wikimedia Commons(CC 라이선스, overseas_spots) 전용.
-# Worker 가 upload.wikimedia.org·commons.wikimedia.org 만 화이트리스트로 통과시키므로
-# KTO 이미지(tong.visitkorea.or.kr)는 구조적으로 배제된다 — 다운로드/저장 금지 규정과 무관.
+# 트리거: 일일 워밍(채널 카드는 매일 바뀜; 04:30 KST concentration-sync 이후) +
+# overseas-sync 후 신규 이미지 워밍(workflow_call).
+# KTO 컴플라이언스: 프록시 캐싱은 2026-07-16 운영사무국 확인으로 허용 (CLAUDE.md
+# Prohibitions). Type3(변경금지)는 무변형 pass-through 캐시, Type1(출처표시)만
+# 백엔드 서명 /t1 변환 — 워밍은 API 가 발급한 URL 을 그대로 데운다.
 on:
   schedule:
-    - cron: "0 19 * * 0" # 매주 월요일 04:00 KST (일 19:00 UTC + 9h)
+    - cron: "0 20 * * *" # 매일 05:00 KST (20:00 UTC + 9h) — concentration-sync(04:30 KST) 이후
   workflow_call:
   workflow_dispatch:
 
