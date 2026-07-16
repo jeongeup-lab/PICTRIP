@@ -1,9 +1,19 @@
 import { useEffect, useState } from "react";
-import { View, Text, Pressable, PanResponder, StyleSheet, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  PanResponder,
+  StyleSheet,
+  ActivityIndicator,
+  useWindowDimensions,
+} from "react-native";
 import Svg, { Defs, LinearGradient, Stop, Rect } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { Image } from "expo-image";
 import { Icon } from "@/components/Icon";
+import { RemoteImage, fullSizeSourceUri } from "@/components/RemoteImage";
 import { useChannelCards, useChannels, useSeenChannels } from "@/features/channels/queries";
 import type { ChannelKey } from "@/features/channels/api";
 import {
@@ -14,7 +24,6 @@ import {
 } from "@/features/map/usecases/request-location";
 import { PermissionPrimer } from "@/features/map/components/PermissionPrimer";
 import { StoryCard } from "@/features/channels/components/StoryCard";
-import { FramedImage } from "@/components/FramedImage";
 import { colors } from "@/constants/theme";
 
 interface Props {
@@ -23,9 +32,12 @@ interface Props {
 
 const LAST = Number.MAX_SAFE_INTEGER;
 const BG = "#141216";
+const CARD_HEIGHT = 520;
 
 export function StoryViewer({ start }: Props) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const cardWidth = width - 32;
   const { data: channelData, isError: channelsError } = useChannels();
   const { markSeen } = useSeenChannels();
   const channels = (channelData?.channels ?? []).filter((c) => c.available);
@@ -51,6 +63,13 @@ export function StoryViewer({ start }: Props) {
   const cardCount = cards.length;
   const shownIdx = cardCount > 0 ? Math.min(cardIdx, cardCount - 1) : 0;
   const currentCard = cards[shownIdx];
+
+  useEffect(() => {
+    for (const c of (cardData?.cards ?? []).slice(shownIdx + 1, shownIdx + 3)) {
+      if (c.imageUrl)
+        void Image.prefetch(fullSizeSourceUri(c.imageUrl), { cachePolicy: "memory-disk" });
+    }
+  }, [cardData, shownIdx]);
 
   useEffect(() => {
     if (!needCoords) return;
@@ -191,17 +210,21 @@ export function StoryViewer({ start }: Props) {
 
   return (
     <View style={[styles.root, { backgroundColor: BG }]} {...pan.panHandlers}>
-      <FramedImage uri={currentCard?.imageUrl ?? null} />
-      <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
-        <Defs>
-          <LinearGradient id="storyScrim" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={BG} stopOpacity={0.55} />
-            <Stop offset="0.4" stopColor={BG} stopOpacity={0.15} />
-            <Stop offset="1" stopColor={BG} stopOpacity={0.85} />
-          </LinearGradient>
-        </Defs>
-        <Rect x="0" y="0" width="100%" height="100%" fill="url(#storyScrim)" />
-      </Svg>
+      <View style={styles.cardWrap} pointerEvents="none">
+        <View style={[styles.card, { width: cardWidth, height: CARD_HEIGHT }]}>
+          <RemoteImage uri={currentCard?.imageUrl ?? null} style={StyleSheet.absoluteFill} />
+          <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
+            <Defs>
+              <LinearGradient id="storyCardScrim" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor={BG} stopOpacity={0.28} />
+                <Stop offset="0.5" stopColor={BG} stopOpacity={0.05} />
+                <Stop offset="1" stopColor={BG} stopOpacity={0.78} />
+              </LinearGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height="100%" fill="url(#storyCardScrim)" />
+          </Svg>
+        </View>
+      </View>
 
       <Pressable
         testID="story-tap-left"
@@ -235,14 +258,19 @@ export function StoryViewer({ start }: Props) {
         </View>
       </View>
 
-      <View style={[styles.bottom, { paddingBottom: insets.bottom + 24 }]} pointerEvents="box-none">
-        {currentCard ? (
-          <StoryCard
-            key={currentCard.contentId ?? String(shownIdx)}
-            card={currentCard}
-            onDetail={onDetail}
-          />
-        ) : null}
+      <View style={styles.cardWrap} pointerEvents="box-none">
+        <View
+          style={[styles.cardMeta, { width: cardWidth, height: CARD_HEIGHT }]}
+          pointerEvents="box-none"
+        >
+          {currentCard ? (
+            <StoryCard
+              key={currentCard.contentId ?? String(shownIdx)}
+              card={currentCard}
+              onDetail={onDetail}
+            />
+          ) : null}
+        </View>
       </View>
     </View>
   );
@@ -250,6 +278,25 @@ export function StoryViewer({ start }: Props) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  cardWrap: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  card: {
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: colors.sec,
+  },
+  cardMeta: {
+    justifyContent: "flex-end",
+    paddingHorizontal: 20,
+    paddingBottom: 22,
+  },
   errorRoot: { alignItems: "center", justifyContent: "center", paddingHorizontal: 24 },
   errorText: { fontSize: 15, fontWeight: "600", color: colors.onImage, textAlign: "center" },
   loadingText: { fontSize: 14, fontWeight: "500", color: colors.onImage, textAlign: "center" },
@@ -283,5 +330,4 @@ const styles = StyleSheet.create({
     borderColor: colors.glassBorder,
   },
   closeFloat: { position: "absolute", right: 16 },
-  bottom: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 20 },
 });

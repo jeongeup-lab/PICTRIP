@@ -1,6 +1,7 @@
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { router } from "expo-router";
+import { Image } from "expo-image";
 import { StoryViewer } from "@/features/channels/components/StoryViewer";
 import { useChannels, useChannelCards, useSeenChannels } from "@/features/channels/queries";
 import { useSaveOptimistic } from "@/features/saved/hooks/use-save-optimistic";
@@ -175,6 +176,44 @@ describe("StoryViewer", () => {
     await tap(r, "right");
     expect(mockMarkSeen).toHaveBeenCalledWith("hot");
     expect(title(r)).toBe("H1");
+  });
+
+  it("renders the current card image cover-filled inside the rounded card frame", async () => {
+    setChannels([meta("hot", "Hot")]);
+    cardsByKey.hot = [
+      card({ title: "A", imageUrl: "https://tong.visitkorea.or.kr/cms/a_image1_1.jpg" }),
+    ];
+    const r = await mount("hot");
+    const uris = r.root
+      .findAllByType(Image)
+      .map((n) => n.props.source?.uri)
+      .filter((u): u is string => typeof u === "string" && u.includes("tong.visitkorea"));
+    expect(uris).toContain("https://img.pictrip.org/tong.visitkorea.or.kr/cms/a_image1_1.jpg");
+  });
+
+  it("prefetches the next two card images but not the current one", async () => {
+    const prefetch = jest.spyOn(Image, "prefetch").mockResolvedValue(true);
+    setChannels([meta("hot", "Hot")]);
+    cardsByKey.hot = [
+      card({ title: "A", imageUrl: "https://tong.visitkorea.or.kr/cms/a_image1_1.jpg" }),
+      card({ title: "B", imageUrl: "https://tong.visitkorea.or.kr/cms/b_image1_1.jpg" }),
+      card({ title: "C", imageUrl: "https://tong.visitkorea.or.kr/cms/c_image1_1.jpg" }),
+      card({ title: "D", imageUrl: "https://tong.visitkorea.or.kr/cms/d_image1_1.jpg" }),
+    ];
+    await mount("hot");
+    const prefetched = prefetch.mock.calls.map((c) => c[0] as string);
+    expect(prefetched).toContain(
+      "https://img.pictrip.org/tong.visitkorea.or.kr/cms/b_image1_1.jpg",
+    );
+    expect(prefetched).toContain(
+      "https://img.pictrip.org/tong.visitkorea.or.kr/cms/c_image1_1.jpg",
+    );
+    expect(prefetched).not.toContain(
+      "https://img.pictrip.org/tong.visitkorea.or.kr/cms/a_image1_1.jpg",
+    );
+    expect(prefetched).not.toContain(
+      "https://img.pictrip.org/tong.visitkorea.or.kr/cms/d_image1_1.jpg",
+    );
   });
 
   it("hides the save and detail buttons on a non-saveable snap card", async () => {

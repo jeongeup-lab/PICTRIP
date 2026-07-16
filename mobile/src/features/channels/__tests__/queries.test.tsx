@@ -1,6 +1,14 @@
 import renderer, { act } from "react-test-renderer";
-import { channelCardsKey, useSeenChannels, useSeenStore } from "@/features/channels/queries";
+import { Image } from "expo-image";
+import {
+  channelCardsKey,
+  prefetchChannelCards,
+  useSeenChannels,
+  useSeenStore,
+} from "@/features/channels/queries";
+import { getChannelCards } from "@/features/channels/api";
 import { loadSeen, saveSeen } from "@/features/channels/lib/seen-store";
+import { queryClient } from "@/lib/query-client";
 
 const mockKst = { day: "2026-07-13" };
 
@@ -11,6 +19,11 @@ jest.mock("@/features/channels/lib/kst", () => ({
 jest.mock("@/features/channels/lib/seen-store", () => ({
   loadSeen: jest.fn(async () => []),
   saveSeen: jest.fn(async () => {}),
+}));
+
+jest.mock("@/features/channels/api", () => ({
+  getChannelCards: jest.fn(),
+  getChannels: jest.fn(),
 }));
 
 const mockSaveSeen = saveSeen as jest.Mock;
@@ -32,6 +45,50 @@ describe("channelCardsKey", () => {
 
   it("uses a null location slot when coords are absent", () => {
     expect(channelCardsKey("hot")).toEqual(["channel-cards", "hot", null]);
+  });
+});
+
+describe("prefetchChannelCards", () => {
+  afterEach(() => {
+    queryClient.clear();
+    jest.restoreAllMocks();
+  });
+
+  it("warms the first card image bytes after the cards JSON lands", async () => {
+    const prefetch = jest.spyOn(Image, "prefetch").mockResolvedValue(true);
+    (getChannelCards as jest.Mock).mockResolvedValue({
+      key: "festa",
+      label: "Festa",
+      cards: [
+        { contentId: "1", imageUrl: "https://tong.visitkorea.or.kr/cms/f_image1_1.jpg" },
+        { contentId: "2", imageUrl: "https://tong.visitkorea.or.kr/cms/g_image1_1.jpg" },
+      ],
+    });
+    await act(async () => {
+      prefetchChannelCards("festa");
+    });
+    expect(prefetch).toHaveBeenCalledWith(
+      "https://img.pictrip.org/tong.visitkorea.or.kr/cms/f_image1_1.jpg",
+      { cachePolicy: "memory-disk" },
+    );
+    expect(prefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips the around channel and cards without an image", async () => {
+    const prefetch = jest.spyOn(Image, "prefetch").mockResolvedValue(true);
+    prefetch.mockClear();
+    (getChannelCards as jest.Mock).mockClear();
+    prefetchChannelCards("around");
+    (getChannelCards as jest.Mock).mockResolvedValue({
+      key: "snap",
+      label: "Snap",
+      cards: [{ contentId: null, imageUrl: null }],
+    });
+    await act(async () => {
+      prefetchChannelCards("snap");
+    });
+    expect(prefetch).not.toHaveBeenCalled();
+    expect(getChannelCards).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { create } from "zustand";
+import { Image } from "expo-image";
+import { fullSizeSourceUri } from "@/components/RemoteImage";
 import { getChannelCards, getChannels, type ChannelKey } from "@/features/channels/api";
 import { loadSeen, saveSeen } from "@/features/channels/lib/seen-store";
 import { todayKst } from "@/features/channels/lib/kst";
@@ -32,10 +34,18 @@ export function useChannelCards(key: ChannelKey, coords?: { lat: number; lng: nu
 
 export function prefetchChannelCards(key: ChannelKey) {
   if (key === "around") return;
-  void queryClient.prefetchQuery({
-    queryKey: channelCardsKey(key),
-    queryFn: () => getChannelCards(key),
-  });
+  void queryClient
+    .prefetchQuery({
+      queryKey: channelCardsKey(key),
+      queryFn: () => getChannelCards(key),
+    })
+    .then(() => {
+      const data = queryClient.getQueryData<Awaited<ReturnType<typeof getChannelCards>>>(
+        channelCardsKey(key),
+      );
+      const first = data?.cards[0]?.imageUrl;
+      if (first) void Image.prefetch(fullSizeSourceUri(first), { cachePolicy: "memory-disk" });
+    });
 }
 
 interface SeenState {
