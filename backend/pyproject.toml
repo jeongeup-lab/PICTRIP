@@ -235,12 +235,10 @@ ignore_imports = [
     # 잡히지 않게 한다. spots 내부의 직접 spots.models import는 의도된 것(#22).
     "app.modules.spots.services -> app.modules.spots.services.*",
     "app.modules.spots.services.* -> app.modules.spots.models",
-    # ADM seam: own-module ORM via its repository, plus the documented
-    # exception — admin writes curations/curation_spots (spots.models) only.
+    # ADM seam: own-module ORM via its repository.
     "app.modules.admin.services -> app.modules.admin.models",
     "app.modules.admin.services -> app.modules.admin.repositories",
     "app.modules.admin.repositories -> app.modules.admin.models",
-    "app.modules.admin.repositories -> app.modules.spots.models",
 ]
 # Most services are still placeholders that don't import their own models yet.
 # Allow these ignores to be inactive until the services get implemented.
@@ -251,14 +249,11 @@ unmatched_ignore_imports_alerting = "none"
 # models. This DIRECT-only contract (allow_indirect_imports = true) closes that:
 # a spots service submodule must not import users/images/map/system models
 # directly. spots.models is excluded — own-module model imports are intended (#22).
-# The legitimate seam chain curations -> images.services -> images.models is
-# indirect, so it is not flagged.
 [[tool.importlinter.contracts]]
 name = "Spots service submodules don't directly import other modules' models"
 type = "forbidden"
 source_modules = [
     "app.modules.spots.services.cards",
-    "app.modules.spots.services.curations",
     "app.modules.spots.services.detail",
     "app.modules.spots.services.nearby",
     "app.modules.spots.services.rows",

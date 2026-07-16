@@ -22,25 +22,6 @@ class SpotCard(BaseModel):
         return https_kto_image(v)
 
 
-class CurationDetailResponse(BaseModel):
-    """Region/curation detail (S09 §5.2). subtitle is intentionally omitted —
-    the detail screen shows title/lead/intro only."""
-
-    id: int
-    type: str
-    slug: str
-    title: str
-    lead: str | None = None
-    intro: str | None = None
-    coverUrl: str | None = None
-    spots: list[SpotCard] = []
-
-    @field_validator("coverUrl")
-    @classmethod
-    def _upgrade_cover(cls, v: str | None) -> str | None:
-        return https_kto_image(v)
-
-
 class SpotImageOut(BaseModel):
     originImageUrl: str
     smallImageUrl: str | None = None

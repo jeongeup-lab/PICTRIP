@@ -8,7 +8,6 @@ only). Two endpoints under ``/admin/api/*`` behind the session gate:
 
 Hiding a spot here is exactly the filter ``/v1/feed`` already applies
 (``is_hidden = false``), so the last test asserts the toggle reaches the feed.
-Auth/session fixture style is copied from ``test_admin_curations.py``.
 """
 
 from __future__ import annotations

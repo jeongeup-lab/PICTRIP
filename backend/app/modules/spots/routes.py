@@ -11,43 +11,13 @@ from app.core.kto_client import KtoDep
 from app.core.redis import RedisDep
 from app.core.schemas import ok
 from app.modules.spots.schemas import (
-    CurationDetailResponse,
-    SpotCard,
     SpotDetailResponse,
     SpotImageOut,
     SpotIntro,
 )
-from app.modules.spots.services import curations as curation_svc
 from app.modules.spots.services import load_spot_detail
 
 router = APIRouter(tags=["SPT · spots"])
-
-
-@router.get("/curations/{slug}", summary="Region/curation detail (≤8 spots)")
-async def get_curation(slug: str, session: DbSession, redis: RedisDep) -> dict[str, Any]:
-    row = await curation_svc.get_curation_detail(session, redis, slug)
-    payload = CurationDetailResponse(
-        id=row.id,
-        type=row.type,
-        slug=row.slug,
-        title=row.title,
-        lead=row.lead,
-        intro=row.intro,
-        coverUrl=row.cover_url,
-        spots=[
-            SpotCard(
-                contentId=s.content_id,
-                title=s.title,
-                firstImageUrl=s.first_image_url,
-                addr1=s.addr1,
-                mapx=s.mapx,
-                mapy=s.mapy,
-                category=s.lcls_systm3_nm,
-            )
-            for s in row.spots
-        ],
-    )
-    return ok(payload)
 
 
 @router.get(

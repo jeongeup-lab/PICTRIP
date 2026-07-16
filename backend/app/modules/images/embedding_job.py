@@ -80,8 +80,6 @@ async def collect_targets(
     after that time (the "this collection" scope). ``limit`` caps the batch so the
     serving process is never pinned by a huge backlog.
     """
-    # Imported lazily: spots.services (via curations) imports images.services,
-    # which re-exports this module → a module-level import would be circular.
     from app.modules.spots.services import image_bearing_spots_stmt
 
     spots = image_bearing_spots_stmt(since=since).subquery()

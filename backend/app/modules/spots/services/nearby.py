@@ -12,7 +12,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
-from app.modules.spots.models import LclsSystmCode, Region, Spot, SpotDetail
+from app.modules.spots.models import LclsSystmCode, Spot, SpotDetail
 
 _MAX_NUM_OF_ROWS = 50
 _EARTH_RADIUS_M = 6_371_000.0
@@ -220,85 +220,3 @@ async def find_nearby_spots_bbox(
     sub = inner.subquery()
     stmt = select(sub).order_by(sub.c.dist).limit(_MAX_NUM_OF_ROWS)
     return _materialize(await session.execute(stmt))
-
-
-@dataclass
-class PickerSpotRow:
-    """One admin-picker search hit (SPT owns the query; admin only presents it)."""
-
-    content_id: str
-    title: str
-    region_cd: str | None
-    region_name: str | None
-    first_image_url: str | None
-
-
-def _escape_like(q: str) -> str:
-    """Escape LIKE wildcards so ``q`` matches literally (pairs with escape='\\\\')."""
-    return q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-
-
-async def search_spots_for_picker(
-    session: AsyncSession,
-    *,
-    q: str | None,
-    region: str | None,
-    sigungu: str | None,
-    category: NearbyCategory | None,
-    limit: int,
-    offset: int,
-) -> tuple[list[PickerSpotRow], int]:
-    """Admin picker search — SPT owns the Spot/Region/category query so the admin
-    module stays free of cross-module model imports (A01 §1.1). trgm ILIKE over
-    title/addr1 (q optional — filters alone allow browsing). Scoped to exposable
-    spots (show_flag=1 AND non-empty image) so results match the cover/handpick
-    save gate — an imageless spot the admin can't save never shows up.
-
-    Uses idx_spots_title_trgm / idx_spots_addr1_trgm (partial WHERE show_flag=1).
-    ``%``/``_`` in q are escaped (literal match). Category reuses the NearbyCategory
-    SSOT predicate. Ordered by (title, content_id) so offset pagination is
-    deterministic. Returns (page rows, total match count).
-    """
-    conds: list[ColumnElement[bool]] = [
-        Spot.show_flag == 1,
-        Spot.first_image_url.isnot(None),
-        Spot.first_image_url != "",
-    ]
-    if q:
-        pat = f"%{_escape_like(q)}%"
-        conds.append(or_(Spot.title.ilike(pat, escape="\\"), Spot.addr1.ilike(pat, escape="\\")))
-    if region:
-        conds.append(Spot.ldong_regn_cd == region)
-    if sigungu:
-        conds.append(Spot.ldong_signgu_cd == sigungu)
-    if category is not None:
-        conds.append(category_predicate(category))
-
-    total = (
-        await session.execute(select(func.count()).select_from(Spot).where(*conds))
-    ).scalar_one()
-    rows = await session.execute(
-        select(
-            Spot.content_id,
-            Spot.title,
-            Spot.ldong_regn_cd.label("region_cd"),
-            Region.ldong_regn_nm.label("region_name"),
-            Spot.first_image_url,
-        )
-        .outerjoin(Region, Region.ldong_regn_cd == Spot.ldong_regn_cd)
-        .where(*conds)
-        .order_by(Spot.title, Spot.content_id)
-        .limit(limit)
-        .offset(offset)
-    )
-    items = [
-        PickerSpotRow(
-            content_id=r.content_id,
-            title=r.title,
-            region_cd=r.region_cd,
-            region_name=r.region_name,
-            first_image_url=r.first_image_url,
-        )
-        for r in rows.all()
-    ]
-    return items, int(total)
