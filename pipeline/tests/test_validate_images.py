@@ -49,6 +49,11 @@ def test_probe_treats_non_image_200_as_unknown():
     assert probe(client, LIVE) == UNKNOWN
 
 
+def test_probe_accepts_uppercase_image_content_type():
+    client = _client({LIVE: 206}, content_type="IMAGE/JPEG")
+    assert probe(client, LIVE) == ALIVE
+
+
 def test_probe_upgrades_http_to_https():
     client = _client({LIVE: 206})
     assert probe(client, LIVE.replace("https://", "http://")) == ALIVE

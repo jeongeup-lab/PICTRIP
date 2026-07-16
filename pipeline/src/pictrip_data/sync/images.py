@@ -74,7 +74,7 @@ def probe(client: httpx.Client, url: str) -> str:
         return DEAD
     if response.status_code in (200, 206):
         content_type = response.headers.get("content-type", "")
-        return ALIVE if content_type.startswith("image/") else UNKNOWN
+        return ALIVE if content_type.lower().startswith("image/") else UNKNOWN
     return UNKNOWN
 
 
