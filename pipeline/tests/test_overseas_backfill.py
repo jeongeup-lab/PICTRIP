@@ -37,7 +37,7 @@ def test_filename_unquotes_and_strips_prefix():
     assert _filename("https://example.com/x") is None
 
 
-def test_backfill_rewrites_filepath_and_preserves_embedding(db_conn):
+def test_backfill_rewrites_filepath_and_invalidates_embedding(db_conn):
     with db_conn.cursor() as cur:
         upsert_overseas(cur, SPOT, Credit("A", "CC", None, None))
         cur.execute(
@@ -56,7 +56,7 @@ def test_backfill_rewrites_filepath_and_preserves_embedding(db_conn):
         cur.execute(
             "SELECT image_url, embedding IS NULL FROM overseas_spots WHERE wikidata_id = 'QTESTBF1'"
         )
-        assert cur.fetchone() == (DIRECT, False)
+        assert cur.fetchone() == (DIRECT, True)
 
 
 def test_backfill_skips_when_thumb_missing(db_conn):
