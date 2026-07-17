@@ -25,7 +25,6 @@ class KtoService(StrEnum):
     KOR = "KorService2"
     TARRLTE = "TarRlteTarService1"
     CNCTR = "TatsCnctrRateService"
-    DATALAB = "DataLabService"
     PET = "KorPetTourService2"
     GALLERY = "PhotoGalleryService1"
 
@@ -34,7 +33,6 @@ _SERVICE_BASE: dict[KtoService, str] = {
     KtoService.KOR: settings.KTO_BASE_URL_KOR,
     KtoService.TARRLTE: settings.KTO_BASE_URL_TARRLTE,
     KtoService.CNCTR: settings.KTO_BASE_URL_CNCTR,
-    KtoService.DATALAB: settings.KTO_BASE_URL_DATALAB,
     KtoService.PET: settings.KTO_BASE_URL_PET,
     KtoService.GALLERY: settings.KTO_BASE_URL_GALLERY,
 }
