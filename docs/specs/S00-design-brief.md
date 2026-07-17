@@ -40,12 +40,12 @@
 | 02 | `02-onboarding.html` | 온보딩 |
 | 03 | `03-login.html` | 로그인 |
 | 04 | `04-permissions.html` | 권한 |
-| 05 | `05-home.html` | 홈 (큐레이션 피드) |
-| 06 | `06-curation.html` | 큐레이션 상세 |
+| 05 | (삭제 — S13 대체) | 홈 (큐레이션 피드) |
+| 06 | (삭제 — S13 대체) | 큐레이션 상세 |
 | 07 | `07-spot.html` | 스팟 상세 |
-| 08 | `08-photo-select.html` | 사진 선택 |
-| 09 | `09-analyzing.html` | 분석 중 |
-| 10 | `10-result.html` | 사진 검색 결과 |
+| 08 | (삭제 — S13에서 기능 제거) | 사진 선택 |
+| 09 | (삭제 — S13에서 기능 제거) | 분석 중 |
+| 10 | (삭제 — S13에서 기능 제거) | 사진 검색 결과 |
 | 11 | `11-map.html` | 지도(내 주변) |
 | 12 | `12-region-picker.html` | 지역 선택 |
 | 13 | `13-saved.html` | 저장(스크랩) |
@@ -90,6 +90,7 @@ vs 현 자산/제약, 마이그레이션 방향).
 
 ## 입력 포인터
 
-- 디자인 SSOT: `docs/mockups/` (`index.html` 갤러리)
+- 디자인 SSOT: `docs/mockups/` (`index.html` 갤러리) — 단 홈·탐색은
+  `docs/mockups/redesign-2026-07-cc/app-prototype.html`(S13)이 우선
 - 아키텍처/제약 SSOT: `CLAUDE.md` (루트, 127줄)
 - 결정 이력: 메모리 `mockup_refactor_plan`
