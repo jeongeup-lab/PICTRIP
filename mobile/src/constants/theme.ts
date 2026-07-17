@@ -13,23 +13,10 @@ export const colors = {
   accentText: "#03A94E",
   accentFill: "rgba(3,199,90,0.08)",
   scrim: "rgba(20,18,22,0.50)",
-  scrimStrong: "rgba(16,14,18,0.64)",
   glassFill: "rgba(255,255,255,0.15)",
   glassBorder: "rgba(255,255,255,0.22)",
   onImage: "#FFFFFF",
   onDim: "rgba(255,255,255,0.85)",
-} as const;
-
-export const type = {
-  family: undefined as undefined | string,
-  h1: { fontSize: 38, fontWeight: "800" as const, letterSpacing: -1 },
-  h2: { fontSize: 25, fontWeight: "800" as const, letterSpacing: -0.5 },
-  h3: { fontSize: 22, fontWeight: "800" as const, letterSpacing: -0.3 },
-  hero: { fontSize: 30, fontWeight: "800" as const, letterSpacing: -0.6 },
-  body: { fontSize: 15, fontWeight: "500" as const },
-  bodyStrong: { fontSize: 15, fontWeight: "700" as const },
-  caption: { fontSize: 13, fontWeight: "500" as const },
-  eyebrow: { fontSize: 12, fontWeight: "800" as const, letterSpacing: 1.5 },
 } as const;
 
 export const spacing = {
