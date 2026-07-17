@@ -75,7 +75,12 @@ BootGate(스플래시) → 온보딩(최초 1회, 3스텝) → 탭 셸
 ## 이미지 표시 규칙 (클라이언트)
 
 `RemoteImage` 단일 컴포넌트가 담당:
-- KTO 이미지는 하단 ~12% 워터마크 밴드를 프레임 밖으로 크롭(`cropBanner`).
+- KTO 이미지는 하단 ~12% 워터마크 밴드를 프레임 밖으로 밀어내는 **클라이언트
+  표시 프레이밍**(`cropBanner` — CSS 클리핑, 파일 바이트 무변형이라 공공누리
+  Type 구분과 무관). 파일을 실제로 변형하는 서버측 변환(`/t1` 리사이즈)은
+  `Type1`에만 발급되고 `Type3`는 원본 pass-through — 발급 로직은
+  `backend/.../feed/services/display.py`. 출처표시는 홈 푸터 "데이터 출처" +
+  `pictrip.org/legal/data-sources`로 이행.
 - Commons·KTO URL은 `img.pictrip.org` 프록시로 재작성(엣지 캐시).
 - 폴백 체인: 원본(`_image1_1`) 실패 → 미드사이즈(`_image2_1`) / 프록시 실패 →
   직접 Wikimedia(전용 UA) → 백오프 재시도 2회 → 회색 박스.
