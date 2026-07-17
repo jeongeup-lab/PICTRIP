@@ -28,7 +28,7 @@
    ```bash
    uv run alembic revision --autogenerate -m "..."
    # SQL을 반드시 눈으로 리뷰 — autogenerate는 부분 인덱스·CHECK·드롭 downgrade를 놓친다
-   POSTGRES_DB=pictrip_test uv run alembic upgrade head
+   POSTGRES_HOST=localhost POSTGRES_DB=pictrip_test uv run alembic upgrade head
    ```
    파괴적 변경은 expand→contract 순서를 지킨다(→ [ADR-0002](../adr/0002-expand-contract-migrations.md)).
 
