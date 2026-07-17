@@ -40,7 +40,10 @@ def include_object(object_, name, type_, reflected, compare_to):
     # `sync_runs` is owned by pipeline/ (CREATE TABLE IF NOT EXISTS in
     # pictrip_data/sync/audit.py). It is never a backend model; exclude it from
     # autogenerate so a drop is never emitted. (Monorepo invariant, CLAUDE.md.)
-    return not (type_ == "table" and name == "sync_runs")
+    # `curations`/`curation_spots` are retired from serving (S13) but the tables
+    # are preserved by decision; their ORM models are gone, so exclude them too
+    # or autogenerate would emit drops.
+    return not (type_ == "table" and name in {"sync_runs", "curations", "curation_spots"})
 
 
 def run_migrations_offline() -> None:

@@ -8,21 +8,17 @@ from typing import Any
 
 from sqlalchemy import (
     BigInteger,
-    Boolean,
     CheckConstraint,
     Date,
     DateTime,
     Float,
     ForeignKey,
-    Identity,
     Index,
-    Integer,
     Numeric,
     SmallInteger,
     String,
     Text,
     UniqueConstraint,
-    false,
     func,
     text,
 )
@@ -275,55 +271,3 @@ class UserSavedSpot(Base):
 
 
 # TarRlteTar lives in Redis (rlte:{contentId}, 1h TTL, ADR-0005) — no ORM model.
-
-
-# Curation (S07 §3.1/§3.2) — first-class entity backing the home feed + detail pages.
-class Curation(Base):
-    __tablename__ = "curations"
-
-    id: Mapped[int] = mapped_column(BigInteger, Identity(always=False), primary_key=True)
-    type: Mapped[str] = mapped_column(String(16), nullable=False)
-    slug: Mapped[str] = mapped_column(String(80), nullable=False, unique=True)
-    title: Mapped[str] = mapped_column(Text, nullable=False)
-    subtitle: Mapped[str | None] = mapped_column(Text)
-    lead: Mapped[str | None] = mapped_column(Text)
-    intro: Mapped[str | None] = mapped_column(Text)
-    cover_spot_id: Mapped[str | None] = mapped_column(
-        String(32), ForeignKey("spots.content_id", ondelete="SET NULL")
-    )
-    region_cd: Mapped[str | None] = mapped_column(String(8), ForeignKey("regions.ldong_regn_cd"))
-    mood_id: Mapped[int | None] = mapped_column(SmallInteger, ForeignKey("moods.id"))
-    is_published: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=false())
-    position: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-
-    __table_args__ = (
-        CheckConstraint("type IN ('region','mood','editorial')", name="ck_curation_type"),
-        CheckConstraint(
-            "(type='region' AND region_cd IS NOT NULL) "
-            "OR (type='mood' AND mood_id IS NOT NULL) "
-            "OR type='editorial'",
-            name="ck_curation_scope",
-        ),
-        UniqueConstraint("slug", name="uq_curations_slug"),
-        Index("idx_curations_feed", "type", "is_published", "position"),
-    )
-
-
-class CurationSpot(Base):
-    __tablename__ = "curation_spots"
-
-    curation_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("curations.id", ondelete="CASCADE"), primary_key=True
-    )
-    content_id: Mapped[str] = mapped_column(
-        String(32), ForeignKey("spots.content_id", ondelete="CASCADE"), primary_key=True
-    )
-    position: Mapped[int] = mapped_column(Integer, nullable=False)
-
-    __table_args__ = (Index("idx_curation_spots_order", "curation_id", "position"),)

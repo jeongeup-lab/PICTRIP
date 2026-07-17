@@ -127,7 +127,7 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
 - Home feed is `GET /feed` (S13): 해외 게시물 커서 페이지네이션 → 스와이프 시
   `GET /overseas/{id}/matches`로 국내 매칭 3곳. 구 `/home/feed`(히어로+레일)·
   `/curations/{slug}`·`/taste/photo-search`는 제거 — `curations`/`curation_spots`
-  테이블은 잔존(서빙 표면 없음).
+  테이블은 잔존(서빙 표면·ORM 모델 없음; autogenerate에서 `include_object`로 제외).
 - `overseas_spots`는 **백엔드 Alembic 소유**(마이그레이션 0018), 행 적재는
   `pipeline/` Wikidata ETL. 매칭 캐시는 Redis `match:{revision}:{overseasId}`
   (TTL 6h, `matching:revision`으로 무효화).

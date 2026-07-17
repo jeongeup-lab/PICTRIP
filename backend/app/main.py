@@ -20,7 +20,6 @@ from app.core.error_handlers import register_error_handlers
 from app.core.kto_client import KtoClient
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import (
-    ApiV1CompatMiddleware,
     CacheControlMiddleware,
     TraceIdMiddleware,
 )
@@ -87,9 +86,6 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(TraceIdMiddleware)
     app.add_middleware(CacheControlMiddleware, prefix=settings.API_V1_PREFIX)
-    # Outermost (added last) — rewrites bare API paths to /v1 before routing so a
-    # mis-built mobile release (v0.4.1, missing /v1 base) keeps working. TEMPORARY.
-    app.add_middleware(ApiV1CompatMiddleware, prefix=settings.API_V1_PREFIX)
     # Signed-cookie session for the /admin console login (replaces HTTP Basic).
     app.add_middleware(
         SessionMiddleware,
