@@ -32,9 +32,6 @@ from app.modules.users.schemas import (
     UserPublic,
 )
 
-# A precomputed bcrypt hash of a random value. ``login_with_email`` runs a verify
-# against this when the email is unknown so the missing-user and wrong-password
-# paths take ~the same time (reduces a timing oracle for email enumeration).
 _DUMMY_PASSWORD_HASH = hash_password("pictrip-dummy-not-a-real-password")
 
 
@@ -56,7 +53,8 @@ def _normalize_email(email: str) -> str:
 async def authenticate_with_oauth(
     session: AsyncSession, provider: str, body: OAuthLoginIn
 ) -> TokenPair:
-    # Identity key = provider + sub (S09 §3.1). Zero Redis writes.
+    """Verify the provider id_token and mint a token pair (identity key =
+    provider + sub, zero Redis writes)."""
     claims = await verify_oauth_id_token(provider, body.idToken, expected_nonce=body.nonce)
 
     user = await repo.get_or_create_user_via_provider(
@@ -106,12 +104,14 @@ async def login_with_email(session: AsyncSession, body: EmailLoginIn) -> TokenPa
 
     Unknown email, an account with no password set, or a bad password all raise
     the same ``InvalidCredentials`` (401) so the response can't distinguish
-    them. A dummy verify on the missing-user path keeps timing roughly uniform."""
+    them. A dummy bcrypt verify (against a precomputed hash of a random value)
+    on the missing-user path keeps timing roughly uniform, reducing a timing
+    oracle for email enumeration."""
     email = _normalize_email(body.email)
     user = await repo.get_active_user_by_email(session, email)
 
     if user is None or user.password_hash is None:
-        verify_password(body.password, _DUMMY_PASSWORD_HASH)  # equalize timing
+        verify_password(body.password, _DUMMY_PASSWORD_HASH)
         raise InvalidCredentials()
 
     if not verify_password(body.password, user.password_hash):
@@ -192,12 +192,9 @@ async def get_consents(session: AsyncSession, user_id: int) -> ConsentState:
 
 async def refresh_session(session: AsyncSession, redis: Redis, refresh_token: str) -> TokenPair:
     pair = await refresh_tokens(redis, refresh_token)
-    # Re-hydrate the full profile so a refresh returns the same shape as login
-    # (the token primitive only knows the user id).
     pair.user = await get_user_public(session, pair.user.id)
     return pair
 
 
 async def logout_session(redis: Redis, refresh_token: str | None) -> None:
-    # Idempotent: missing/malformed/expired tokens are silently no-ops.
     await deny_refresh(redis, refresh_token)

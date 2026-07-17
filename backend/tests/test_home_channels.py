@@ -12,7 +12,6 @@ from app.core.kto_client import get_kto
 from app.core.redis import get_redis
 from app.main import app
 
-# reference point near Haeundae, Busan
 LAT, LNG = 35.15, 129.05
 
 

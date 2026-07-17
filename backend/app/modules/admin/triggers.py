@@ -29,7 +29,6 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-# GitHub returns 204 No Content (no body, no run id) on a successful dispatch.
 _GITHUB_API = "https://api.github.com"
 _DISPATCH_TIMEOUT = httpx.Timeout(10.0, connect=5.0)
 
@@ -51,7 +50,9 @@ class WorkflowDispatchTrigger:
 
     POST /repos/{owner}/{repo}/actions/workflows/{workflow}/dispatches with
     ``{"ref": ref}``. On missing token, non-2xx, or network error raises
-    :class:`AdminTriggerFailed` (→ 502 envelope, A01 §3).
+    :class:`AdminTriggerFailed` (→ 502 envelope, A01 §3). A successful dispatch
+    is 204 No Content — no run id, so ``trigger`` returns None and admin polls
+    ``sync_runs``.
     """
 
     async def trigger(self, job: str) -> str | None:
@@ -60,7 +61,6 @@ class WorkflowDispatchTrigger:
                 "수집 트리거가 아직 구성되지 않았습니다 (GITHUB_DISPATCH_TOKEN 미설정)."
             )
         await self._dispatch(job)
-        # workflow_dispatch yields 204 with no run id — admin polls sync_runs.
         return None
 
     async def _dispatch(self, job: str) -> None:

@@ -58,14 +58,16 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
 
     Channels expire after 10 minutes; regions-tree after 24h.
     Requires a matching Cloudflare Cache Rule to take effect.
+
+    Admin console assets are the opposite: never cached at the edge or browser,
+    so a deploy is visible immediately without a Cloudflare purge (assets are
+    tiny).
     """
 
     def __init__(self, app: ASGIApp, prefix: str) -> None:
         super().__init__(app)
         self._channels = f"{prefix}/home/channels"
         self._regions_tree = f"{prefix}/map/regions-tree"
-        # Admin console CSS/JS/logo: never cache at the edge or browser, so a deploy
-        # is visible immediately without a Cloudflare purge (assets are tiny).
         self._admin_assets = "/admin/assets"
 
     async def dispatch(

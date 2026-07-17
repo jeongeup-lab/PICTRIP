@@ -16,7 +16,6 @@ const LABEL: Record<Provider, string> = {
   apple: "Apple로 계속하기",
 };
 
-// Brand colors are the documented exception to the monochrome rule (mockup 03).
 const STYLE: Record<Provider, { bg: string; fg: string; border?: string }> = {
   kakao: { bg: "#FEE500", fg: "#181600" },
   google: { bg: "#FFFFFF", fg: colors.ink, border: colors.line },

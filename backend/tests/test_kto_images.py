@@ -37,14 +37,11 @@ def test_non_kto_untouched() -> None:
 
 
 def test_kto_host_only_as_substring_untouched() -> None:
-    # Real host is example.com; the KTO host merely appears in a query param.
     tricky = "https://example.com/img?u=https://tong.visitkorea.or.kr/x_image2_1.jpg"
     assert hires_kto_image(tricky) == tricky
 
 
 def test_foreign_http_url_with_kto_substring_not_https_promoted() -> None:
-    # Regression: hires must not inherit https_kto_image's old substring match and flip the
-    # outer scheme of a foreign http URL that only mentions the KTO host in a query param.
     tricky = "http://example.com/img?u=http://tong.visitkorea.or.kr/x_image2_1.jpg"
     assert hires_kto_image(tricky) == tricky
     assert https_kto_image(tricky) == tricky

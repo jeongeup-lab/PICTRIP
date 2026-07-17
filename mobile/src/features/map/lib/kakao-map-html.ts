@@ -1,19 +1,8 @@
 import { SEOUL_CITY_HALL } from "@/constants/map";
 
-/** Build the self-contained HTML for the KakaoWebMap WebView. The Kakao JS SDK
- * is loaded with autoload=false and initialized in kakao.maps.load(). Markers
- * are CustomOverlays: ink teardrop pins + a blue current-location dot (the one
- * sanctioned color, S05 §1.2). Bridges via window.ReactNativeWebView.
- *
- * When `interactive` is false the map is locked (no drag/zoom, no
- * center_changed events) so it can live inside a scrolling page (spot detail)
- * without fighting the page scroll. */
 export function buildKakaoMapHtml(jsKey: string, interactive = true, accentDot = false): string {
   const { lat, lng } = SEOUL_CITY_HALL;
   const dotColor = accentDot ? "#03C75A" : "#fff";
-  // 'idle' fires after the map settles from a drag, zoom, OR programmatic
-  // setCenter — so the viewport bbox (sw/ne) is reported on every movement, not
-  // just drags. The bbox drives "이 지역에서 검색" (query what the user sees).
   const gestures = interactive
     ? `kakao.maps.event.addListener(map,'idle',function(){
          var c=map.getCenter(), b=map.getBounds(), sw=b.getSouthWest(), ne=b.getNorthEast();
@@ -42,8 +31,6 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true, accentDot =
 <div id="msg"></div>
 <script>
   var map, pins = [], me = null, lastSpots = [], selectedId = null;
-  // Monochrome category glyphs (white line-icons on the ink pin) — keeps the
-  // sanctioned all-grey palette while letting each marker read as 관광지/음식점/카페/레저/쇼핑.
   var GLYPHS = {
     attraction: '<path d="M3 18l5-8 3 4 3-5 4 9z"/>',
     food: '<path d="M6 3v8M9 3v8M7.5 11v10M16 3c-1.4 0-2 2.2-2 5s.6 4 2 4v9"/>',
@@ -109,16 +96,12 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true, accentDot =
       post('ready');
     }catch(e){ fail('init-failed','지도를 표시할 수 없어요', String(e && e.message || e)); }
   }
-  // Load the SDK dynamically so a domain-rejected / network failure surfaces
-  // (a synchronous <script src> would fail silently → blank map).
   (function(){
     var key = ${JSON.stringify(jsKey)};
     if(!key){ fail('missing-js-key','KAKAO_JS_KEY 미설정 — .env에 EXPO_PUBLIC_KAKAO_JS_KEY 추가 필요'); return; }
     var s = document.createElement('script');
     s.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=' + key + '&autoload=false&libraries=clusterer,services';
     s.onerror = function(){
-      // <script> onerror carries no reason — re-probe with fetch to surface the
-      // HTTP status (or network error) in the RN error overlay.
       fetch(s.src).then(function(r){ fail('sdk-load-failed','지도 SDK를 불러오지 못했어요','HTTP '+r.status); })
         .catch(function(e){ fail('sdk-load-failed','지도 SDK를 불러오지 못했어요',String(e)); });
     };

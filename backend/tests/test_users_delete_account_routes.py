@@ -108,17 +108,16 @@ async def test_delete_anonymizes_unlinks_and_blocks_profile(
         )
     ).first()
     assert row is not None
-    assert row.deleted_at is not None  # soft-deleted
-    assert row.email is None and row.name is None  # PII scrubbed
+    assert row.deleted_at is not None
+    assert row.email is None and row.name is None
 
     providers = (
         await override_db_and_seed.execute(
             text("SELECT count(*) AS n FROM user_auth_providers WHERE user_id = :u"), {"u": uid}
         )
     ).scalar_one()
-    assert providers == 0  # OAuth unlinked
+    assert providers == 0
 
-    # The token still decodes, but the user is now deleted → profile is blocked.
     me = await client.get("/v1/users/me", headers=_auth(uid))
     assert me.status_code == 401
     assert me.json()["error"]["code"] == "AUTH_TOKEN_INVALID"
@@ -129,7 +128,7 @@ async def test_delete_clears_password_and_blocks_email_login(
     client: AsyncClient, override_db_and_seed: AsyncSession
 ) -> None:
     email = f"pw-{uuid.uuid4().hex[:10]}@e.st"
-    password = "correct-horse-battery"  # test fixture, not a real secret
+    password = "correct-horse-battery"
 
     signup = await client.post(
         "/v1/auth/email/signup",
@@ -138,7 +137,6 @@ async def test_delete_clears_password_and_blocks_email_login(
     assert signup.status_code == 201
     uid = signup.json()["data"]["user"]["id"]
 
-    # Sanity: the credential exists and login works before deletion.
     pre = await client.post("/v1/auth/email/login", json={"email": email, "password": password})
     assert pre.status_code == 200
 
@@ -151,10 +149,9 @@ async def test_delete_clears_password_and_blocks_email_login(
         )
     ).first()
     assert row is not None
-    assert row.deleted_at is not None  # soft-deleted
-    assert row.password_hash is None  # credential cleared
+    assert row.deleted_at is not None
+    assert row.password_hash is None
 
-    # The email login can no longer authenticate this account.
     post = await client.post("/v1/auth/email/login", json={"email": email, "password": password})
     assert post.status_code == 401
     assert post.json()["error"]["code"] == "AUTH_INVALID_CREDENTIALS"
@@ -169,7 +166,6 @@ async def test_delete_is_idempotent(
     first = await client.delete("/v1/users/me", headers=_auth(uid))
     assert first.status_code == 204
 
-    # A second call with the same (still-valid-signature) token is a no-op 204.
     second = await client.delete("/v1/users/me", headers=_auth(uid))
     assert second.status_code == 204
 

@@ -105,7 +105,6 @@ describe("handleResponseError (401 refresh-retry interceptor)", () => {
     expect(retry).not.toHaveBeenCalled();
   });
 
-  // spec §7 — quiet guest demotion on invalid/revoked session.
   it("clears the local session and rejects on AUTH_SESSION_REVOKED", async () => {
     const retry = jest.fn();
     const config = makeConfig();

@@ -77,8 +77,6 @@ export default function SpotScreen() {
         />
 
         {isLoading || !data || isPlaceholderData ? (
-          // Seeded hero renders above; body waits for the authoritative KTO row
-          // so the snippet overview never flashes in place of the full text.
           <View style={{ padding: spacing.lg, gap: spacing.md }}>
             <Skeleton height={18} />
             <Skeleton height={18} width="80%" />
@@ -92,9 +90,6 @@ export default function SpotScreen() {
           </>
         )}
 
-        {/* Kept outside the body gate so the nearby fetch starts from the seed's
-            coords in parallel with the detail fetch, not in a waterfall behind
-            it. Self-hides until coords + results exist. */}
         <NearbyRail
           lat={data?.mapy ?? null}
           lng={data?.mapx ?? null}

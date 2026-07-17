@@ -1,6 +1,3 @@
-// Shared helpers for deep-link fallback pages (CF Pages Functions).
-// Files prefixed with _ are not routed.
-
 const API_BASE = "https://api.pictrip.org/v1";
 const APP_STORE = "https://apps.apple.com/app/id6778157312";
 const PLAY_STORE = "https://play.google.com/store/apps/details?id=com.jeongeup.pictrip";
@@ -15,14 +12,12 @@ export function escapeHtml(s) {
     .replaceAll("'", "&#39;");
 }
 
-// Collapse whitespace/newlines and truncate for meta descriptions.
 export function summarize(text, max = 160) {
   if (!text) return "";
   const flat = String(text).replace(/\s+/g, " ").trim();
   return flat.length > max ? flat.slice(0, max - 1).trimEnd() + "…" : flat;
 }
 
-// Fetch a JSend endpoint; return its `data` or null on any failure.
 export async function fetchData(path) {
   try {
     const res = await fetch(`${API_BASE}${path}`, {
@@ -36,7 +31,6 @@ export async function fetchData(path) {
   }
 }
 
-// Full HTML document with Open Graph / Twitter / smart-banner meta.
 export function renderPage({ url, title, description, image, bodyHtml }) {
   const t = escapeHtml(title);
   const d = escapeHtml(description);
@@ -94,7 +88,6 @@ export function htmlResponse(html, status = 200) {
     status,
     headers: {
       "content-type": "text/html; charset=utf-8",
-      // Short edge cache; deep-link previews don't need to be real-time.
       "cache-control": "public, max-age=300",
     },
   });

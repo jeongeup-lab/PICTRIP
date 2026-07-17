@@ -1,4 +1,7 @@
-"""MAP repositories — DB queries; SQLAlchemy lives here."""
+"""MAP repositories — DB queries; SQLAlchemy lives here.
+
+Centroids are runtime AVG of visible spot coordinates. mapx=lng, mapy=lat
+(S07 ERD) — do not swap."""
 
 from __future__ import annotations
 
@@ -9,8 +12,6 @@ from sqlalchemy import text
 
 from app.core.db import AsyncSession
 
-# Centroids are runtime AVG of visible spot coordinates. mapx=lng, mapy=lat
-# (S07 ERD) — do not swap.
 _SIDO_CENTROID_SQL = text(
     "SELECT ldong_regn_cd AS code, AVG(mapx) AS cx, AVG(mapy) AS cy "
     "FROM spots WHERE show_flag = 1 AND ldong_regn_cd IS NOT NULL "

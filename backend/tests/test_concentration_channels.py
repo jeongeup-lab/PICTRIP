@@ -70,7 +70,6 @@ async def test_hit_serves_from_cache_without_db(db_session, seeded) -> None:
     redis = FakeRedis(decode_responses=True)
     await load_concentration_channel_cached(db_session, redis, "hot")
 
-    # Wipe the DB rows: a cache hit must not touch the table.
     await db_session.execute(text("DELETE FROM spot_concentration"))
     await db_session.flush()
 

@@ -58,6 +58,21 @@ async def get_or_create_user_via_provider(
     email: str | None,
     picture: str | None,
 ) -> User:
+    """Resolve or create the account for an OAuth identity (identity key = provider+sub).
+
+    The profile email is non-essential. If it already belongs to another active
+    account it is dropped (storing it would violate the partial-unique
+    idx_users_email_active index and 500). We deliberately do NOT auto-link to
+    that account: emails are unverified, so linking would let an attacker
+    pre-register a victim's email and hijack the victim's later OAuth login
+    (pre-account hijacking).
+
+    A brand-new account always gets a generated random Korean nickname — the
+    provider's name claim is deliberately ignored (returning users keep whatever
+    name they already have). On ``IntegrityError`` the insert is retried: either
+    a concurrent insert won the provider UNIQUE constraint (reselect the winner),
+    or an active-email TOCTOU collision slipped past the pre-check (re-insert
+    without the conflicting profile email)."""
     existing = await find_auth_provider(
         session, provider=provider, provider_user_id=provider_user_id
     )
@@ -66,19 +81,10 @@ async def get_or_create_user_via_provider(
         assert user is not None
         return user
 
-    # The profile email here is non-essential — identity is provider+sub. If it
-    # already belongs to another active account, storing it would violate the
-    # partial-unique active-email index (idx_users_email_active) and 500. Drop it
-    # instead. We deliberately do NOT auto-link to that account: emails are
-    # unverified, so linking would let an attacker pre-register a victim's email
-    # and hijack the victim's later OAuth login (pre-account hijacking).
     user_email = email
     if user_email is not None and await get_active_user_by_email(session, user_email) is not None:
         user_email = None
 
-    # A brand-new account always gets a generated random Korean nickname — the
-    # provider's name claim is deliberately ignored (returning users below keep
-    # whatever name they already have).
     try:
         async with session.begin_nested():
             user = User(email=user_email, name=generate_nickname(), profile_image_url=picture)
@@ -93,15 +99,10 @@ async def get_or_create_user_via_provider(
             )
             await session.flush()
     except IntegrityError:
-        # Either a concurrent insert won the provider UNIQUE constraint, or an
-        # active-email collision slipped past the pre-check above (a TOCTOU race
-        # where the other account committed in between).
         existing = await find_auth_provider(
             session, provider=provider, provider_user_id=provider_user_id
         )
         if existing is None:
-            # Not a provider race → it was the email index. Re-insert without the
-            # conflicting profile email.
             async with session.begin_nested():
                 user = User(email=None, name=generate_nickname(), profile_image_url=picture)
                 session.add(user)

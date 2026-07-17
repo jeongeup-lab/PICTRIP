@@ -10,13 +10,12 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-EMBEDDING_DIM = 512  # CLIP ViT-B/32
+EMBEDDING_DIM = 512
 
 
 class ClipEmbedder:
     """Lazy-loaded CLIP embedder, single model instance per process."""
 
-    # torch/transformers are Any-typed and imported lazily to avoid the cold-start/GPU-install cost.
     _model: Any = None
     _processor: Any = None
     _torch: Any = None
@@ -41,7 +40,10 @@ class ClipEmbedder:
         self._torch = torch
 
     def embed_image(self, image_bytes: bytes) -> list[float]:
-        """Return a 512-dim L2-normalised embedding for the given image bytes."""
+        """Return a 512-dim L2-normalised embedding for the given image bytes.
+
+        transformers <5 returns the features tensor directly; >=5 wraps it in
+        ``ModelOutput.pooler_output`` — both shapes are handled."""
         from PIL import Image
 
         self._ensure_loaded()
@@ -53,7 +55,6 @@ class ClipEmbedder:
 
         with self._torch.no_grad():
             features = self._model.get_image_features(**inputs)
-            # transformers <5 returns the tensor; >=5 wraps it in ModelOutput.pooler_output — handle both.
             if not isinstance(features, self._torch.Tensor):
                 features = features.pooler_output
             features = features / features.norm(dim=-1, keepdim=True)

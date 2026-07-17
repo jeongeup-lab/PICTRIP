@@ -1,7 +1,5 @@
 import { Platform } from "react-native";
 
-/** OAuth client config from EXPO_PUBLIC_* env (placeholders until consoles set up).
- * Apple needs no client id (native bundle id is the audience). */
 export const OAUTH = {
   google: {
     clientId:

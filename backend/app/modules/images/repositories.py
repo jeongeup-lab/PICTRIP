@@ -11,5 +11,4 @@ from app.modules.images.models import SpotEmbedding
 
 def spot_has_embedding_clause(correlate_col: InstrumentedAttribute[str]) -> Exists:
     """EXISTS clause: a spot_embeddings row whose content_id matches the outer column."""
-    # Caller passes the outer column so this file never imports spots' models.
     return exists().where(SpotEmbedding.content_id == correlate_col)

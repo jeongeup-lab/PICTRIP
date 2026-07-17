@@ -13,9 +13,11 @@ from app.core.embedding import EMBEDDING_DIM
 
 
 class SpotEmbedding(Base):
+    """HNSW cosine index: m/ef_construction must match migration 0005 to avoid
+    autogenerate drift."""
+
     __tablename__ = "spot_embeddings"
     __table_args__ = (
-        # HNSW cosine index (ADR-0006); m/ef_construction must match migration 0005 to avoid autogenerate drift.
         Index(
             "idx_spot_embeddings_hnsw",
             "embedding",
@@ -75,6 +77,9 @@ class EmbeddingFailure(Base):
     is otherwise indistinguishable between "pending" and "broken image". The embed
     job upserts a row here on failure (incrementing ``attempts``) and DELETEs it on
     a later success, so ``count(*)`` here = the live failure backlog.
+
+    ``reason`` values: ``download_failed`` (non-200/empty body) | ``clip_error``
+    (decode/inference raised).
     """
 
     __tablename__ = "embedding_failures"
@@ -83,7 +88,6 @@ class EmbeddingFailure(Base):
     content_id: Mapped[str] = mapped_column(
         ForeignKey("spots.content_id", ondelete="CASCADE"), primary_key=True
     )
-    # download_failed (non-200/empty body) | clip_error (decode/inference raised)
     reason: Mapped[str] = mapped_column(String(32), nullable=False)
     attempts: Mapped[int] = mapped_column(Integer, server_default="1", nullable=False)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)

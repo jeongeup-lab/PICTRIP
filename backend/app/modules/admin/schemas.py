@@ -12,7 +12,6 @@ from datetime import date, datetime
 from pydantic import BaseModel
 
 
-# --- GET /admin/api/collection -------------------------------------------------
 class LastRun(BaseModel):
     status: str | None
     finishedAt: datetime | None
@@ -37,7 +36,6 @@ class CollectionStatus(BaseModel):
     nextScheduledAt: datetime | None
 
 
-# --- POST /admin/api/collection/trigger (A01 §3 / ADM-009) --------------------
 class TriggerResult(BaseModel):
     """Result of a collection trigger. ``runId`` is None for workflow_dispatch
     (GitHub returns 204 with no run id; the admin polls sync_runs for status)."""
@@ -47,7 +45,6 @@ class TriggerResult(BaseModel):
     accepted: bool
 
 
-# --- GET /admin/api/embedding -------------------------------------------------
 class EmbeddingRecent(BaseModel):
     """The embedding state of spots from the latest collection run (synced since
     ``since``). ``outstanding`` = target - embedded (still need embedding)."""
@@ -60,25 +57,23 @@ class EmbeddingRecent(BaseModel):
 
 class EmbeddingStatus(BaseModel):
     totalSpots: int
-    withImage: int  # image-bearing spots = the coverage denominator
-    embedded: int  # image-bearing spots that have an embedding
-    missing: int  # withImage - embedded (all-time backlog)
-    failed: int  # spots in embedding_failures (recorded failures)
-    pending: int  # missing - failed (never attempted)
+    withImage: int
+    embedded: int
+    missing: int
+    failed: int
+    pending: int
     failuresByReason: dict[str, int]
     recent: EmbeddingRecent
     lastComputedAt: datetime | None
-    running: bool  # an embed job currently holds the Redis lock
+    running: bool
 
 
-# --- POST /admin/api/embedding/trigger ----------------------------------------
 class EmbeddingTriggerResult(BaseModel):
-    job: str  # "embed-failed" | "embed-missing"
-    scope: str  # "failed" | "missing"
+    job: str
+    scope: str
     accepted: bool
 
 
-# --- GET /admin/api/history?days=N --------------------------------------------
 class HistoryDay(BaseModel):
     date: date
     success: int
@@ -91,7 +86,6 @@ class HistoryList(BaseModel):
     days: list[HistoryDay]
 
 
-# --- GET /admin/api/history/{date} --------------------------------------------
 class HistoryRun(BaseModel):
     id: int
     status: str
@@ -111,7 +105,6 @@ class HistoryDetail(BaseModel):
     runs: list[HistoryRun]
 
 
-# --- GET /admin/api/health ----------------------------------------------------
 class HealthApi(BaseModel):
     version: str
     uptimeSec: int
@@ -145,7 +138,6 @@ class Health(BaseModel):
     users: HealthUsers
 
 
-# --- 게시물(해외 스팟) 숨김 관리 (A7) — scoped write: overseas_spots.is_hidden ---
 class OverseasListItem(BaseModel):
     """One row of the 게시물 관리 table. image_url is a Wikimedia Commons https
     URL already (no KTO http→https upgrade needed)."""

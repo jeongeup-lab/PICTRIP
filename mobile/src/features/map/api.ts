@@ -3,8 +3,6 @@ import type { NearbySpot, RegionLabel } from "@/lib/api-types";
 import type { Bounds } from "@/features/map/lib/geo";
 import type { NearbyCategory } from "@/features/map/lib/nearby-categories";
 
-/** Nearby spots inside the visible map bbox (server sorts by distance asc +
- * caps). 전체 = omit category. api-client unwraps JSend once. */
 export async function getNearby(
   bounds: Bounds,
   category?: NearbyCategory | null,
@@ -20,7 +18,6 @@ export async function getNearby(
   })) as unknown as NearbySpot[];
 }
 
-/** Reverse-geocoded region label for the header (Kakao coord2regioncode). */
 export async function getRegionLabel(lat: number, lng: number): Promise<RegionLabel> {
   return (await api.get("/map/region", { params: { lat, lng } })) as unknown as RegionLabel;
 }

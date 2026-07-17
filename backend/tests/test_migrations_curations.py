@@ -55,8 +55,6 @@ async def test_scope_check_rejects_region_without_region_cd(db_session: AsyncSes
 
 
 async def test_type_check_rejects_unknown_type(db_session: AsyncSession) -> None:
-    # An unknown type fails both ck_curation_type and ck_curation_scope (no scope
-    # branch matches); Postgres may report either — assert the check layer rejects.
     with pytest.raises(IntegrityError, match=r"ck_curation_(type|scope)"):
         await db_session.execute(
             text("INSERT INTO curations (type, slug, title) VALUES ('weird','bad2','x')")

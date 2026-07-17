@@ -19,14 +19,7 @@ interface MapState {
   snap: Snap;
   viewportCenter: LatLng | null;
   viewportBounds: Bounds | null;
-  // The bbox the nearby query fetches. Derived from the anchor center (±RADIUS_M)
-  // on GPS/region anchors, or the real visible rectangle when "이 지역에서 검색".
-  // Frozen at search time: snap/layout changes never re-derive it, so the
-  // fetched result set stays put while the user drags the sheet.
   queryBounds: Bounds | null;
-  // Map view height in px (window minus tab bar) — the denominator of the
-  // visible-fraction clip. Set from the map screen's onLayout; the window
-  // height alone over-clips because the tab bar shortens the map view.
   mapViewH: number;
   lastQueryCenter: LatLng | null;
   selectedSpotId: string | null;
@@ -60,9 +53,6 @@ const initial = {
   selectedSpotId: null,
 };
 
-/** Single source of truth for the map tab. queryBounds drives the nearby fetch
- * (the bbox the user sees); panning only updates viewportCenter/Bounds so the
- * pill can appear without refetching (S05 §1.3-1.4). */
 export const useMapStore = create<MapState>((set, get) => ({
   ...initial,
 
@@ -73,14 +63,7 @@ export const useMapStore = create<MapState>((set, get) => ({
       gpsCoords: gps !== undefined ? gps : s.gpsCoords,
       lastQueryCenter: center,
       viewportCenter: center,
-      // A new anchor is a new search context: close an open spot-detail panel
-      // (e.g. region applied from the header while the panel covered the list).
       selectedSpotId: null,
-      // Pan→search passes the real viewport bbox: clip its south edge to the
-      // sheet top so we never query (and pin) spots the panel hides. GPS/region
-      // anchors get a ±RADIUS_M square around the center — NOT screen-aligned,
-      // so clipping it by a screen fraction would cut a distance band that can
-      // exclude even the anchor itself; query it unclipped.
       queryBounds: bounds
         ? clipBoundsToVisible(bounds, SHEET_SNAP_Y[s.snap], s.mapViewH)
         : bboxFromCenter(center, RADIUS_M),
@@ -107,9 +90,6 @@ export const useMapStore = create<MapState>((set, get) => ({
 
   applyRegion: (centroid) => get().setAnchor(centroid, "region"),
 
-  // Snap changes never touch queryBounds: re-clipping on every drag refetched
-  // a different distance-capped result set, shuffling the list mid-gesture.
-  // The strip a lower snap reveals stays unqueried until the next search.
   setSnap: (snap) => set({ snap }),
   selectSpot: (selectedSpotId) => set({ selectedSpotId }),
 

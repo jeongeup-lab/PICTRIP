@@ -137,8 +137,6 @@ describe("RemoteImage", () => {
     await act(async () => {
       r!.update(<RemoteImage uri="https://example.com/b.jpg" />);
     });
-    // A single error on the new uri must retry (stay mounted), not inherit the
-    // previous uri's exhausted retry count and drop straight to the placeholder.
     await act(async () => {
       images(r!)[0].props.onError();
     });
@@ -170,8 +168,6 @@ describe("RemoteImage", () => {
       r = renderer.create(<RemoteImage uri={KTO_HIRES} />);
     });
     expect(images(r!)[0].props.source.uri).toBe(PROXIED_KTO_HIRES);
-    // Proxy outage escape hatch — the Worker itself already serves the mid-size
-    // when a dead original 404s, so client degrade goes proxy → direct instead.
     await act(async () => {
       images(r!)[0].props.onError();
     });
@@ -213,7 +209,6 @@ describe("RemoteImage", () => {
   });
 
   it("does not degrade a non-KTO url that merely contains _image1_1", async () => {
-    // Foreign host with the same token in its path must keep normal same-uri retry.
     const ext = "https://cdn.example.com/photos/x_image1_1.jpg";
     let r: renderer.ReactTestRenderer;
     await act(async () => {
@@ -222,7 +217,6 @@ describe("RemoteImage", () => {
     await act(async () => {
       images(r!)[0].props.onError();
     });
-    // Retries the same uri (mounted), does NOT rewrite to _image2_1.
     expect(images(r!)).toHaveLength(1);
     await act(async () => {
       jest.advanceTimersByTime(900);
@@ -237,12 +231,10 @@ describe("RemoteImage", () => {
     await act(async () => {
       r = renderer.create(<RemoteImage uri={A_HIRES} />);
     });
-    // A's proxied request errors → degraded to A's direct url.
     await act(async () => {
       images(r!)[0].props.onError();
     });
     expect(images(r!)[0].props.source.uri).toBe(A_HIRES);
-    // Switch to B: its first request must be B's proxied form, not a degraded one.
     await act(async () => {
       r!.update(<RemoteImage uri={B_HIRES} />);
     });
@@ -263,7 +255,6 @@ describe("RemoteImage", () => {
       images(r!)[0].props.onError();
     });
     expect(images(r!)[0].props.source.uri).toBe(KTO_HIRES);
-    // From here the direct url behaves like any uri: retry, retry, then give up.
     await failAllRetries(r!);
     expect(images(r!)).toHaveLength(0);
   });
@@ -386,7 +377,6 @@ describe("RemoteImage", () => {
     await act(async () => {
       r!.update(<RemoteImage uri={A} />);
     });
-    // Back on A: a single error must retry, not reuse A's earlier exhausted count.
     await act(async () => {
       images(r!)[0].props.onError();
     });

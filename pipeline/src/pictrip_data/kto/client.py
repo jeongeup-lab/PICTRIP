@@ -84,7 +84,7 @@ class KtoClient:
             "MobileOS": "ETC",
             "MobileApp": settings.kto_mobile_app,
             "_type": "json",
-            "arrange": "C",  # by modified date
+            "arrange": "C",
             "numOfRows": rows,
             "pageNo": page,
         }

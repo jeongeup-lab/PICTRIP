@@ -14,7 +14,6 @@ export default function ConsentScreen() {
   const { data, isLoading, isError, refetch } = useConsents();
   const update = useUpdateConsent();
 
-  // Focus-local location-permission re-sync (S01 §4; global AppState hook deferred).
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;

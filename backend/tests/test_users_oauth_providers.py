@@ -24,8 +24,6 @@ _GOOGLE_CERTS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 
 @pytest.fixture(autouse=True)
 def _clear_oidc_cache():
-    # Otherwise a cached fake JWKS is served without a fetch, leaving the
-    # httpx_mock response unused (pytest-httpx then errors).
     _jwks_caches.clear()
     yield
     _jwks_caches.clear()
@@ -94,8 +92,6 @@ async def test_google_rejected_when_no_audience_configured(
     otherwise make PyJWT skip audience validation -> token substitution)."""
     priv, _jwks = kakao_signing_key
     monkeypatch.setattr("app.config.settings.GOOGLE_CLIENT_IDS", [])
-    # The token is otherwise perfectly valid (right signature/issuer); only the
-    # missing server-side audience config makes it inadmissible.
     token = _mint_google(priv, aud="some-client", sub="g-99")
     with pytest.raises(OAuthProviderUnavailable):
         await verify_oauth_id_token("google", token, expected_nonce=None)

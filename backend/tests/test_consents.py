@@ -86,7 +86,7 @@ async def test_put_consents_creates_and_echoes(
     assert body["error"] is None
     data = body["data"]
     assert data["locationConsent"] is True
-    assert data["photoConsent"] is False  # default
+    assert data["photoConsent"] is False
     assert data["termsVersion"] == "v1.0"
     assert data["consentedAt"] is not None
 
@@ -121,7 +121,6 @@ async def test_put_consents_is_idempotent_upsert(
     )
     assert first.status_code == 200
 
-    # A second PUT updates the SAME row in place (PK = user_id).
     second = await client.put(
         "/v1/users/me/consents",
         headers=_auth(uid),
@@ -133,7 +132,6 @@ async def test_put_consents_is_idempotent_upsert(
     assert data["photoConsent"] is False
     assert data["termsVersion"] == "v3.0"
 
-    # Exactly one row persists for this user.
     count = (
         await override_db_and_seed.execute(
             text("SELECT count(*) AS n FROM user_consents WHERE user_id = :u"), {"u": uid}

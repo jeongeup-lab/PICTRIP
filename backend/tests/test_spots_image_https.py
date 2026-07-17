@@ -20,12 +20,10 @@ from app.modules.spots.schemas import SpotCard, SpotImageOut
             "http://tong.visitkorea.or.kr/cms/resource/57/3390157_image2_1.jpg",
             "https://tong.visitkorea.or.kr/cms/resource/57/3390157_image2_1.jpg",
         ),
-        # already https — untouched
         (
             "https://tong.visitkorea.or.kr/cms/resource/56/4066656_image2_1.jpg",
             "https://tong.visitkorea.or.kr/cms/resource/56/4066656_image2_1.jpg",
         ),
-        # non-KTO http host — left as-is (don't silently rewrite arbitrary URLs)
         ("http://example.com/x.jpg", "http://example.com/x.jpg"),
         (None, None),
     ],

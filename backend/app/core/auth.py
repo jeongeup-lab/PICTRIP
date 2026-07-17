@@ -29,7 +29,6 @@ logger = get_logger(__name__)
 if TYPE_CHECKING:
     from app.modules.users.schemas import TokenPair, UserPublic
 
-# `users.schemas` is imported lazily inside mint functions to break an import cycle.
 
 _DEV_HS256_SECRET = "pictrip-local-dev-only-not-for-prod"
 
@@ -134,7 +133,7 @@ async def refresh_tokens(redis: Redis, refresh_token: str) -> TokenPair:
         raise AuthTokenInvalid()
     try:
         denied = await redis.exists(f"denyjti:{jti}")
-    except Exception:  # Redis blip -> fail-open (S08); alarm so it isn't silent
+    except Exception:
         logger.warning("denylist_check_failed_fail_open", jti=jti)
         denied = 0
     if denied:
@@ -142,7 +141,7 @@ async def refresh_tokens(redis: Redis, refresh_token: str) -> TokenPair:
 
     uid = int(payload["sub"])
     access = create_access_token(user_id=uid)
-    refresh = create_refresh_token(user_id=uid, jti=jti)  # same jti, new exp
+    refresh = create_refresh_token(user_id=uid, jti=jti)
     return TokenPair(
         accessToken=access,
         refreshToken=refresh,
@@ -165,5 +164,5 @@ async def deny_refresh(redis: Redis, refresh_token: str | None) -> None:
     ttl = max(1, int(payload["exp"]) - int(time.time()))
     try:
         await redis.set(f"denyjti:{jti}", "1", ex=ttl)
-    except Exception:  # best-effort: a Redis OOM/blip must not make logout a 500
+    except Exception:
         logger.warning("denylist_write_failed", jti=jti)

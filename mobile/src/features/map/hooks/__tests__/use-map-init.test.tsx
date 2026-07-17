@@ -13,7 +13,6 @@ jest.mock("@/features/map/usecases/request-location", () => ({
 
 const gps = { lat: 35.1, lng: 129.0 };
 
-/** Renders the hook and exposes its return through a ref-like callback. */
 function Harness({ onReady }: { onReady: (api: UseMapInit) => void }) {
   const api = useMapInit();
   onReady(api);
@@ -32,7 +31,6 @@ async function mount(): Promise<{ api: () => UseMapInit; tree: () => string }> {
 describe("useMapInit", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
-    // reset() may re-render a tree still mounted from a prior test; wrap in act.
     await act(async () => {
       useMapStore.getState().reset();
     });
@@ -64,7 +62,6 @@ describe("useMapInit", () => {
   });
 
   it("re-entry short-circuits to ready BEFORE calling getPermissionStatus", async () => {
-    // Simulate a surviving store from a previous mount.
     await act(async () => {
       useMapStore.getState().setAnchor(gps, "gps", gps);
     });
@@ -74,20 +71,17 @@ describe("useMapInit", () => {
     expect(loc.getCurrentCoords).not.toHaveBeenCalled();
   });
 
-  // Regression (a9cfe09): the re-entry short-circuit skipped the GPS branch
-  // entirely, so a center without gpsCoords (skip/aborted fix) left the blue
-  // dot missing forever — even after granting permission in Settings.
   it("re-entry with center but no gpsCoords backfills the dot without moving the map", async () => {
     (loc.getPermissionStatus as jest.Mock).mockResolvedValue("granted");
     (loc.getCurrentCoords as jest.Mock).mockResolvedValue(gps);
     await act(async () => {
-      useMapStore.getState().setAnchor(SEOUL_CITY_HALL, "pan", null); // skipToSeoul leftover
+      useMapStore.getState().setAnchor(SEOUL_CITY_HALL, "pan", null);
     });
     const { api } = await mount();
     expect(api().perm).toBe("ready");
     const st = useMapStore.getState();
-    expect(st.gpsCoords).toEqual(gps); // blue dot backfilled
-    expect(st.center).toEqual(SEOUL_CITY_HALL); // map not recentered
+    expect(st.gpsCoords).toEqual(gps);
+    expect(st.center).toEqual(SEOUL_CITY_HALL);
     expect(st.anchorSource).toBe("pan");
   });
 
@@ -97,7 +91,7 @@ describe("useMapInit", () => {
       useMapStore.getState().setAnchor(SEOUL_CITY_HALL, "pan", null);
     });
     const { api } = await mount();
-    expect(api().perm).toBe("ready"); // Seoul fallback keeps working
+    expect(api().perm).toBe("ready");
     expect(loc.getCurrentCoords).not.toHaveBeenCalled();
     expect(useMapStore.getState().gpsCoords).toBeNull();
   });

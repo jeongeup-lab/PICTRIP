@@ -52,13 +52,8 @@ from app.modules.images import services as image_services
 _SOURCE_NAME = "국문 관광정보 서비스"
 _SOURCE_ENDPOINT = "areaBasedSyncList2"
 
-# Fixed admin actor (A04 single Basic user); no role/user table exists (out of scope).
 _ADMIN_ACTOR = "admin"
 
-# Re-embed trigger: a Redis lock doubles as the "running" flag for the status card
-# and the concurrency guard for the button (SET NX). TTL auto-releases a crashed
-# job. The "missing" (full-backlog) scope is capped so a background run never pins
-# the serving process — larger backlogs go through scripts.backfill_embeddings.
 _EMBED_TRIGGER_MAX = 2000
 
 _logger = get_logger(__name__)
@@ -74,7 +69,6 @@ async def get_collection_status(session: AsyncSession) -> CollectionStatus:
         last_run = LastRun(
             status=row.status,
             finishedAt=row.finished_at,
-            # ranAt = finished_at when present, else started_at (A01 §2.1).
             ranAt=row.finished_at or row.started_at,
             apiCalls=row.api_calls,
             inserted=row.inserted,
@@ -91,12 +85,10 @@ async def get_collection_status(session: AsyncSession) -> CollectionStatus:
             endpoint=_SOURCE_ENDPOINT,
             lastRun=last_run,
         ),
-        # Honest null: no scheduler metadata is wired yet (A01 §2.1 allows it).
         nextScheduledAt=None,
     )
 
 
-# --- embedding status + re-embed trigger (collection/embedding are separate) ---
 async def get_embedding_status(session: AsyncSession, redis: Redis) -> EmbeddingStatus:
     """Coverage + failure backlog + "this collection" progress (A01-extension).
 
@@ -104,6 +96,9 @@ async def get_embedding_status(session: AsyncSession, redis: Redis) -> Embedding
     ``spot_embeddings`` row. ``embedding_failures`` makes "failed" distinguishable
     from "not yet attempted". The "recent" view scopes to the latest sync run's
     start so the operator sees whether today's newly-collected spots are embedded.
+    ``sync_runs`` is pipeline-owned and always present in prod; the read is
+    guarded defensively so a DB that has never been synced degrades to a null
+    window instead of 500ing.
     """
     totals = await repo.embedding_totals(session)
     reasons = {r.reason: r.n for r in await repo.embedding_failures_by_reason(session)}
@@ -113,9 +108,6 @@ async def get_embedding_status(session: AsyncSession, redis: Redis) -> Embedding
     embedded = with_image - missing
     failed = totals.failed
 
-    # Scope "this collection" to the latest sync run's start. sync_runs is
-    # pipeline-owned and always present in prod; guard defensively so a DB that
-    # has never been synced degrades to a null window instead of 500ing.
     since = None
     recent_target = recent_embedded = 0
     try:
@@ -161,7 +153,10 @@ async def trigger_embedding(
     ``scope='failed'`` retries only spots in ``embedding_failures``; ``'missing'``
     processes the (capped) all-time backlog. A Redis ``SET NX`` lock rejects a
     second concurrent trigger and marks the status card "running"; the background
-    task releases it on completion. The write itself goes through
+    task releases it on completion and the lock TTL auto-releases a crashed job.
+    The "missing" scope is capped (``_EMBED_TRIGGER_MAX``) so a background run
+    never pins the serving process — larger backlogs go through
+    ``scripts.backfill_embeddings``. The write itself goes through
     :mod:`app.modules.images.services` (cross-module via services, never models).
     """
     if scope not in ("failed", "missing"):
@@ -191,7 +186,7 @@ async def _run_embed_job(
     try:
         await invalidate_all_match_cache(redis)
         await image_services.run_embedding_job(only_failed=only_failed, limit=limit)
-    except Exception:  # never let a background failure leave the lock dangling
+    except Exception:
         _logger.exception("embed.job.error")
     finally:
         await invalidate_all_match_cache(redis)
@@ -269,8 +264,12 @@ def _pool_stats() -> tuple[int, int]:
 
 
 async def get_health(session: AsyncSession) -> Health:
+    """Component health card. When the DB is down — the page exists precisely to
+    show this — the DB-touching aggregates are skipped and reported as zeros so
+    the endpoint degrades to ``db.ok=false`` instead of 500ing. Pool stats read
+    the live engine pool, not the DB."""
     db_ok = await repo.db_ping(session)
-    in_use, pool_size = _pool_stats()  # reads the engine pool, not the DB
+    in_use, pool_size = _pool_stats()
 
     if db_ok:
         spots = await repo.count_spots(session)
@@ -283,22 +282,17 @@ async def get_health(session: AsyncSession) -> Health:
             kakao=users_row.kakao,
         )
     else:
-        # DB is down — the health page exists precisely to show this. Skip the
-        # DB-touching aggregates (they would raise → 500) and report zeros so the
-        # endpoint degrades to db.ok=false instead of 500ing (A01 §2.3/§3).
         spots = 0
         users = HealthUsers(total=0, active=0, new7d=0, deleted30d=0, kakao=0)
 
     return Health(
         api=HealthApi(version=API_VERSION, uptimeSec=uptime_seconds(), p95Ms=None),
         db=HealthDb(ok=db_ok, poolInUse=in_use, poolSize=pool_size, spots=spots),
-        # Tunnel health check deferred (A01 §2.3) → honest nulls.
         tunnel=HealthTunnel(ok=None, detail=None),
         users=users,
     )
 
 
-# --- collection trigger (A01 §3/§5 Phase 2 / ADM-009·010) ---------------------
 async def trigger_collection(
     session: AsyncSession,
     actor: str = _ADMIN_ACTOR,
@@ -310,14 +304,13 @@ async def trigger_collection(
 
     CONCURRENCY (my decision; A7 left it open): if the latest sync_run is still
     ``running`` we REJECT (the button must not double-fire) before touching the
-    adapter, so a stuck/in-flight run can't be stampeded.
+    adapter, so a stuck/in-flight run can't be stampeded. This app-level guard is
+    best-effort — there is a TOCTOU window between the read and the
+    workflow_dispatch. The AUTHORITATIVE guard against double-runs is the GitHub
+    Actions ``concurrency.group: pipeline-sync`` in
+    ``.github/workflows/pipeline-sync.yml``, which serialises at the CI layer.
     """
     latest = await repo.latest_sync_run(session)
-    # App-level guard — best-effort. There is a TOCTOU window between this read
-    # and the workflow_dispatch below (two requests can race through). The
-    # AUTHORITATIVE guard against double-runs is the GitHub Actions
-    # ``concurrency.group: pipeline-sync`` in
-    # ``.github/workflows/pipeline-sync.yml`` — that serialises at the CI layer.
     if latest is not None and latest.status == "running":
         _audit_trigger(actor, accepted=False, ref=None, reason="already-running")
         raise AdminTriggerFailed("이미 수집이 진행 중입니다.")
@@ -325,9 +318,6 @@ async def trigger_collection(
     try:
         ref = await get_collection_trigger().trigger("sync-daily")
     except AdminTriggerFailed:
-        # Distinguish the two failure modes in the audit so operators can tell
-        # a misconfiguration from a live GitHub error without reading the message.
-        # Token check mirrors WorkflowDispatchTrigger.trigger() — no token value logged.
         audit_reason = "not-configured" if not settings.GITHUB_DISPATCH_TOKEN else "github-error"
         _audit_trigger(actor, accepted=False, ref=None, reason=audit_reason)
         raise
@@ -337,8 +327,11 @@ async def trigger_collection(
 
 
 def _audit_trigger(actor: str, *, accepted: bool, ref: str | None, reason: str | None) -> None:
-    # ADM-010 audit: one structured log line per trigger call via app.core.logging.
-    # No audit table — the structured line is the record (actor · action · job · result · ref).
+    """ADM-010 audit: one structured log line per trigger call — no audit table,
+    the line is the record (actor · action · job · result · ref). ``reason``
+    distinguishes a misconfiguration (not-configured) from a live GitHub error
+    so operators can tell without reading the message; the token value is never
+    logged."""
     _logger.info(
         "collection.trigger",
         actor=actor,
@@ -348,12 +341,6 @@ def _audit_trigger(actor: str, *, accepted: bool, ref: str | None, reason: str |
         ref=ref,
         reason=reason,
     )
-
-
-# --- 게시물(해외 스팟) 숨김 관리 (A7) — admin's scoped-write surface -----------
-# Only overseas_spots.is_hidden is written here (CLAUDE.md grant). Hiding a spot
-# is exactly the filter /v1/feed applies, so the toggle removes it from the app
-# feed. One structured audit line per toggle.
 
 
 async def list_overseas(
@@ -389,6 +376,10 @@ async def set_overseas_visibility(
     hidden: bool,
     actor: str = _ADMIN_ACTOR,
 ) -> OverseasVisibility:
+    """admin's scoped-write surface: only ``overseas_spots.is_hidden`` is written
+    (CLAUDE.md grant). Hiding a spot is exactly the filter ``/v1/feed`` applies,
+    so the toggle removes it from the app feed. One structured audit line per
+    toggle."""
     found = await repo.set_overseas_hidden(session, overseas_id, hidden)
     if not found:
         raise AdminOverseasNotFound

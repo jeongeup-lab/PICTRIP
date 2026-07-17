@@ -15,7 +15,8 @@ image is embedded). This module:
   client, used by the background trigger and the CLI.
 
 Image bytes are processed in memory and never persisted (only the vector is
-stored) — per the KTO image prohibition.
+stored) — per the KTO image prohibition. CLIP is a single CPU model instance,
+so inference is serialised behind a lock and only downloads run in parallel.
 """
 
 from __future__ import annotations
@@ -36,10 +37,8 @@ from app.modules.images.models import EmbeddingFailure, SpotEmbedding
 
 logger = get_logger(__name__)
 
-# CLIP is a single CPU model instance — serialise inference; parallelise only downloads.
 _embed_lock = asyncio.Lock()
 
-# Status codes returned by _embed_one / used as embedding_failures.reason.
 OK = "ok"
 DOWNLOAD_FAILED = "download_failed"
 CLIP_ERROR = "clip_error"
@@ -125,7 +124,7 @@ async def _embed_one(
         async with _embed_lock:
             vector = await asyncio.to_thread(embedder.embed_image, resp.content)
         return (content_id, image_url, vector, OK, None)
-    except Exception as exc:  # one bad image must not abort the run
+    except Exception as exc:
         logger.warning("embed.failed", content_id=content_id, error=str(exc))
         return (content_id, image_url, None, CLIP_ERROR, str(exc)[:500])
 
@@ -146,7 +145,6 @@ async def _record_success(
         )
     )
     await session.execute(stmt)
-    # Clear any prior failure record — this spot is now embedded.
     await session.execute(delete(EmbeddingFailure).where(EmbeddingFailure.content_id == content_id))
     return True
 

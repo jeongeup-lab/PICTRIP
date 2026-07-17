@@ -13,15 +13,15 @@ from app.modules.spots.services import NearbyCategory, derive_category
         ("HS", None, None, "attraction"),
         ("NA", None, None, "attraction"),
         ("EX", None, None, "attraction"),
-        ("VE", "VE01", None, "attraction"),  # not an excluded code
-        ("VE", "VE06", None, None),  # VE06~VE11 excluded
+        ("VE", "VE01", None, "attraction"),
+        ("VE", "VE06", None, None),
         ("FD", "FD01", "FD010100", "food"),
-        ("FD", "FD03", "FD030100", "cafe"),  # bakery FD030100 → cafe, takes priority over food
+        ("FD", "FD03", "FD030100", "cafe"),
         ("FD", "FD05", "FD050100", "cafe"),
         ("LS", "LS01", None, "leisure"),
         ("SH", "SH01", None, "shopping"),
-        ("SH", "SH04", None, None),  # duty-free excluded
-        ("XX", None, None, None),  # unclassified
+        ("SH", "SH04", None, None),
+        ("XX", None, None, None),
     ],
 )
 def test_derive_category(l1, l2, l3, expected):

@@ -2,7 +2,6 @@ import renderer, { act } from "react-test-renderer";
 import { StyleSheet } from "react-native";
 import Onboarding from "@/app/onboarding";
 
-// iPhone Dynamic Island top inset — the regression device class.
 const INSET_TOP = 59;
 
 jest.mock("react-native-safe-area-context", () => {
@@ -28,7 +27,6 @@ describe("Onboarding skip button", () => {
       tree = renderer.create(<Onboarding />);
     });
 
-    // Walk up from the label to the absolutely-positioned Pressable wrapper.
     const label = tree!.root.find(
       (n) =>
         typeof n.type === "string" &&

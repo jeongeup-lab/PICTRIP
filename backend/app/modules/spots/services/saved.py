@@ -15,8 +15,6 @@ from app.core.exceptions import ResourceNotFound, ValidationFailed
 from app.modules.spots.models import LclsSystmCode, Spot, UserSavedSpot
 from app.modules.spots.services.rows import SpotCardRow
 
-# Opaque keyset cursor on (saved_at, content_id) DESC, base64-encoded. The pair
-# is unique (content_id is the PK tail) so the sort is total and resume is exact.
 _CURSOR_SEP = "\x1f"
 
 
@@ -91,7 +89,6 @@ async def list_saved_spots(
     )
     if cursor is not None:
         c_saved_at, c_content_id = decode_saved_cursor(cursor)
-        # Strictly after the cursor in DESC order: older saved_at, or equal with smaller content_id.
         stmt = stmt.where(
             or_(
                 UserSavedSpot.saved_at < c_saved_at,

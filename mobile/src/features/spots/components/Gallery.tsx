@@ -11,11 +11,7 @@ interface GalleryProps {
 
 const MAX_THUMBS = 3;
 
-/** Hero gallery: up to three 64px thumbnails + a "+N" glass tile for the rest.
- * Tapping anywhere opens the fullscreen PhotoViewer. */
 export function Gallery({ images, firstImageUrl, onViewAll }: GalleryProps) {
-  // Thumbnails are 64px — load the small variant, not the full-res origin.
-  // PhotoViewer uses origin for fullscreen.
   const uris =
     images.length > 0
       ? images.map((img) => img.smallImageUrl ?? img.originImageUrl)

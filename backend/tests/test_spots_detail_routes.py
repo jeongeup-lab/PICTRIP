@@ -130,14 +130,12 @@ async def test_detail_404_for_unknown(client: AsyncClient) -> None:
 async def test_detail_route_exposes_intro_and_category(
     client: AsyncClient, override_db_and_seed: AsyncSession
 ) -> None:
-    # Re-override KTO so detailIntro2 returns a usetime intro.
     app.dependency_overrides[get_kto] = lambda: FakeKto(
         [{"overview": "상세 설명", "homepage": "<a>hp</a>", "tel": "02-1"}],
         [{"originimgurl": "http://kto/1.jpg", "smallimageurl": "http://kto/1s.jpg"}],
         [{"usetime": "09:30~17:30"}],
     )
 
-    # Seed a spot whose lcls_systm3 maps to '사적지'.
     await override_db_and_seed.execute(
         text(
             "INSERT INTO lcls_systm_codes "

@@ -24,7 +24,6 @@ from app.core.db import get_db
 from app.core.redis import get_redis
 from app.main import app
 
-# Seeded by migration 0016.
 _USERNAME = "admin"
 _PASSWORD = "admin"
 
@@ -80,7 +79,7 @@ async def test_login_success_then_page_served(client: AsyncClient) -> None:
     assert login.status_code == 303
     assert login.headers["location"].endswith("/admin")
 
-    page = await client.get("/admin")  # cookie carried by the client
+    page = await client.get("/admin")
     assert page.status_code == 200
     assert page.headers["content-type"].startswith("text/html")
     assert page.headers["x-frame-options"] == "DENY"
@@ -92,7 +91,6 @@ async def test_login_bad_credentials_bounce_back(client: AsyncClient, user: str,
     resp = await _login(client, user, pw)
     assert resp.status_code == 303
     assert resp.headers["location"].endswith("/admin/login?error=1")
-    # still logged out
     page = await client.get("/admin")
     assert page.status_code == 303
     assert page.headers["location"].endswith("/admin/login")
@@ -124,7 +122,7 @@ async def test_no_admin_row_rejects_login(client: AsyncClient, db_session: Async
 async def test_login_rate_limited_after_threshold(client: AsyncClient) -> None:
     """5/min/IP — the 6th attempt is throttled regardless of credentials."""
     statuses = [(await _login(client, _USERNAME, "wrong")).status_code for _ in range(6)]
-    assert statuses[:5] == [303] * 5  # under the limit: handler runs (bounce back)
+    assert statuses[:5] == [303] * 5
     assert statuses[5] == 429
     over = await _login(client, _USERNAME, "wrong")
     assert over.status_code == 429

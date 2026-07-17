@@ -22,14 +22,9 @@ from app.core.db import get_db
 from app.main import app
 from app.modules.admin.security import require_admin
 
-# DB-backed admin auth: migration 0016 seeds admin/admin into the test DB
-# (alembic upgrade head runs before pytest in CI), so requests authenticate with
-# this fixed credential — no settings monkeypatch.
 _PASSWORD = "admin"
 _AUTH = ("admin", _PASSWORD)
 
-# Measured sync_runs schema (A01 §0). Created per-test so the suite is self-
-# contained on a DB that pipeline/ has never touched.
 _CREATE_SYNC_RUNS = """
 CREATE TABLE IF NOT EXISTS sync_runs (
     id            bigserial PRIMARY KEY,
@@ -99,22 +94,13 @@ def admin_password() -> str:
 
 @pytest.fixture
 async def seed(db_session: AsyncSession) -> None:
-    # sync_runs (foreign/pipeline-owned) created in-transaction.
     await db_session.execute(text(_CREATE_SYNC_RUNS))
 
-    # Insert oldest → newest so the serial id ascends with recency (as the daily
-    # pipeline does). The last-inserted row (today's success) is therefore the
-    # highest id, which is exactly what /collection's "ORDER BY id DESC" lastRun
-    # must surface (A01 §2.1).
-    #
-    # 3 days ago: one error (inside a 7d window, outside a 2d window).
     await _insert_run(db_session, started_offset_days=3, status="error")
-    # Yesterday: success + running (unfinished).
     await _insert_run(db_session, started_offset_days=1, status="success")
     await _insert_run(
         db_session, started_offset_days=1, status="running", finished=False, duration_sec=None
     )
-    # Today: error then the latest success run (highest id → drives lastRun).
     await _insert_run(db_session, started_offset_days=0, status="error", api_calls=5, error="boom")
     await _insert_run(
         db_session,
@@ -127,7 +113,6 @@ async def seed(db_session: AsyncSession) -> None:
         duration_sec=63.0,
     )
 
-    # spots — totalSpots / health.db.spots = 4.
     for i in range(4):
         await db_session.execute(
             text(
@@ -137,8 +122,6 @@ async def seed(db_session: AsyncSession) -> None:
             {"cid": f"sp-{i}", "t": f"spot-{i}"},
         )
 
-    # users — total=4, active(deleted_at IS NULL)=3, new7d=2 (created recently),
-    # deleted30d=1, kakao=2.
     await db_session.execute(
         text(
             "INSERT INTO users (id, created_at, deleted_at) VALUES "
@@ -162,7 +145,6 @@ def _override(db_session: AsyncSession) -> None:
     app.dependency_overrides[require_admin] = lambda: "admin"
 
 
-# --- auth gate ----------------------------------------------------------------
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "path",
@@ -174,12 +156,11 @@ def _override(db_session: AsyncSession) -> None:
     ],
 )
 async def test_api_requires_auth(client: AsyncClient, admin_password: str, path: str) -> None:
-    resp = await client.get(path)  # no credentials
+    resp = await client.get(path)
     assert resp.status_code == 401
     assert resp.json()["error"]["code"] == "ADMIN_UNAUTHORIZED"
 
 
-# --- /admin/api/collection ----------------------------------------------------
 @pytest.mark.asyncio
 async def test_collection_status(
     db_session: AsyncSession, client: AsyncClient, admin_password: str, seed: None
@@ -198,7 +179,6 @@ async def test_collection_status(
     assert data["nextScheduledAt"] is None
 
     last = data["source"]["lastRun"]
-    # Highest-id row = today's success run with the bumped counters.
     assert last["status"] == "success"
     assert last["apiCalls"] == 11
     assert last["inserted"] == 7
@@ -206,8 +186,7 @@ async def test_collection_status(
     assert last["softDeleted"] == 2
     assert last["durationSec"] == 63.0
     assert last["finishedAt"] is not None
-    assert last["ranAt"] is not None  # = finishedAt here
-    # camelCase contract — no snake_case leaks.
+    assert last["ranAt"] is not None
     assert set(last.keys()) == {
         "status",
         "finishedAt",
@@ -220,7 +199,6 @@ async def test_collection_status(
     }
 
 
-# --- /admin/api/history -------------------------------------------------------
 @pytest.mark.asyncio
 async def test_history_grouping_7d(
     db_session: AsyncSession, client: AsyncClient, admin_password: str, seed: None
@@ -233,18 +211,14 @@ async def test_history_grouping_7d(
 
     assert resp.status_code == 200
     days = resp.json()["data"]["days"]
-    # 3 distinct days seeded within 7d (today, -1, -3).
     assert len(days) == 3
     by_runs = {d["date"]: d for d in days}
-    # most-recent-first ordering
     assert days[0]["date"] >= days[1]["date"] >= days[2]["date"]
-    # today: 1 success + 1 error
     today = days[0]
     assert today["success"] == 1
     assert today["error"] == 1
     assert today["running"] == 0
     assert today["runs"] == 2
-    # the -1 day has a running run
     running_day = next(d for d in days if d["running"] == 1)
     assert running_day["success"] == 1
     assert running_day["runs"] == 2
@@ -287,16 +261,13 @@ async def test_history_window_2d_excludes_old(
         app.dependency_overrides.clear()
 
     days = resp.json()["data"]["days"]
-    # days=2 → today + yesterday only; the -3d error row is excluded.
     assert len(days) == 2
 
 
-# --- /admin/api/history/{date} ------------------------------------------------
 @pytest.mark.asyncio
 async def test_history_detail_today(
     db_session: AsyncSession, client: AsyncClient, admin_password: str, seed: None
 ) -> None:
-    # resolve "today" via the DB to avoid TZ skew between Python and Postgres.
     today = (await db_session.execute(text("SELECT CURRENT_DATE"))).scalar_one()
     _override(db_session)
     try:
@@ -340,7 +311,6 @@ async def test_history_detail_unknown_date_404(
     assert resp.json()["error"]["code"] == "ADMIN_HISTORY_NOT_FOUND"
 
 
-# --- /admin/api/health --------------------------------------------------------
 @pytest.mark.asyncio
 async def test_health(
     db_session: AsyncSession, client: AsyncClient, admin_password: str, seed: None
@@ -359,7 +329,7 @@ async def test_health(
     assert isinstance(data["db"]["poolSize"], int)
     assert isinstance(data["db"]["poolInUse"], int)
 
-    assert data["api"]["version"]  # present, non-empty
+    assert data["api"]["version"]
     assert isinstance(data["api"]["uptimeSec"], int)
     assert data["api"]["p95Ms"] is None
 

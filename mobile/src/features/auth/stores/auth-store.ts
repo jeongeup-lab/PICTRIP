@@ -62,10 +62,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   clear: async () => {
     await clearRefreshToken();
     set({ accessToken: null, user: null, isAuthenticated: false });
-    // Evict the previous user's saved/scrap list so a different user (or guest)
-    // never sees stale cached data. Key inlined (not imported from
-    // saved/queries) to avoid the auth-store ↔ saved/queries import cycle —
-    // MUST stay in sync with savedKeys.list (["saved"]).
     queryClient.removeQueries({ queryKey: ["saved"] });
   },
 
@@ -74,9 +70,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!refreshToken) return;
     try {
       await get().refresh();
-    } catch {
-      // quiet guest demotion — no toast, no retry (S1)
-    }
+    } catch {}
   },
 
   loginWithOAuth: async (provider) => {
@@ -84,7 +78,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (outcome === "canceled") return "canceled";
     const pair = await oauthLogin(provider, outcome.idToken, outcome.nonce);
     await get().setSession(pair);
-    // Consent is best-effort — never block login on it (S01 §3).
     void recordConsentSnapshot().catch(() => undefined);
     return "success";
   },
@@ -92,14 +85,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loginWithEmail: async (email, password) => {
     const pair = await emailLogin(email, password);
     await get().setSession(pair);
-    // Consent is best-effort — never block login on it (S01 §3).
     void recordConsentSnapshot().catch(() => undefined);
   },
 
   signupWithEmail: async (email, password, name) => {
     const pair = await emailSignup(email, password, name);
     await get().setSession(pair);
-    // Consent is best-effort — never block signup on it (S01 §3).
     void recordConsentSnapshot().catch(() => undefined);
   },
 
@@ -107,9 +98,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const refreshToken = await getRefreshToken();
     try {
       await logoutRequest(refreshToken);
-    } catch {
-      // Logout is local-authoritative; server denylist is best-effort.
-    }
+    } catch {}
     await get().clear();
   },
 
@@ -127,14 +116,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       isOnboarded: true,
       createdAt: null,
     };
-    // __DEV__ smoke only — no backend call, no refresh persisted.
     set({ accessToken: "dev-access-token", user, isAuthenticated: true });
   },
 }));
 
-// api-client (lib) reads the session through this seam instead of importing
-// the auth feature — registered at module init (the entry route imports this
-// store before any authed request fires).
 registerAuthSession({
   getAccessToken: () => useAuthStore.getState().accessToken,
   refresh: () => useAuthStore.getState().refresh(),

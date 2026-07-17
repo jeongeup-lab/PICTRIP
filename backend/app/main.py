@@ -61,6 +61,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
+    """Assemble the app. Middleware order matters (outermost added first). The
+    ``/admin/assets`` mount is PUBLIC/unauthenticated — it must contain only
+    non-sensitive CSS/JS (no data, no secrets, no source maps), as it is served
+    without the AdminAuth gate."""
     app = FastAPI(
         title="PicTrip API",
         version=API_VERSION,
@@ -71,7 +75,6 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Middleware order matters: outermost added first.
     if settings.TRUSTED_HOSTS and settings.TRUSTED_HOSTS != ["*"]:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.TRUSTED_HOSTS)
 
@@ -86,7 +89,6 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(TraceIdMiddleware)
     app.add_middleware(CacheControlMiddleware, prefix=settings.API_V1_PREFIX)
-    # Signed-cookie session for the /admin console login (replaces HTTP Basic).
     app.add_middleware(
         SessionMiddleware,
         secret_key=settings.ADMIN_SESSION_SECRET,
@@ -98,23 +100,18 @@ def create_app() -> FastAPI:
 
     register_error_handlers(app)
 
-    # Liveness probe lives outside /v1.
     @app.get("/health", include_in_schema=False)
     async def health() -> dict[str, Any]:
         return ok({"status": "ok"})
 
-    # --- Admin console (outside /v1 — internal ops surface; A01 §1.2) ---
     app.include_router(admin_router, prefix="/admin")
     admin_assets = Path(__file__).parent / "modules" / "admin" / "static" / "assets"
-    # PUBLIC/unauthenticated mount: must contain ONLY non-sensitive CSS/JS
-    # (no data, no secrets, no source maps) — it is served without the AdminAuth gate.
     app.mount(
         "/admin/assets",
         StaticFiles(directory=admin_assets),
         name="admin-assets",
     )
 
-    # --- Routers under /v1 ---
     prefix = settings.API_V1_PREFIX
     app.include_router(users_router, prefix=prefix)
     app.include_router(spots_router, prefix=prefix)

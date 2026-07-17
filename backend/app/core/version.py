@@ -12,7 +12,6 @@ import time
 
 API_VERSION = "1.0.0-dev"
 
-# Captured at import (≈ app boot). monotonic() is immune to wall-clock jumps.
 _STARTED_MONOTONIC = time.monotonic()
 
 

@@ -38,19 +38,6 @@ export async function setSeenChannelsRaw(value: string): Promise<void> {
   await SecureStore.setItemAsync(SEEN_CHANNELS_KEY, value);
 }
 
-/**
- * iOS keychain entries survive an app uninstall, so the secure-store
- * `onboarding_seen` flag would otherwise persist across a fresh reinstall and
- * the onboarding flow would never appear again (the reported "온보딩이 사라짐"
- * symptom). The app's document directory IS wiped on uninstall, so we keep a
- * marker file there to detect a fresh install: if the marker is absent this is
- * a new install — clear the stale onboarding flag, then drop the marker so
- * later launches within the same install skip the reset. Everything is wrapped
- * so any FileSystem failure silently falls back to the prior behavior and never
- * blocks boot. The refresh token is cleared too: the keychain entry also
- * survives uninstall, so a reinstaller would otherwise be silently hydrated into
- * the previous install's session.
- */
 export async function ensureFreshInstall(): Promise<void> {
   try {
     const marker = new File(Paths.document, INSTALL_MARKER);
@@ -58,11 +45,7 @@ export async function ensureFreshInstall(): Promise<void> {
     try {
       await SecureStore.deleteItemAsync(ONBOARDING_KEY);
       await clearRefreshToken();
-    } catch {
-      // Leave the entries as-is if they can't be cleared.
-    }
+    } catch {}
     marker.create();
-  } catch {
-    // FileSystem unavailable — fall back to existing behavior.
-  }
+  } catch {}
 }

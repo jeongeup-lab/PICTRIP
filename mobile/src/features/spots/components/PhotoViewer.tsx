@@ -22,13 +22,11 @@ interface PhotoViewerProps {
   onClose: () => void;
 }
 
-/** Full-screen in-app photo gallery: horizontal paging + close + "n / total". */
 export function PhotoViewer({ visible, images, initialIndex = 0, onClose }: PhotoViewerProps) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(initialIndex);
 
-  // Reset paging each time the viewer closes so the next open starts fresh.
   const handleClose = () => {
     setIndex(initialIndex);
     onClose();
@@ -43,7 +41,6 @@ export function PhotoViewer({ visible, images, initialIndex = 0, onClose }: Phot
     <Modal visible={visible} animationType="fade" transparent onRequestClose={handleClose}>
       <View style={styles.root}>
         <FlatList
-          // Remount on open so scroll position resets to the initial page.
           key={visible ? "open" : "closed"}
           data={images}
           keyExtractor={(uri, i) => `${uri}-${i}`}

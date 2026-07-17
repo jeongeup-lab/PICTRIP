@@ -4,7 +4,6 @@ import pytest
 from pictrip_data.kto.client import KtoClient
 from pictrip_data.master.load_codes import load_codes
 
-# Live-verified ldongCode2 shape: region repeats per sigungu.
 LDONG_ROWS = [
     {
         "lDongRegnCd": "11",
@@ -28,7 +27,6 @@ LDONG_ROWS = [
         "rnum": 3,
     },
     {
-        # Sejong: KTO gives the province as 5-char '36110' (not 2-char).
         "lDongRegnCd": "36110",
         "lDongRegnNm": "세종특별자치시",
         "lDongSignguCd": "36110",
@@ -74,7 +72,6 @@ class FakeClient:
 
 def _cleanup_codes(conn):
     cur = conn.cursor()
-    # Codes from this test's fixtures only.
     cur.execute("DELETE FROM sigungus WHERE ldong_regn_cd IN ('11','26','36')")
     cur.execute("DELETE FROM regions WHERE ldong_regn_cd IN ('11','26','36')")
     cur.execute("DELETE FROM lcls_systm_codes WHERE lcls_systm3_cd IN ('AC010100','AC020100')")
@@ -139,14 +136,12 @@ def test_load_codes_upserts_and_is_idempotent(db_conn, seed_codes_guard):
         load_codes(client=fake, conn=db_conn)
 
         cur = db_conn.cursor()
-        # regions deduped (11 appears twice in the ldong list -> one row).
         cur.execute(
             "SELECT ldong_regn_cd, ldong_regn_nm FROM regions "
             "WHERE ldong_regn_cd IN ('11','26') ORDER BY ldong_regn_cd"
         )
         assert cur.fetchall() == [("11", "서울특별시"), ("26", "부산광역시")]
 
-        # sigungus composite codes = regn + signgu.
         cur.execute(
             "SELECT ldong_signgu_cd, ldong_regn_cd, ldong_signgu_nm FROM sigungus "
             "WHERE ldong_regn_cd IN ('11','26') ORDER BY ldong_signgu_cd"
@@ -157,7 +152,6 @@ def test_load_codes_upserts_and_is_idempotent(db_conn, seed_codes_guard):
             ("26110", "26", "중구"),
         ]
 
-        # lcls codes upserted with all columns.
         cur.execute(
             "SELECT lcls_systm3_cd, lcls_systm3_nm, lcls_systm2_cd, lcls_systm1_cd, "
             "lcls_systm2_nm, lcls_systm1_nm FROM lcls_systm_codes "
@@ -168,7 +162,6 @@ def test_load_codes_upserts_and_is_idempotent(db_conn, seed_codes_guard):
             ("AC020100", "모텔", "AC02", "AC", "모텔", "숙박"),
         ]
 
-        # Idempotent: second run, same counts, no error.
         load_codes(client=fake, conn=db_conn)
         cur.execute("SELECT count(*) FROM regions WHERE ldong_regn_cd IN ('11','26')")
         assert cur.fetchone()[0] == 2
@@ -223,7 +216,6 @@ def test_load_codes_normalizes_sejong(db_conn, seed_codes_guard):
     cur = db_conn.cursor()
     cur.execute("SELECT ldong_regn_nm FROM regions WHERE ldong_regn_cd = '36'")
     assert cur.fetchone() == ("세종특별자치시",)
-    # composite = normalized regn '36' + signgu '36110' = '3636110' (fits varchar 8).
     cur.execute("SELECT ldong_regn_cd FROM sigungus WHERE ldong_signgu_cd = '3636110'")
     assert cur.fetchone() == ("36",)
     _cleanup_codes(db_conn)

@@ -13,9 +13,9 @@ class SpotCardRow:
     addr1: str | None
     mapx: float | None
     mapy: float | None
-    category: str | None = None  # derive_category chip code, NOT lcls_systm3_nm
-    lcls_systm3_nm: str | None = None  # KTO subtype label; canonical card category
-    cpyrht_div_cd: str | None = None  # 공공누리 license: Type1 resizable, Type3 verbatim-only
+    category: str | None = None
+    lcls_systm3_nm: str | None = None
+    cpyrht_div_cd: str | None = None
 
 
 @dataclass
@@ -58,7 +58,7 @@ class SpotDetailRow:
     sigungu_name: str | None
     detail_status: str
     images: list[SpotImageRow]
-    category: str | None = None  # lcls_systm3_nm subtype label
+    category: str | None = None
     intro: SpotIntroRow | None = None
 
 

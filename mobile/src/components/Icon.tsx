@@ -37,7 +37,6 @@ interface IconProps {
   strokeWidth?: number;
 }
 
-// Each path drawn on a 24x24 viewBox, stroke = currentColor unless filled.
 const PATHS: Record<IconName, { d?: string; fill?: boolean; extra?: "heart" }> = {
   "chevron-left": { d: "M15 5l-7 7 7 7" },
   "chevron-right": { d: "M9 5l7 7-7 7" },

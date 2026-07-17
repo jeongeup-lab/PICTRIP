@@ -1,4 +1,10 @@
-"""Application settings (pydantic-settings, validated at startup)."""
+"""Application settings (pydantic-settings, validated at startup).
+
+ADMIN_SESSION_SECRET signs the /admin session cookie — rotating it invalidates
+all admin sessions (cookie is Secure only in production). Admin console
+credentials are NOT here: auth is DB-backed (`admin_users` table, decision
+2026-06-27) — see app/modules/admin/security.py.
+"""
 
 from __future__ import annotations
 
@@ -19,17 +25,14 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # --- Application ---
     ENVIRONMENT: Environment = "local"
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"
 
-    # --- API ---
     API_V1_PREFIX: str = "/v1"
     CORS_ORIGINS: list[str] = Field(default_factory=list)
     TRUSTED_HOSTS: list[str] = Field(default_factory=lambda: ["*"])
 
-    # --- Database ---
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432
     POSTGRES_DB: str = "pictrip"
@@ -53,38 +56,28 @@ class Settings(BaseSettings):
             )
         )
 
-    # --- Redis ---
     REDIS_URL: RedisDsn = Field(default="redis://localhost:6379/0")  # type: ignore[assignment]
 
-    # --- Auth ---
     JWT_ALGORITHM: str = "RS256"
     JWT_ACCESS_TOKEN_TTL_SECONDS: int = 900
     JWT_REFRESH_TOKEN_TTL_SECONDS: int = 2_592_000
     JWT_PRIVATE_KEY: str = ""
     JWT_PUBLIC_KEY: str = ""
 
-    # --- Admin console session (signed-cookie login; replaces HTTP Basic) ---
-    # Signs the /admin session cookie. Set a strong value in prod .env; rotating
-    # it invalidates all admin sessions. Cookie is Secure only in production.
     ADMIN_SESSION_SECRET: str = "dev-insecure-admin-session-secret-change-me"
-    ADMIN_SESSION_TTL_SECONDS: int = 28_800  # 8h
+    ADMIN_SESSION_TTL_SECONDS: int = 28_800
 
-    # --- OAuth ---
-    # Both Kakao keys are valid id_token `aud`: native SDK uses NATIVE_APP_KEY, web/server uses REST_API_KEY.
     KAKAO_REST_API_KEY: str = ""
     KAKAO_NATIVE_APP_KEY: str = ""
     GOOGLE_OAUTH_CLIENT_ID_IOS: str = ""
     GOOGLE_OAUTH_CLIENT_ID_ANDROID: str = ""
     GOOGLE_OAUTH_CLIENT_ID_WEB: str = ""
 
-    # --- Kakao OIDC ---
     KAKAO_JWKS_URL: str = "https://kauth.kakao.com/.well-known/jwks.json"
     KAKAO_OIDC_ISSUER: str = "https://kauth.kakao.com"
     KAKAO_JWKS_CACHE_TTL_SECONDS: int = 3600
     KAKAO_JWKS_STALE_ON_ERROR_TTL_SECONDS: int = 86400
 
-    # --- Google / Apple OIDC (S09 §3.1) ---
-    # Accepted id_token `aud`: Google client_ids and Apple bundle id (Apple id_tokens are RS256-signed).
     GOOGLE_CLIENT_IDS: list[str] = Field(default_factory=list)
     GOOGLE_JWKS_URL: str = "https://www.googleapis.com/oauth2/v3/certs"
     GOOGLE_OIDC_ISSUERS: list[str] = Field(
@@ -96,10 +89,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _merge_google_client_ids(self) -> Settings:
-        # The OIDC verifier reads GOOGLE_CLIENT_IDS as the accepted id_token `aud`
-        # set. Fold the per-platform client IDs into it so filling
-        # GOOGLE_OAUTH_CLIENT_ID_{IOS,ANDROID,WEB} actually enables Google login
-        # (they were otherwise dead config — never read by the verifier).
+        """Fold the per-platform Google client IDs into GOOGLE_CLIENT_IDS — the
+        set the OIDC verifier reads as accepted id_token `aud` — so filling
+        GOOGLE_OAUTH_CLIENT_ID_{IOS,ANDROID,WEB} actually enables Google login
+        (they were otherwise dead config, never read by the verifier)."""
         merged = list(self.GOOGLE_CLIENT_IDS)
         for cid in (
             self.GOOGLE_OAUTH_CLIENT_ID_IOS,
@@ -111,7 +104,6 @@ class Settings(BaseSettings):
         self.GOOGLE_CLIENT_IDS = merged
         return self
 
-    # --- KTO ---
     KTO_SERVICE_KEY: str = ""
     KTO_BASE_URL_KOR: str = "http://apis.data.go.kr/B551011/KorService2"
     KTO_BASE_URL_TARRLTE: str = "https://apis.data.go.kr/B551011/TarRlteTarService1"
@@ -120,38 +112,20 @@ class Settings(BaseSettings):
     KTO_BASE_URL_GALLERY: str = "https://apis.data.go.kr/B551011/PhotoGalleryService1"
     KTO_MOBILE_APP: str = "PicTrip"
 
-    # --- Embedding ---
     CLIP_MODEL_NAME: str = "openai/clip-vit-base-patch32"
     CLIP_DEVICE: Literal["cpu", "cuda", "mps"] = "cpu"
 
-    # --- Overseas → domestic matching (S13) ---
     MATCH_DISTANCE_MAX: float = 0.32
     MATCH_CANDIDATES: int = 40
 
-    # --- Image proxy (img.pictrip.org) ---
-    # SECRET — set in .env only, and mirror into the worker via
-    # ``wrangler secret put T1_SECRET``. Empty = signed Type1 transforms disabled
-    # (feed falls back to the untransformed hires URL).
     IMG_PROXY_ORIGIN: str = "https://img.pictrip.org"
     IMG_PROXY_T1_SECRET: str = ""
 
-    # --- Admin console (A01) ---
-    # Auth is DB-backed (admin_users table), NOT an env var (decision 2026-06-27):
-    # the credential lives in the shared CT110 DB so it needs no CT112 .env/shell to
-    # set or rotate. See app/modules/admin/security.py + migration 0016.
-
-    # --- Collection trigger (A01 §3/§5 Phase 2, decision A7) ---
-    # The trigger MECHANISM is config-gated behind an adapter (triggers.py). The
-    # recommended mechanism is GitHub ``workflow_dispatch``: when unconfigured
-    # (no token) the endpoint returns a clean ADMIN_TRIGGER_FAILED(502) instead
-    # of crashing.
-    # SECRET — set in .env only (PAT/fine-grained token with ``actions:write``).
     GITHUB_DISPATCH_TOKEN: str = ""
-    GITHUB_REPO: str = "jeongeup-lab/PICTRIP"  # owner/repo
-    COLLECTION_WORKFLOW: str = "pipeline-sync.yml"  # workflow file id
-    COLLECTION_WORKFLOW_REF: str = "main"  # git ref to dispatch on
+    GITHUB_REPO: str = "jeongeup-lab/PICTRIP"
+    COLLECTION_WORKFLOW: str = "pipeline-sync.yml"
+    COLLECTION_WORKFLOW_REF: str = "main"
 
-    # --- Observability ---
     SENTRY_DSN: str = ""
     SENTRY_TRACES_SAMPLE_RATE: float = 0.1
     SENTRY_PROFILES_SAMPLE_RATE: float = 0.05
