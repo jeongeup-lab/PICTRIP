@@ -9,7 +9,7 @@ import httpx
 from fastapi import Depends, Request
 from tenacity import (
     retry,
-    retry_if_exception_type,
+    retry_if_exception,
     stop_after_attempt,
     wait_exponential,
 )
@@ -19,6 +19,16 @@ from app.core.exceptions import KtoApiUnavailable
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def _is_transient(exc: BaseException) -> bool:
+    """Retry only on transient errors: connection/timeout problems, HTTP 429,
+    and 5xx. A non-transient 4xx (e.g. a bad serviceKey) must raise immediately
+    instead of burning retries against the daily quota."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+        return status == 429 or status >= 500
+    return isinstance(exc, httpx.RequestError)
 
 
 class KtoService(StrEnum):
@@ -54,7 +64,7 @@ class KtoClient:
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=8),
-        retry=retry_if_exception_type((httpx.RequestError, httpx.HTTPStatusError)),
+        retry=retry_if_exception(_is_transient),
         reraise=True,
     )
     async def call(
