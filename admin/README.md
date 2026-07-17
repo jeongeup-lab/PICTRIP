@@ -33,4 +33,4 @@
 ## 보류
 
 - 수집 즉시 실행 버튼(Phase 2/A7) — `pipeline-sync.yml` 미배선.
-  조건·근거는 `docs/operations.md` 참조.
+  조건·근거는 [`docs/reference/crons-and-workflows.md`](../docs/reference/crons-and-workflows.md) 참조.

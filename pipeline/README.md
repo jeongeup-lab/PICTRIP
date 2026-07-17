@@ -30,4 +30,4 @@ uv run pictrip-data sync-daily
 uv run streamlit run src/pictrip_data/dashboard/app.py
 ```
 
-크론·시크릿 위치는 `docs/operations.md` 참조.
+크론·시크릿 위치는 [`docs/reference/crons-and-workflows.md`](../docs/reference/crons-and-workflows.md) 참조.
