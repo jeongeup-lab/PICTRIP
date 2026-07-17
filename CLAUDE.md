@@ -4,9 +4,9 @@ Image-based Korea tourism recommendation service. 2026 KTO Data Utilization
 Contest — 1차 deadline **2026-09-21 16:00 KST**.
 
 Monorepo with 5 deploy units + docs (`AGENTS.md` is a symlink to this file).
-Design SSOT is `docs/mockups/` (구 monochrome screens; 홈·탐색은 S13 —
-`redesign-2026-07-cc/app-prototype.html`이 우선, 대체된 구 목업 05·06·08·09·10은
-삭제). Full specs in
+화면 기준(디자인 SSOT)은 **구현된 앱**(`mobile/src`) — 신규 화면 디자인은
+일회성 핸드오프(html 프로토타입)로 만들고 구현 후 폐기한다(리포에 목업을
+쌓지 않는다; `admin/mockups/`만 예외 — 어드민 UI의 소스다). Full specs in
 `docs/specs/` (flat, stable IDs `S00`–`S13`, sort order = read order);
 `docs/specs/DECISIONS.md` holds the locked decisions.
 
