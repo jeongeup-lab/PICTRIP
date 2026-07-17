@@ -11,10 +11,10 @@
   근거를 파고들어 결정한다. 대충 종합하지 않는다.
 - 설계 철학(브리프): **화면/UX/네비/ API 형태는 백지에서 이상적으로** 설계한다
   (기존 코드에 맞추지 않는다). **단 DB·인프라는 "이상 설계 → 현실 reconcile"**.
-- 산출물: `docs/specs/<group>/S<nn>-<slug>.md` (group: `screens`·`platform`·
-  `enhancements`·`admin`, nn=제로패딩). 끝나면 이 파일의 **결정 로그**에
-  한 줄 추가하고 커밋한다.
-- 입력 SSOT: 디자인=`docs/mockups/`(무채색 16화면, `index.html` 갤러리),
+- 산출물: `docs/specs/S<nn>-<slug>.md` (flat, nn=제로패딩). 끝나면 이 파일의
+  **결정 로그**에 한 줄 추가하고 커밋한다.
+- 입력 SSOT: 디자인=`docs/mockups/`(무채색 스크린, `index.html` 갤러리 —
+  홈·탐색은 `redesign-2026-07-cc/app-prototype.html`(S13)이 우선),
   제약=`CLAUDE.md`(루트), 브리프=`docs/specs/S00-design-brief.md`.
 
 ## 잠긴 결정 (이미 사용자 승인 — 재논의 금지, 세부만 설계)
@@ -234,7 +234,7 @@ DB/인프라/API 세션은 화면 세션들의 data needs를 종합해 형식화
   차별=규모+출시완성도). **crosscheck 확정: 1차마감 2026-09-21(사용자 확인)·루브릭 30/30/20/20·
   15128555=공사 집중률 API(재융합이 공사 OpenAPI 게이트 충족)·S4 유사도%항상노출·auth 30일고정에코.**
 - **A1+ (2026-06-21) 어드민 홈 큐레이션 편집기 채택 (스코프 확장, read-write)** →
-  `admin/specs/A01-admin-console.md`(A9·§7·Phase 4), 목업 `admin/mockups/curation.html`(B안 확정),
+  `admin/specs/A01-admin-console.md`(A9·§7·Phase 4), 목업 `admin/mockups/history/`(B안 확정, S13 은퇴로 아카이브),
   요구사항 `requirements/dev-requirements.md`(ADM-012~018). A01 본래 "콘텐츠 큐레이션=비목표·
   어드민 read-only" 결정을 **사용자 승인으로 뒤집음**: 홈 편성(히어로6+무드레일3)을 앱 재배포
   없이 운영자가 편집/발행(홈=백엔드 주도 잠긴 결정 2의 마지막 조각; 현재는 시드 스크립트 수정이
