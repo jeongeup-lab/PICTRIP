@@ -6,9 +6,10 @@ Contest — 1차 deadline **2026-09-21 16:00 KST**.
 Monorepo with 5 deploy units + docs (`AGENTS.md` is a symlink to this file).
 화면 기준(디자인 SSOT)은 **구현된 앱**(`mobile/src`) — 신규 화면 디자인은
 일회성 핸드오프(html 프로토타입)로 만들고 구현 후 폐기한다(리포에 목업을
-쌓지 않는다; `admin/mockups/`만 예외 — 어드민 UI의 소스다). Full specs in
-`docs/specs/` (flat, stable IDs `S00`–`S13`, sort order = read order);
-`docs/specs/DECISIONS.md` holds the locked decisions.
+쌓지 않는다; `admin/mockups/`만 예외 — 어드민 UI의 소스다). 문서는 현행판
+4종만 유지한다: `docs/product.md`(무엇) · `docs/architecture.md`(API·DB) ·
+`docs/operations.md`(배포·운영) · `docs/decisions.md`(결정 로그, append-only).
+구 설계 스펙(S00–S13)·플랜은 삭제됨 — git 히스토리와 decisions.md가 기록.
 
 ## Repo layout
 
@@ -18,9 +19,10 @@ Monorepo with 5 deploy units + docs (`AGENTS.md` is a symlink to this file).
 | `mobile/` | Expo SDK 56 RN app | EAS / stores |
 | `web/` | Cloudflare Pages — apex `pictrip.org` | Cloudflare |
 | `pipeline/` | KTO ETL CLI + Streamlit (`pictrip-data`) | CT111 |
+| `workers/img-proxy/` | 이미지 프록시 Worker — `img.pictrip.org` | Cloudflare |
 | `deploy/api-host/` · `deploy/monitoring/` | Ops/IaC | CT112 / CT113 |
-| `admin/` | Admin console specs · mockups · status (code lives in `backend/app/modules/admin/`) | — |
-| `docs/` | Design + spec SSOT | — |
+| `admin/` | 어드민 UI 소스(`mockups/`) — code lives in `backend/app/modules/admin/` | — |
+| `docs/` | 현행 문서 4종 (product · architecture · operations · decisions) | — |
 
 ## Commands
 
@@ -46,7 +48,7 @@ uv run ruff check . && uv run pytest
 
 - **Backend**: Python 3.12 · FastAPI modular monolith (`app/modules/`: users ·
   spots · feed · images · map · system · admin) · SQLAlchemy 2.0 async ·
-  PostgreSQL + pgvector · Redis · CLIP ViT-B/32 (LLM 미사용 — S13).
+  PostgreSQL + pgvector · Redis · CLIP ViT-B/32 (LLM 미사용).
 - **Mobile**: Expo SDK 56 · RN 0.85 · React 19.2 · TypeScript strict · Expo
   Router (typed routes) · Zustand · TanStack Query · axios · expo-secure-store.
 - **Web**: Cloudflare Pages static (legal · `.well-known` deep-link files ·
@@ -98,7 +100,7 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
   no uv workspace. Only coupling = CT110 prod DB tables `spots` + `sync_runs`.
 - **admin `static/` is a copy of `admin/mockups/`** (UI SSOT) + CI drift
   check; not a symlink.
-- **CF Pages build root = `web/`** (S08 §5.2). `.well-known/*` needs fixed JSON
+- **CF Pages build root = `web/`**. `.well-known/*` needs fixed JSON
   MIME and no redirects (`web/_headers`).
 
 ## Conventions
@@ -125,7 +127,7 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
   `users.taste_vector`). Cast vector literals: `... <=> $1::halfvec(512)`.
 - Related-spots (TarRlteTar) are Redis-only: key `rlte:{contentId}`, TTL 1h.
 - `hnsw.ef_search = 80` is an asyncpg `server_settings` in `app/core/db.py`.
-- Home feed is `GET /feed` (S13): 해외 게시물 커서 페이지네이션 → 스와이프 시
+- Home feed is `GET /feed`: 해외 게시물 커서 페이지네이션 → 스와이프 시
   `GET /overseas/{id}/matches`로 국내 매칭 3곳. 구 `/home/feed`(히어로+레일)·
   `/curations/{slug}`·`/taste/photo-search`는 제거 — `curations`/`curation_spots`
   테이블은 잔존(서빙 표면·ORM 모델 없음; autogenerate에서 `include_object`로 제외).
@@ -149,7 +151,7 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
   (2026 OT자료 1차 심사 유의사항·설명회 슬라이드 3).
 - **DO NOT persist user-uploaded images** — CLIP runs in memory, bytes discarded.
 - **Wikimedia Commons images: URL only + 표기 의무** — 저작자·라이선스명에 더해
-  라이선스 전문 URL·원본 파일 페이지 URL을 저장·노출한다 (S13 §5.4·§7.1).
+  라이선스 전문 URL·원본 파일 페이지 URL을 저장·노출한다.
 - **DO NOT modify KTO `overview` text** — store and display verbatim.
 - **DO NOT put secrets in code or commits** — `.env` only; mobile gets only
   `EXPO_PUBLIC_*`.

@@ -1,29 +1,36 @@
-# PicTrip Admin (어드민 콘솔)
+# PicTrip 어드민 콘솔
 
-Owner 염준선 · 설계 SSOT [`admin/specs/A01-admin-console.md`](specs/A01-admin-console.md).
+> 갱신: 2026-07-17 · 코드 = `backend/app/modules/admin/` · UI 소스 = `admin/mockups/`
+
+운영자용 내부 콘솔 (`https://api.pictrip.org/admin`). read-only 집계 +
+해외 게시물 숨김 토글만 — 회원 관리·콘텐츠 편집은 비목표.
 
 ## 구성
 
 | 조각 | 위치 | 비고 |
 |---|---|---|
-| 코드 | `backend/app/modules/admin/` | FastAPI 모듈 (`/admin` + `/admin/api/*`) |
-| 명세 | `admin/specs/A01-admin-console.md` | 설계 SSOT |
-| 목업 (UI SSOT) | `admin/mockups/` | served copy = `backend/app/modules/admin/static/` (byte-identical, drift-checked) |
+| 코드 | `backend/app/modules/admin/` | `/admin` 페이지 + `/admin/api/*` JSON |
+| **UI 소스** | `admin/mockups/` | served copy = `backend/.../admin/static/` — 바이트 동일, CI(`admin-drift.yml`)가 강제. **UI 수정은 여기서 하고 static에 복사** |
 
-## 진행 상황 (ADM-001~018)
+## 화면
 
-| 단계 | 범위 | 상태 |
-|---|---|---|
-| Phase 1 운영콘솔 | ADM-001~008 | ✅ 완료 (PR #21) |
-| Phase 4 큐레이션 편집기 | ADM-012~018 | 🗑 **S13에서 은퇴** (2026-07 — 홈 개편으로 라우트·UI·시드 제거, `curations`/`curation_spots` 테이블은 보존) |
-| 큐레이션 하드닝 (A11) | 발행 토글 제거(편성=시드 고정 6+3) · 보드 DnD 재정렬(`PUT /admin/api/curations/positions`) · `…/preview` 정식화 · 피커 필터(시군구·카테고리·페이지네이션) · `/admin/login` 레이트리밋 | 🗑 **S13에서 은퇴** (레이트리밋은 잔존) |
-| 게시물 모더레이션 (S13) | `/admin/overseas` 페이지 · `PUT /admin/api/overseas/{id}/visibility` (해외 게시물 `is_hidden` 토글) | ✅ 완료 (2026-07) |
-| Phase 2 수집 트리거 | ADM-009·010 | ⏸ 보류 — 파이프라인 트리거 메커니즘 = `workflow_dispatch` on self-hosted runner; secrets + 토큰 세팅 필요 |
-| ADM-011 어드민 배포 | — | ⬜ 머지 후 배포 — `admin_users` 비번 로테이션(DB), CF Access |
+| 페이지 | 내용 |
+|---|---|
+| `/admin` | 운영 개요 — 총 스팟·최근 수집·임베딩 커버리지(+재임베딩 트리거) |
+| `/admin/history` | 수집 이력 롤업 (일 단위, 최근 N일) |
+| `/admin/health` | api·db·터널·가입자 컴포넌트 상태 (DB 다운 시에도 500 대신 degrade) |
+| `/admin/overseas` | 해외 게시물 목록·검색 + `is_hidden` 토글 (유일한 쓰기) |
 
-## 노출 전 운영 주의
+## 인증·보안
 
-- 인증은 DB-backed `admin_users`(마이그레이션 0016이 `admin`/`admin` 시드) — 강한 비번으로
-  로테이션(`backend/scripts/set_admin_password.py`) + Cloudflare Access (Phase 3).
-- `/admin/login`은 5회/분/IP 레이트리밋(브루트포스 방어) 적용됨.
-- prod `CORS` / `TRUSTED_HOSTS` 명시.
+- **DB-backed**: `admin_users` 테이블(bcrypt) — env 아님. 마이그레이션 0016이
+  `admin`/`admin`을 시드하므로 **배포 후 즉시 로테이션**:
+  `python -m scripts.set_admin_password --username admin` (CT110 DB 쓰기만 필요).
+- `/admin/login` 5회/분/IP 레이트리밋. 세션 = 서명 쿠키
+  (`ADMIN_SESSION_SECRET`, 로테이션 시 전 세션 무효).
+- `/admin/assets`는 비인증 공개 마운트 — 민감 정보 절대 금지.
+
+## 보류
+
+- 수집 즉시 실행 버튼(Phase 2/A7) — `pipeline-sync.yml` 미배선.
+  조건·근거는 `docs/operations.md` 참조.
