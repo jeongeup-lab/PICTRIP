@@ -34,8 +34,6 @@ async def test_openapi_schema_includes_all_domains(client: AsyncClient) -> None:
         for method in op.values()
         for tag in method.get("tags", [])
     }
-    # IMG exposes no HTTP operations, so its tag never appears in the schema —
-    # tags are collected from operations only. The other domains do.
     expected = {
         "USR · user/auth",
         "SPT · spots",
@@ -44,7 +42,6 @@ async def test_openapi_schema_includes_all_domains(client: AsyncClient) -> None:
         "feed",
     }
     assert expected.issubset(tags_in_schema)
-    # courses/recommendations removed in the refactor (6-module surface).
     assert "REC · recommendation" not in tags_in_schema
     assert "CRS · course" not in tags_in_schema
 

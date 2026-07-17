@@ -18,6 +18,12 @@
 
 ## 로그 (최신순)
 
+- **2026-07-17 · 지도 WebView 가드 2건 (주석 제거로 승격)** — ① Kakao SDK는
+  동적 로드 + `onerror` 시 fetch 재프로브: 동기 `<script src>`는 도메인 거부/
+  네트워크 실패 시 조용히 죽어 지도만 빈 화면이 된다. ② bbox 보고는 `idle`
+  이벤트: 드래그·줌뿐 아니라 프로그래매틱 `setCenter` 후에도 발화해야 "이
+  지역에서 검색"이 모든 이동을 본다. ③ 시트 스냅은 실제 탭바 높이(iOS 49+
+  safe-area)에서 유도 — 고정값은 SE류 기기에서 카드 과노출.
 - **2026-07-17 · 문서 재구조화** — 스펙 16·플랜 7·목업 전체를 삭제하고 현행 문서
   4종(product·architecture·operations·decisions)으로 대체. 문서는 코드가 말하지
   못하는 "무엇·왜·운영"만 담는다.
@@ -52,6 +58,9 @@
   Hot/Hidden 채널의 소스가 됨.
 - **2026-06-28 · 카카오 로그인 = https 바운스** — 커스텀 스킴 거부로
   `web/oauthredirect → pictrip://` 웹 바운스 사용, OIDC ON·클라이언트 시크릿 OFF.
+- **2026-06-28 · Google OAuth redirect = triple-slash** — standalone에서
+  `makeRedirectUri`가 `scheme://oauthredirect`(이중 슬래시)를 만들면 Google이
+  Error 400(정책 위반)으로 거부 → `isTripleSlashed: true`(`scheme:///`) 필수.
 - **2026-06-27 · 어드민 인증 = DB-backed** — `admin_users` 테이블(bcrypt), env 아님.
   프로비저닝/로테이션은 CT110 DB 쓰기만으로 가능(`scripts/set_admin_password.py`).
 - **2026-06-27 · cloudflared = CT112 호스트 프로세스가 SSOT** — compose 내 서비스

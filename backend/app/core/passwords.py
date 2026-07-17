@@ -35,5 +35,4 @@ def verify_password(raw: str, hashed: str | None) -> bool:
     try:
         return bcrypt.checkpw(_truncate(raw), hashed.encode("ascii"))
     except ValueError:
-        # Malformed/non-bcrypt stored hash — treat as a failed verification.
         return False

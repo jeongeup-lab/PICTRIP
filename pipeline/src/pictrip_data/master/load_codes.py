@@ -47,13 +47,13 @@ ON CONFLICT (lcls_systm3_cd) DO UPDATE SET
 
 
 def _load_ldong(client: KtoClient, conn: psycopg.Connection) -> None:
+    """Upsert regions + sigungus from ldongCode2. Sejong's province code
+    arrives as the 5-char '36110'; it is normalized to 2-char so it fits
+    regions/sigungus (varchar 8) and matches existing data."""
     rows = client.call("ldongCode2", lDongListYn="Y", numOfRows=400)
-    # Dedup regions in Python: the ldong list repeats the region per sigungu.
     regions: dict[str, str] = {}
     sigungus: list[tuple[str, str, str]] = []
     for r in rows:
-        # Sejong's province code is the 5-char '36110'; normalize to 2-char so it
-        # fits regions/sigungus (varchar 8) and matches existing data.
         regn_cd = normalize_regn_cd(str(r["lDongRegnCd"]))
         regn_nm = str(r["lDongRegnNm"])
         signgu_cd = str(r["lDongSignguCd"])
@@ -62,7 +62,6 @@ def _load_ldong(client: KtoClient, conn: psycopg.Connection) -> None:
         sigungus.append((f"{regn_cd}{signgu_cd}", regn_cd, signgu_nm))
 
     cur = conn.cursor()
-    # regions first (sigungus FK them).
     cur.executemany(_REGION_SQL, list(regions.items()))
     cur.executemany(_SIGUNGU_SQL, sigungus)
 
@@ -85,7 +84,7 @@ def _load_lcls(client: KtoClient, conn: psycopg.Connection) -> None:
 
 def _run(client: KtoClient, conn: psycopg.Connection) -> None:
     _load_ldong(client, conn)
-    _load_lcls(client, conn)  # independent of regions/sigungus
+    _load_lcls(client, conn)
     conn.commit()
 
 

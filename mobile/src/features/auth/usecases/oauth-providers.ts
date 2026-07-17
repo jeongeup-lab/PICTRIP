@@ -18,14 +18,10 @@ export type OAuthOutcome = OAuthCredential | "canceled";
 
 const REDIRECT_PATH = "oauthredirect";
 
-// Kakao rejects custom-scheme redirect URIs (http/https only), so its OAuth
-// redirect_uri is our web bounce page, which forwards back to APP_RETURN_URL.
 const KAKAO_REDIRECT_URI = "https://pictrip.org/oauthredirect";
 const APP_RETURN_URL = "pictrip://oauthredirect";
 
 function providerError(detail?: string): never {
-  // The failing stage is surfaced in the message — device-side OAuth failures
-  // never reach the backend, so the screen is the only place to read them.
   throw new AppError(
     "OAUTH_PROVIDER_UNAVAILABLE",
     `로그인에 실패했어요. 잠시 후 다시 시도해 주세요.${detail ? ` (${detail})` : ""}`,
@@ -33,8 +29,6 @@ function providerError(detail?: string): never {
   );
 }
 
-// OAuth2 returns error=access_denied when the user declines consent on the
-// provider's screen — that's a cancel, not a failure (S01: 취소는 무음 복귀).
 function isConsentDeclined(error: string): boolean {
   return error === "access_denied";
 }
@@ -85,10 +79,6 @@ function parseQueryParams(url: string): Record<string, string> {
   return out;
 }
 
-/** Kakao OIDC via web bounce: redirect_uri is the https page, but the auth
- * session watches the pictrip:// scheme that page forwards to. We drive the
- * browser manually (not AuthRequest.promptAsync) because the redirect_uri sent
- * to Kakao and the URL that closes the session must differ. */
 async function kakaoLogin(): Promise<OAuthOutcome> {
   const clientId = OAUTH.kakao.restKey;
   if (!clientId) return providerError();
@@ -109,7 +99,7 @@ async function kakaoLogin(): Promise<OAuthOutcome> {
   if (params.error) {
     return isConsentDeclined(params.error) ? "canceled" : providerError(`kakao:${params.error}`);
   }
-  if (params.state !== request.state) return providerError("state-mismatch"); // CSRF guard
+  if (params.state !== request.state) return providerError("state-mismatch");
   if (!params.code) return providerError("no-code");
   let token: AuthSession.TokenResponse;
   try {
@@ -133,8 +123,6 @@ interface OidcConfig {
   issuer: string;
   clientId: string;
   scopes: string[];
-  /** Custom URL scheme the provider redirects back to. Google iOS clients
-   *  require the reversed-client-id scheme, not the app's pictrip:// scheme. */
   redirectScheme: string;
 }
 
@@ -156,8 +144,6 @@ async function webOidcLogin(cfg: OidcConfig): Promise<OAuthOutcome> {
   });
   const result = await request.promptAsync(discovery);
   if (result.type === "cancel" || result.type === "dismiss") return "canceled";
-  // A declined consent can arrive as type:"error" (not "success") carrying
-  // error=access_denied — still a user cancel, so map it before the generic guard.
   if (result.type === "error") {
     const code = result.params?.error ?? result.errorCode ?? "error";
     return isConsentDeclined(code) ? "canceled" : providerError(`provider:${code}`);
@@ -187,14 +173,10 @@ async function webOidcLogin(cfg: OidcConfig): Promise<OAuthOutcome> {
   return { idToken: token.idToken, nonce };
 }
 
-/** Acquire a provider OIDC id_token. Apple = native; Google/Kakao = web OIDC
- * (code+PKCE). Returns "canceled" on user dismiss; throws AppError otherwise. */
 export async function getIdToken(provider: Provider): Promise<OAuthOutcome> {
   if (provider === "apple") return appleLogin();
   if (provider === "google") {
     const clientId = OAUTH.google.clientId;
-    // Google native OAuth clients redirect to the reversed-client-id scheme
-    // (e.g. com.googleusercontent.apps.123-abc://oauthredirect), not pictrip://.
     const redirectScheme =
       "com.googleusercontent.apps." + clientId.replace(/\.apps\.googleusercontent\.com$/, "");
     return webOidcLogin({

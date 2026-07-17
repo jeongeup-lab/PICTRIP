@@ -17,8 +17,6 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.config import settings
 
-# AsyncSession/IntegrityError re-exported so services type their session param and
-# catch constraint races at the transaction boundary without importing sqlalchemy (ADR-0002).
 __all__ = ["AsyncSession", "Base", "DbSession", "IntegrityError", "engine", "get_db"]
 
 
@@ -35,7 +33,6 @@ def _build_engine() -> AsyncEngine:
         pool_timeout=30,
         pool_recycle=1800,
         pool_pre_ping=True,
-        # hnsw.ef_search=80 set as asyncpg server_setting (once per connection, no per-session SET race). ADR-0006.
         connect_args={"server_settings": {"hnsw.ef_search": "80"}},
     )
 
@@ -59,5 +56,4 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
 
 
-# Route-facing alias so routes stay free of sqlalchemy imports (ADR-0002).
 DbSession = Annotated[AsyncSession, Depends(get_db)]

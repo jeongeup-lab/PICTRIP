@@ -12,13 +12,9 @@ interface Props {
   variant: "full" | "sheet";
   onSuccess: () => void;
   onCancel?: () => void;
-  /** Override the email-button handler. The sheet variant must close its native
-   *  <Modal> before routing (see AuthPromptSheet); the full screen pushes directly. */
   onEmailPress?: () => void;
 }
 
-// Sign in with Apple is iOS-only — expo-apple-authentication rejects on Android,
-// so don't surface a button that can only fail there.
 const PROVIDERS: Provider[] = [
   "kakao",
   "google",
@@ -64,11 +60,8 @@ export function LoginCard({ variant, onSuccess, onCancel, onEmailPress }: Props)
     try {
       const res = await loginWithOAuth(provider);
       if (res === "success") onSuccess();
-      else onCancel?.(); // canceled = silent (S01)
+      else onCancel?.();
     } catch (e) {
-      // provider/backend failure — inline error, buttons re-enabled (S01 §3).
-      // AppError messages carry the failing stage (device failures never reach
-      // backend logs, so the screen is the only diagnostic surface).
       setError(e instanceof AppError ? e.message : "잠시 후 다시 시도해 주세요.");
     } finally {
       setPending(null);

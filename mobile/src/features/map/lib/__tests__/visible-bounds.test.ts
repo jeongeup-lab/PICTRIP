@@ -11,14 +11,13 @@ describe("clipBoundsToVisible", () => {
 
   it("raises the south edge to the panel top (half snap = top 50%)", () => {
     const out = clipBoundsToVisible(bounds, 422, 844);
-    // visibleSouthLat = 38 - (38-37) * (422/844) = 37.5
     expect(out.sw.lat).toBeCloseTo(37.5, 5);
   });
 
   it("clips more as the panel rises (smaller panelTopY → smaller band)", () => {
     const high = clipBoundsToVisible(bounds, 700, 844).sw.lat;
     const low = clipBoundsToVisible(bounds, 300, 844).sw.lat;
-    expect(low).toBeGreaterThan(high); // panel higher → south edge nearer the top
+    expect(low).toBeGreaterThan(high);
   });
 
   it("returns the full bounds when the panel is at the bottom (fraction >= 1)", () => {
@@ -27,9 +26,9 @@ describe("clipBoundsToVisible", () => {
   });
 
   it("never collapses below the 15% minimum visible band", () => {
-    const out = clipBoundsToVisible(bounds, 10, 844); // fraction ~0.012 → clamped to 0.15
+    const out = clipBoundsToVisible(bounds, 10, 844);
     expect(out.sw.lat).toBeCloseTo(37.85, 5);
-    expect(out.sw.lat).toBeLessThan(out.ne.lat); // never inverted
+    expect(out.sw.lat).toBeLessThan(out.ne.lat);
   });
 
   it("falls back to the input bounds for a non-positive screen height", () => {

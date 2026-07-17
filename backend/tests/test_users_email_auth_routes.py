@@ -36,7 +36,6 @@ async def override_db():
     from app.core.db import get_db
     from app.core.redis import get_redis
 
-    # Fresh fakeredis per test so rate-limit counters never bleed across tests.
     fake = FakeRedis(decode_responses=True)
     eng = create_async_engine(str(settings.sqlalchemy_database_url), poolclass=NullPool)
     async with eng.connect() as conn:
@@ -66,11 +65,6 @@ async def override_db():
     await fake.aclose()
 
 
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
-
-
 async def test_signup_returns_token_pair_and_sets_email(client):
     email = _email()
     resp = await client.post(
@@ -82,7 +76,6 @@ async def test_signup_returns_token_pair_and_sets_email(client):
     assert data["accessToken"]
     assert data["refreshToken"]
     assert data["user"]["email"] == email
-    # Signup always assigns a generated random nickname, ignoring the supplied name.
     assert data["user"]["displayName"]
     assert data["user"]["displayName"] != "Nina"
 
@@ -141,19 +134,16 @@ async def test_login_unknown_email_returns_401(client):
 
 
 async def test_login_overlong_password_returns_422(client):
-    # Capped at bcrypt's 72-byte limit so a huge string can't waste a hash.
     resp = await client.post("/v1/auth/email/login", json={"email": _email(), "password": "x" * 73})
     assert resp.status_code == 422
 
 
 async def test_login_rate_limited_after_threshold(client):
-    # 10/min/IP — the 11th attempt (over limit) is throttled regardless of creds,
-    # blunting brute-force / credential-stuffing from a single source.
     body = {"email": _email(), "password": "whatever1"}
     statuses = [
         (await client.post("/v1/auth/email/login", json=body)).status_code for _ in range(11)
     ]
-    assert statuses[:10] == [401] * 10  # under the limit: handler runs (unknown email)
+    assert statuses[:10] == [401] * 10
     assert statuses[10] == 429
     assert (await client.post("/v1/auth/email/login", json=body)).json()["error"][
         "code"
@@ -161,8 +151,6 @@ async def test_login_rate_limited_after_threshold(client):
 
 
 async def test_signup_rate_limited_after_threshold(client):
-    # 5/min/IP — the 6th signup (over limit) is throttled, capping email
-    # enumeration / spam account creation from a single source.
     statuses = [
         (
             await client.post(
@@ -173,11 +161,6 @@ async def test_signup_rate_limited_after_threshold(client):
     ]
     assert statuses[:5] == [201] * 5
     assert statuses[5] == 429
-
-
-# ---------------------------------------------------------------------------
-# Service layer
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

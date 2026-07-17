@@ -11,9 +11,6 @@ class AppError(Exception):
     code: str = "INTERNAL_ERROR"
     http_status: int = 500
     message: str = "Internal server error."
-    # Optional response headers (e.g. ``WWW-Authenticate: Basic``). The envelope
-    # handler forwards these onto the JSONResponse, mirroring the Starlette
-    # HTTPException handler's ``headers=exc.headers``.
     headers: ClassVar[dict[str, str] | None] = None
 
     def __init__(
@@ -130,13 +127,14 @@ class SessionStoreUnavailable(AppError):
     message = "세션 저장소에 일시적인 문제가 발생했습니다."
 
 
-# --- admin console (A01 §3) ---
 class AdminUnauthorized(AppError):
+    """Deliberately no WWW-Authenticate header: the console uses a login page +
+    signed-cookie session, not HTTP Basic, so the browser must not pop its
+    native auth dialog."""
+
     code = "ADMIN_UNAUTHORIZED"
     http_status = 401
     message = "관리자 인증이 필요합니다."
-    # No WWW-Authenticate: the console uses a login page + signed-cookie session,
-    # not HTTP Basic, so the browser must not pop its native auth dialog.
 
 
 class AdminHistoryNotFound(AppError):
@@ -145,7 +143,7 @@ class AdminHistoryNotFound(AppError):
     message = "해당 날짜의 수집 이력이 없습니다."
 
 
-class AdminTriggerFailed(AppError):  # Phase 2
+class AdminTriggerFailed(AppError):
     code = "ADMIN_TRIGGER_FAILED"
     http_status = 502
 

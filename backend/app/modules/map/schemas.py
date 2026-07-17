@@ -14,12 +14,12 @@ class NearbySpotCard(BaseModel):
     addr1: str | None = None
     mapx: float | None = None
     mapy: float | None = None
-    dist: float | None = None  # distance from query point, metres
-    category: str | None = None  # KTO subtype label (lcls_systm3_nm)
-    categoryGroup: str | None = None  # 5-bucket: attraction/food/cafe/leisure/shopping
+    dist: float | None = None
+    category: str | None = None
+    categoryGroup: str | None = None
     regionName: str | None = None
     sigunguName: str | None = None
-    overview: str | None = None  # KTO overview, verbatim
+    overview: str | None = None
 
     @field_validator("firstImageUrl")
     @classmethod

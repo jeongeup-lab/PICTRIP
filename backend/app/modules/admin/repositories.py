@@ -10,6 +10,11 @@ The *only* admin file that imports SQLAlchemy. All access is read-only:
 
 Functions return plain Python (``Row`` / ``dict`` / scalars), never Pydantic —
 shaping into DTOs is the service layer's job.
+
+The only ORM import is the admin module's own surface: ``admin_users`` (console
+credentials, DB-backed auth A01 §1.3). ``overseas_spots`` is owned by the feed
+module; admin's sanctioned write is the single ``is_hidden`` column (CLAUDE.md
+grant) — reads stay raw SQL like the other cross-module aggregates.
 """
 
 from __future__ import annotations
@@ -21,9 +26,6 @@ from sqlalchemy import Row, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# The admin module's own ORM-mapped surface: admin_users (console credentials,
-# DB-backed auth A01 §1.3). No cross-module models are imported — reads of
-# spots/users tables stay raw SQL.
 from app.modules.admin.models import AdminUser
 
 
@@ -92,12 +94,6 @@ async def sync_runs_on_date(session: AsyncSession, day: date) -> list[Row[Any]]:
         {"day": day},
     )
     return list(result.all())
-
-
-# --- embedding status (A01-extension; read-only) ------------------------------
-# Embedding is a separate step from collection: pipeline writes ``spots``, then
-# CLIP writes ``spot_embeddings``. These read-only aggregates let the console show
-# how far embedding has progressed and how many spots failed (embedding_failures).
 
 
 async def embedding_totals(session: AsyncSession) -> Row[Any]:
@@ -173,8 +169,6 @@ async def db_ping(session: AsyncSession) -> bool:
         result = await session.execute(text("SELECT 1"))
         return bool(result.scalar_one() == 1)
     except (SQLAlchemyError, OSError):
-        # DB/connection errors → degrade to "not ok". Unexpected exceptions
-        # (programming errors etc.) propagate.
         return False
 
 
@@ -192,12 +186,6 @@ async def user_aggregates(session: AsyncSession) -> Row[Any]:
         )
     )
     return result.one()
-
-
-# --- 게시물(해외 스팟) 숨김 관리 (A7) — read list + scoped is_hidden write ------
-# overseas_spots is owned by the feed module; admin's sanctioned write here is the
-# single ``is_hidden`` column (CLAUDE.md grants overseas_spots.is_hidden). Reads
-# stay raw SQL like the other cross-module aggregates above.
 
 
 async def list_overseas(

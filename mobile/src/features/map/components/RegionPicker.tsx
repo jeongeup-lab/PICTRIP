@@ -15,7 +15,6 @@ interface Props {
 export function RegionPicker({ visible, onClose, onApply }: Props) {
   const insets = useSafeAreaInsets();
   const [sidoIdx, setSidoIdx] = useState(0);
-  // selection: null = "{시도} 전체", else sigungu index
   const [sigunguIdx, setSigunguIdx] = useState<number | null>(null);
 
   useEffect(() => {
@@ -133,8 +132,6 @@ const styles = StyleSheet.create({
   panes: { flex: 1, flexDirection: "row", minHeight: 0 },
 
   left: {
-    // ScrollView 기본 flexGrow:1이 width를 flex-basis로 만들어 남는 공간을
-    // 흡수하므로 (좌측이 우측보다 넓어짐) grow/shrink를 차단해야 width가 먹힌다.
     width: "33%",
     flexGrow: 0,
     flexShrink: 0,

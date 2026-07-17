@@ -24,6 +24,15 @@ def _run(
     conn,
     watermark_from: str | None = None,
 ) -> None:
+    """Fetch, upsert, then (full mode only) reconcile and advance the watermark.
+
+    Full runs soft-delete active spots that vanished from KTO entirely —
+    showflag=0 rows still arrive in the feed and upsert handles them.
+    Incremental runs fetch only a delta, so reconcile would wrongly wipe the
+    rest; an empty fetch (failed page) is also guarded against wiping all.
+    The watermark is stored as raw KTO text 'YYYYMMDDHHMMSS' (prod schema =
+    TEXT); when nothing changed it keeps the prior value so it never
+    regresses to NULL."""
     refs = load_ref_codes(conn)
     with record_run(conn, mode) as c:
         c["watermark_from"] = watermark_from
@@ -44,11 +53,6 @@ def _run(
                 if s.modified_time and (max_seen is None or s.modified_time > max_seen):
                     max_seen = s.modified_time
             page += 1
-        # FULL-run reconcile: hide active spots that VANISHED from KTO entirely
-        # (not just showflag=0 — those arrive in the feed and upsert handles them).
-        # Incremental runs only fetch a delta, so reconcile would wrongly wipe the
-        # rest; skip them. Guard against an empty fetch (failed page) wiping all.
-        # Runs weekly at ~68k scale; ANY array param is fine at that size.
         if mode == "full" and seen:
             cur = conn.cursor()
             cur.execute(
@@ -58,9 +62,6 @@ def _run(
             )
             c["soft_deleted"] += cur.rowcount
             conn.commit()
-        # Store watermark as raw KTO text 'YYYYMMDDHHMMSS' (prod schema = TEXT).
-        # When nothing changed (max_seen None), keep the prior watermark so it
-        # never regresses to NULL.
         c["watermark_to"] = max_seen.strftime("%Y%m%d%H%M%S") if max_seen else watermark_from
 
 

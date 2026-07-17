@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import random
 
-# Travel / nature / mood adjectives (wholesome). >= 20.
 _ADJECTIVES: tuple[str, ...] = (
     "포근한",
     "잔잔한",
@@ -33,7 +32,6 @@ _ADJECTIVES: tuple[str, ...] = (
     "온화한",
 )
 
-# Travel / nature nouns (wholesome). >= 20.
 _NOUNS: tuple[str, ...] = (
     "여행자",
     "나그네",
@@ -69,5 +67,5 @@ def generate_nickname(rng: random.Random | None = None) -> str:
     r = rng if rng is not None else random
     adjective = r.choice(_ADJECTIVES)
     noun = r.choice(_NOUNS)
-    number = r.randint(10, 999)  # 2-3 digits
+    number = r.randint(10, 999)
     return f"{adjective}{noun}{number}"

@@ -36,14 +36,9 @@ class NearbySpotRow:
     mapx: float | None
     mapy: float | None
     dist: float | None
-    # KTO subtype label (lcls_systm3_nm); None if unmatched.
     category: str | None = None
-    # 5-bucket code via derive_category (attraction/food/cafe/leisure/shopping); drives
-    # the map marker glyph. Always one of the 5 since the base WHERE excludes uncategorized.
     category_group: str | None = None
-    # KTO overview, verbatim (no summarize); usually None (lazy-cached on detail only).
     overview: str | None = None
-    # Below filled by the consuming module (MAP) via load_region_meta, not SPT.
     region_name: str | None = None
     sigungu_name: str | None = None
 
@@ -67,7 +62,6 @@ def category_predicate(cat: NearbyCategory) -> ColumnElement[bool]:
         return or_(Spot.lcls_systm2 == "FD05", Spot.lcls_systm3 == "FD030100")
     if cat is NearbyCategory.leisure:
         return Spot.lcls_systm1 == "LS"
-    # shopping
     return and_(
         Spot.lcls_systm1 == "SH",
         or_(Spot.lcls_systm2.is_(None), Spot.lcls_systm2 != "SH04"),
@@ -159,7 +153,6 @@ def _base_select(dist: ColumnElement[float], category: NearbyCategory | None):  
     )
     if category is not None:
         return inner.where(category_predicate(category))
-    # "All" = union of the 5 categories; uncategorized spots excluded.
     return inner.where(all_categories_predicate())
 
 
@@ -192,7 +185,6 @@ async def find_nearby_spots(
     category: NearbyCategory | None,
 ) -> list[NearbySpotRow]:
     """Active+image spots within radius m, distance-ordered (crowd merged by MAP)."""
-    # Bounding box (degrees); clamp cos to avoid div-by-0 at high latitudes.
     dlat = radius / 111_320.0
     dlng = radius / (111_320.0 * max(math.cos(math.radians(lat)), 0.01))
 

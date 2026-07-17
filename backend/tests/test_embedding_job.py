@@ -78,7 +78,6 @@ async def test_embed_spots_clears_failure_on_later_success(
     db_session: AsyncSession, httpx_mock, fake_clip: None
 ) -> None:
     await _seed_spot(db_session, "sp-1", "https://img/sp-1.jpg")
-    # Pre-existing failure row for the same spot.
     await db_session.execute(
         text(
             "INSERT INTO embedding_failures (content_id, reason, attempts) "
@@ -96,7 +95,6 @@ async def test_embed_spots_clears_failure_on_later_success(
             dl_sem=asyncio.Semaphore(2),
         )
 
-    # success → embedding written AND failure row removed.
     assert (
         await db_session.execute(
             text("SELECT count(*) FROM spot_embeddings WHERE content_id='sp-1'")
@@ -221,12 +219,9 @@ async def test_embed_spots_does_not_record_failure_for_changed_source(
 
 @pytest.mark.asyncio
 async def test_collect_targets_scopes(db_session: AsyncSession) -> None:
-    # image-bearing, no embedding → target
     await _seed_spot(db_session, "miss-old", "https://img/a.jpg", days_ago=10)
     await _seed_spot(db_session, "miss-new", "https://img/b.jpg", days_ago=0)
-    # no image → never a target
     await _seed_spot(db_session, "no-img", None)
-    # already embedded → excluded
     await _seed_spot(db_session, "done", "https://img/c.jpg")
     await db_session.execute(
         text(
@@ -243,7 +238,6 @@ async def test_collect_targets_scopes(db_session: AsyncSession) -> None:
         ),
         {"v": "[" + ",".join(["0.0"] * 512) + "]"},
     )
-    # a failure record on miss-old
     await db_session.execute(
         text(
             "INSERT INTO embedding_failures (content_id, reason) VALUES "

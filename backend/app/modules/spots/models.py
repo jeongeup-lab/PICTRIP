@@ -84,7 +84,6 @@ class Spot(Base):
             name="ck_spot_cpyrht_div_cd",
         ),
         CheckConstraint("show_flag IN (0, 1)", name="ck_spot_show_flag"),
-        # User reads always filter show_flag=1 (ADR-0007), so browsing indexes are partial.
         Index(
             "idx_spots_active_location",
             "mapx",
@@ -113,7 +112,6 @@ class Spot(Base):
             "show_flag",
             postgresql_where=text("show_flag = 1"),
         ),
-        # Partial index backs the home-feed quality-gate random pool.
         Index(
             "idx_spots_image_pool",
             "ldong_regn_cd",
@@ -268,6 +266,3 @@ class UserSavedSpot(Base):
     saved_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-
-
-# TarRlteTar lives in Redis (rlte:{contentId}, 1h TTL, ADR-0005) — no ORM model.

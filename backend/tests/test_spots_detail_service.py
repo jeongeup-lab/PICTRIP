@@ -144,7 +144,7 @@ async def test_modified_time_supersedes_fresh_cache(
 
     row = await load_spot_detail(db_session, kto, redis, "DT-MODIFIED")
 
-    assert kto.calls == 3  # cache busted: refetched despite being within TTL
+    assert kto.calls == 3
     assert row.detail_status == "fresh"
     assert row.overview == "한라산 정상 풍경"
 
@@ -155,7 +155,7 @@ async def test_cache_miss_fetches_then_caches(db_session: AsyncSession, redis: F
     kto = FakeKto(_COMMON, _IMAGES)
 
     row = await load_spot_detail(db_session, kto, redis, "DT-MISS")
-    assert kto.calls == 3  # common + image + intro
+    assert kto.calls == 3
     assert row.detail_status == "fresh"
     assert row.overview == "한라산 정상 풍경"
     assert [i.origin_image_url for i in row.images] == ["http://kto/1.jpg", "http://kto/2.jpg"]
@@ -270,7 +270,6 @@ async def test_intro_persisted_and_returned(db_session: AsyncSession, redis: Fak
     assert row.intro.usetime == "09:30~17:30"
     assert row.intro.restdate == "매주 월요일"
 
-    # second load serves from cache (intro_data persisted), no KTO calls
     kto2 = FakeKto(_COMMON, _IMAGES, _INTRO)
     row2 = await load_spot_detail(db_session, kto2, redis, "DT-INTRO")
     assert kto2.calls == 0
@@ -286,14 +285,14 @@ async def test_redis_hit_skips_postgres_detail(db_session: AsyncSession, redis: 
     await _insert_detail(db_session, "DT-REDIS", overview="pg overview", age_days=1)
 
     row1 = await load_spot_detail(db_session, FakeKto(), redis, "DT-REDIS")
-    assert row1.overview == "pg overview"  # PG read + warms Redis
+    assert row1.overview == "pg overview"
 
     await db_session.execute(text("DELETE FROM spot_details WHERE content_id = 'DT-REDIS'"))
     await db_session.commit()
 
     kto = FakeKto(_COMMON, _IMAGES)
     row2 = await load_spot_detail(db_session, kto, redis, "DT-REDIS")
-    assert kto.calls == 0  # neither Postgres nor KTO — served from Redis
+    assert kto.calls == 0
     assert row2.detail_status == "fresh"
     assert row2.overview == "pg overview"
 
@@ -322,12 +321,12 @@ async def test_stale_redis_defers_to_fresh_postgres(
 
     kto = FakeKto(_COMMON, _IMAGES)
     row = await load_spot_detail(db_session, kto, redis, "DT-HEAL")
-    assert kto.calls == 0  # fresh PG served — no needless KTO refetch
+    assert kto.calls == 0
     assert row.detail_status == "fresh"
-    assert row.overview == "pg fresh"  # not the stale Redis bundle
+    assert row.overview == "pg fresh"
 
     healed = await redis.get("spotdetail:v1:DT-HEAL")
-    assert healed is not None and "pg fresh" in healed  # Redis rewritten from PG
+    assert healed is not None and "pg fresh" in healed
 
 
 class BrokenRedis:
@@ -347,7 +346,7 @@ async def test_redis_down_falls_back_to_postgres(db_session: AsyncSession) -> No
 
     kto = FakeKto(_COMMON, _IMAGES)
     row = await load_spot_detail(db_session, kto, BrokenRedis(), "DT-RDOWN")
-    assert kto.calls == 0  # Postgres cache still fresh; Redis error was swallowed
+    assert kto.calls == 0
     assert row.detail_status == "fresh"
     assert row.overview == "pg only"
 
@@ -367,7 +366,7 @@ async def test_kto_budget_timeout_falls_back(
 
         async def call(self, service, operation, **params):
             self.calls += 1
-            await asyncio.sleep(0.5)  # exceeds the patched budget
+            await asyncio.sleep(0.5)
             return []
 
     row = await load_spot_detail(db_session, SlowKto(), redis, "DT-SLOW")
@@ -381,7 +380,7 @@ async def test_image_batch_upsert_updates_each_row(
     """The batched image upsert applies each row's OWN proposed value on conflict
     (excluded.*), not a single scalar — proven by two rows getting distinct updates."""
     await _insert_spot(db_session, "DT-BATCH")
-    await _insert_detail(db_session, "DT-BATCH", overview="x", age_days=8)  # stale → refetch
+    await _insert_detail(db_session, "DT-BATCH", overview="x", age_days=8)
     await _insert_image(db_session, "DT-BATCH", 0, "http://old/0.jpg")
     await _insert_image(db_session, "DT-BATCH", 1, "http://old/1.jpg")
     kto = FakeKto(

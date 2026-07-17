@@ -1,5 +1,3 @@
-// Deep-link fallback for /spots/{contentId} — server-renders the spot with
-// Open Graph meta so shared links unfurl, and offers app/store CTAs.
 import { escapeHtml, summarize, fetchData, renderPage, htmlResponse, pageUrl } from "../_lib.js";
 
 export async function onRequestGet(context) {

@@ -27,10 +27,6 @@ _STATIC_DIR = Path(__file__).parent / "static"
 
 router = APIRouter(tags=["ADM · admin console"], include_in_schema=False)
 
-# Security headers for the served admin HTML. The console only loads same-origin
-# CSS/JS; img-src allows https: for KTO image URLs, style-src allows
-# 'unsafe-inline' for the mockups' inline style attributes. frame-ancestors /
-# X-Frame-Options block clickjacking.
 _HTML_SECURITY_HEADERS = {
     "Content-Security-Policy": (
         "default-src 'self'; script-src 'self'; "
@@ -50,7 +46,6 @@ def _logged_in(request: Request) -> bool:
     return bool(request.session.get(SESSION_KEY))
 
 
-# --- Auth: login page + session ----------------------------------------------
 @router.get("/login")
 async def admin_login_page(request: Request) -> Response:
     """Public login page; redirect to the console if already signed in."""
@@ -83,7 +78,6 @@ async def admin_logout(request: Request) -> RedirectResponse:
     return RedirectResponse("/admin/login", status_code=303)
 
 
-# --- Static HTML pages (session-gated; redirect to /admin/login if logged out) -
 @router.get("")
 @router.get("/")
 async def admin_index(request: Request) -> Response:
@@ -117,7 +111,6 @@ async def admin_overseas(request: Request) -> Response:
     return _page("overseas.html")
 
 
-# --- JSON API (A01 §3) --------------------------------------------------------
 @router.get("/api/collection")
 async def api_collection(_: AdminAuth, db: DbSession) -> dict[str, Any]:
     """CollectionStatus — totalSpots + latest run + next schedule (A01 §2.1)."""
@@ -176,7 +169,6 @@ async def api_health(_: AdminAuth, db: DbSession) -> dict[str, Any]:
     return ok(await services.get_health(db))
 
 
-# --- 게시물(해외 스팟) 숨김 관리 (A7) — admin's scoped write surface -----------
 @router.get("/api/overseas")
 async def api_overseas_list(
     _: AdminAuth,

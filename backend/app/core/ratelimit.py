@@ -45,7 +45,7 @@ async def _enforce(redis: Redis, *, key: str, limit: int, window_seconds: int) -
         count = await redis.incr(key)
         if count == 1:
             await redis.expire(key, window_seconds)
-    except Exception:  # Redis blip -> fail-open (S08); alarm so it isn't silent
+    except Exception:
         logger.warning("rate_limit_unavailable_fail_open", key=key)
         return
     if count > limit:

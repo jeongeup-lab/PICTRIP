@@ -3,8 +3,6 @@ import { View, Text, Pressable, StyleSheet } from "react-native";
 import { htmlToPlainText } from "@/lib/html-text";
 import { colors, spacing } from "@/constants/theme";
 
-/** 소개 section. Renders KTO overview text; HTML tags/entities are stripped for
- * display only (the stored value is untouched), clamp is visual only. */
 export function IntroSection({ overview }: { overview: string | null }) {
   const [expanded, setExpanded] = useState(false);
   const text = useMemo(() => (overview ? htmlToPlainText(overview) : ""), [overview]);

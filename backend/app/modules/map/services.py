@@ -25,11 +25,11 @@ logger = get_logger(__name__)
 
 _NEARBY_LIMIT = 30
 _REGION_CACHE_KEY = "region:{lat:.3f}:{lng:.3f}"
-_REGION_CACHE_TTL = 86_400  # 1 day
+_REGION_CACHE_TTL = 86_400
 _COORD2REGIONCODE_PATH = "/geo/coord2regioncode.json"
 
 REGIONS_TREE_KEY = "regions:tree"
-_REGIONS_TREE_TTL = 86_400  # 24h — the tree is administrative + slow-moving.
+_REGIONS_TREE_TTL = 86_400
 
 
 async def _enrich(session: AsyncSession, rows: list[NearbySpotRow]) -> list[NearbySpotRow]:
@@ -125,7 +125,6 @@ def _to_region_label(payload: dict[str, Any]) -> RegionLabel | None:
     docs = payload.get("documents") or []
     if not docs:
         return None
-    # Prefer administrative-dong (H), else first document.
     doc = next((d for d in docs if d.get("region_type") == "H"), docs[0])
     sido = doc.get("region_1depth_name") or None
     sigungu = doc.get("region_2depth_name") or None
@@ -145,7 +144,7 @@ async def reverse_geocode(redis: Redis, *, lat: float, lng: float) -> RegionLabe
     cached = None
     try:
         cached = await redis.get(key)
-    except Exception as exc:  # cache is non-critical
+    except Exception as exc:
         logger.warning("map.region.cache_get_failed", error=str(exc))
     if cached is not None:
         try:
@@ -153,7 +152,7 @@ async def reverse_geocode(redis: Redis, *, lat: float, lng: float) -> RegionLabe
             if raw == "null":
                 return None
             return RegionLabel.model_validate_json(raw)
-        except ValueError as exc:  # UnicodeDecodeError + pydantic ValidationError
+        except ValueError as exc:
             logger.warning("map.region.cache_corrupt", error=str(exc))
 
     payload = await kakao_local_get(_COORD2REGIONCODE_PATH, params={"x": lng, "y": lat})
@@ -163,7 +162,7 @@ async def reverse_geocode(redis: Redis, *, lat: float, lng: float) -> RegionLabe
 
     try:
         await redis.set(key, label.model_dump_json() if label else "null", ex=_REGION_CACHE_TTL)
-    except Exception as exc:  # cache write best-effort
+    except Exception as exc:
         logger.warning("map.region.cache_set_failed", error=str(exc))
     return label
 
@@ -172,7 +171,7 @@ async def regions_tree(session: AsyncSession, redis: Redis) -> list[dict[str, An
     """17 sido + their sigungus, each with a runtime-AVG centroid, cached 24h."""
     try:
         cached = await redis.get(REGIONS_TREE_KEY)
-    except Exception as exc:  # cache is non-critical — degrade to a rebuild.
+    except Exception as exc:
         logger.warning("map.regions_tree.cache_get_failed", error=str(exc))
         cached = None
     if cached is not None:
@@ -196,7 +195,6 @@ async def regions_tree(session: AsyncSession, redis: Redis) -> list[dict[str, An
         sido_lng, sido_lat = sido_centroids.get(region.ldong_regn_cd, (0.0, 0.0))
         sg_nodes: list[dict[str, Any]] = []
         for sg in sigungus_by_regn.get(region.ldong_regn_cd, []):
-            # A sigungu with no visible spots falls back to its sido centroid.
             lng, lat = sigungu_centroids.get(sg.ldong_signgu_cd, (sido_lng, sido_lat))
             sg_nodes.append(
                 {
@@ -216,6 +214,6 @@ async def regions_tree(session: AsyncSession, redis: Redis) -> list[dict[str, An
 
     try:
         await redis.set(REGIONS_TREE_KEY, json.dumps(tree), ex=_REGIONS_TREE_TTL)
-    except Exception as exc:  # cache write best-effort
+    except Exception as exc:
         logger.warning("map.regions_tree.cache_set_failed", error=str(exc))
     return tree

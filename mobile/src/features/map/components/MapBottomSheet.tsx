@@ -11,17 +11,11 @@ interface Props {
   headerExtra?: ReactNode;
   children: ReactNode;
   onTranslate?: (v: Animated.Value) => void;
-  /** Device-measured snap geometry (49 + insets.bottom). Falls back to the
-   * default-tab-bar SHEET_SNAP_Y when omitted (e.g. tests). */
   snapY?: Record<Snap, number>;
 }
 
 export const H = Dimensions.get("window").height;
 
-// translateY from the top of the sheet container; smaller = taller sheet.
-// Reveal budgets live in lib/sheet-snap.ts (peek = 1 card, half = 2 cards).
-// Exported so the map store can approximate the sheet top for bounds clipping.
-// Uses the default tab-bar height; the map screen passes an exact snapY prop.
 export const SHEET_SNAP_Y: Record<Snap, number> = sheetSnapY(H);
 
 export function MapBottomSheet({
@@ -41,10 +35,6 @@ export function MapBottomSheet({
   }, [y, onTranslate]);
 
   useEffect(() => {
-    // JS driver (not native): the map screen anchors the search pill + recenter
-    // FAB to this value via Animated.subtract. A native-driven spring never
-    // updates the JS value, so those JS-side followers would freeze mid-snap.
-    // JS-driving keeps the shared value updating every frame for both.
     Animated.spring(y, { toValue: Y[snap], useNativeDriver: false, bounciness: 2 }).start();
   }, [snap, y, Y]);
 

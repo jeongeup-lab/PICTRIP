@@ -50,7 +50,7 @@ class SpotDetailResponse(SpotCard):
     tel: str | None = None
     regionName: str | None = None
     sigunguName: str | None = None
-    category: str | None = None  # lcls_systm3_nm subtype label
+    category: str | None = None
     detailStatus: str
     images: list[SpotImageOut] = []
     intro: SpotIntro | None = None

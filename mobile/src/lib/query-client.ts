@@ -1,7 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { AppError } from "@/lib/app-error";
 
-/** 4xx AppErrors are deterministic — never retry them. */
 export function isAppError4xx(error: unknown): boolean {
   return error instanceof AppError && error.status >= 400 && error.status < 500;
 }

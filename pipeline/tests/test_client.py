@@ -17,7 +17,7 @@ def test_returns_items_and_total():
     def handler(request: httpx.Request) -> httpx.Response:
         assert "areaBasedSyncList2" in str(request.url)
         assert request.url.params.get("_type") == "json"
-        assert request.url.params.get("showflag") is None  # omitted to receive hidden
+        assert request.url.params.get("showflag") is None
         assert request.url.params.get("arrange") == "C"
         return httpx.Response(200, json=FIXTURE)
 

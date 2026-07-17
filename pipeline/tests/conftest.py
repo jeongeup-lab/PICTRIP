@@ -8,17 +8,10 @@ TEST_DSN = os.environ.get(
     "postgresql://pictrip:pictrip_dev_only@localhost:5432/pictrip_test",
 )
 
-# Every test content_id starts with this prefix so cleanup is targeted.
 TEST_PREFIX = "T"
-# Real fixture ids used by sync_daily test (not prefixed) — clean these too.
 FIXTURE_IDS = ("2865520", "3509884")
 
 
-# Minimal schema the DB-integration tests need. CREATE ... IF NOT EXISTS makes
-# this a no-op against the locally-migrated pictrip_test (backend Alembic head),
-# and self-bootstraps a fresh empty Postgres in CI (no backend dependency).
-# Column types/FKs mirror the live spots schema; sync_runs is created separately
-# by the pipeline's own ensure_table().
 _SCHEMA = """
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE TABLE IF NOT EXISTS regions (
@@ -81,8 +74,6 @@ CREATE TABLE IF NOT EXISTS overseas_spots (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
--- Mirror of backend migration 0019's overseas trigger, so a fresh CI Postgres
--- behaves like the migrated pictrip_test (image_url change → embedding NULL).
 CREATE OR REPLACE FUNCTION invalidate_overseas_spot_embedding()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -107,7 +98,6 @@ def _ensure_test_schema(conn: psycopg.Connection) -> None:
 
 def _cleanup(conn: psycopg.Connection) -> None:
     cur = conn.cursor()
-    # sync_runs may not exist yet on a fresh DB; ignore if missing.
     cur.execute(
         "DELETE FROM spots WHERE content_id LIKE %s OR content_id = ANY(%s)",
         (TEST_PREFIX + "%", list(FIXTURE_IDS)),
@@ -122,9 +112,7 @@ def db_conn():
     """Connect to pictrip_test (schema = backend Alembic head). Explicit cleanup
     before and after, because record_run/sync_daily commit mid-test."""
     conn = psycopg.connect(TEST_DSN, autocommit=False)
-    # Self-bootstrap the schema (no-op on the locally-migrated DB; creates it in CI).
     _ensure_test_schema(conn)
-    # Ensure sync_runs exists so TRUNCATE/DELETE never error.
     from pictrip_data.sync.audit import ensure_table
 
     ensure_table(conn)

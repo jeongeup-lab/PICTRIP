@@ -37,37 +37,21 @@ export default function MapTab() {
     [nearby.data, s.gpsCoords],
   );
 
-  // useBottomTabBarHeight isn't exported by expo-router and bottom-tabs isn't
-  // installed, so use the iOS default tab content height (49) + safe-area inset.
   const tabBarHeight = TAB_BAR_CONTENT_HEIGHT + insets.bottom;
-  // Snap geometry from the REAL tab-bar height so peek reveals exactly 1 card and
-  // half exactly 2 on every device (a fixed 83 over-reveals on small-inset phones).
   const snapY = useMemo(() => sheetSnapY(H, tabBarHeight), [tabBarHeight]);
 
-  // The sheet owns its translateY Animated.Value and hands it up via onTranslate.
-  // We start from a fallback matching the current snap so the pill/FAB are placed
-  // correctly on the very first frame (before the sheet's mount effect fires).
   const [sheetY, setSheetY] = useState<Animated.Value>(() => new Animated.Value(snapY[s.snap]));
   const handleTranslate = useCallback((v: Animated.Value) => setSheetY(v), []);
-  // Anchor each control so its BOTTOM edge sits SHEET_GAP px above the sheet top.
-  // Derived from the sheet's translateY; the sheet JS-drives that value (see
-  // MapBottomSheet) so these followers update every frame during drag AND snap.
   const pillTranslateY = useMemo(
     () => Animated.subtract(sheetY, SHEET_GAP + PILL_HEIGHT),
     [sheetY],
   );
   const fabTranslateY = useMemo(() => Animated.subtract(sheetY, SHEET_GAP + FAB_HEIGHT), [sheetY]);
 
-  // The sheet (height H, translated down) hangs snapY[snap] px off-screen, so the
-  // last card must clear that overflow + the tab bar. Snap-aware — a fixed value
-  // clips the last card at the half/peek snaps.
   const listPaddingBottom = mapListPaddingBottom(snapY[s.snap], tabBarHeight, spacing.xxl);
 
   useEffect(() => {
     if (label.data) s.setLabel(label.data);
-    // /map/region fail-opens to ok(null) (backend degrades on Kakao Local
-    // errors) and React Query caches that null as a SUCCESS — without a
-    // fallback the header would show "위치 확인 중" forever.
     else if (label.isSuccess) s.setLabel(NEAR_ME_LABEL);
   }, [label.data, label.isSuccess]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -91,8 +75,6 @@ export default function MapTab() {
         selectedId={s.selectedSpotId}
         userLocation={s.gpsCoords}
         onPinTap={(id) => {
-          // Warm the detail cache, then swap the list sheet for the detail panel
-          // (S05 §1.3's scroll+highlight behavior was replaced by this panel).
           prefetchSpot(id);
           s.selectSpot(id);
         }}
@@ -179,9 +161,6 @@ export default function MapTab() {
 
       {s.selectedSpotId != null ? (
         <SpotDetailSheet
-          // Remount per spot: the sheet's internal state (save toggle, snap,
-          // measured hero height) must not leak from the previous spot, and a
-          // fresh mount replays the rise animation for the new pin.
           key={s.selectedSpotId}
           contentId={s.selectedSpotId}
           seed={spots.find((sp) => sp.contentId === s.selectedSpotId) ?? null}
@@ -203,11 +182,10 @@ export default function MapTab() {
   );
 }
 
-// RN bottom-tab content height on iOS (excludes the safe-area inset, added separately).
 const TAB_BAR_CONTENT_HEIGHT = 49;
-const PILL_HEIGHT = 38; // SearchHerePill height
-const FAB_HEIGHT = 44; // RecenterFab height
-const SHEET_GAP = 14; // mockup: control bottom sits 14px above the sheet top edge
+const PILL_HEIGHT = 38;
+const FAB_HEIGHT = 44;
+const SHEET_GAP = 14;
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
@@ -229,7 +207,6 @@ const styles = StyleSheet.create({
     maxWidth: "80%",
   },
   labelText: { fontSize: 14.5, fontWeight: "700", color: colors.ink },
-  // top:0 + translateY anchors these to the sheet's animated top edge (see body).
   pill: { position: "absolute", left: 0, right: 0, top: 0, alignItems: "center" },
   fab: { position: "absolute", right: spacing.lg, top: 0 },
   list: { paddingTop: spacing.sm },

@@ -45,7 +45,7 @@ async def test_email_partial_unique_allows_reuse_after_soft_delete(
     )
 
     db_session.add(User(email="reuse@example.com"))
-    await db_session.flush()  # must NOT raise — u1 is soft-deleted
+    await db_session.flush()
 
     count = await db_session.scalar(
         text("SELECT count(*) FROM users WHERE email = :e"),

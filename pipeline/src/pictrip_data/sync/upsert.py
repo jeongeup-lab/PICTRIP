@@ -73,7 +73,7 @@ def upsert_spots(
         cur.execute(_SQL, _row(spot, refs))
         result = cur.fetchone()
         if result is None:
-            counters["skipped"] += 1  # newer-wins guard blocked a stale row
+            counters["skipped"] += 1
             continue
         inserted, show_flag = result
         if show_flag == 0:

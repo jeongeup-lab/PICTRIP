@@ -42,8 +42,6 @@ describe("request-location", () => {
     expect(await getCurrentCoords()).toBeNull();
   });
 
-  // Regression: getCurrentPositionAsync has no timeout — a hanging first fix
-  // froze the primer/"위치 확인 중" indefinitely.
   it("getCurrentCoords falls back to the last known position after the timeout", async () => {
     jest.useFakeTimers();
     (Location.getCurrentPositionAsync as jest.Mock).mockReturnValue(new Promise(() => {}));

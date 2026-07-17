@@ -7,8 +7,6 @@ import { useAuthPromptStore } from "@/features/auth/stores/auth-prompt-store";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { colors, spacing, radii } from "@/constants/theme";
 
-/** Root-mounted bottom sheet for the login nudge (save 등 inline 승격).
- * Driven by the auth-prompt store; resolves the pending action on success. */
 export function AuthPromptSheet() {
   const insets = useSafeAreaInsets();
   const visible = useAuthPromptStore((s) => s.visible);
@@ -18,10 +16,6 @@ export function AuthPromptSheet() {
   const dismiss = useAuthPromptStore((s) => s.dismiss);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
-  // Resume a pending action (e.g. save) once the user becomes authenticated by
-  // ANY path — crucially the email screen, which logs in on a separate route and
-  // can't call succeed() directly. OAuth flows through here harmlessly: succeed()
-  // clears `resolve`, so this no-ops after the direct onSuccess call.
   useEffect(() => {
     if (isAuthenticated && resolve) succeed();
   }, [isAuthenticated, resolve, succeed]);
@@ -39,10 +33,6 @@ export function AuthPromptSheet() {
             onSuccess={succeed}
             onCancel={dismiss}
             onEmailPress={() => {
-              // Close the native Modal first (keeping the pending action armed),
-              // THEN route to the email screen — pushing under an open Modal
-              // renders the screen behind the sheet. The isAuthenticated effect
-              // above resumes the pending action once email login succeeds.
               hide();
               router.push("/auth/email");
             }}

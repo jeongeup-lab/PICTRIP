@@ -37,7 +37,6 @@ from app.modules.spots.models import Sigungu, Spot, SpotConcentration
 logger = get_logger(__name__)
 
 _OPERATION = "tatsCnctrRatedList"
-# One sigungu = up to ~100+ spots x 30 days; 20k rows clears the largest in 1 page.
 _NUM_OF_ROWS = 20000
 
 
@@ -145,7 +144,6 @@ async def main() -> None:
             day_rates = _collection_day_rate(rows)
             totals["fetched"] += len(day_rates)
 
-            # active, image-bearing spots in THIS sigungu, keyed by normalized title
             async with async_session_factory() as session:
                 spot_rows = (
                     await session.execute(
@@ -175,8 +173,6 @@ async def main() -> None:
                     }
                 )
 
-    # dedupe by content_id (a spot can be matched once per its own sigungu only,
-    # but guard anyway) keeping the highest rate
     deduped: dict[str, dict[str, object]] = {}
     for row in upsert_rows:
         cid = row["content_id"]

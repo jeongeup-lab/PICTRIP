@@ -8,7 +8,7 @@ from app.core.passwords import hash_password, verify_password
 def test_hash_password_is_not_plaintext() -> None:
     hashed = hash_password("hunter2-secret")
     assert hashed != "hunter2-secret"
-    assert hashed.startswith("$2")  # bcrypt prefix
+    assert hashed.startswith("$2")
 
 
 def test_verify_password_roundtrip() -> None:
@@ -22,7 +22,6 @@ def test_verify_password_handles_none_hash() -> None:
 
 
 def test_hash_password_handles_long_input() -> None:
-    # bcrypt has a 72-byte input limit; the helper must not raise on long input.
     long_pw = "a" * 200
     hashed = hash_password(long_pw)
     assert verify_password(long_pw, hashed) is True

@@ -73,9 +73,6 @@ function InfoRow({ icon, value, link, onPress, onCopy, last }: InfoItem & { last
 }
 
 export function LocationSection({ spot }: { spot: SpotDetail }) {
-  // Defer the WKWebView boot (create + remote Kakao SDK fetch + kakao.maps.load)
-  // until the nav transition settles, so it doesn't jank the page becoming
-  // interactive. The map fills into its fixed-height box a moment later.
   const [mapReady, setMapReady] = useState(false);
   useEffect(() => {
     const task = InteractionManager.runAfterInteractions(() => setMapReady(true));
@@ -89,7 +86,6 @@ export function LocationSection({ spot }: { spot: SpotDetail }) {
   const homepage = cleanHomepage(spot.homepage);
   const usetime = spot.intro?.usetime ? htmlToPlainText(spot.intro.usetime) : null;
 
-  // Single non-interactive pin for this spot. KakaoWebMap reads contentId/mapx/mapy.
   const pin: NearbySpot = {
     contentId: spot.contentId,
     title: spot.title,
@@ -98,7 +94,7 @@ export function LocationSection({ spot }: { spot: SpotDetail }) {
     mapx: spot.mapx,
     mapy: spot.mapy,
     dist: null,
-    categoryGroup: null, // single self-pin on the detail map → generic dot glyph
+    categoryGroup: null,
     regionName: spot.regionName,
     sigunguName: spot.sigunguName,
     overview: spot.overview,
@@ -139,8 +135,6 @@ export function LocationSection({ spot }: { spot: SpotDetail }) {
     <View style={styles.section}>
       <Text style={styles.h2}>위치</Text>
       {lat != null && lng != null ? (
-        // Non-interactive: pass touches to the page ScrollView (avoids a WKWebView
-        // dead zone that swallows touchmove and blocks scroll over the map).
         <View style={styles.map} pointerEvents="none">
           {mapReady ? (
             <KakaoWebMap

@@ -31,9 +31,6 @@ async def nearby(
     lng: float | None = Query(default=None, ge=-180, le=180),
     radius: int = Query(default=3000, ge=1, le=20000),
     category: NearbyCategory | None = Query(default=None),
-    # Visible-map bounding box (south-west + north-east corners). When all four
-    # are supplied the query returns spots inside the rectangle the user sees,
-    # overriding lat/lng/radius. Otherwise it falls back to center+radius.
     sw_lat: float | None = Query(default=None, ge=-90, le=90),
     sw_lng: float | None = Query(default=None, ge=-180, le=180),
     ne_lat: float | None = Query(default=None, ge=-90, le=90),

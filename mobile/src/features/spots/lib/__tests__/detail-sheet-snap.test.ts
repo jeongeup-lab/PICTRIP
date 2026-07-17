@@ -39,12 +39,12 @@ describe("detailSheetSnapY", () => {
   it("uses a screen-ratio fallback before the hero is measured", () => {
     const { base, peek, full } = detailSheetSnapY(H, null, tabBar, true);
     expect(full).toBeLessThan(base);
-    expect(base).toBeLessThan(H); // partially open, not closed
-    expect(peek).toBe(base); // peek collapses to base until the hero is measured
+    expect(base).toBeLessThan(H);
+    expect(peek).toBe(base);
   });
 
   it("never opens base shorter than the minimum visible height", () => {
-    const { base } = detailSheetSnapY(H, 100, tabBar, true); // degenerate measurement
+    const { base } = detailSheetSnapY(H, 100, tabBar, true);
     expect(H - base - tabBar).toBeGreaterThanOrEqual(MIN_BASE_VISIBLE_PX);
   });
 

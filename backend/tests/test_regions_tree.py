@@ -44,7 +44,6 @@ async def _seed_spot(
     lng: float,
     show: int = 1,
 ) -> None:
-    # mapx = lng, mapy = lat (S07 ERD).
     await session.execute(
         text(
             "INSERT INTO spots (content_id, content_type_id, title, show_flag, "
@@ -68,11 +67,8 @@ async def _seed_basic(session: AsyncSession) -> None:
     await _seed_region(session, "11", "서울특별시")
     await _seed_sigungu(session, "1101", "11", "종로구")
     await _seed_sigungu(session, "1102", "11", "강남구")
-    # Jongno-gu: two spots → AVG
     await _seed_spot(session, "s1", regn="11", signgu="1101", lat=37.50, lng=127.00)
     await _seed_spot(session, "s2", regn="11", signgu="1101", lat=37.60, lng=127.10)
-    # Gangnam-gu: no spots → falls back to sido centroid
-    # hidden spot must not move the centroid
     await _seed_spot(session, "s3", regn="11", signgu="1101", lat=99.0, lng=99.0, show=0)
 
 
@@ -83,7 +79,6 @@ async def test_centroid_is_runtime_avg(db_session: AsyncSession) -> None:
     tree = await regions_tree(db_session, redis)
     seoul = next(r for r in tree if r["regionCode"] == "11")
     assert seoul["regionName"] == "서울특별시"
-    # sido centroid = AVG over both visible spots (hidden excluded)
     assert seoul["centroid"]["lat"] == 37.55
     assert seoul["centroid"]["lng"] == 127.05
 
@@ -99,7 +94,6 @@ async def test_empty_sigungu_falls_back_to_sido_centroid(db_session: AsyncSessio
     tree = await regions_tree(db_session, redis)
     seoul = next(r for r in tree if r["regionCode"] == "11")
     gangnam = next(s for s in seoul["sigungus"] if s["sigunguCode"] == "1102")
-    # Gangnam-gu has no spots → COALESCE to sido centroid
     assert gangnam["centroid"]["lat"] == seoul["centroid"]["lat"]
     assert gangnam["centroid"]["lng"] == seoul["centroid"]["lng"]
 
@@ -116,7 +110,6 @@ async def test_serves_from_cache_when_present(db_session: AsyncSession) -> None:
     ]
     await redis.set(REGIONS_TREE_KEY, json.dumps(cached))
 
-    # DB has nothing seeded → if cache is honoured we still get the cached tree.
     tree = await regions_tree(db_session, redis)
     assert tree == cached
 

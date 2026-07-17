@@ -1,4 +1,11 @@
-"""Spot detail with lazy KTO enrichment + 7-day cache (ADR-0007)."""
+"""Spot detail with lazy KTO enrichment + 7-day cache (ADR-0007).
+
+Redis (`spotdetail:v1:*`) is a hot front cache for the KTO-derived detail bundle
+(overview/images/intro); Postgres (spot_details + spot_images) stays the 7-day
+authority — a Redis hit just skips its two reads. The shorter Redis TTL bounds
+staleness from a pipeline modified_time bump between Redis writes, and the
+modified_time supersede check still runs on every request (cached_at travels in
+the bundle), so a bump is honoured immediately regardless of TTL."""
 
 from __future__ import annotations
 
@@ -35,12 +42,6 @@ logger = get_logger(__name__)
 
 _DETAIL_TTL = timedelta(days=7)
 
-# Redis hot front cache for the KTO-derived detail bundle (overview/images/intro).
-# Postgres (spot_details + spot_images) stays the 7-day authority; Redis just
-# skips its two reads on a hit. Shorter TTL bounds staleness from a pipeline
-# modified_time bump between Redis writes — the modified_time supersede check
-# below still runs on every request (cached_at travels in the bundle), so a bump
-# is honoured immediately regardless of TTL.
 _REDIS_KEY = "spotdetail:v1:{content_id}"
 _REDIS_TTL_SECONDS = int(timedelta(hours=1).total_seconds())
 
@@ -63,7 +64,7 @@ async def _redis_get_detail(redis: Redis, content_id: str) -> _DetailCache | Non
     key = _REDIS_KEY.format(content_id=content_id)
     try:
         raw = await redis.get(key)
-    except Exception as exc:  # cache is non-critical — fall back to Postgres
+    except Exception as exc:
         logger.warning("spot.detail.cache_get_failed", content_id=content_id, error=str(exc))
         return None
     if raw is None:
@@ -98,7 +99,7 @@ async def _redis_set_detail(redis: Redis, content_id: str, cache: _DetailCache) 
     )
     try:
         await redis.set(key, payload, ex=_REDIS_TTL_SECONDS)
-    except Exception as exc:  # cache write best-effort
+    except Exception as exc:
         logger.warning("spot.detail.cache_set_failed", content_id=content_id, error=str(exc))
 
 
@@ -139,7 +140,7 @@ def _extract_intro(content_type_id: int, intro_data: dict[str, Any] | None) -> S
                 return v
         return None
 
-    if content_type_id == 39:  # restaurant
+    if content_type_id == 39:
         return SpotIntroRow(
             usetime=g("opentimefood"),
             restdate=g("restdatefood"),
@@ -222,9 +223,6 @@ async def _persist_detail(
     await session.execute(detail_stmt)
 
     if images:
-        # One multi-row upsert instead of a per-image round trip (a 20-image spot
-        # was ~20 sequential writes on every cold refresh). excluded.* applies each
-        # row's own proposed value on conflict.
         img_stmt = pg_insert(SpotImage).values(
             [
                 {
@@ -337,10 +335,6 @@ async def _read_cached_detail(
     return detail, existing_images
 
 
-# Wall-clock ceiling for the user-facing KTO detail fetch. Each kto.call already
-# retries 3x with exponential backoff on a 10s timeout, so one flaky endpoint can
-# stall the gather for ~30s. This caps it: on timeout we raise KtoApiUnavailable
-# and fall back to the stale/unavailable path rather than making the user wait.
 _KTO_DETAIL_BUDGET = 8.0
 
 
@@ -348,7 +342,12 @@ async def _fetch_kto_detail(
     kto: KtoClient, content_id: str, content_type_id: int
 ) -> tuple[str | None, str | None, str | None, list[tuple[str, str | None]], dict[str, Any]]:
     """Fetch + parse the 3 KTO detail endpoints concurrently, under a wall-clock
-    budget. Propagates KtoApiUnavailable (also on budget timeout)."""
+    budget. Propagates KtoApiUnavailable (also on budget timeout).
+
+    The budget exists because each kto.call already retries 3x with exponential
+    backoff on a 10s timeout, so one flaky endpoint could stall the gather for
+    ~30s; on budget timeout we fall back to the stale/unavailable path rather
+    than making the user wait."""
     try:
         common_items, image_items, intro_items = await asyncio.wait_for(
             asyncio.gather(
@@ -390,15 +389,18 @@ async def load_spot_detail(
     """Spot detail with lazy KTO enrichment (ADR-0007). Reads the detail bundle
     from Redis (hot front cache) then Postgres (7-day authority), commits the read
     txn before any HTTP, then fetches/upserts on miss/stale outside a txn. On KTO
-    failure serves stale or partial — never 502. 404 if absent or show_flag=0."""
+    failure serves stale or partial — never 502. 404 if absent or show_flag=0.
+
+    The Redis fast path is taken only when the bundle is FRESH: a stale (or
+    missing) Redis bundle must defer to Postgres before any KTO call — otherwise
+    a best-effort Redis SET that failed after a PG refresh would pin a stale
+    response (and re-hit KTO) for up to the TTL even though PG is already fresh.
+    The read txn ends with commit() (not rollback) so rows survive under the
+    savepoint-based test fixtures."""
     spot = await _load_spot_context(session, content_id)
     ctx = _DetailContext(spot, spot.region_name, spot.sigungu_name, spot.category)
 
     cache = await _redis_get_detail(redis, content_id)
-    # Fast path only when Redis is FRESH. A stale (or missing) Redis bundle must
-    # defer to Postgres, the authority, before any KTO call — otherwise a
-    # best-effort Redis SET that failed after a PG refresh would pin a stale
-    # response (and re-hit KTO) for up to the TTL even though PG is already fresh.
     redis_fresh = cache is not None and _is_fresh(cache.cached_at, spot.modified_time)
     if not redis_fresh:
         detail, existing_images = await _read_cached_detail(session, content_id)
@@ -412,12 +414,11 @@ async def load_spot_detail(
                 images=existing_images,
             )
 
-    # End read txn before HTTP. commit() (not rollback) keeps rows under savepoint test fixtures.
     await session.commit()
 
     if cache is not None and _is_fresh(cache.cached_at, spot.modified_time):
         if not redis_fresh:
-            await _redis_set_detail(redis, content_id, cache)  # warm / heal from Postgres
+            await _redis_set_detail(redis, content_id, cache)
         return ctx.assemble(
             overview=cache.overview,
             homepage=cache.homepage,

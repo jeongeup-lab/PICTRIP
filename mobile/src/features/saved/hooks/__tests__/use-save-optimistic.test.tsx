@@ -50,7 +50,7 @@ describe("useSaveOptimistic", () => {
       await api().toggle();
     });
     expect(requireAuth).toHaveBeenCalledWith("save");
-    expect(api().saved).toBe(false); // never flipped
+    expect(api().saved).toBe(false);
     expect(saveMutate).not.toHaveBeenCalled();
   });
 
@@ -74,7 +74,6 @@ describe("useSaveOptimistic", () => {
       await api().toggle();
     });
     expect(api().saved).toBe(true);
-    // invoke the onError rollback passed to the mutation
     const opts = saveMutate.mock.calls[0][1];
     act(() => opts.onError());
     expect(api().saved).toBe(false);

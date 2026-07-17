@@ -8,7 +8,6 @@ interface VisitSectionProps {
   onScrap: () => void;
 }
 
-/** 방문 예정 inset block: 공유 / 스크랩 cards. */
 export function VisitSection({ title, onShare, onScrap }: VisitSectionProps) {
   return (
     <View style={styles.visit}>

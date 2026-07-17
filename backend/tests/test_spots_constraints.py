@@ -38,7 +38,7 @@ async def test_spots_cpyrht_div_cd_check_rejects_bad_value(
             content_id="SPT-BAD-CPYRHT",
             content_type_id=12,
             title="bad",
-            cpyrht_div_cd="Type2",  # ⛔ only Type1 / Type3 / NULL allowed
+            cpyrht_div_cd="Type2",
         )
     )
     with pytest.raises(IntegrityError, match="ck_spot_cpyrht_div_cd"):
@@ -53,7 +53,7 @@ async def test_spots_show_flag_check_rejects_out_of_range(
             content_id="SPT-BAD-FLAG",
             content_type_id=12,
             title="bad",
-            show_flag=2,  # ⛔ only 0 or 1
+            show_flag=2,
         )
     )
     with pytest.raises(IntegrityError, match="ck_spot_show_flag"):
@@ -68,7 +68,7 @@ async def test_spot_moods_confidence_out_of_range_rejected(
         SpotMood(
             content_id="SPT-CONF",
             mood_id=1,
-            confidence=1.5,  # ⛔ must be ≤ 1.0
+            confidence=1.5,
             source="code",
         )
     )
@@ -85,7 +85,7 @@ async def test_spot_moods_source_check_rejects_unknown(
             content_id="SPT-SRC",
             mood_id=1,
             confidence=0.5,
-            source="auto",  # ⛔ not in {code, image, manual}
+            source="auto",
         )
     )
     with pytest.raises(IntegrityError, match="ck_spot_mood_source"):
@@ -107,7 +107,6 @@ async def test_regions_seed_includes_17_sido(db_session: AsyncSession) -> None:
     count = await db_session.scalar(text("SELECT count(*) FROM regions"))
     assert count == 17
 
-    # Spot-check three: a metropolitan city, a province, a special self-governing province from the post-2024 set
     seoul = await db_session.scalar(
         text("SELECT ldong_regn_nm FROM regions WHERE ldong_regn_cd = '11'")
     )

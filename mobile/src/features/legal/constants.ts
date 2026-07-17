@@ -1,5 +1,3 @@
-/** Legal documents (mockup 16). Bodies are hosted static pages (S06 D1);
- * the app only routes to them. Labels are mockup-verbatim. */
 export type LegalSlug = "terms" | "privacy" | "location" | "data-sources";
 
 export interface LegalDoc {

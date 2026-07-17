@@ -28,7 +28,6 @@ log = logging.getLogger("app.auth.oidc")
 
 _JWKS_TIMEOUT = httpx.Timeout(connect=2.0, read=3.0, write=2.0, pool=2.0)
 
-# Per-provider JWKS cache: provider -> {"value", "fresh_until", "stale_until"}.
 _jwks_caches: dict[str, dict[str, Any]] = {}
 
 
@@ -50,7 +49,7 @@ async def _fetch_jwks(url: str) -> dict[str, Any]:
                 resp.raise_for_status()
                 data: dict[str, Any] = resp.json()
                 return data
-            except Exception as exc:  # surface any transport/HTTP error uniformly
+            except Exception as exc:
                 last_exc = exc
                 continue
     raise OAuthProviderUnavailable() from last_exc
@@ -90,7 +89,12 @@ async def _verify_generic(
     expected_nonce: str | None,
     hash_nonce: bool,
 ) -> OidcClaims:
-    # SECURITY: empty audiences would make PyJWT skip `aud` checks (token-substitution hole) — fail loudly.
+    """Verify an id_token against a provider's JWKS.
+
+    SECURITY: empty ``audiences`` is rejected loudly — passing it through would
+    make PyJWT skip the ``aud`` check entirely (token-substitution hole). The
+    issuer is checked manually, not via ``jwt.decode``, to allow multiple valid
+    issuers (Google with/without https) across PyJWT versions."""
     if not audiences:
         log.error("oidc[%s]: no configured audience — provider misconfigured", provider)
         raise OAuthProviderUnavailable()
@@ -117,14 +121,13 @@ async def _verify_generic(
             id_token,
             key,
             algorithms=algorithms,
-            audience=audiences,  # never None — empty audiences rejected above
-            leeway=300,  # ±5 min skew
+            audience=audiences,
+            leeway=300,
         )
     except jwt.InvalidTokenError as exc:
         log.info("oidc[%s]: decode rejected (%s)", provider, type(exc).__name__)
         raise OAuthIdTokenInvalid() from exc
 
-    # Issuer checked manually to allow multiple valid issuers (Google with/without https) across PyJWT versions.
     if payload.get("iss") not in issuers:
         log.info("oidc[%s]: issuer mismatch", provider)
         raise OAuthIdTokenInvalid()
@@ -171,7 +174,7 @@ async def verify_oauth_id_token(
             url=settings.APPLE_JWKS_URL,
             issuers=[settings.APPLE_OIDC_ISSUER],
             audiences=[settings.APPLE_BUNDLE_ID] if settings.APPLE_BUNDLE_ID else [],
-            algorithms=["RS256"],  # Apple id_tokens are RS256-signed
+            algorithms=["RS256"],
             id_token=id_token,
             expected_nonce=expected_nonce,
             hash_nonce=True,

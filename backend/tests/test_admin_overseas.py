@@ -84,8 +84,6 @@ def _override(db_session: AsyncSession) -> None:
 
 
 async def test_list_overseas_requires_auth(db_session, client, seeded_overseas) -> None:
-    # Exercise the real session gate: override get_db (so no real DB session
-    # opens) but leave require_admin unmocked.
     app.dependency_overrides[get_db] = lambda: db_session
     try:
         res = await client.get("/admin/api/overseas")
@@ -129,7 +127,7 @@ async def test_list_overseas_orders_by_id_and_cursor(db_session, client, seeded_
 
     d2 = page2.json()["data"]
     assert [i["id"] for i in d2["items"]] == seeded_overseas.ids[2:]
-    assert d2["nextCursor"] is None  # last page
+    assert d2["nextCursor"] is None
 
 
 async def test_toggle_visibility(db_session, client, seeded_overseas) -> None:
@@ -146,7 +144,6 @@ async def test_toggle_visibility(db_session, client, seeded_overseas) -> None:
         target = next(i for i in listed.json()["data"]["items"] if i["id"] == oid)
         assert target["isHidden"] is True
 
-        # toggle back off
         back = await client.put(
             f"/admin/api/overseas/{oid}/visibility", json={"isHidden": False}, headers=_AUTH
         )

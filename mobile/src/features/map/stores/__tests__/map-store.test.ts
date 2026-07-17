@@ -17,9 +17,9 @@ describe("map-store", () => {
 
   it("onViewportChange beyond threshold makes the pill visible without moving center", () => {
     useMapStore.getState().setAnchor(seoul, "gps", seoul);
-    useMapStore.getState().onViewportChange({ lat: 37.58, lng: 126.9784 }); // ~1.5km north
+    useMapStore.getState().onViewportChange({ lat: 37.58, lng: 126.9784 });
     expect(useMapStore.getState().pillVisible()).toBe(true);
-    expect(useMapStore.getState().center).toEqual(seoul); // unchanged
+    expect(useMapStore.getState().center).toEqual(seoul);
   });
 
   it("searchHere promotes the viewport to center with source=pan and hides the pill", () => {
@@ -62,9 +62,6 @@ describe("map-store", () => {
     expect(useMapStore.getState().center).toEqual(seoul);
   });
 
-  // Regression (e4a3800): the ±RADIUS_M fallback square is not screen-aligned;
-  // clipping it by a screen fraction cut a distance band that excluded the
-  // anchor itself. Center-derived anchors must query the square unclipped.
   it("GPS anchor queryBounds contains the anchor center", () => {
     useMapStore.getState().setAnchor(seoul, "gps", seoul);
     const qb = useMapStore.getState().queryBounds!;
@@ -78,9 +75,9 @@ describe("map-store", () => {
     useMapStore.getState().onViewportChange({ lat: 37.58, lng: 126.9784 }, vpBounds);
     useMapStore.getState().searchHere();
     const qb = useMapStore.getState().queryBounds!;
-    expect(qb.ne).toEqual(vpBounds.ne); // north/lng edges untouched
+    expect(qb.ne).toEqual(vpBounds.ne);
     expect(qb.sw.lng).toBe(vpBounds.sw.lng);
-    expect(qb.sw.lat).toBeGreaterThan(vpBounds.sw.lat); // south edge raised
+    expect(qb.sw.lat).toBeGreaterThan(vpBounds.sw.lat);
   });
 
   it("setSnap keeps the pan-search queryBounds frozen (results stay put while dragging)", () => {
@@ -102,8 +99,6 @@ describe("map-store", () => {
     expect(useMapStore.getState().queryBounds).toEqual(before);
   });
 
-  // Regression (Codex review): applying a region while the detail panel was
-  // open left selectedSpotId set — the panel kept covering the new region's list.
   it("a new anchor closes an open spot-detail selection", () => {
     useMapStore.getState().setAnchor(seoul, "gps", seoul);
     useMapStore.getState().selectSpot("12345");

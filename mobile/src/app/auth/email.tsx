@@ -20,7 +20,6 @@ type Mode = "login" | "signup";
 
 function messageForError(err: unknown): string {
   if (err instanceof AppError) {
-    // Branch on code only — never message (S01).
     switch (err.code) {
       case "EMAIL_TAKEN":
         return "이미 가입된 이메일이에요.";
@@ -53,14 +52,9 @@ export default function EmailAuthScreen() {
 
   const close = () => {
     if (router.canGoBack()) router.back();
-    else router.replace("/(tabs)"); // deep-link / cold-start entry has nothing to pop
+    else router.replace("/(tabs)");
   };
 
-  // Single source of dismissal: close once authenticated by any path (this
-  // screen's own submit, or already-authed re-entry). Avoids an imperative
-  // close() racing a second router.back(). This screen is never stacked under
-  // another auth screen (the full login screen routes here via replace), so the
-  // effect only ever fires one back().
   useEffect(() => {
     if (isAuthenticated) close();
   }, [isAuthenticated]);
@@ -85,7 +79,6 @@ export default function EmailAuthScreen() {
       } else {
         await loginWithEmail(trimmedEmail, password);
       }
-      // Dismissal is handled by the isAuthenticated effect — success flips auth.
     } catch (e) {
       setError(messageForError(e));
     } finally {

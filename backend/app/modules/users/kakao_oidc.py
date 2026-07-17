@@ -12,7 +12,6 @@ from app.core.exceptions import OAuthProviderUnavailable
 
 _JWKS_TIMEOUT = httpx.Timeout(connect=2.0, read=3.0, write=2.0, pool=2.0)
 
-# Cache keys: "value" (JWKS), "fresh_until", "stale_until" (unix ts).
 _jwks_cache: dict[str, Any] = {}
 
 
@@ -26,7 +25,7 @@ async def _fetch_jwks() -> dict[str, Any]:
                 resp.raise_for_status()
                 data: dict[str, Any] = resp.json()
                 return data
-            except Exception as exc:  # surface any transport/HTTP error uniformly
+            except Exception as exc:
                 last_exc = exc
                 continue
     raise OAuthProviderUnavailable() from last_exc
@@ -84,7 +83,12 @@ def _jwk_to_pem(jwk: dict[str, Any]) -> bytes:
 
 
 async def verify_id_token(token: str, *, expected_nonce: str | None = None) -> KakaoClaims:
-    """Verify a Kakao OIDC id_token. Failure paths log the exception class only, never token PII."""
+    """Verify a Kakao OIDC id_token. Failure paths log the exception class only, never token PII.
+
+    Valid ``aud`` values are the REST API key (web/server) and the Native App Key
+    (mobile SDK). SECURITY: when neither is configured the token is rejected
+    loudly — an empty audience list would make PyJWT skip the ``aud`` check
+    (token-substitution hole)."""
     import logging
 
     from app.core.exceptions import OAuthIdTokenInvalid
@@ -107,10 +111,8 @@ async def verify_id_token(token: str, *, expected_nonce: str | None = None) -> K
         log.info("verify_id_token: kid not in JWKS")
         raise OAuthIdTokenInvalid()
 
-    # `aud` is either REST API key (web/server) or Native App Key (mobile SDK).
     valid_audiences = [a for a in (settings.KAKAO_REST_API_KEY, settings.KAKAO_NATIVE_APP_KEY) if a]
 
-    # SECURITY: empty audiences would make PyJWT skip `aud` checks (token-substitution hole) — fail loudly.
     if not valid_audiences:
         log.error("verify_id_token: no configured Kakao audience — provider misconfigured")
         raise OAuthProviderUnavailable()
@@ -121,9 +123,9 @@ async def verify_id_token(token: str, *, expected_nonce: str | None = None) -> K
             token,
             pem,
             algorithms=["RS256"],
-            audience=valid_audiences,  # never None — empty audiences rejected above
+            audience=valid_audiences,
             issuer=settings.KAKAO_OIDC_ISSUER,
-            leeway=300,  # spec §1.2 allows ±5 min skew
+            leeway=300,
         )
     except jwt.InvalidTokenError as exc:
         log.info("verify_id_token: jwt.decode rejected (%s)", type(exc).__name__)

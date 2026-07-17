@@ -14,7 +14,6 @@ from app.main import app
 from app.modules.map.services import nearby_spots, nearby_spots_bbox
 from app.modules.spots.services import NearbyCategory
 
-# reference point near Gwanghwamun
 LAT, LNG = 37.5759, 126.9769
 
 
@@ -82,7 +81,6 @@ async def _seed(
         },
     )
     if overview is not None:
-        # overview lives only on spot_details (ADR-0007); exercises nearby's LEFT JOIN.
         await session.execute(
             text(
                 "INSERT INTO spot_details (content_id, content_type_id, overview) "
@@ -93,21 +91,20 @@ async def _seed(
 
 
 async def test_orders_by_distance_and_applies_radius(db_session: AsyncSession) -> None:
-    await _seed(db_session, "near", lat=LAT + 0.001, lng=LNG)  # ~110m
-    await _seed(db_session, "mid", lat=LAT + 0.005, lng=LNG)  # ~550m
-    await _seed(db_session, "far", lat=LAT + 0.05, lng=LNG)  # ~5.5km (outside)
+    await _seed(db_session, "near", lat=LAT + 0.001, lng=LNG)
+    await _seed(db_session, "mid", lat=LAT + 0.005, lng=LNG)
+    await _seed(db_session, "far", lat=LAT + 0.05, lng=LNG)
 
     rows = await nearby_spots(db_session, lat=LAT, lng=LNG, radius=1000, category=None)
     ids = [r.content_id for r in rows]
-    assert ids[:2] == ["near", "mid"]  # distance order
-    assert "far" not in ids  # outside radius
+    assert ids[:2] == ["near", "mid"]
+    assert "far" not in ids
     assert rows[0].dist is not None and rows[1].dist is not None
     assert rows[0].dist < rows[1].dist
 
 
 async def test_default_radius_is_3000(db_session: AsyncSession) -> None:
-    # ~2km spot must be caught by the default radius (3000).
-    await _seed(db_session, "between", lat=LAT + 0.018, lng=LNG)  # ~2km
+    await _seed(db_session, "between", lat=LAT + 0.018, lng=LNG)
 
     rows = await nearby_spots(db_session, lat=LAT, lng=LNG, radius=3000, category=None)
     ids = {r.content_id for r in rows}
@@ -132,17 +129,16 @@ async def test_category_filter_food_excludes_bakery(db_session: AsyncSession) ->
         db_session, lat=LAT, lng=LNG, radius=1000, category=NearbyCategory.food
     )
     ids = {r.content_id for r in rows}
-    assert ids == {"rest"}  # bakery FD030100 is not food
+    assert ids == {"rest"}
 
 
 async def test_no_category_restricts_to_defined_taxonomy(db_session: AsyncSession) -> None:
-    # category=None is the union of the 5 defined categories, not "no filter".
-    await _seed(db_session, "spot", lat=LAT, lng=LNG, l1="NA")  # attraction
-    await _seed(db_session, "uncat", lat=LAT, lng=LNG, l1="A0")  # matches no chip
+    await _seed(db_session, "spot", lat=LAT, lng=LNG, l1="NA")
+    await _seed(db_session, "uncat", lat=LAT, lng=LNG, l1="A0")
 
     rows = await nearby_spots(db_session, lat=LAT, lng=LNG, radius=1000, category=None)
     ids = {r.content_id for r in rows}
-    assert ids == {"spot"}  # unclassified A0 excluded even from the all view
+    assert ids == {"spot"}
 
 
 async def test_category_is_subtype_label(db_session: AsyncSession) -> None:
@@ -161,8 +157,8 @@ async def test_overview_left_join_passthrough(db_session: AsyncSession) -> None:
 
     rows = await nearby_spots(db_session, lat=LAT, lng=LNG, radius=1000, category=None)
     by_id = {r.content_id: r for r in rows}
-    assert by_id["withov"].overview == "40년대 지어진 한옥 카페"  # verbatim
-    assert by_id["noov"].overview is None  # not yet cached → None, not an error
+    assert by_id["withov"].overview == "40년대 지어진 한옥 카페"
+    assert by_id["noov"].overview is None
 
 
 async def test_region_meta_passthrough(db_session: AsyncSession) -> None:
@@ -204,9 +200,8 @@ async def test_nearby_route_returns_new_fields(db_session, client):
     assert resp.status_code == 200
     body = resp.json()
     item = next(i for i in body["data"] if i["contentId"] == "rt1")
-    assert item["category"] == "찻집"  # subtype label
+    assert item["category"] == "찻집"
     assert "dist" in item
-    # crowd / firstImage2Url / congestion were removed.
     assert "crowd" not in item
     assert "firstImage2Url" not in item
     assert "congestion" not in item
@@ -250,10 +245,9 @@ async def test_nearby_route_requires_lat_lng(db_session, client):
 
 
 async def test_bbox_returns_only_spots_inside_the_rectangle(db_session: AsyncSession) -> None:
-    # Inside a tight box around the reference point; one spot just outside it.
     await _seed(db_session, "in1", lat=LAT + 0.002, lng=LNG + 0.002)
     await _seed(db_session, "in2", lat=LAT - 0.002, lng=LNG - 0.002)
-    await _seed(db_session, "out", lat=LAT + 0.02, lng=LNG)  # north of the box
+    await _seed(db_session, "out", lat=LAT + 0.02, lng=LNG)
 
     rows = await nearby_spots_bbox(
         db_session,
@@ -264,8 +258,7 @@ async def test_bbox_returns_only_spots_inside_the_rectangle(db_session: AsyncSes
         category=None,
     )
     ids = [r.content_id for r in rows]
-    assert set(ids) == {"in1", "in2"}  # "out" is outside the bbox
-    # ordered by distance from the box center (LAT,LNG): both equidistant-ish, dist set
+    assert set(ids) == {"in1", "in2"}
     assert all(r.dist is not None for r in rows)
 
 
@@ -289,4 +282,4 @@ async def test_nearby_route_bbox_params_override_radius(db_session, client):
 
     assert resp.status_code == 200
     ids = {i["contentId"] for i in resp.json()["data"]}
-    assert ids == {"inbox"}  # outbox falls outside the rectangle
+    assert ids == {"inbox"}

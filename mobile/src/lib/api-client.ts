@@ -12,9 +12,6 @@ import { getAuthSession } from "@/lib/auth-session";
 
 type RetriableConfig = InternalAxiosRequestConfig & { _retried?: boolean };
 
-/** Response-rejected handler, extracted so the 401→refresh→retry branching is
-   unit-testable without a live server. `retry` re-issues the request and
-   defaults to `api.request`; runtime behavior is identical to inlining it. */
 export async function handleResponseError(
   error: AxiosError<Envelope<unknown>>,
   retry: (config: RetriableConfig) => Promise<unknown> = (config) => api.request(config),
@@ -36,18 +33,12 @@ export async function handleResponseError(
       throw appError;
     }
   }
-  // spec §7 — quiet guest demotion on an invalid/revoked session: drop the
-  // local session so the UI reactively falls back to guest, then surface the
-  // error. (AUTH_TOKEN_EXPIRED is handled above via refresh; GUEST_FORBIDDEN
-  // has no session to clear.) clear() is fire-and-forget — we throw next.
   if (appError.code === "AUTH_TOKEN_INVALID" || appError.code === "AUTH_SESSION_REVOKED") {
     void session?.clear();
   }
   throw appError;
 }
 
-/** Authed client — injects Bearer from auth-store, unwraps JSend, throws AppError.
-   On 401 AUTH_TOKEN_EXPIRED it refreshes once and retries the original request. */
 export const api = axiosCreate({
   baseURL: API_BASE,
   timeout: 15000,
@@ -62,10 +53,6 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-/* Same contained typing as bare-client: the fulfilled handler returns unwrapped
-   envelope data (not AxiosResponse). axios types the fulfilled return as
-   AxiosResponse, so the handler is cast at function level only — no `as any`,
-   no cast on the interceptor manager; runtime returns the data unchanged. */
 api.interceptors.response.use(
   ((response: AxiosResponse<Envelope<unknown>>): unknown => unwrapData(response.data)) as (
     r: AxiosResponse,

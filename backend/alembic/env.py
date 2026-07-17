@@ -17,9 +17,6 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from app.config import settings
 from app.core.db import Base
 
-# --- Import all models so Base.metadata is complete ---
-# Side-effect imports: F401 is suppressed for the whole alembic/* tree via ruff
-# per-file-ignores; no explicit noqa is needed (it would trigger RUF100).
 from app.modules.admin import models as _admin_models
 from app.modules.feed import models as _feed_models
 from app.modules.images import models as _images_models
@@ -37,12 +34,6 @@ target_metadata = Base.metadata
 
 
 def include_object(object_, name, type_, reflected, compare_to):
-    # `sync_runs` is owned by pipeline/ (CREATE TABLE IF NOT EXISTS in
-    # pictrip_data/sync/audit.py). It is never a backend model; exclude it from
-    # autogenerate so a drop is never emitted. (Monorepo invariant, CLAUDE.md.)
-    # `curations`/`curation_spots` are retired from serving (S13) but the tables
-    # are preserved by decision; their ORM models are gone, so exclude them too
-    # or autogenerate would emit drops.
     return not (type_ == "table" and name in {"sync_runs", "curations", "curation_spots"})
 
 

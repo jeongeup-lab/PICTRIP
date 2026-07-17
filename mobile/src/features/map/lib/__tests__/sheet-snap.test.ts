@@ -1,8 +1,6 @@
 import { sheetSnapY, CARD_PX, HALF_VISIBLE_PX, PEEK_VISIBLE_PX } from "../sheet-snap";
 
 describe("sheetSnapY", () => {
-  // Regression: half used to be a screen ratio (H * 0.42) that showed ~3 cards
-  // on tall phones; the entry default must reveal exactly TWO cards.
   it("half reveals exactly one card more than peek", () => {
     expect(HALF_VISIBLE_PX - PEEK_VISIBLE_PX).toBe(CARD_PX);
     for (const h of [667, 852, 932]) {

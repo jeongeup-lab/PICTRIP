@@ -93,6 +93,9 @@ class UserAuthProvider(Base):
 
 
 class UserConsent(Base):
+    """The DB also has a `notification_consent` column (default false) that is
+    intentionally unmapped here — expand/contract migration in flight."""
+
     __tablename__ = "user_consents"
 
     user_id: Mapped[int] = mapped_column(
@@ -102,7 +105,6 @@ class UserConsent(Base):
     )
     location_consent: Mapped[bool] = mapped_column(Boolean, server_default=false(), nullable=False)
     photo_consent: Mapped[bool] = mapped_column(Boolean, server_default=false(), nullable=False)
-    # `notification_consent` DB column intentionally unmapped (expand/contract; has DB default false).
     terms_version: Mapped[str] = mapped_column(String(16), nullable=False)
     consented_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
