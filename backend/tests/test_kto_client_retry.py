@@ -29,6 +29,15 @@ def test_non_transient_4xx_raise_immediately(status: int) -> None:
 def test_connection_errors_are_retried() -> None:
     request = httpx.Request("GET", "https://apis.data.go.kr/test")
     assert _is_transient(httpx.ConnectTimeout("timeout", request=request)) is True
+    assert _is_transient(httpx.ConnectError("refused", request=request)) is True
+    assert _is_transient(httpx.RemoteProtocolError("server hung up", request=request)) is True
+
+
+def test_deterministic_client_errors_are_not_retried() -> None:
+    request = httpx.Request("GET", "https://apis.data.go.kr/test")
+    assert _is_transient(httpx.UnsupportedProtocol("bad scheme", request=request)) is False
+    assert _is_transient(httpx.TooManyRedirects("loop", request=request)) is False
+    assert _is_transient(httpx.DecodingError("bad gzip", request=request)) is False
 
 
 def test_unrelated_exceptions_are_not_retried() -> None:

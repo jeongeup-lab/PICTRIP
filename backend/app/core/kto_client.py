@@ -22,13 +22,16 @@ logger = get_logger(__name__)
 
 
 def _is_transient(exc: BaseException) -> bool:
-    """Retry only on transient errors: connection/timeout problems, HTTP 429,
-    and 5xx. A non-transient 4xx (e.g. a bad serviceKey) must raise immediately
-    instead of burning retries against the daily quota."""
+    """Retry only on transient errors: timeouts, network drops, HTTP 429 and 5xx.
+
+    Everything else raises immediately: non-transient 4xx (e.g. a bad
+    serviceKey) and deterministic client errors (UnsupportedProtocol,
+    TooManyRedirects, ...) never succeed on retry and only burn the daily
+    quota or add latency."""
     if isinstance(exc, httpx.HTTPStatusError):
         status = exc.response.status_code
         return status == 429 or status >= 500
-    return isinstance(exc, httpx.RequestError)
+    return isinstance(exc, (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError))
 
 
 class KtoService(StrEnum):
