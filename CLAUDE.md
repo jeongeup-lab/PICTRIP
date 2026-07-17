@@ -6,10 +6,10 @@ Contest — 1차 deadline **2026-09-21 16:00 KST**.
 Monorepo with 5 deploy units + docs (`AGENTS.md` is a symlink to this file).
 화면 기준(디자인 SSOT)은 **구현된 앱**(`mobile/src`) — 신규 화면 디자인은
 일회성 핸드오프(html 프로토타입)로 만들고 구현 후 폐기한다(리포에 목업을
-쌓지 않는다; `admin/mockups/`만 예외 — 어드민 UI의 소스다). 문서는 현행판
-4종만 유지한다: `docs/product.md`(무엇) · `docs/architecture.md`(API·DB) ·
-`docs/operations.md`(배포·운영) · `docs/decisions.md`(결정 로그, append-only).
-구 설계 스펙(S00–S13)·플랜은 삭제됨 — git 히스토리와 decisions.md가 기록.
+쌓지 않는다; `admin/mockups/`만 예외 — 어드민 UI의 소스다). 문서는
+[Diátaxis](https://diataxis.fr) 4분류 — `docs/explanation/`(이해) ·
+`docs/how-to/`(작업) · `docs/reference/`(조회) · `docs/adr/`(결정, 불변) —
+인덱스·작성 규칙은 `docs/README.md`. 현행만 기록하고 히스토리는 ADR+git이 담당.
 
 ## Repo layout
 
@@ -22,7 +22,7 @@ Monorepo with 5 deploy units + docs (`AGENTS.md` is a symlink to this file).
 | `workers/img-proxy/` | 이미지 프록시 Worker — `img.pictrip.org` | Cloudflare |
 | `deploy/api-host/` · `deploy/monitoring/` | Ops/IaC | CT112 / CT113 |
 | `admin/` | 어드민 UI 소스(`mockups/`) — code lives in `backend/app/modules/admin/` | — |
-| `docs/` | 현행 문서 4종 (product · architecture · operations · decisions) | — |
+| `docs/` | Diátaxis 문서 (explanation · how-to · reference · adr) | — |
 
 ## Commands
 
