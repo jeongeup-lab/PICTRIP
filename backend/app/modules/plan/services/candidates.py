@@ -11,8 +11,13 @@ from app.core.logging import get_logger
 from app.modules.map.services import search_place
 from app.modules.plan.naver_local import NaverPlace, search_local
 from app.modules.plan.services.intent import PlanIntent
-from app.modules.spots.services import NearbyCategory, NearbySpotRow, find_nearby_spots
-from app.web.errors import PlanRegionNotFound
+from app.modules.spots.services import (
+    NearbyCategory,
+    NearbySpotRow,
+    find_nearby_spots,
+    load_active_spot_cards_by_ids,
+)
+from app.web.errors import PlanNotEnoughSpots, PlanRegionNotFound
 
 logger = get_logger(__name__)
 
@@ -25,6 +30,7 @@ _MEALS_PER_DAY = 2
 _CAFES_PER_DAY = 1
 _ATTRACTIONS_PER_DAY = 2
 _NAVER_MAX_DISPLAY = 5
+_PICKER_POOL_SIZE = 12
 _MEAL_EXCLUDE_KEYWORDS = ("카페", "디저트", "베이커리", "간식", "찻집", "분식", "닭강정")
 _CAFE_INCLUDE_KEYWORDS = ("카페", "커피", "디저트", "베이커리", "찻집")
 _FOOD_MAX_KM_FROM_ANCHOR = 15.0
@@ -206,16 +212,22 @@ async def _kto_food_fallback(
     return out
 
 
-async def collect_candidates(session: AsyncSession, intent: PlanIntent) -> PlanCandidates:
-    region = intent.region or ""
+async def _resolve_anchor(region: str) -> tuple[float, float]:
     anchor = await search_place(region)
     if anchor is None:
         raise PlanRegionNotFound()
-    anchor_lat, anchor_lng = anchor
+    return anchor
 
-    days = intent.days or 1
-    needed = days * _ATTRACTIONS_PER_DAY + 1
 
+async def _collect_attractions(
+    session: AsyncSession,
+    *,
+    anchor_lat: float,
+    anchor_lng: float,
+    needed: int,
+    exclude_ids: set[str] | None = None,
+) -> list[NearbySpotRow]:
+    exclude = exclude_ids or set()
     attractions = await find_nearby_spots(
         session,
         lat=anchor_lat,
@@ -223,7 +235,7 @@ async def collect_candidates(session: AsyncSession, intent: PlanIntent) -> PlanC
         radius=_ATTRACTION_RADIUS_M,
         category=NearbyCategory.attraction,
     )
-    attractions = [r for r in attractions if r.first_image_url]
+    attractions = [r for r in attractions if r.first_image_url and r.content_id not in exclude]
     if len(attractions) < needed:
         wide = await find_nearby_spots(
             session,
@@ -232,9 +244,20 @@ async def collect_candidates(session: AsyncSession, intent: PlanIntent) -> PlanC
             radius=_ATTRACTION_RADIUS_WIDE_M,
             category=NearbyCategory.attraction,
         )
-        seen = {r.content_id for r in attractions}
+        seen = {r.content_id for r in attractions} | exclude
         attractions.extend(r for r in wide if r.first_image_url and r.content_id not in seen)
+    return attractions
 
+
+async def _collect_food(
+    session: AsyncSession,
+    *,
+    region: str,
+    days: int,
+    anchor_lat: float,
+    anchor_lng: float,
+    attractions: list[NearbySpotRow],
+) -> tuple[list[FoodCandidate], list[FoodCandidate]]:
     meals_raw, cafes_raw = await asyncio.gather(
         search_local(f"{region} 맛집", display=_NAVER_MAX_DISPLAY),
         search_local(f"{region} 카페", display=_NAVER_MAX_DISPLAY),
@@ -276,16 +299,131 @@ async def collect_candidates(session: AsyncSession, intent: PlanIntent) -> PlanC
             limit=days * _CAFES_PER_DAY,
         )
     )
-
     logger.info(
-        "plan.candidates.collected",
+        "plan.food.collected",
         region=region,
         locality=locality,
-        attractions=len(attractions),
         meals=len(meals),
         cafes=len(cafes),
         naver_meals=naver_meal_count,
         naver_cafes=naver_cafe_count,
+    )
+    return meals, cafes
+
+
+async def collect_candidates(session: AsyncSession, intent: PlanIntent) -> PlanCandidates:
+    region = intent.region or ""
+    anchor_lat, anchor_lng = await _resolve_anchor(region)
+    days = intent.days or 1
+
+    attractions = await _collect_attractions(
+        session,
+        anchor_lat=anchor_lat,
+        anchor_lng=anchor_lng,
+        needed=days * _ATTRACTIONS_PER_DAY + 1,
+    )
+    meals, cafes = await _collect_food(
+        session,
+        region=region,
+        days=days,
+        anchor_lat=anchor_lat,
+        anchor_lng=anchor_lng,
+        attractions=attractions,
+    )
+    logger.info("plan.candidates.collected", region=region, attractions=len(attractions))
+    return PlanCandidates(
+        anchor_lat=anchor_lat,
+        anchor_lng=anchor_lng,
+        attractions=attractions,
+        meals=meals,
+        cafes=cafes,
+    )
+
+
+async def picker_pool(session: AsyncSession, intent: PlanIntent) -> list[NearbySpotRow]:
+    anchor_lat, anchor_lng = await _resolve_anchor(intent.region or "")
+    rows = await _collect_attractions(
+        session,
+        anchor_lat=anchor_lat,
+        anchor_lng=anchor_lng,
+        needed=_PICKER_POOL_SIZE,
+    )
+    seen_titles: set[str] = set()
+    pool: list[NearbySpotRow] = []
+    for row in rows:
+        if row.title in seen_titles:
+            continue
+        seen_titles.add(row.title)
+        pool.append(row)
+        if len(pool) >= _PICKER_POOL_SIZE:
+            break
+    return pool
+
+
+def _card_to_row(card_id: str, card: object) -> NearbySpotRow | None:
+    title = getattr(card, "title", None)
+    mapx = getattr(card, "mapx", None)
+    mapy = getattr(card, "mapy", None)
+    if not title or mapx is None or mapy is None:
+        return None
+    return NearbySpotRow(
+        content_id=card_id,
+        title=str(title),
+        first_image_url=getattr(card, "first_image_url", None),
+        addr1=getattr(card, "addr1", None),
+        mapx=float(mapx),
+        mapy=float(mapy),
+        dist=0.0,
+        category=getattr(card, "category", None),
+    )
+
+
+async def collect_for_picks(
+    session: AsyncSession, intent: PlanIntent, picked_ids: list[str]
+) -> PlanCandidates:
+    days = intent.days or 1
+    needed = days * _ATTRACTIONS_PER_DAY
+
+    cards = await load_active_spot_cards_by_ids(session, picked_ids[:needed])
+    picked: list[NearbySpotRow] = []
+    for cid in picked_ids[:needed]:
+        card = cards.get(cid)
+        if card is None:
+            continue
+        row = _card_to_row(cid, card)
+        if row is not None:
+            picked.append(row)
+    if not picked:
+        raise PlanNotEnoughSpots()
+
+    anchor_lat = sum(r.mapy or 0.0 for r in picked) / len(picked)
+    anchor_lng = sum(r.mapx or 0.0 for r in picked) / len(picked)
+
+    fillers: list[NearbySpotRow] = []
+    if len(picked) < needed:
+        nearby = await _collect_attractions(
+            session,
+            anchor_lat=anchor_lat,
+            anchor_lng=anchor_lng,
+            needed=needed,
+            exclude_ids={r.content_id for r in picked},
+        )
+        fillers = nearby[: needed - len(picked)]
+
+    attractions = picked + fillers
+    meals, cafes = await _collect_food(
+        session,
+        region=intent.region or "",
+        days=days,
+        anchor_lat=anchor_lat,
+        anchor_lng=anchor_lng,
+        attractions=attractions,
+    )
+    logger.info(
+        "plan.candidates.picked",
+        region=intent.region,
+        picked=len(picked),
+        fillers=len(fillers),
     )
     return PlanCandidates(
         anchor_lat=anchor_lat,

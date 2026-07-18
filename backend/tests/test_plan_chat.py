@@ -120,6 +120,81 @@ async def test_create_plan_without_region_falls_back_to_ask(db_session, monkeypa
     assert res.reply.type == "text"
 
 
+async def test_create_plan_without_days_asks_duration(db_session, monkeypatch):
+    _turn_stub(monkeypatch, AgentTurn(call_name="create_plan", call_args={"region": "강릉"}))
+    redis = FakeRedis(decode_responses=False)
+
+    res = await handle_chat(
+        db_session, redis, req=ChatRequest(message="강릉 여행가고싶다"), user_id=None
+    )
+    assert res.reply.type == "text"
+    assert res.reply.plan is None
+    assert "강릉" in res.reply.text
+    assert res.reply.chips == ["당일치기", "1박 2일", "2박 3일"]
+
+
+async def test_create_plan_with_pool_shows_picker_then_generates_from_picks(
+    db_session, monkeypatch
+):
+    _turn_stub(
+        monkeypatch, AgentTurn(call_name="create_plan", call_args={"region": "강릉", "days": 1})
+    )
+    _narrate_stub(monkeypatch)
+    _candidates_stubs(monkeypatch)
+    for i in range(5):
+        await _seed_spot(db_session, f"p{i}", lat=ANCHOR_LAT + 0.004 + i * 0.002, lng=ANCHOR_LNG)
+    redis = FakeRedis(decode_responses=False)
+
+    res = await handle_chat(
+        db_session, redis, req=ChatRequest(message="강릉 당일치기"), user_id=None
+    )
+    assert res.reply.type == "pick"
+    assert res.reply.pick is not None
+    assert res.reply.pick.maxPicks == 2
+    assert len(res.reply.pick.spots) >= 4
+    assert all(s.imageUrl for s in res.reply.pick.spots)
+    assert res.reply.chips == ["알아서 짜줘"]
+
+    picked = [res.reply.pick.spots[3].contentId, res.reply.pick.spots[1].contentId]
+    _turn_stub(monkeypatch, None)
+    res2 = await handle_chat(
+        db_session,
+        redis,
+        req=ChatRequest(threadId=res.threadId, message="이 사진들로 짜줘", picks=picked),
+        user_id=None,
+    )
+    assert res2.reply.type == "plan"
+    plan = res2.reply.plan
+    assert plan is not None
+    attraction_ids = {s.contentId for d in plan.days for s in d.slots if s.type == "attraction"}
+    assert set(picked) <= attraction_ids
+
+
+async def test_auto_message_after_picker_generates(db_session, monkeypatch):
+    _turn_stub(
+        monkeypatch, AgentTurn(call_name="create_plan", call_args={"region": "강릉", "days": 1})
+    )
+    _narrate_stub(monkeypatch)
+    _candidates_stubs(monkeypatch)
+    for i in range(5):
+        await _seed_spot(db_session, f"q{i}", lat=ANCHOR_LAT + 0.004 + i * 0.002, lng=ANCHOR_LNG)
+    redis = FakeRedis(decode_responses=False)
+
+    res = await handle_chat(
+        db_session, redis, req=ChatRequest(message="강릉 당일치기"), user_id=None
+    )
+    assert res.reply.type == "pick"
+
+    _turn_stub(monkeypatch, None)
+    res2 = await handle_chat(
+        db_session,
+        redis,
+        req=ChatRequest(threadId=res.threadId, message="알아서 짜줘"),
+        user_id=None,
+    )
+    assert res2.reply.type == "plan"
+
+
 async def test_recommend_places_turn_returns_cards(db_session, monkeypatch):
     _turn_stub(
         monkeypatch,
