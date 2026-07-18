@@ -8,6 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.plan.llm import AgentTurn
+from app.modules.plan.naver_local import NaverPlace
 from app.modules.plan.repositories import PhotoMatchRow
 from app.modules.plan.schemas import ChatRequest, UserLocation
 from app.modules.plan.services.chat import handle_chat
@@ -110,6 +111,120 @@ async def test_nearest_matches_without_location_asks_permission(db_session, monk
     )
     assert res.reply.type == "text"
     assert "위치" in res.reply.text
+
+
+async def test_recommend_retries_with_locality(db_session, monkeypatch):
+    async def fake_turn(**kwargs):
+        return AgentTurn(
+            call_name="recommend_places", call_args={"query": "남애항 스카이워크 전망대 맛집"}
+        )
+
+    queries: list[str] = []
+
+    async def fake_local(query: str, *, display: int = 5):
+        queries.append(query)
+        if "양양" in query:
+            return [NaverPlace("남애복집", "한식", "강원 양양군", 38.02, 128.75)]
+        return []
+
+    monkeypatch.setattr("app.modules.plan.services.chat.generate_turn", fake_turn)
+    monkeypatch.setattr("app.modules.plan.services.chat.search_local", fake_local)
+    redis = FakeRedis(decode_responses=False)
+    await redis.set(
+        "plan:thread:t3",
+        json.dumps(
+            {
+                "messages": [],
+                "selected": {
+                    "name": "남애항 스카이워크 전망대",
+                    "address": "강원특별자치도 양양군 현남면",
+                    "lat": 38.02,
+                    "lng": 128.75,
+                },
+            }
+        ),
+    )
+
+    res = await handle_chat(
+        db_session, redis, req=ChatRequest(threadId="t3", message="근처 맛집 있어?"), user_id=None
+    )
+    assert res.reply.type == "places"
+    assert res.reply.places and res.reply.places[0].name == "남애복집"
+    assert any("양양" in q for q in queries)
+
+
+async def test_recommend_falls_back_to_kto_when_naver_empty(db_session, monkeypatch):
+    async def fake_turn(**kwargs):
+        return AgentTurn(call_name="recommend_places", call_args={"query": "오지 맛집"})
+
+    async def fake_local(query: str, *, display: int = 5):
+        return []
+
+    monkeypatch.setattr("app.modules.plan.services.chat.generate_turn", fake_turn)
+    monkeypatch.setattr("app.modules.plan.services.chat.search_local", fake_local)
+    await db_session.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, first_image_url, "
+            "show_flag, mapx, mapy, lcls_systm2, addr1) "
+            "VALUES ('900', 39, '산골식당', 'http://kto/9.jpg', 1, 128.75, 38.02, 'FD01', '강원 양양군')"
+        )
+    )
+    redis = FakeRedis(decode_responses=False)
+    await redis.set(
+        "plan:thread:t4",
+        json.dumps(
+            {
+                "messages": [],
+                "selected": {
+                    "name": "전망대",
+                    "address": "강원 양양군",
+                    "lat": 38.02,
+                    "lng": 128.75,
+                },
+            }
+        ),
+    )
+
+    res = await handle_chat(
+        db_session, redis, req=ChatRequest(threadId="t4", message="근처 맛집?"), user_id=None
+    )
+    assert res.reply.type == "places"
+    assert res.reply.places and res.reply.places[0].source == "kto"
+    assert res.reply.places[0].name == "산골식당"
+
+
+async def test_distance_between_uses_selected_origin(db_session, monkeypatch):
+    async def fake_turn(**kwargs):
+        return AgentTurn(call_name="distance_between", call_args={"target": "이원식당"})
+
+    monkeypatch.setattr("app.modules.plan.services.chat.generate_turn", fake_turn)
+    redis = FakeRedis(decode_responses=False)
+    await redis.set(
+        "plan:thread:t5",
+        json.dumps(
+            {
+                "messages": [],
+                "selected": {
+                    "name": "주벅배전망대",
+                    "address": "충남 서산시",
+                    "lat": 36.77,
+                    "lng": 126.35,
+                },
+                "places": [
+                    {"name": "이원식당", "lat": 36.86, "lng": 126.30, "address": "충남 태안군"}
+                ],
+            }
+        ),
+    )
+
+    res = await handle_chat(
+        db_session,
+        redis,
+        req=ChatRequest(threadId="t5", message="이원식당이랑 얼마나 떨어져있어?"),
+        user_id=None,
+    )
+    assert res.reply.type == "text"
+    assert "주벅배전망대" in res.reply.text and "km" in res.reply.text
 
 
 async def test_select_spot_returns_intro_card(db_session: AsyncSession, monkeypatch):

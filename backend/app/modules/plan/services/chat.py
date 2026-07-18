@@ -9,6 +9,7 @@ from redis.asyncio import Redis
 from app.core.db import AsyncSession
 from app.core.logging import get_logger
 from app.modules.plan import repositories
+from app.modules.plan.labels import category_label
 from app.modules.plan.links import place_links
 from app.modules.plan.llm import generate_json, generate_turn
 from app.modules.plan.naver_local import search_local
@@ -25,7 +26,12 @@ from app.modules.plan.services.assemble import assemble_days
 from app.modules.plan.services.candidates import collect_candidates, collect_for_picks, picker_pool
 from app.modules.plan.services.intent import PlanIntent, clamp_days
 from app.modules.plan.services.narrate import narrate_plan
-from app.modules.spots.services import load_active_spot_cards_by_ids
+from app.modules.spots.services import (
+    NearbyCategory,
+    find_nearby_spots,
+    load_active_spot_cards_by_ids,
+    load_overview_map,
+)
 from app.web.errors import PlanAgentUnavailable, ResourceNotFound
 
 logger = get_logger(__name__)
@@ -36,21 +42,21 @@ _MAX_THREAD_MESSAGES = 20
 _MAX_CONTEXT_MESSAGES = 12
 
 _SYSTEM = (
-    "너는 PICTRIP AI, 한국 국내여행 도우미다. 항상 한국어 해요체로 짧게 답한다. 이모지 금지. "
+    "너는 PICTRIP AI, 한국 국내여행 도우미다. 반드시 '-이에요/-해요'로 끝나는 해요체로 짧게 답한다. "
+    "'-습니다/-입니다'·이모지 금지. "
     "도구 규칙: "
-    "1) 사용자가 여행 일정(코스)을 원하면 create_plan을 호출한다. "
-    "목적지가 도시·시군구면 place_type=region, 특정 명소·해변·역이면 place_type=spot으로 구분한다. "
-    "당일치기=1, 1박 2일=2, 2박 3일=3, 상한 3. '주말'처럼 기간을 유추할 수 있으면 유추하되, "
-    "기간을 전혀 알 수 없으면 days를 생략하고 호출한다(임의로 정하지 않는다). "
-    "2) 특정 장소·역·동네 주변의 맛집·카페·가볼 곳 같은 단건 추천 질문에는 recommend_places를 호출한다. "
-    "query에는 위치와 조건을 그대로 담는다. 예: '어린이대공원역 작업하기 좋은 카페'. "
-    "3) 일정을 만들기에 지역이나 기간이 부족하면 도구를 호출하지 말고 부족한 것 한 가지만 짧게 되묻는다. "
-    "지역이 없는데 분위기(바다·산·먹방 등)를 말하면 어울리는 국내 지역 2~3곳을 예로 들며 되묻는다. "
-    "4) 이미 만든 일정을 고쳐 달라고 하면 바뀐 조건을 반영해 create_plan을 다시 호출한다. "
-    "5) 사용자가 사진을 올려 매칭된 여행지 목록이 컨텍스트에 있으면 그 목록에 대한 질문"
-    "(가까운 곳, 특정 여행지 설명, 그 주변 맛집·카페)에 우선 대응한다. "
-    "현재 위치 기준 정렬 요청에는 nearest_matches를 호출한다. "
-    "6) 여행과 무관한 요청은 정중히 여행 얘기로 돌린다."
+    "1) 여행 일정(코스) 요청이면 create_plan. 목적지가 도시·시군구면 place_type=region, "
+    "특정 명소·해변·역이면 place_type=spot. 기간을 모르면 days를 생략하고 호출한다. "
+    "2) 특정 위치 주변의 맛집·카페·가볼 곳 추천 질문이면 recommend_places. "
+    "query는 '지역명 맛집'처럼 짧게 만든다(예: '양양 현남면 맛집'). 시설 이름 전체를 넣지 않는다. "
+    "3) 두 장소 사이 거리나 '얼마나 떨어져 있어' 질문이면 distance_between을 호출한다. "
+    "target에는 상대 장소명을 넣는다. "
+    "4) 사용자 현재 위치 기준 정렬 요청이면 nearest_matches. "
+    "5) 영업시간·입장료·주차처럼 확인 안 된 사실은 단정하지 말고, 일반적인 경향만 말한 뒤 "
+    "상세 보기나 네이버 지도 확인을 안내한다. "
+    "6) 사진 매칭 목록·선택된 여행지가 컨텍스트에 있으면 그것을 기준으로 답한다. "
+    "7) 일정 요청인데 지역을 모르면 어울리는 국내 지역 2~3곳을 예로 들며 짧게 되묻는다. "
+    "8) 여행과 무관한 요청은 정중히 여행 얘기로 돌린다."
 )
 
 _TOOLS: list[dict[str, Any]] = [
@@ -78,6 +84,17 @@ _TOOLS: list[dict[str, Any]] = [
                 "themes": {"type": "ARRAY", "items": {"type": "STRING"}},
             },
             "required": ["region"],
+        },
+    },
+    {
+        "name": "distance_between",
+        "description": "선택된 여행지(또는 사용자 위치)와 특정 장소 사이의 거리를 계산해 알려준다.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "target": {"type": "STRING", "description": "거리를 잴 상대 장소명. 예: 이원식당"}
+            },
+            "required": ["target"],
         },
     },
     {
@@ -110,6 +127,7 @@ _PICK_TEXT = (
 _AUTO_MESSAGE = "알아서 짜줘"
 _ATTRACTIONS_PER_DAY = 2
 _PLACES_FOUND = "네이버에서 리뷰 많은 순으로 골라봤어요."
+_PLACES_FOUND_KTO = "네이버 결과가 없어서 한국관광공사 데이터에서 주변 식당을 찾았어요."
 _NEAREST_FOUND = "현재 위치에서 가까운 순으로 정렬했어요."
 _NEAREST_NO_LOCATION = "위치 정보를 받지 못했어요. 브라우저(앱)의 위치 권한을 허용해 주세요."
 _NEAREST_NO_MATCHES = "먼저 사진을 올려서 닮은 여행지를 찾아볼까요?"
@@ -249,7 +267,11 @@ async def _select_spot_reply(
     if card is None:
         return ChatReply(type="text", text="해당 여행지를 찾지 못했어요.")
     name = str(getattr(card, "title", ""))
-    category = getattr(card, "category", None) or getattr(card, "lcls_systm3_nm", None) or "여행지"
+    category = (
+        getattr(card, "lcls_systm3_nm", None)
+        or category_label(getattr(card, "category", None))
+        or "여행지"
+    )
     addr = getattr(card, "addr1", None)
     place = PlaceCard(
         name=name,
@@ -261,13 +283,16 @@ async def _select_spot_reply(
         imageUrl=getattr(card, "first_image_url", None),
         links=place_links(name, getattr(card, "mapy", None), getattr(card, "mapx", None)),
     )
+    overview_map = await load_overview_map(session, [content_id])
+    overview = (overview_map.get(content_id) or "")[:400]
     intro_raw = await generate_json(
         system=(
-            "너는 한국 국내여행 도우미다. 주어진 여행지 메타데이터로 2문장 소개를 쓴다. "
+            "너는 한국 국내여행 도우미다. 주어진 여행지 정보로 2~3문장 소개를 쓴다. "
             "반드시 '-이에요/-해요'로 끝나는 해요체. '-습니다/-입니다'·이모지 금지. "
-            "주어진 사실(이름·분류·주소) 밖의 구체 정보는 지어내지 않는다. JSON으로만 답한다."
+            "공식 설명이 있으면 그 내용을 근거로 핵심만 자기 문장으로 풀어 쓰고, "
+            "공식 설명에 없는 구체 정보(영업시간·요금 등)는 지어내지 않는다. JSON으로만 답한다."
         ),
-        user=f"이름: {name}, 분류: {category}, 주소: {addr}",
+        user=f"이름: {name}\n분류: {category}\n주소: {addr}\n공식 설명: {overview or '없음'}",
         schema={
             "type": "OBJECT",
             "properties": {"intro": {"type": "STRING"}},
@@ -280,15 +305,57 @@ async def _select_spot_reply(
         if intro_raw and intro_raw.get("intro")
         else _SPOT_INTRO_FALLBACK.format(name=name, category=category)
     )
-    state["selected"] = {"contentId": content_id, "name": name, "address": addr}
+    state["selected"] = {
+        "contentId": content_id,
+        "name": name,
+        "address": addr,
+        "lat": getattr(card, "mapy", None),
+        "lng": getattr(card, "mapx", None),
+    }
     return ChatReply(type="spot", text=intro, spot=place)
 
 
-async def _recommend_places(query: str) -> ChatReply:
+_FOOD_KEYWORDS = ("맛집", "밥집", "카페", "술집", "빵집", "식당", "삼겹살")
+
+
+def _context_anchor(state: dict[str, Any]) -> tuple[float, float, str | None] | None:
+    selected = state.get("selected")
+    if isinstance(selected, dict) and selected.get("lat") and selected.get("lng"):
+        return float(selected["lat"]), float(selected["lng"]), selected.get("address")
+    for m in state.get("matches") or []:
+        if m.get("lat") and m.get("lng"):
+            return float(m["lat"]), float(m["lng"]), m.get("address")
+    return None
+
+
+def _locality_of(address: str | None) -> str | None:
+    if not address:
+        return None
+    parts = str(address).split()
+    if len(parts) < 2:
+        return None
+    sido = parts[0]
+    for suffix in ("특별자치도", "특별자치시", "특별시", "광역시", "도"):
+        if sido.endswith(suffix):
+            sido = sido[: -len(suffix)]
+            break
+    return f"{sido} {parts[1]}"
+
+
+async def _recommend_places(session: AsyncSession, state: dict[str, Any], query: str) -> ChatReply:
+    keyword = next((k for k in _FOOD_KEYWORDS if k in query), "맛집")
+    anchor = _context_anchor(state)
+
     places = await search_local(query, display=5)
+    if not places and anchor and anchor[2]:
+        locality = _locality_of(anchor[2])
+        if locality and locality not in query:
+            places = await search_local(f"{locality} {keyword}", display=5)
+
     cards = [
         PlaceCard(
             name=p.name,
+            source="naver",
             category=p.category,
             address=p.address,
             lat=p.lat,
@@ -297,9 +364,96 @@ async def _recommend_places(query: str) -> ChatReply:
         )
         for p in places
     ]
+
+    if not cards and anchor:
+        category = NearbyCategory.cafe if keyword == "카페" else NearbyCategory.food
+        rows = await find_nearby_spots(
+            session, lat=anchor[0], lng=anchor[1], radius=8_000, category=category
+        )
+        cards = [
+            PlaceCard(
+                name=r.title,
+                source="kto",
+                contentId=r.content_id,
+                category=category_label("cafe" if category is NearbyCategory.cafe else "food"),
+                address=r.addr1,
+                lat=r.mapy,
+                lng=r.mapx,
+                imageUrl=r.first_image_url,
+                links=place_links(r.title, r.mapy, r.mapx),
+            )
+            for r in rows[:5]
+        ]
+
     if not cards:
         return ChatReply(type="text", text=_PLACES_EMPTY)
-    return ChatReply(type="places", text=_PLACES_FOUND, places=cards)
+
+    state["places"] = [
+        {
+            "name": c.name,
+            "lat": c.lat,
+            "lng": c.lng,
+            "address": c.address,
+        }
+        for c in cards
+    ]
+    text = _PLACES_FOUND if cards[0].source == "naver" else _PLACES_FOUND_KTO
+    return ChatReply(type="places", text=text, places=cards)
+
+
+def _km_between(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    import math
+
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lng2 - lng1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * 6371.0 * math.asin(math.sqrt(a))
+
+
+def _distance_reply(state: dict[str, Any], req: ChatRequest, target: str) -> ChatReply:
+    from difflib import SequenceMatcher
+
+    def ratio(a: str, b: str) -> float:
+        return SequenceMatcher(None, a.replace(" ", ""), b.replace(" ", "")).ratio()
+
+    pool: list[dict[str, Any]] = []
+    pool.extend(state.get("places") or [])
+    pool.extend(state.get("matches") or [])
+    best = None
+    for item in pool:
+        name = str(item.get("name") or "")
+        if not name or item.get("lat") is None or item.get("lng") is None:
+            continue
+        r = ratio(target, name)
+        if r >= 0.45 and (best is None or r > best[0]):
+            best = (r, item)
+    if best is None:
+        return ChatReply(type="text", text=f"'{target}'의 위치 정보를 찾지 못했어요.")
+
+    item = best[1]
+    selected = state.get("selected")
+    if isinstance(selected, dict) and selected.get("lat") and selected.get("lng"):
+        origin_name = str(selected.get("name"))
+        km = _km_between(
+            float(selected["lat"]),
+            float(selected["lng"]),
+            float(item["lat"]),
+            float(item["lng"]),
+        )
+    elif req.location is not None:
+        origin_name = "현재 위치"
+        km = _km_between(req.location.lat, req.location.lng, float(item["lat"]), float(item["lng"]))
+    else:
+        return ChatReply(type="text", text=_NEAREST_NO_LOCATION)
+
+    drive_min = max(3, round(km / 40 * 60))
+    if km < 1.5:
+        walk_min = max(2, round(km * 1000 / 67))
+        text = f"{origin_name}에서 {item['name']}까지 직선거리 약 {km:.1f}km, 걸어서 {walk_min}분쯤이에요."
+    else:
+        text = f"{origin_name}에서 {item['name']}까지 직선거리 약 {km:.1f}km, 차로 {drive_min}분쯤이에요."
+    return ChatReply(type="text", text=text)
 
 
 async def handle_chat(
@@ -403,7 +557,14 @@ async def handle_chat(
         reply = _nearest_matches_reply(state, req)
     elif turn.call_name == "recommend_places":
         query = str((turn.call_args or {}).get("query") or req.message).strip()
-        reply = await _recommend_places(query)
+        reply = await _recommend_places(session, state, query)
+    elif turn.call_name == "distance_between":
+        target = str((turn.call_args or {}).get("target") or "").strip()
+        reply = (
+            _distance_reply(state, req, target)
+            if target
+            else ChatReply(type="text", text="어느 장소와의 거리인지 알려줄래요?")
+        )
     else:
         reply = ChatReply(type="text", text=turn.text or _FALLBACK_ASK)
 

@@ -75,6 +75,7 @@ class ChatRequest(BaseModel):
 
 class PlaceCard(BaseModel):
     name: str
+    source: Literal["naver", "kto"] = "naver"
     contentId: str | None = None
     category: str | None = None
     address: str | None = None

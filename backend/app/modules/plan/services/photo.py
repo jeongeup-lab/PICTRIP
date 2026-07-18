@@ -8,6 +8,7 @@ from redis.asyncio import Redis
 from app.core.db import AsyncSession
 from app.core.logging import get_logger
 from app.ml.embedding import embedder
+from app.modules.plan.labels import category_label
 from app.modules.plan.llm import describe_image
 from app.modules.plan.repositories import PhotoMatchRow, match_spots_by_vector
 from app.modules.plan.schemas import MatchCard, PhotoResponse
@@ -26,7 +27,7 @@ def _to_card(row: PhotoMatchRow) -> MatchCard:
     return MatchCard(
         contentId=row.content_id,
         name=row.title,
-        category=row.category,
+        category=category_label(row.category),
         address=row.addr1,
         lat=row.lat,
         lng=row.lng,
