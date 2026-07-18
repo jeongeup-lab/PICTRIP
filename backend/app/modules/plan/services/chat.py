@@ -12,7 +12,7 @@ from app.modules.plan import repositories
 from app.modules.plan.labels import category_label
 from app.modules.plan.links import place_links
 from app.modules.plan.llm import generate_json, generate_turn
-from app.modules.plan.naver_local import search_local
+from app.modules.plan.naver_local import NaverPlace, search_local
 from app.modules.plan.schemas import (
     ChatReply,
     ChatRequest,
@@ -52,11 +52,13 @@ _SYSTEM = (
     "3) 두 장소 사이 거리나 '얼마나 떨어져 있어' 질문이면 distance_between을 호출한다. "
     "target에는 상대 장소명을 넣는다. "
     "4) 사용자 현재 위치 기준 정렬 요청이면 nearest_matches. "
-    "5) 영업시간·입장료·주차처럼 확인 안 된 사실은 단정하지 말고, 일반적인 경향만 말한 뒤 "
+    "5) 사용자가 검색 결과를 지적하거나 다시 찾아달라고 하면 같은 검색어를 반복하지 말고 "
+    "조건을 바꾼 검색어로 recommend_places를 다시 호출한다(예: '신림동 조용한 카페'). "
+    "6) 영업시간·입장료·주차처럼 확인 안 된 사실은 단정하지 말고, 일반적인 경향만 말한 뒤 "
     "상세 보기나 네이버 지도 확인을 안내한다. "
-    "6) 사진 매칭 목록·선택된 여행지가 컨텍스트에 있으면 그것을 기준으로 답한다. "
-    "7) 일정 요청인데 지역을 모르면 어울리는 국내 지역 2~3곳을 예로 들며 짧게 되묻는다. "
-    "8) 여행과 무관한 요청은 정중히 여행 얘기로 돌린다."
+    "7) 사진 매칭 목록·선택된 여행지가 컨텍스트에 있으면 그것을 기준으로 답한다. "
+    "8) 일정 요청인데 지역을 모르면 어울리는 국내 지역 2~3곳을 예로 들며 짧게 되묻는다. "
+    "9) 여행과 무관한 요청은 정중히 여행 얘기로 돌린다."
 )
 
 _TOOLS: list[dict[str, Any]] = [
@@ -316,6 +318,38 @@ async def _select_spot_reply(
 
 
 _FOOD_KEYWORDS = ("맛집", "밥집", "카페", "술집", "빵집", "식당", "삼겹살")
+_CAFE_INCLUDE = ("카페", "커피", "디저트", "베이커리", "찻집")
+_FOOD_INCLUDE = (
+    "음식점",
+    "한식",
+    "일식",
+    "중식",
+    "양식",
+    "분식",
+    "뷔페",
+    "아시아",
+    "해물",
+    "생선",
+    "육류",
+    "고기",
+    "치킨",
+    "피자",
+    "패스트푸드",
+    "술집",
+    "호프",
+    "요리",
+)
+
+
+def _category_ok(keyword: str | None, category: str | None) -> bool:
+    if keyword is None:
+        return True
+    cat = category or ""
+    if keyword == "카페":
+        return any(k in cat for k in _CAFE_INCLUDE)
+    if keyword == "빵집":
+        return any(k in cat for k in ("베이커리", "빵", "디저트", "카페"))
+    return any(k in cat for k in _FOOD_INCLUDE)
 
 
 def _context_anchor(state: dict[str, Any]) -> tuple[float, float, str | None] | None:
@@ -343,14 +377,25 @@ def _locality_of(address: str | None) -> str | None:
 
 
 async def _recommend_places(session: AsyncSession, state: dict[str, Any], query: str) -> ChatReply:
-    keyword = next((k for k in _FOOD_KEYWORDS if k in query), "맛집")
+    keyword = next((k for k in _FOOD_KEYWORDS if k in query), None)
     anchor = _context_anchor(state)
 
-    places = await search_local(query, display=5)
+    last = state.get("lastReco") or {}
+    exclude: set[str] = (
+        set(last.get("names") or []) if last.get("keyword") == (keyword or query) else set()
+    )
+
+    def usable(raw: list[NaverPlace]) -> list[NaverPlace]:
+        ok = [p for p in raw if _category_ok(keyword, p.category)]
+        fresh = [p for p in ok if p.name not in exclude]
+        return fresh or ok
+
+    places = usable(await search_local(query, display=5))
     if not places and anchor and anchor[2]:
         locality = _locality_of(anchor[2])
+        retry_term = keyword or (query.split()[-1] if len(query.split()) > 1 else query)
         if locality and locality not in query:
-            places = await search_local(f"{locality} {keyword}", display=5)
+            places = usable(await search_local(f"{locality} {retry_term}", display=5))
 
     cards = [
         PlaceCard(
@@ -365,7 +410,7 @@ async def _recommend_places(session: AsyncSession, state: dict[str, Any], query:
         for p in places
     ]
 
-    if not cards and anchor:
+    if not cards and anchor and keyword is not None:
         category = NearbyCategory.cafe if keyword == "카페" else NearbyCategory.food
         rows = await find_nearby_spots(
             session, lat=anchor[0], lng=anchor[1], radius=8_000, category=category
@@ -397,6 +442,7 @@ async def _recommend_places(session: AsyncSession, state: dict[str, Any], query:
         }
         for c in cards
     ]
+    state["lastReco"] = {"keyword": keyword or query, "names": [c.name for c in cards]}
     text = _PLACES_FOUND if cards[0].source == "naver" else _PLACES_FOUND_KTO
     return ChatReply(type="places", text=text, places=cards)
 

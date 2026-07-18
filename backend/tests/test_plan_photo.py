@@ -193,6 +193,61 @@ async def test_recommend_falls_back_to_kto_when_naver_empty(db_session, monkeypa
     assert res.reply.places[0].name == "산골식당"
 
 
+async def test_recommend_cafe_filters_non_cafe_categories(db_session, monkeypatch):
+    async def fake_turn(**kwargs):
+        return AgentTurn(call_name="recommend_places", call_args={"query": "신림동 카페"})
+
+    async def fake_local(query: str, *, display: int = 5):
+        return [
+            NaverPlace("쟝블랑제리", "카페,디저트>베이커리", "서울 관악구", 37.47, 126.95),
+            NaverPlace("영풍문고 신림점", "쇼핑,유통>서점", "서울 관악구", 37.48, 126.93),
+            NaverPlace("스타벅스 신림점", "카페,디저트>카페", "서울 관악구", 37.48, 126.93),
+        ]
+
+    monkeypatch.setattr("app.modules.plan.services.chat.generate_turn", fake_turn)
+    monkeypatch.setattr("app.modules.plan.services.chat.search_local", fake_local)
+    redis = FakeRedis(decode_responses=False)
+
+    res = await handle_chat(
+        db_session, redis, req=ChatRequest(message="작업하기 좋은 카페는?"), user_id=None
+    )
+    assert res.reply.type == "places"
+    names = [p.name for p in res.reply.places or []]
+    assert "영풍문고 신림점" not in names
+    assert "스타벅스 신림점" in names
+
+
+async def test_recommend_excludes_previously_shown_on_retry(db_session, monkeypatch):
+    async def fake_turn(**kwargs):
+        return AgentTurn(call_name="recommend_places", call_args={"query": "신림동 카페"})
+
+    calls = {"n": 0}
+
+    async def fake_local(query: str, *, display: int = 5):
+        calls["n"] += 1
+        return [
+            NaverPlace("카페A", "카페,디저트>카페", "서울 관악구", 37.47, 126.95),
+            NaverPlace("카페B", "카페,디저트>카페", "서울 관악구", 37.48, 126.93),
+        ]
+
+    monkeypatch.setattr("app.modules.plan.services.chat.generate_turn", fake_turn)
+    monkeypatch.setattr("app.modules.plan.services.chat.search_local", fake_local)
+    redis = FakeRedis(decode_responses=False)
+
+    res1 = await handle_chat(
+        db_session, redis, req=ChatRequest(message="신림동 카페 ㄱㄱ"), user_id=None
+    )
+    assert res1.reply.type == "places"
+
+    res2 = await handle_chat(
+        db_session,
+        redis,
+        req=ChatRequest(threadId=res1.threadId, message="다른 데는 없어?"),
+        user_id=None,
+    )
+    assert res2.reply.type == "places"
+
+
 async def test_distance_between_uses_selected_origin(db_session, monkeypatch):
     async def fake_turn(**kwargs):
         return AgentTurn(call_name="distance_between", call_args={"target": "이원식당"})
