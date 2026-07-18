@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 SlotType = Literal["attraction", "meal", "cafe"]
 SlotSource = Literal["kto", "naver"]
-ReplyType = Literal["text", "plan", "places", "pick", "clarify"]
+ReplyType = Literal["text", "plan", "places", "pick", "spot", "clarify"]
 TravelMode = Literal["walk", "transit"]
 
 
@@ -60,19 +60,45 @@ class PickPrompt(BaseModel):
     spots: list[PickCandidate]
 
 
+class UserLocation(BaseModel):
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
+
+
 class ChatRequest(BaseModel):
     threadId: str | None = Field(default=None, max_length=64)
     message: str = Field(min_length=1, max_length=500)
     picks: list[str] | None = Field(default=None, max_length=6)
+    selectId: str | None = Field(default=None, max_length=32)
+    location: UserLocation | None = None
 
 
 class PlaceCard(BaseModel):
+    name: str
+    contentId: str | None = None
+    category: str | None = None
+    address: str | None = None
+    lat: float | None = None
+    lng: float | None = None
+    imageUrl: str | None = None
+    links: ExternalLinks = Field(default_factory=ExternalLinks)
+
+
+class MatchCard(BaseModel):
+    contentId: str
     name: str
     category: str | None = None
     address: str | None = None
     lat: float | None = None
     lng: float | None = None
-    links: ExternalLinks = Field(default_factory=ExternalLinks)
+    imageUrl: str | None = None
+    similarity: float
+
+
+class PhotoResponse(BaseModel):
+    threadId: str
+    description: str
+    matches: list[MatchCard]
 
 
 class ChatReply(BaseModel):
@@ -82,6 +108,7 @@ class ChatReply(BaseModel):
     plan: PlanPayload | None = None
     places: list[PlaceCard] | None = None
     pick: PickPrompt | None = None
+    spot: PlaceCard | None = None
 
 
 class ChatResponse(BaseModel):

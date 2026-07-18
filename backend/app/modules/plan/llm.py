@@ -87,6 +87,44 @@ async def generate_turn(
     return AgentTurn(text=joined or None)
 
 
+async def describe_image(image_bytes: bytes, mime_type: str) -> str | None:
+    import base64
+
+    body = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {
+                        "inlineData": {
+                            "mimeType": mime_type,
+                            "data": base64.b64encode(image_bytes).decode(),
+                        }
+                    },
+                    {
+                        "text": (
+                            "이 사진의 장면과 분위기를 한국어 1~2문장으로 묘사해줘. "
+                            "반드시 '-이에요/-해요'로 끝나는 해요체. '-습니다/-입니다' 금지. "
+                            "장소명 추측·이모지 금지, 분위기와 풍경 중심으로."
+                        )
+                    },
+                ],
+            }
+        ],
+        "generationConfig": {"temperature": 0.6},
+    }
+    payload = await _post_gemini(body)
+    if payload is None:
+        return None
+    try:
+        parts = payload["candidates"][0]["content"]["parts"]
+    except (KeyError, IndexError, TypeError):
+        return None
+    texts = [p["text"] for p in parts if isinstance(p.get("text"), str)]
+    joined = "".join(texts).strip()
+    return joined or None
+
+
 async def generate_json(
     *,
     system: str,

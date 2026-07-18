@@ -1,0 +1,143 @@
+from __future__ import annotations
+
+import json
+
+import pytest
+from fakeredis.aioredis import FakeRedis
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.modules.plan.llm import AgentTurn
+from app.modules.plan.repositories import PhotoMatchRow
+from app.modules.plan.schemas import ChatRequest, UserLocation
+from app.modules.plan.services.chat import handle_chat
+from app.modules.plan.services.photo import handle_photo
+from app.web.errors import ImageInvalid
+
+_ROWS = [
+    PhotoMatchRow(
+        "100", "경포해수욕장", "해변", "강원 강릉시", 37.80, 128.90, "http://kto/1.jpg", 0.18
+    ),
+    PhotoMatchRow(
+        "200", "협재해수욕장", "해변", "제주 제주시", 33.39, 126.24, "http://kto/2.jpg", 0.22
+    ),
+]
+
+
+def _photo_stubs(monkeypatch):
+    monkeypatch.setattr(
+        "app.modules.plan.services.photo.embedder.embed_image", lambda b: [0.1] * 512
+    )
+
+    async def fake_match(session, vector, *, limit):
+        return list(_ROWS)
+
+    async def fake_describe(image_bytes, mime_type):
+        return "노을이 지는 바닷가 풍경이에요."
+
+    monkeypatch.setattr("app.modules.plan.services.photo.match_spots_by_vector", fake_match)
+    monkeypatch.setattr("app.modules.plan.services.photo.describe_image", fake_describe)
+
+
+async def test_photo_returns_description_and_matches(db_session, monkeypatch):
+    _photo_stubs(monkeypatch)
+    redis = FakeRedis(decode_responses=False)
+
+    res = await handle_photo(
+        db_session, redis, thread_id=None, image_bytes=b"img", mime_type="image/jpeg"
+    )
+    assert "바닷가" in res.description
+    assert [m.contentId for m in res.matches] == ["100", "200"]
+    assert res.matches[0].similarity == pytest.approx(0.82)
+
+    raw = await redis.get(f"plan:thread:{res.threadId}")
+    state = json.loads(raw)
+    assert [m["contentId"] for m in state["matches"]] == ["100", "200"]
+
+
+async def test_photo_rejects_bad_mime(db_session):
+    redis = FakeRedis(decode_responses=False)
+    with pytest.raises(ImageInvalid):
+        await handle_photo(
+            db_session, redis, thread_id=None, image_bytes=b"x", mime_type="text/plain"
+        )
+
+
+async def _seed_state(redis: FakeRedis, tid: str) -> None:
+    state = {
+        "messages": [],
+        "matches": [
+            {"contentId": "100", "name": "경포해수욕장", "lat": 37.80, "lng": 128.90},
+            {"contentId": "200", "name": "협재해수욕장", "lat": 33.39, "lng": 126.24},
+        ],
+    }
+    await redis.set(f"plan:thread:{tid}", json.dumps(state))
+
+
+async def test_nearest_matches_sorts_by_user_location(db_session, monkeypatch):
+    async def fake_turn(**kwargs):
+        return AgentTurn(call_name="nearest_matches", call_args={})
+
+    monkeypatch.setattr("app.modules.plan.services.chat.generate_turn", fake_turn)
+    redis = FakeRedis(decode_responses=False)
+    await _seed_state(redis, "t1")
+
+    res = await handle_chat(
+        db_session,
+        redis,
+        req=ChatRequest(
+            threadId="t1",
+            message="내 위치에서 가까운 곳은?",
+            location=UserLocation(lat=33.5, lng=126.5),
+        ),
+        user_id=None,
+    )
+    assert res.reply.type == "places"
+    assert res.reply.places is not None
+    assert res.reply.places[0].name == "협재해수욕장"
+
+
+async def test_nearest_matches_without_location_asks_permission(db_session, monkeypatch):
+    async def fake_turn(**kwargs):
+        return AgentTurn(call_name="nearest_matches", call_args={})
+
+    monkeypatch.setattr("app.modules.plan.services.chat.generate_turn", fake_turn)
+    redis = FakeRedis(decode_responses=False)
+    await _seed_state(redis, "t2")
+
+    res = await handle_chat(
+        db_session, redis, req=ChatRequest(threadId="t2", message="가까운 데는?"), user_id=None
+    )
+    assert res.reply.type == "text"
+    assert "위치" in res.reply.text
+
+
+async def test_select_spot_returns_intro_card(db_session: AsyncSession, monkeypatch):
+    await db_session.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, first_image_url, "
+            "show_flag, mapx, mapy, lcls_systm1, addr1) "
+            "VALUES ('300', 12, '경기전', 'http://kto/3.jpg', 1, 127.15, 35.81, 'HS', '전북 전주시')"
+        )
+    )
+
+    async def fake_json(**kwargs):
+        return {"intro": "조선 태조의 어진을 모신 곳이에요. 한옥마을 산책과 함께 둘러보기 좋아요."}
+
+    monkeypatch.setattr("app.modules.plan.services.chat.generate_json", fake_json)
+    redis = FakeRedis(decode_responses=False)
+
+    res = await handle_chat(
+        db_session,
+        redis,
+        req=ChatRequest(message="경기전 알려줘", selectId="300"),
+        user_id=None,
+    )
+    assert res.reply.type == "spot"
+    assert res.reply.spot is not None
+    assert res.reply.spot.contentId == "300"
+    assert res.reply.spot.imageUrl == "http://kto/3.jpg"
+    assert "어진" in res.reply.text
+
+    raw = await redis.get(f"plan:thread:{res.threadId}")
+    assert json.loads(raw)["selected"]["contentId"] == "300"

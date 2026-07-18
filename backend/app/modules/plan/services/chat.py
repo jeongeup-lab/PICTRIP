@@ -10,7 +10,7 @@ from app.core.db import AsyncSession
 from app.core.logging import get_logger
 from app.modules.plan import repositories
 from app.modules.plan.links import place_links
-from app.modules.plan.llm import generate_turn
+from app.modules.plan.llm import generate_json, generate_turn
 from app.modules.plan.naver_local import search_local
 from app.modules.plan.schemas import (
     ChatReply,
@@ -25,6 +25,7 @@ from app.modules.plan.services.assemble import assemble_days
 from app.modules.plan.services.candidates import collect_candidates, collect_for_picks, picker_pool
 from app.modules.plan.services.intent import PlanIntent, clamp_days
 from app.modules.plan.services.narrate import narrate_plan
+from app.modules.spots.services import load_active_spot_cards_by_ids
 from app.web.errors import PlanAgentUnavailable, ResourceNotFound
 
 logger = get_logger(__name__)
@@ -46,7 +47,10 @@ _SYSTEM = (
     "3) 일정을 만들기에 지역이나 기간이 부족하면 도구를 호출하지 말고 부족한 것 한 가지만 짧게 되묻는다. "
     "지역이 없는데 분위기(바다·산·먹방 등)를 말하면 어울리는 국내 지역 2~3곳을 예로 들며 되묻는다. "
     "4) 이미 만든 일정을 고쳐 달라고 하면 바뀐 조건을 반영해 create_plan을 다시 호출한다. "
-    "5) 여행과 무관한 요청은 정중히 여행 얘기로 돌린다."
+    "5) 사용자가 사진을 올려 매칭된 여행지 목록이 컨텍스트에 있으면 그 목록에 대한 질문"
+    "(가까운 곳, 특정 여행지 설명, 그 주변 맛집·카페)에 우선 대응한다. "
+    "현재 위치 기준 정렬 요청에는 nearest_matches를 호출한다. "
+    "6) 여행과 무관한 요청은 정중히 여행 얘기로 돌린다."
 )
 
 _TOOLS: list[dict[str, Any]] = [
@@ -77,6 +81,11 @@ _TOOLS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "nearest_matches",
+        "description": "사진 매칭 결과를 사용자 현재 위치에서 가까운 순으로 정렬해 보여준다.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "recommend_places",
         "description": "특정 위치 주변의 맛집·카페·가볼 곳을 단건 추천한다. 일정 생성이 아닐 때 사용.",
         "parameters": {
@@ -101,10 +110,14 @@ _PICK_TEXT = (
 _AUTO_MESSAGE = "알아서 짜줘"
 _ATTRACTIONS_PER_DAY = 2
 _PLACES_FOUND = "네이버에서 리뷰 많은 순으로 골라봤어요."
+_NEAREST_FOUND = "현재 위치에서 가까운 순으로 정렬했어요."
+_NEAREST_NO_LOCATION = "위치 정보를 받지 못했어요. 브라우저(앱)의 위치 권한을 허용해 주세요."
+_NEAREST_NO_MATCHES = "먼저 사진을 올려서 닮은 여행지를 찾아볼까요?"
+_SPOT_INTRO_FALLBACK = "{name} — {category}. 카드를 눌러 자세히 볼 수 있어요."
 _PLACES_EMPTY = "마땅한 곳을 찾지 못했어요. 위치나 조건을 조금 바꿔서 다시 말해줄래요?"
 
 
-async def _load_state(redis: Redis, tid: str) -> dict[str, Any]:
+async def load_thread_state(redis: Redis, tid: str) -> dict[str, Any]:
     try:
         raw = await redis.get(_THREAD_KEY.format(tid=tid))
     except Exception as exc:
@@ -121,7 +134,7 @@ async def _load_state(redis: Redis, tid: str) -> dict[str, Any]:
     return state if isinstance(state, dict) else {}
 
 
-async def _save_state(redis: Redis, tid: str, state: dict[str, Any]) -> None:
+async def save_thread_state(redis: Redis, tid: str, state: dict[str, Any]) -> None:
     try:
         await redis.set(_THREAD_KEY.format(tid=tid), json.dumps(state), ex=_THREAD_TTL)
     except Exception as exc:
@@ -188,6 +201,89 @@ def _intent_from_args(args: dict[str, Any]) -> PlanIntent | None:
     )
 
 
+def _match_dist_km(m: dict[str, Any], lat: float, lng: float) -> float:
+    import math
+
+    mlat, mlng = m.get("lat"), m.get("lng")
+    if mlat is None or mlng is None:
+        return 1e9
+    p1, p2 = math.radians(lat), math.radians(float(mlat))
+    dp = math.radians(float(mlat) - lat)
+    dl = math.radians(float(mlng) - lng)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * 6371.0 * math.asin(math.sqrt(a))
+
+
+def _match_to_place(m: dict[str, Any]) -> PlaceCard:
+    return PlaceCard(
+        name=str(m.get("name") or ""),
+        contentId=m.get("contentId"),
+        category=m.get("category"),
+        address=m.get("address"),
+        lat=m.get("lat"),
+        lng=m.get("lng"),
+        imageUrl=m.get("imageUrl"),
+        links=place_links(str(m.get("name") or ""), m.get("lat"), m.get("lng")),
+    )
+
+
+def _nearest_matches_reply(state: dict[str, Any], req: ChatRequest) -> ChatReply:
+    matches = state.get("matches") or []
+    if not matches:
+        return ChatReply(type="text", text=_NEAREST_NO_MATCHES)
+    if req.location is None:
+        return ChatReply(type="text", text=_NEAREST_NO_LOCATION)
+    ordered = sorted(matches, key=lambda m: _match_dist_km(m, req.location.lat, req.location.lng))
+    return ChatReply(
+        type="places",
+        text=_NEAREST_FOUND,
+        places=[_match_to_place(m) for m in ordered[:6]],
+    )
+
+
+async def _select_spot_reply(
+    session: AsyncSession, state: dict[str, Any], content_id: str
+) -> ChatReply:
+    cards = await load_active_spot_cards_by_ids(session, [content_id])
+    card = cards.get(content_id)
+    if card is None:
+        return ChatReply(type="text", text="해당 여행지를 찾지 못했어요.")
+    name = str(getattr(card, "title", ""))
+    category = getattr(card, "category", None) or getattr(card, "lcls_systm3_nm", None) or "여행지"
+    addr = getattr(card, "addr1", None)
+    place = PlaceCard(
+        name=name,
+        contentId=content_id,
+        category=category,
+        address=addr,
+        lat=getattr(card, "mapy", None),
+        lng=getattr(card, "mapx", None),
+        imageUrl=getattr(card, "first_image_url", None),
+        links=place_links(name, getattr(card, "mapy", None), getattr(card, "mapx", None)),
+    )
+    intro_raw = await generate_json(
+        system=(
+            "너는 한국 국내여행 도우미다. 주어진 여행지 메타데이터로 2문장 소개를 쓴다. "
+            "반드시 '-이에요/-해요'로 끝나는 해요체. '-습니다/-입니다'·이모지 금지. "
+            "주어진 사실(이름·분류·주소) 밖의 구체 정보는 지어내지 않는다. JSON으로만 답한다."
+        ),
+        user=f"이름: {name}, 분류: {category}, 주소: {addr}",
+        schema={
+            "type": "OBJECT",
+            "properties": {"intro": {"type": "STRING"}},
+            "required": ["intro"],
+        },
+        temperature=0.6,
+    )
+    intro = (
+        str(intro_raw.get("intro"))
+        if intro_raw and intro_raw.get("intro")
+        else _SPOT_INTRO_FALLBACK.format(name=name, category=category)
+    )
+    state["selected"] = {"contentId": content_id, "name": name, "address": addr}
+    return ChatReply(type="spot", text=intro, spot=place)
+
+
 async def _recommend_places(query: str) -> ChatReply:
     places = await search_local(query, display=5)
     cards = [
@@ -214,9 +310,16 @@ async def handle_chat(
     user_id: int | None,
 ) -> ChatResponse:
     tid = req.threadId or uuid.uuid4().hex
-    state = await _load_state(redis, tid)
+    state = await load_thread_state(redis, tid)
     messages = _normalize_messages(state.get("messages"))[-_MAX_THREAD_MESSAGES:]
     messages.append({"role": "user", "text": req.message})
+
+    if req.selectId:
+        reply = await _select_spot_reply(session, state, req.selectId)
+        messages.append({"role": "model", "text": reply.text})
+        state["messages"] = messages[-_MAX_THREAD_MESSAGES:]
+        await save_thread_state(redis, tid, state)
+        return ChatResponse(threadId=tid, reply=reply)
 
     pending = state.get("pendingIntent")
     picks = [str(x) for x in (req.picks or []) if str(x).strip()]
@@ -236,14 +339,22 @@ async def handle_chat(
         reply = ChatReply(type="plan", text=reply_text, plan=payload)
         messages.append({"role": "model", "text": reply.text})
         state["messages"] = messages[-_MAX_THREAD_MESSAGES:]
-        await _save_state(redis, tid, state)
+        await save_thread_state(redis, tid, state)
         return ChatResponse(threadId=tid, reply=reply)
 
     contents = [
         {"role": m["role"], "parts": [{"text": m["text"]}]}
         for m in messages[-_MAX_CONTEXT_MESSAGES:]
     ]
-    turn = await generate_turn(system=_SYSTEM, contents=contents, tools=_TOOLS)
+    system = _SYSTEM
+    matches = state.get("matches") or []
+    if matches:
+        names = ", ".join(str(m.get("name")) for m in matches[:12])
+        system += f" [컨텍스트] 사진 매칭 여행지 목록: {names}."
+    selected = state.get("selected")
+    if isinstance(selected, dict) and selected.get("name"):
+        system += f" [컨텍스트] 선택된 여행지: {selected['name']}({selected.get('address') or ''})."
+    turn = await generate_turn(system=system, contents=contents, tools=_TOOLS)
     if turn is None:
         raise PlanAgentUnavailable()
 
@@ -288,6 +399,8 @@ async def handle_chat(
                     chips=[_AUTO_MESSAGE],
                     pick=PickPrompt(maxPicks=max_picks, spots=spots),
                 )
+    elif turn.call_name == "nearest_matches":
+        reply = _nearest_matches_reply(state, req)
     elif turn.call_name == "recommend_places":
         query = str((turn.call_args or {}).get("query") or req.message).strip()
         reply = await _recommend_places(query)
@@ -296,7 +409,7 @@ async def handle_chat(
 
     messages.append({"role": "model", "text": reply.text})
     state["messages"] = messages[-_MAX_THREAD_MESSAGES:]
-    await _save_state(redis, tid, state)
+    await save_thread_state(redis, tid, state)
     return ChatResponse(threadId=tid, reply=reply)
 
 
