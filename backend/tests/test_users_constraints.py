@@ -1,12 +1,3 @@
-"""USR DB-level constraint regression tests (migration 0002_usr_tables).
-
-These rules live in the DB, not the application layer, so they only catch
-regressions if the migration itself is exercised. Covered here:
-
-- `users.email` partial unique (`idx_users_email_active`, WHERE deleted_at IS NULL)
-- email reuse is allowed once the prior owner is soft-deleted
-"""
-
 from __future__ import annotations
 
 import pytest

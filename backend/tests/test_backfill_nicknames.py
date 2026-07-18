@@ -1,5 +1,3 @@
-"""scripts/backfill_nicknames.py — random nicknames for pre-generator accounts."""
-
 from __future__ import annotations
 
 import random

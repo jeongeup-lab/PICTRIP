@@ -1,5 +1,3 @@
-"""GET /v1/home/channels/{key} — around·hot·hidden 채널 카드."""
-
 from __future__ import annotations
 
 import pytest_asyncio

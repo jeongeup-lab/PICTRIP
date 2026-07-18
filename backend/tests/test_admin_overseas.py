@@ -1,15 +1,3 @@
-"""Admin 게시물(해외 스팟) 숨김 관리 — GET list + PUT visibility (A7).
-
-The admin module's second scoped-write surface (``overseas_spots.is_hidden``
-only). Two endpoints under ``/admin/api/*`` behind the session gate:
-
-- ``GET /admin/api/overseas?q=&cursor=&limit=`` — id-cursor list (search on name)
-- ``PUT /admin/api/overseas/{id}/visibility``   — toggle is_hidden
-
-Hiding a spot here is exactly the filter ``/v1/feed`` already applies
-(``is_hidden = false``), so the last test asserts the toggle reaches the feed.
-"""
-
 from __future__ import annotations
 
 from base64 import b64encode

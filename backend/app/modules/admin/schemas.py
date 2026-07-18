@@ -1,10 +1,3 @@
-"""admin schemas — JSend `data` payloads (A01 §3).
-
-Field names are the contract (camelCase) — they must match A01 §3 exactly because
-the static admin pages read ``data.<field>`` directly. These DTOs carry no ORM
-imports (Pydantic only).
-"""
-
 from __future__ import annotations
 
 from datetime import date, datetime
@@ -37,18 +30,12 @@ class CollectionStatus(BaseModel):
 
 
 class TriggerResult(BaseModel):
-    """Result of a collection trigger. ``runId`` is None for workflow_dispatch
-    (GitHub returns 204 with no run id; the admin polls sync_runs for status)."""
-
     job: str
     runId: str | None
     accepted: bool
 
 
 class EmbeddingRecent(BaseModel):
-    """The embedding state of spots from the latest collection run (synced since
-    ``since``). ``outstanding`` = target - embedded (still need embedding)."""
-
     since: datetime | None
     target: int
     embedded: int
@@ -139,9 +126,6 @@ class Health(BaseModel):
 
 
 class OverseasListItem(BaseModel):
-    """One row of the 게시물 관리 table. image_url is a Wikimedia Commons https
-    URL already (no KTO http→https upgrade needed)."""
-
     id: int
     nameKo: str
     countryNameKo: str
@@ -151,16 +135,11 @@ class OverseasListItem(BaseModel):
 
 
 class OverseasList(BaseModel):
-    """GET /admin/api/overseas — id-cursor page. ``nextCursor`` is the last id
-    of this page when more rows follow, else None."""
-
     items: list[OverseasListItem]
     nextCursor: int | None
 
 
 class OverseasVisibilityUpdate(BaseModel):
-    """PUT /admin/api/overseas/{id}/visibility body."""
-
     isHidden: bool
 
 

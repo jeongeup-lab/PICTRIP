@@ -1,5 +1,3 @@
-"""Shared KTO scalar-field cleaning. `clean_scalar` trims; `verbatim` preserves `overview` exactly (ADR-0007)."""
-
 from __future__ import annotations
 
 import html
@@ -10,13 +8,6 @@ _TAG_RE = re.compile(r"<[^>]+>")
 
 
 def clean_homepage(raw: str | None) -> str | None:
-    """Normalize a KTO ``homepage`` field for display.
-
-    KTO frequently returns the homepage wrapped in an anchor, e.g.
-    ``<a href="http://x" target="_blank">http://x</a>``. Return the bare URL:
-    the ``href`` when an anchor is present, else the tag-stripped + unescaped
-    text. ``None``/empty (after cleaning) collapses to ``None``.
-    """
     if raw is None:
         return None
     text_value = raw.strip()
@@ -32,7 +23,6 @@ def clean_homepage(raw: str | None) -> str | None:
 
 
 def clean_scalar(value: object) -> str | None:
-    """Trim a KTO scalar field (homepage/tel/title/image url); empty/missing -> None."""
     if value is None:
         return None
     text_value = str(value).strip()
@@ -40,7 +30,6 @@ def clean_scalar(value: object) -> str | None:
 
 
 def verbatim(value: object) -> str | None:
-    """KTO `overview` must be stored exactly as sent — only ''/None collapse to None."""
     if value is None or value == "":
         return None
     return str(value)

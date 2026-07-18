@@ -1,5 +1,3 @@
-"""FastAPI application entrypoint."""
-
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
@@ -61,10 +59,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    """Assemble the app. Middleware order matters (outermost added first). The
-    ``/admin/assets`` mount is PUBLIC/unauthenticated — it must contain only
-    non-sensitive CSS/JS (no data, no secrets, no source maps), as it is served
-    without the AdminAuth gate."""
     app = FastAPI(
         title="PicTrip API",
         version=API_VERSION,

@@ -13,57 +13,47 @@ from pictrip_data.sync.images import validate_images
 app = typer.Typer(help="pictrip-data — KTO ETL CLI")
 
 
-@app.command("sync-daily")
+@app.command("sync-daily", help="KTO 일일 증분 동기화")
 def sync_daily_cmd() -> None:
-    """Daily incremental sync of spots from areaBasedSyncList2 (cron 04:00 KST)."""
     sync_daily()
 
 
-@app.command("sync-full")
+@app.command("sync-full", help="KTO 전량 동기화")
 def sync_full_cmd() -> None:
-    """Full reconcile — no modifiedtime filter (weekly; quota-aware)."""
     sync_full()
 
 
-@app.command("validate-images")
+@app.command("validate-images", help="이미지 URL 생존 검사")
 def validate_images_cmd(
     dry_run: bool = typer.Option(False, "--dry-run"),
     limit: int | None = typer.Option(None, "--limit", min=1),
 ) -> None:
-    """Probe spots.first_image_url liveness (weekly cron); dead originals → _image2_1 or NULL."""
     result = validate_images(dry_run=dry_run, limit=limit)
     typer.echo(result)
 
 
-@app.command("load-codes")
+@app.command("load-codes", help="지역·분류 마스터 코드 적재")
 def load_codes_cmd() -> None:
-    """One-shot load of region/classification master codes."""
     load_codes()
 
 
-@app.command("sync-overseas")
+@app.command("sync-overseas", help="해외 스팟 동기화 (Wikidata)")
 def sync_overseas_cmd(
     limit: int | None = typer.Option(None),
     country: list[str] = typer.Option([], "--country"),
     dry_run: bool = typer.Option(False, "--dry-run"),
 ) -> None:
-    """Sync overseas spots from Wikidata + Commons into overseas_spots."""
     selected = [c for c in COUNTRIES if c.code in country] if country else None
     sync_overseas(countries=selected, limit=limit, dry_run=dry_run)
 
 
-@app.command("backfill-overseas-thumbs")
+@app.command("backfill-overseas-thumbs", help="해외 이미지 URL을 Commons 썸네일로 교체")
 def backfill_overseas_thumbs_cmd(dry_run: bool = typer.Option(False, "--dry-run")) -> None:
-    """Rewrite Special:FilePath image_urls to direct 1200px Commons thumbs.
-
-    URL 변경은 0019 트리거로 embedding 을 NULL 로 무효화한다 — 이후
-    overseas-sync 의 embed 잡(scripts/embed_overseas)으로 재계산할 것."""
     result = backfill_overseas_thumbs(dry_run=dry_run)
     typer.echo(result)
 
 
-@app.command("backfill-overseas-descriptions")
+@app.command("backfill-overseas-descriptions", help="해외 설명 ko.wikipedia 백필")
 def backfill_overseas_descriptions_cmd(dry_run: bool = typer.Option(False, "--dry-run")) -> None:
-    """Fill empty overseas description_ko from ko.wikipedia intro extracts."""
     result = backfill_overseas_descriptions(dry_run=dry_run)
     typer.echo(result)

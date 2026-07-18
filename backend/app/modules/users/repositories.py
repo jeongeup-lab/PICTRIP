@@ -1,5 +1,3 @@
-"""USR repositories — DB queries; SQLAlchemy lives here."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -35,12 +33,6 @@ async def get_active_user_by_email(session: AsyncSession, email: str) -> User | 
 
 
 async def create_email_user(session: AsyncSession, *, email: str, password_hash: str) -> User:
-    """Insert a User + its 'email' provider link inside a savepoint.
-
-    The display name is a generated random Korean nickname — signup never adopts
-    a caller-supplied name (product decision: everyone starts with a fresh alias).
-    Raises ``IntegrityError`` if a concurrent insert wins the partial-unique email
-    index / provider UNIQUE constraint; the caller maps that to a 409."""
     async with session.begin_nested():
         user = User(email=email, name=generate_nickname(), password_hash=password_hash)
         session.add(user)
@@ -58,21 +50,6 @@ async def get_or_create_user_via_provider(
     email: str | None,
     picture: str | None,
 ) -> User:
-    """Resolve or create the account for an OAuth identity (identity key = provider+sub).
-
-    The profile email is non-essential. If it already belongs to another active
-    account it is dropped (storing it would violate the partial-unique
-    idx_users_email_active index and 500). We deliberately do NOT auto-link to
-    that account: emails are unverified, so linking would let an attacker
-    pre-register a victim's email and hijack the victim's later OAuth login
-    (pre-account hijacking).
-
-    A brand-new account always gets a generated random Korean nickname — the
-    provider's name claim is deliberately ignored (returning users keep whatever
-    name they already have). On ``IntegrityError`` the insert is retried: either
-    a concurrent insert won the provider UNIQUE constraint (reselect the winner),
-    or an active-email TOCTOU collision slipped past the pre-check (re-insert
-    without the conflicting profile email)."""
     existing = await find_auth_provider(
         session, provider=provider, provider_user_id=provider_user_id
     )

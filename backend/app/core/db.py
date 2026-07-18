@@ -1,5 +1,3 @@
-"""Async SQLAlchemy 2.0 setup with asyncpg."""
-
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
@@ -21,7 +19,7 @@ __all__ = ["AsyncSession", "Base", "DbSession", "IntegrityError", "engine", "get
 
 
 class Base(DeclarativeBase):
-    """Declarative base for all ORM models."""
+    pass
 
 
 def _build_engine() -> AsyncEngine:
@@ -47,7 +45,6 @@ async_session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """Yield an async session; rolls back on error, commit is explicit in services."""
     async with async_session_factory() as session:
         try:
             yield session

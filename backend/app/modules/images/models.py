@@ -1,5 +1,3 @@
-"""IMG ORM models. spot_embeddings = the 512-dim CLIP vector store (halfvec)."""
-
 from __future__ import annotations
 
 from datetime import datetime
@@ -13,9 +11,6 @@ from app.core.embedding import EMBEDDING_DIM
 
 
 class SpotEmbedding(Base):
-    """HNSW cosine index: m/ef_construction must match migration 0005 to avoid
-    autogenerate drift."""
-
     __tablename__ = "spot_embeddings"
     __table_args__ = (
         Index(
@@ -38,14 +33,6 @@ class SpotEmbedding(Base):
 
 
 class SpotEmbeddingGallery(Base):
-    """Centroid of up to N spot photos (firstimage + detailImage2 originals) —
-    a second, multi-image ANN surface for overseas→domestic matching that
-    smooths out the single-representative-photo lottery. ``image_url`` mirrors
-    ``spots.first_image_url`` at compute time as the staleness anchor (same
-    contract as ``SpotEmbedding``; the 0020 trigger deletes rows on change).
-    ``image_count`` = photos that actually went into the centroid.
-    """
-
     __tablename__ = "spot_embeddings_gallery"
     __table_args__ = (
         Index(
@@ -69,19 +56,6 @@ class SpotEmbeddingGallery(Base):
 
 
 class EmbeddingFailure(Base):
-    """A spot whose embedding attempt failed — the persistent record that lets the
-    admin console distinguish a *failed* embedding from a *not-yet-attempted* one.
-
-    Collection (pipeline → spots) and embedding (CLIP → spot_embeddings) are
-    separate steps; a spot with ``first_image_url`` but no ``spot_embeddings`` row
-    is otherwise indistinguishable between "pending" and "broken image". The embed
-    job upserts a row here on failure (incrementing ``attempts``) and DELETEs it on
-    a later success, so ``count(*)`` here = the live failure backlog.
-
-    ``reason`` values: ``download_failed`` (non-200/empty body) | ``clip_error``
-    (decode/inference raised).
-    """
-
     __tablename__ = "embedding_failures"
     __table_args__ = (Index("idx_embedding_failures_reason", "reason"),)
 

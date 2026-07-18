@@ -1,5 +1,3 @@
-"""IMG service layer. Owned by Dev A (CLIP) + Dev B (HNSW index DDL)."""
-
 from __future__ import annotations
 
 from app.modules.images.embedding_job import (

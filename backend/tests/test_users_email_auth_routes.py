@@ -1,13 +1,3 @@
-"""Integration + service tests for email/password auth.
-
-Routes under test:
-  POST /v1/auth/email/signup
-  POST /v1/auth/email/login
-
-Uses the same savepoint-isolated DB override + fakeredis pattern as
-test_users_auth_routes.py so no real Redis is needed and rows never leak.
-"""
-
 from __future__ import annotations
 
 import uuid

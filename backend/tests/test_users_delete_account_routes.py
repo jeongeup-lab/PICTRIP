@@ -1,9 +1,3 @@
-"""Integration tests for DELETE /v1/users/me (account deletion).
-
-App Store/Play review 5.1.1(v) requires real in-app deletion: soft-delete but scrub
-PII and unlink auth providers so the account is genuinely gone.
-"""
-
 from __future__ import annotations
 
 import uuid

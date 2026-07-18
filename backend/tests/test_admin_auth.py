@@ -1,15 +1,3 @@
-"""ADM-001 — login page + signed-cookie session gate on /admin/* (A01 §1.3).
-
-Credentials are checked against the ``admin_users`` table (username + bcrypt
-hash); migration 0016 seeds ``admin``/``admin`` into the migrated test DB. The
-console no longer uses HTTP Basic: HTML pages redirect to /admin/login when
-logged out, /admin/api/* returns 401 (no WWW-Authenticate), and a successful
-POST /admin/login sets a session cookie that authorizes later requests.
-
-Every test routes the auth lookup through the function-scoped ``db_session`` via
-the ``get_db`` override so it never touches the module-level engine across loops.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Iterator
@@ -30,12 +18,6 @@ _PASSWORD = "admin"
 
 @pytest.fixture(autouse=True)
 def _use_test_db(db_session: AsyncSession) -> Iterator[None]:
-    """Route every /admin auth lookup through the per-test transaction.
-
-    Also override Redis with a fresh fakeredis per test so the login
-    rate-limit counter never bleeds across tests (each test logs in well
-    under the 5/min limit).
-    """
     fake = FakeRedis(decode_responses=True)
     app.dependency_overrides[get_db] = lambda: db_session
     app.dependency_overrides[get_redis] = lambda: fake
@@ -120,7 +102,6 @@ async def test_no_admin_row_rejects_login(client: AsyncClient, db_session: Async
 
 @pytest.mark.asyncio
 async def test_login_rate_limited_after_threshold(client: AsyncClient) -> None:
-    """5/min/IP — the 6th attempt is throttled regardless of credentials."""
     statuses = [(await _login(client, _USERNAME, "wrong")).status_code for _ in range(6)]
     assert statuses[:5] == [303] * 5
     assert statuses[5] == 429
@@ -131,7 +112,6 @@ async def test_login_rate_limited_after_threshold(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_admin_assets_are_not_cached(client: AsyncClient) -> None:
-    """Edge/browser must not cache admin CSS/JS, so a deploy needs no CF purge."""
     resp = await client.get("/admin/assets/admin.css")
     assert resp.status_code == 200
     assert resp.headers["cache-control"] == "no-store"

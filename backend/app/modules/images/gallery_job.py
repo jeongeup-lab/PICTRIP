@@ -1,20 +1,3 @@
-"""Gallery (multi-image) CLIP embedding job — builds ``spot_embeddings_gallery``
-centroid rows for attraction-bucket spots, shared by the CLI backfill
-(``scripts.backfill_gallery_embeddings``).
-
-Each target spot gets one 512-dim centroid: the L2-normalised mean of up to
-``MAX_GALLERY_IMAGES`` per-image CLIP vectors (firstimage + KTO ``detailImage2``
-originals). Averaging several views of the same place smooths the
-single-representative-photo lottery that dominates overseas→domestic matching
-noise (S13 §5.2).
-
-Resumable by construction: a spot is a target only while it lacks a gallery row
-anchored to its *current* ``first_image_url``, and a KTO/API failure writes no
-row, so a re-run picks up exactly the unfinished spots. Image bytes are
-processed in memory and never persisted (only the vector is stored) — per the
-KTO image prohibition.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -44,8 +27,6 @@ _kto_sem = asyncio.Semaphore(4)
 
 @dataclass
 class GalleryResult:
-    """Aggregate counts for one gallery embed run."""
-
     written: int = 0
     failed: int = 0
     skipped: int = 0
@@ -64,9 +45,6 @@ class GalleryResult:
 async def collect_gallery_targets(
     session: AsyncSession, *, limit: int | None = None
 ) -> list[tuple[str, str]]:
-    """(content_id, first_image_url) for attraction spots without a gallery row
-    anchored to their current image. Stale rows (image changed) count as missing.
-    """
     from app.modules.spots.services import attraction_image_spots_stmt
 
     spots = attraction_image_spots_stmt().subquery()
@@ -112,7 +90,6 @@ async def _embed_gallery_one(
     client: httpx.AsyncClient,
     dl_sem: asyncio.Semaphore,
 ) -> tuple[str, list[float] | None, int, str]:
-    """Returns (content_id, centroid|None, image_count, status)."""
     try:
         urls = await _gallery_image_urls(kto, content_id, first_image_url)
     except KtoApiUnavailable:
@@ -168,10 +145,6 @@ async def embed_gallery_spots(
     dl_sem: asyncio.Semaphore,
     result: GalleryResult | None = None,
 ) -> GalleryResult:
-    """Embed one batch of (content_id, first_image_url) targets using ``session``.
-    Failures write no row (the next run retries them). Flushes but does NOT
-    commit — the caller owns the transaction boundary.
-    """
     result = result or GalleryResult()
     if not targets:
         return result
@@ -202,9 +175,6 @@ async def run_gallery_embedding_job(
     concurrency: int = 8,
     session_factory: async_sessionmaker[AsyncSession] = async_session_factory,
 ) -> GalleryResult:
-    """Orchestrate a full gallery embed run: collect targets, then embed
-    batch-by-batch with its own sessions + HTTP/KTO clients. Commits per batch.
-    """
     async with session_factory() as session:
         targets = await collect_gallery_targets(session, limit=limit)
     logger.info("gallery_embed.job.start", targets=len(targets))

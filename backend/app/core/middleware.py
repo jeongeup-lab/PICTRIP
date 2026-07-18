@@ -1,5 +1,3 @@
-"""ASGI middleware: trace-id injection + request access logging + edge cache hints."""
-
 from __future__ import annotations
 
 import time
@@ -18,8 +16,6 @@ _CHANNELS_MAX_AGE = 600
 
 
 class TraceIdMiddleware(BaseHTTPMiddleware):
-    """Assign or propagate X-Trace-Id, expose it in response + structlog context."""
-
     async def dispatch(
         self,
         request: Request,
@@ -54,16 +50,6 @@ class TraceIdMiddleware(BaseHTTPMiddleware):
 
 
 class CacheControlMiddleware(BaseHTTPMiddleware):
-    """Cache-Control on public 200 GETs so a CDN can serve them from the edge.
-
-    Channels expire after 10 minutes; regions-tree after 24h.
-    Requires a matching Cloudflare Cache Rule to take effect.
-
-    Admin console assets are the opposite: never cached at the edge or browser,
-    so a deploy is visible immediately without a Cloudflare purge (assets are
-    tiny).
-    """
-
     def __init__(self, app: ASGIApp, prefix: str) -> None:
         super().__init__(app)
         self._channels = f"{prefix}/home/channels"

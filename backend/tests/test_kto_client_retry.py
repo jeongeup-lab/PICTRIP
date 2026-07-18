@@ -1,9 +1,3 @@
-"""KTO retry policy: only transient failures (429/5xx/connection) are retried.
-
-Non-transient 4xx (bad serviceKey, bad params) must raise immediately —
-retrying them burns the shared daily quota for zero benefit.
-"""
-
 import httpx
 import pytest
 

@@ -1,6 +1,3 @@
-"""feed KTO 이미지 URL은 http→https로 업그레이드된다 (iOS ATS가 http 이미지 로드를
-차단 — 매치/채널 카드가 빈 화면으로 뜨던 원인). map/spots 스키마와 동일 규약."""
-
 from __future__ import annotations
 
 from app.modules.feed.schemas import ChannelCard, ChannelMeta, MatchCard, OverseasPost

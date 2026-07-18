@@ -1,5 +1,3 @@
-"""Integration tests for GET /v1/spots/{contentId}."""
-
 from __future__ import annotations
 
 from collections.abc import AsyncIterator

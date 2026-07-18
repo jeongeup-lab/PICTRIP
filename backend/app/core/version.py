@@ -1,11 +1,3 @@
-"""Process version + uptime, captured once at import.
-
-`API_VERSION` is the single source the FastAPI app title, ``/meta/version`` and
-the admin health endpoint all read, so the version string isn't hardcoded in
-three places. ``uptime_seconds()`` measures wall-clock seconds since the module
-was first imported (≈ process start), used by ``/admin/api/health``.
-"""
-
 from __future__ import annotations
 
 import time

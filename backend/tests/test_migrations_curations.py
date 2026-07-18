@@ -1,9 +1,3 @@
-"""M1 (0011_curations) DB-level regression tests.
-
-Pins the curations / curation_spots tables and their named CHECK constraints so a
-future migration can't loosen them silently.
-"""
-
 from __future__ import annotations
 
 import pytest

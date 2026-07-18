@@ -1,5 +1,3 @@
-"""MAP must not import spots ORM models directly — cross-module reads go through the spots.services seam (#22)."""
-
 from __future__ import annotations
 
 import inspect

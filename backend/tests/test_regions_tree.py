@@ -1,5 +1,3 @@
-"""GET /v1/map/regions-tree — 17 sido + sigungus, runtime-AVG centroid, 24h cache."""
-
 from __future__ import annotations
 
 import json
@@ -63,7 +61,6 @@ async def _seed_spot(
 
 
 async def _seed_basic(session: AsyncSession) -> None:
-    """1 region + 2 sigungus; one sigungu has spots, one is empty."""
     await _seed_region(session, "11", "서울특별시")
     await _seed_sigungu(session, "1101", "11", "종로구")
     await _seed_sigungu(session, "1102", "11", "강남구")

@@ -1,5 +1,3 @@
-"""SPT DTOs."""
-
 from __future__ import annotations
 
 from pydantic import BaseModel, field_validator
@@ -33,8 +31,6 @@ class SpotImageOut(BaseModel):
 
 
 class SpotIntro(BaseModel):
-    """detailIntro2 display fields, verbatim from KTO. All optional."""
-
     usetime: str | None = None
     restdate: str | None = None
     parking: str | None = None

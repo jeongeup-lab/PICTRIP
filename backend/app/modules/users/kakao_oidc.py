@@ -1,5 +1,3 @@
-"""Kakao OIDC: JWKS cache (1h fresh / 24h stale-on-error, §4.5) + id_token verification."""
-
 from __future__ import annotations
 
 import time
@@ -16,7 +14,6 @@ _jwks_cache: dict[str, Any] = {}
 
 
 async def _fetch_jwks() -> dict[str, Any]:
-    """One-shot fetch with a single retry."""
     last_exc: Exception | None = None
     async with httpx.AsyncClient(timeout=_JWKS_TIMEOUT) as client:
         for _ in range(2):
@@ -32,7 +29,6 @@ async def _fetch_jwks() -> dict[str, Any]:
 
 
 async def get_jwks() -> dict[str, Any]:
-    """Return a cached JWKS, refreshing or serving stale-on-error per policy."""
     now = int(time.time())
     if _jwks_cache and now < _jwks_cache.get("fresh_until", 0):
         return _jwks_cache["value"]  # type: ignore[no-any-return]
@@ -65,7 +61,6 @@ class KakaoClaims:
 
 
 def _jwk_to_pem(jwk: dict[str, Any]) -> bytes:
-    """Convert a single RSA JWK dict into PEM bytes for PyJWT verification."""
     from base64 import urlsafe_b64decode
 
     from cryptography.hazmat.primitives import serialization
@@ -83,12 +78,6 @@ def _jwk_to_pem(jwk: dict[str, Any]) -> bytes:
 
 
 async def verify_id_token(token: str, *, expected_nonce: str | None = None) -> KakaoClaims:
-    """Verify a Kakao OIDC id_token. Failure paths log the exception class only, never token PII.
-
-    Valid ``aud`` values are the REST API key (web/server) and the Native App Key
-    (mobile SDK). SECURITY: when neither is configured the token is rejected
-    loudly — an empty audience list would make PyJWT skip the ``aud`` check
-    (token-substitution hole)."""
     import logging
 
     from app.core.exceptions import OAuthIdTokenInvalid

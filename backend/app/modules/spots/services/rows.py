@@ -1,5 +1,3 @@
-"""SPT service row dataclasses (DTOs returned by the service layer)."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -32,8 +30,6 @@ class SpotImageRow:
 
 @dataclass
 class SpotIntroRow:
-    """detailIntro2 display fields, normalized across contentTypeId. All optional."""
-
     usetime: str | None = None
     restdate: str | None = None
     parking: str | None = None

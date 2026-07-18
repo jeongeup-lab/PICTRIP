@@ -1,12 +1,3 @@
-"""Spot detail with lazy KTO enrichment + 7-day cache (ADR-0007).
-
-Redis (`spotdetail:v1:*`) is a hot front cache for the KTO-derived detail bundle
-(overview/images/intro); Postgres (spot_details + spot_images) stays the 7-day
-authority — a Redis hit just skips its two reads. The shorter Redis TTL bounds
-staleness from a pipeline modified_time bump between Redis writes, and the
-modified_time supersede check still runs on every request (cached_at travels in
-the bundle), so a bump is honoured immediately regardless of TTL."""
-
 from __future__ import annotations
 
 import asyncio
@@ -48,9 +39,6 @@ _REDIS_TTL_SECONDS = int(timedelta(hours=1).total_seconds())
 
 @dataclass(frozen=True)
 class _DetailCache:
-    """The KTO-derived detail bundle, sourced from Redis or Postgres. cached_at
-    drives the TTL + modified_time freshness check identically for both sources."""
-
     overview: str | None
     homepage: str | None
     tel: str | None
@@ -60,7 +48,6 @@ class _DetailCache:
 
 
 async def _redis_get_detail(redis: Redis, content_id: str) -> _DetailCache | None:
-    """Read the cached detail bundle. Fail-open: any Redis/parse error is a miss."""
     key = _REDIS_KEY.format(content_id=content_id)
     try:
         raw = await redis.get(key)
@@ -85,7 +72,6 @@ async def _redis_get_detail(redis: Redis, content_id: str) -> _DetailCache | Non
 
 
 async def _redis_set_detail(redis: Redis, content_id: str, cache: _DetailCache) -> None:
-    """Write the detail bundle. Best-effort: a Redis failure never breaks the request."""
     key = _REDIS_KEY.format(content_id=content_id)
     payload = json.dumps(
         {
@@ -104,10 +90,6 @@ async def _redis_set_detail(redis: Redis, content_id: str, cache: _DetailCache) 
 
 
 def _is_fresh(cached_at: datetime, modified_time: datetime | None) -> bool:
-    """Fresh = within TTL AND not superseded by a newer KTO change (pipeline bumps
-    spots.modified_time on content change). modified_time is NULL until the
-    pipeline sync lands the field, so the supersede clause is a safe no-op until
-    then (#37)."""
     return (datetime.now(UTC) - cached_at) < _DETAIL_TTL and (
         modified_time is None or cached_at >= modified_time
     )
@@ -128,7 +110,6 @@ async def _load_detail_images(session: AsyncSession, content_id: str) -> list[Sp
 
 
 def _extract_intro(content_type_id: int, intro_data: dict[str, Any] | None) -> SpotIntroRow | None:
-    """Map detailIntro2 keys -> SpotIntroRow by contentTypeId; None if no intro_data."""
     if not intro_data:
         return None
     d = intro_data
@@ -252,9 +233,6 @@ async def _persist_detail(
 
 @dataclass(frozen=True)
 class _DetailContext:
-    """Spot base row + scalar meta — the fixed inputs to every `_assemble_detail`
-    call, so the orchestrator only varies the KTO-derived fields."""
-
     spot: Any
     region_name: str | None
     sigungu_name: str | None
@@ -285,9 +263,6 @@ class _DetailContext:
 
 
 async def _load_spot_context(session: AsyncSession, content_id: str) -> Any:
-    """Load the visible Spot row plus its (region, sigungu, category) label scalars
-    in one LEFT-JOINed query; raise ResourceNotFound if absent or hidden. The code
-    columns are PKs of the label tables, so the joins can't multiply the row."""
     row = (
         await session.execute(
             select(
@@ -319,7 +294,6 @@ async def _load_spot_context(session: AsyncSession, content_id: str) -> Any:
 async def _read_cached_detail(
     session: AsyncSession, content_id: str
 ) -> tuple[Any, list[SpotImageRow]]:
-    """Read the cached SpotDetail row (or None) plus its persisted images."""
     detail = (
         await session.execute(
             select(
@@ -341,13 +315,6 @@ _KTO_DETAIL_BUDGET = 8.0
 async def _fetch_kto_detail(
     kto: KtoClient, content_id: str, content_type_id: int
 ) -> tuple[str | None, str | None, str | None, list[tuple[str, str | None]], dict[str, Any]]:
-    """Fetch + parse the 3 KTO detail endpoints concurrently, under a wall-clock
-    budget. Propagates KtoApiUnavailable (also on budget timeout).
-
-    The budget exists because each kto.call already retries 3x with exponential
-    backoff on a 10s timeout, so one flaky endpoint could stall the gather for
-    ~30s; on budget timeout we fall back to the stale/unavailable path rather
-    than making the user wait."""
     try:
         common_items, image_items, intro_items = await asyncio.wait_for(
             asyncio.gather(
@@ -386,17 +353,6 @@ async def load_spot_detail(
     redis: Redis,
     content_id: str,
 ) -> SpotDetailRow:
-    """Spot detail with lazy KTO enrichment (ADR-0007). Reads the detail bundle
-    from Redis (hot front cache) then Postgres (7-day authority), commits the read
-    txn before any HTTP, then fetches/upserts on miss/stale outside a txn. On KTO
-    failure serves stale or partial — never 502. 404 if absent or show_flag=0.
-
-    The Redis fast path is taken only when the bundle is FRESH: a stale (or
-    missing) Redis bundle must defer to Postgres before any KTO call — otherwise
-    a best-effort Redis SET that failed after a PG refresh would pin a stale
-    response (and re-hit KTO) for up to the TTL even though PG is already fresh.
-    The read txn ends with commit() (not rollback) so rows survive under the
-    savepoint-based test fixtures."""
     spot = await _load_spot_context(session, content_id)
     ctx = _DetailContext(spot, spot.region_name, spot.sigungu_name, spot.category)
 

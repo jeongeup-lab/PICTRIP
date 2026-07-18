@@ -1,21 +1,3 @@
-"""Backfill gallery (multi-image centroid) embeddings for attraction spots.
-
-    uv run python -m scripts.backfill_gallery_embeddings [--limit N] [--concurrency N]
-                                                         [--batch-size N] [--dry-run]
-
-Overseas→domestic matching quality is capped by the single-representative-photo
-lottery: both sides embed exactly one image, so whatever that photo happens to
-show dominates the match. This walks every attraction-bucket spot with an image
-but no fresh ``spot_embeddings_gallery`` row, fetches its KTO ``detailImage2``
-gallery, embeds up to 5 photos, and upserts the L2-normalised centroid.
-
-The actual work lives in ``app.modules.images.gallery_job``. Failures write no
-row, so a re-run is resumable (KTO quota exhaustion mid-run is safe). Shares the
-Redis embedding lock with the single-image job — CLIP is one CPU model, only one
-embed job of any kind runs at a time. Image bytes are processed in memory and
-never persisted (only the vector is stored).
-"""
-
 from __future__ import annotations
 
 import argparse

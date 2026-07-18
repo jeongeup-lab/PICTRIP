@@ -1,16 +1,3 @@
-"""SPT DB-level constraint regression tests (migration 0003_spt_tables).
-
-Six rules live in the DB schema for SPT; this file pins them so a future
-migration can't loosen them silently:
-
-- `spots.cpyrht_div_cd` ∈ {NULL, Type1, Type3} (KTO copyright classification, core to the data policy)
-- `spots.show_flag` ∈ {0, 1}
-- `spot_moods.confidence` ∈ [0.0, 1.0]
-- `spot_moods.source` ∈ {code, image, manual}
-- `spot_moods` composite PK is enforced (no duplicate (content_id, mood_id))
-- regions seed is present (17 sido) so FKs resolve out of the box
-"""
-
 from __future__ import annotations
 
 import pytest

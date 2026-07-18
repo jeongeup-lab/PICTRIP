@@ -1,9 +1,3 @@
-"""Provider-agnostic OIDC id_token verification (kakao/google/apple).
-
-Generic verifier checks sig + iss + aud + exp (rejects alg:none); Apple adds hashed-nonce.
-Identity key is provider+sub (S09 §3.1). Failure paths log the exception class only, never token PII.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -40,7 +34,6 @@ class OidcClaims:
 
 
 async def _fetch_jwks(url: str) -> dict[str, Any]:
-    """One-shot fetch with a single retry."""
     last_exc: Exception | None = None
     async with httpx.AsyncClient(timeout=_JWKS_TIMEOUT) as client:
         for _ in range(2):
@@ -56,7 +49,6 @@ async def _fetch_jwks(url: str) -> dict[str, Any]:
 
 
 async def _get_jwks(provider: str, url: str) -> dict[str, Any]:
-    """Cached JWKS per provider, refreshing or serving stale-on-error per policy."""
     now = int(time.time())
     cache = _jwks_caches.setdefault(provider, {})
     if cache and now < cache.get("fresh_until", 0):
@@ -74,7 +66,6 @@ async def _get_jwks(provider: str, url: str) -> dict[str, Any]:
 
 
 def _hashed_nonce(raw: str) -> str:
-    """Apple stores nonce as base64url(sha256(raw)), no padding."""
     return urlsafe_b64encode(hashlib.sha256(raw.encode()).digest()).rstrip(b"=").decode()
 
 
@@ -89,12 +80,6 @@ async def _verify_generic(
     expected_nonce: str | None,
     hash_nonce: bool,
 ) -> OidcClaims:
-    """Verify an id_token against a provider's JWKS.
-
-    SECURITY: empty ``audiences`` is rejected loudly — passing it through would
-    make PyJWT skip the ``aud`` check entirely (token-substitution hole). The
-    issuer is checked manually, not via ``jwt.decode``, to allow multiple valid
-    issuers (Google with/without https) across PyJWT versions."""
     if not audiences:
         log.error("oidc[%s]: no configured audience — provider misconfigured", provider)
         raise OAuthProviderUnavailable()
@@ -149,11 +134,6 @@ async def _verify_generic(
 async def verify_oauth_id_token(
     provider: str, id_token: str, *, expected_nonce: str | None = None
 ) -> OidcClaims:
-    """Verify a provider OIDC id_token → OidcClaims. provider ∈ {kakao, google, apple}.
-
-    Raises OAuthIdTokenInvalid (bad token), OAuthProviderUnavailable (JWKS down),
-    or ValidationFailed (unknown provider).
-    """
     if provider == "kakao":
         c = await _verify_kakao(id_token, expected_nonce=expected_nonce)
         return OidcClaims(sub=c.sub, email=c.email, name=c.nickname, picture=c.picture)

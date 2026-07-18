@@ -1,5 +1,3 @@
-"""USR DTOs."""
-
 from __future__ import annotations
 
 from datetime import datetime
@@ -22,19 +20,12 @@ class OAuthLoginIn(BaseModel):
 
 
 class EmailSignupIn(BaseModel):
-    """Max password length mirrors bcrypt's 72-byte input cap."""
-
     email: EmailStr
     password: str = Field(min_length=8, max_length=72)
     name: str | None = None
 
 
 class EmailLoginIn(BaseModel):
-    """Password is capped at bcrypt's 72-byte limit (same as signup) so a huge
-    string can't waste a hash. Deliberately no min_length: a too-short password
-    stays a uniform 401 (credential check), never a 422 that would behave
-    differently from a wrong password."""
-
     email: EmailStr
     password: str = Field(max_length=72)
 

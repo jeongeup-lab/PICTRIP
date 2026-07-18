@@ -1,5 +1,3 @@
-"""FastAPI exception handlers that wrap responses in the standard envelope."""
-
 from __future__ import annotations
 
 from fastapi import FastAPI, Request

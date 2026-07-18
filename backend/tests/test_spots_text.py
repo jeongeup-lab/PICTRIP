@@ -1,5 +1,3 @@
-"""Unit tests for KTO scalar-field cleaning helpers (app.modules.spots.text)."""
-
 from __future__ import annotations
 
 import pytest

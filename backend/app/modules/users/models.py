@@ -1,5 +1,3 @@
-"""USR ORM models."""
-
 from __future__ import annotations
 
 from datetime import datetime
@@ -93,9 +91,6 @@ class UserAuthProvider(Base):
 
 
 class UserConsent(Base):
-    """The DB also has a `notification_consent` column (default false) that is
-    intentionally unmapped here — expand/contract migration in flight."""
-
     __tablename__ = "user_consents"
 
     user_id: Mapped[int] = mapped_column(

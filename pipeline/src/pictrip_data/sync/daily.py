@@ -11,9 +11,6 @@ from pictrip_data.sync.upsert import upsert_spots
 
 
 def watermark_param(wm: str | None) -> str | None:
-    """Stored watermark is the raw KTO modifiedtime text 'YYYYMMDDHHMMSS'
-    (matches the prod sync_runs.watermark_to TEXT column). The areaBasedSyncList2
-    modifiedtime filter takes a date 'YYYYMMDD', so slice the first 8 chars."""
     return wm[:8] if wm else None
 
 
@@ -24,15 +21,6 @@ def _run(
     conn,
     watermark_from: str | None = None,
 ) -> None:
-    """Fetch, upsert, then (full mode only) reconcile and advance the watermark.
-
-    Full runs soft-delete active spots that vanished from KTO entirely —
-    showflag=0 rows still arrive in the feed and upsert handles them.
-    Incremental runs fetch only a delta, so reconcile would wrongly wipe the
-    rest; an empty fetch (failed page) is also guarded against wiping all.
-    The watermark is stored as raw KTO text 'YYYYMMDDHHMMSS' (prod schema =
-    TEXT); when nothing changed it keeps the prior value so it never
-    regresses to NULL."""
     refs = load_ref_codes(conn)
     with record_run(conn, mode) as c:
         c["watermark_from"] = watermark_from
@@ -81,7 +69,6 @@ def sync_daily(mode: str = "incremental", client: KtoClient | None = None, conn=
 
 
 def sync_full(client: KtoClient | None = None, conn=None) -> None:
-    """Full reconcile — no modifiedtime filter (~685 pages; quota-aware, weekly)."""
     owns_client = client is None
     client = client or KtoClient()
     if conn is None:

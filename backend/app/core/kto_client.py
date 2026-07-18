@@ -1,5 +1,3 @@
-"""Async client for the four KTO Open APIs (shared params, retry, response unwrapping)."""
-
 from __future__ import annotations
 
 from enum import StrEnum
@@ -22,12 +20,6 @@ logger = get_logger(__name__)
 
 
 def _is_transient(exc: BaseException) -> bool:
-    """Retry only on transient errors: timeouts, network drops, HTTP 429 and 5xx.
-
-    Everything else raises immediately: non-transient 4xx (e.g. a bad
-    serviceKey) and deterministic client errors (UnsupportedProtocol,
-    TooManyRedirects, ...) never succeed on retry and only burn the daily
-    quota or add latency."""
     if isinstance(exc, httpx.HTTPStatusError):
         status = exc.response.status_code
         return status == 429 or status >= 500
@@ -52,8 +44,6 @@ _SERVICE_BASE: dict[KtoService, str] = {
 
 
 class KtoClient:
-    """Thin async wrapper. Instantiate once and reuse — kept in app.state.kto."""
-
     def __init__(self) -> None:
         self._client = httpx.AsyncClient(
             timeout=httpx.Timeout(10.0, connect=5.0),
@@ -76,7 +66,6 @@ class KtoClient:
         operation: str,
         **params: Any,
     ) -> list[dict[str, Any]]:
-        """Call a KTO endpoint and return the unwrapped item list (may be empty)."""
         url = f"{_SERVICE_BASE[service]}/{operation}"
         merged = {
             "serviceKey": settings.KTO_SERVICE_KEY,
@@ -103,7 +92,6 @@ class KtoClient:
 
 
 def get_kto(request: Request) -> KtoClient:
-    """FastAPI dependency. Returns the lifespan-installed KtoClient singleton."""
     kto: KtoClient = request.app.state.kto
     return kto
 

@@ -1,5 +1,3 @@
-"""GET /v1/map/region — Kakao coord2regioncode reverse-geocode + Redis cache."""
-
 from __future__ import annotations
 
 import re
@@ -81,8 +79,6 @@ async def test_region_returns_null_on_empty(client, httpx_mock):
 
 
 class _BrokenRedis:
-    """get/set both raise — a dead cache must behave like a miss (#13)."""
-
     async def get(self, key):
         raise ConnectionError("redis down")
 

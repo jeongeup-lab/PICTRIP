@@ -1,9 +1,3 @@
-"""Alembic environment for async SQLAlchemy 2.0.
-
-All ORM models are imported here so `Base.metadata` is fully populated before
-Alembic compares it to the live database.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -38,7 +32,6 @@ def include_object(object_, name, type_, reflected, compare_to):
 
 
 def run_migrations_offline() -> None:
-    """Generate SQL without a live DB connection."""
     context.configure(
         url=settings.sqlalchemy_database_url,
         target_metadata=target_metadata,

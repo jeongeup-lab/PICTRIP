@@ -1,12 +1,3 @@
-"""One-shot loader for region / classification master codes.
-
-Idempotent upsert from two KorService2 endpoints:
-  - ldongCode2 (lDongListYn=Y)   -> regions + sigungus (composite signgu code)
-  - lclsSystmCode2 (lclsSystmListYn=Y) -> lcls_systm_codes
-
-Run manually, not on cron. Owns the same ref tables that upsert.py FK-checks.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -47,9 +38,6 @@ ON CONFLICT (lcls_systm3_cd) DO UPDATE SET
 
 
 def _load_ldong(client: KtoClient, conn: psycopg.Connection) -> None:
-    """Upsert regions + sigungus from ldongCode2. Sejong's province code
-    arrives as the 5-char '36110'; it is normalized to 2-char so it fits
-    regions/sigungus (varchar 8) and matches existing data."""
     rows = client.call("ldongCode2", lDongListYn="Y", numOfRows=400)
     regions: dict[str, str] = {}
     sigungus: list[tuple[str, str, str]] = []
@@ -89,9 +77,6 @@ def _run(client: KtoClient, conn: psycopg.Connection) -> None:
 
 
 def load_codes(client: Any | None = None, conn: psycopg.Connection | None = None) -> None:
-    """Load region / sigungu / lcls master codes idempotently. Builds its own
-    KtoClient + DB connection when not injected (same ownership pattern as
-    sync_daily)."""
     owns_client = client is None
     client = client or KtoClient()
     try:

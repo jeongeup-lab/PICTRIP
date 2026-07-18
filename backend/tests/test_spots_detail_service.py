@@ -1,5 +1,3 @@
-"""SPT load_spot_detail — lazy KTO fetch + 7-day cache + stale/partial fallback."""
-
 from __future__ import annotations
 
 import asyncio
@@ -21,8 +19,6 @@ def redis() -> FakeRedis:
 
 
 class FakeKto:
-    """Duck-typed KtoClient. Records call count; returns fixtures or raises."""
-
     def __init__(self, common=None, images=None, intro=None, *, fail: bool = False) -> None:
         self._common = common if common is not None else []
         self._images = images if images is not None else []
@@ -133,8 +129,6 @@ async def test_fresh_cache_skips_kto(db_session: AsyncSession, redis: FakeRedis)
 async def test_modified_time_supersedes_fresh_cache(
     db_session: AsyncSession, redis: FakeRedis
 ) -> None:
-    """A detail within TTL is still refetched when spots.modified_time is newer
-    than cached_at (pipeline signalled a KTO content change) (#37)."""
     await _insert_spot(db_session, "DT-MODIFIED")
     await _insert_detail(db_session, "DT-MODIFIED", overview="old", age_days=1)
     await db_session.execute(
@@ -279,8 +273,6 @@ async def test_intro_persisted_and_returned(db_session: AsyncSession, redis: Fak
 
 @pytest.mark.asyncio
 async def test_redis_hit_skips_postgres_detail(db_session: AsyncSession, redis: FakeRedis) -> None:
-    """A warm Redis bundle serves the detail without touching spot_details — proven
-    by deleting the Postgres row and still getting it back from the second load."""
     await _insert_spot(db_session, "DT-REDIS")
     await _insert_detail(db_session, "DT-REDIS", overview="pg overview", age_days=1)
 
@@ -301,9 +293,6 @@ async def test_redis_hit_skips_postgres_detail(db_session: AsyncSession, redis: 
 async def test_stale_redis_defers_to_fresh_postgres(
     db_session: AsyncSession, redis: FakeRedis
 ) -> None:
-    """A stale Redis bundle must not shadow a fresh Postgres row (e.g. a prior
-    refresh whose best-effort Redis SET was lost): serve fresh PG, skip KTO, and
-    heal Redis — never pin the stale response for the TTL."""
     await _insert_spot(db_session, "DT-HEAL")
     await _insert_detail(db_session, "DT-HEAL", overview="pg fresh", age_days=1)
     await _redis_set_detail(
@@ -330,8 +319,6 @@ async def test_stale_redis_defers_to_fresh_postgres(
 
 
 class BrokenRedis:
-    """Duck-typed Redis whose get/set always raise — exercises the fail-open path."""
-
     async def get(self, *args, **kwargs):
         raise RuntimeError("redis down")
 
@@ -355,8 +342,6 @@ async def test_redis_down_falls_back_to_postgres(db_session: AsyncSession) -> No
 async def test_kto_budget_timeout_falls_back(
     db_session: AsyncSession, redis: FakeRedis, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A KTO endpoint that outruns the wall-clock budget is cut off and served as
-    unavailable, not left to the full ~30s tenacity retry storm."""
     monkeypatch.setattr("app.modules.spots.services.detail._KTO_DETAIL_BUDGET", 0.05)
     await _insert_spot(db_session, "DT-SLOW")
 
@@ -377,8 +362,6 @@ async def test_kto_budget_timeout_falls_back(
 async def test_image_batch_upsert_updates_each_row(
     db_session: AsyncSession, redis: FakeRedis
 ) -> None:
-    """The batched image upsert applies each row's OWN proposed value on conflict
-    (excluded.*), not a single scalar — proven by two rows getting distinct updates."""
     await _insert_spot(db_session, "DT-BATCH")
     await _insert_detail(db_session, "DT-BATCH", overview="x", age_days=8)
     await _insert_image(db_session, "DT-BATCH", 0, "http://old/0.jpg")

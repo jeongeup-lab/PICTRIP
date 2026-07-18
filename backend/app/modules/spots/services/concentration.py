@@ -1,5 +1,3 @@
-"""집중률 서빙 쿼리 — Hot(붐비는) / Hidden(조용하지만 볼거리) 채널 시드."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

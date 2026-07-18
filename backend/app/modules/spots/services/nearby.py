@@ -1,6 +1,3 @@
-"""Nearby SPT service — bbox+haversine distance query + category taxonomy.
-SPT owns Spot queries; MAP only merges crowd (Redis) onto the returned rows."""
-
 from __future__ import annotations
 
 import math
@@ -44,7 +41,6 @@ class NearbySpotRow:
 
 
 def category_predicate(cat: NearbyCategory) -> ColumnElement[bool]:
-    """Category SSOT rule -> SQLAlchemy boolean for the nearby WHERE."""
     if cat is NearbyCategory.attraction:
         return or_(
             Spot.lcls_systm1.in_(("HS", "NA", "EX")),
@@ -69,8 +65,6 @@ def category_predicate(cat: NearbyCategory) -> ColumnElement[bool]:
 
 
 def all_categories_predicate() -> ColumnElement[bool]:
-    """Union of the 5 defined categories — uncategorized spots (숙박/축제/공연 등)
-    excluded. The taxonomy SSOT for every "tourist-worthy spots only" gate."""
     return or_(*(category_predicate(c) for c in NearbyCategory))
 
 
@@ -84,21 +78,14 @@ def _predicate_sql(predicate: ColumnElement[bool]) -> str:
 
 
 def all_categories_sql() -> str:
-    """all_categories_predicate rendered as raw SQL for text() queries that join
-    the ``spots`` table by its real name (no alias). Generated from the ORM
-    predicate so the category taxonomy stays single-source."""
     return _predicate_sql(all_categories_predicate())
 
 
 def attraction_category_sql() -> str:
-    """category_predicate(attraction) rendered as raw SQL — the overseas→domestic
-    matching gate: 명소 매칭에는 attraction 버킷만 후보로 허용."""
     return _predicate_sql(category_predicate(NearbyCategory.attraction))
 
 
 def derive_category(l1: str | None, l2: str | None, l3: str | None) -> str | None:
-    """lcls values -> chip code. Order cafe before food: FD030100 is excluded from
-    food but included in cafe."""
     if l2 == "FD05" or l3 == "FD030100":
         return "cafe"
     if l2 in ("FD01", "FD02", "FD03") and l3 != "FD030100":
@@ -113,8 +100,6 @@ def derive_category(l1: str | None, l2: str | None, l3: str | None) -> str | Non
 
 
 def _dist_expr(lat: float, lng: float) -> ColumnElement[float]:
-    """Haversine distance (m) from (lat,lng) to each spot; mapy=lat, mapx=lng.
-    acos domain clamped to avoid NaN at the poles."""
     cos_term = func.cos(func.radians(lat)) * func.cos(func.radians(Spot.mapy)) * func.cos(
         func.radians(Spot.mapx) - func.radians(lng)
     ) + func.sin(func.radians(lat)) * func.sin(func.radians(Spot.mapy))
@@ -124,9 +109,6 @@ def _dist_expr(lat: float, lng: float) -> ColumnElement[float]:
 
 
 def _base_select(dist: ColumnElement[float], category: NearbyCategory | None):  # type: ignore[no-untyped-def]
-    """Shared SELECT + base/category filters for the nearby queries (sans bbox).
-    Base: show_flag=1 AND first_image_url IS NOT NULL. category=None means the
-    union of the 5 defined categories, NOT no filter — uncategorized spots are excluded."""
     inner = (
         select(
             Spot.content_id.label("content_id"),
@@ -184,7 +166,6 @@ async def find_nearby_spots(
     radius: int,
     category: NearbyCategory | None,
 ) -> list[NearbySpotRow]:
-    """Active+image spots within radius m, distance-ordered (crowd merged by MAP)."""
     dlat = radius / 111_320.0
     dlng = radius / (111_320.0 * max(math.cos(math.radians(lat)), 0.01))
 
@@ -206,10 +187,6 @@ async def find_nearby_spots_bbox(
     ne_lng: float,
     category: NearbyCategory | None,
 ) -> list[NearbySpotRow]:
-    """Active+image spots inside the visible map rectangle (sw..ne), ordered by
-    distance from the box center. Same base/category rules as find_nearby_spots;
-    the map's bbox replaces the center+radius circle so results match what the
-    user sees on screen."""
     min_lat, max_lat = min(sw_lat, ne_lat), max(sw_lat, ne_lat)
     min_lng, max_lng = min(sw_lng, ne_lng), max(sw_lng, ne_lng)
     center_lat = (min_lat + max_lat) / 2

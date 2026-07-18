@@ -1,5 +1,3 @@
-"""Spot-card loaders — id → SpotCardRow hydration seams for other modules."""
-
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -14,12 +12,6 @@ from app.modules.spots.services.rows import SpotCardRow
 
 
 def image_bearing_spots_stmt(*, since: datetime | None = None) -> Select[tuple[str, str | None]]:
-    """(content_id, first_image_url) selectable for spots with a non-empty image URL.
-
-    Cross-module contract for the images embedding job: images composes its own
-    embedding/failure filters against this selectable (as a subquery) so Spot ORM
-    knowledge stays inside spots. ``since`` scopes to spots synced at or after it.
-    """
     stmt = select(Spot.content_id, Spot.first_image_url).where(
         Spot.first_image_url.is_not(None),
         Spot.first_image_url != "",
@@ -30,11 +22,6 @@ def image_bearing_spots_stmt(*, since: datetime | None = None) -> Select[tuple[s
 
 
 def attraction_image_spots_stmt() -> Select[tuple[str, str | None]]:
-    """(content_id, first_image_url) selectable for visible attraction-bucket spots
-    with an image — the gallery-embedding target pool. Mirrors the matching
-    candidate gate (attraction only) so gallery KTO calls are never spent on
-    spots that can't surface as matches.
-    """
     return image_bearing_spots_stmt().where(
         Spot.show_flag == 1,
         category_predicate(NearbyCategory.attraction),
@@ -54,7 +41,6 @@ async def load_region_meta(
     session: AsyncSession,
     content_ids: list[str],
 ) -> dict[str, tuple[str | None, str | None]]:
-    """{content_id: (region_name, sigungu_name)} for a batch of ids; missing ids absent."""
     if not content_ids:
         return {}
     stmt = (
@@ -75,8 +61,6 @@ async def load_overview_map(
     session: AsyncSession,
     content_ids: Sequence[str],
 ) -> dict[str, str | None]:
-    """{content_id: overview} for a batch of ids; missing ids absent. overview lives
-    on spot_details (KTO verbatim), the cross-module seam for match-card previews."""
     if not content_ids:
         return {}
     result = await session.execute(
@@ -91,7 +75,6 @@ async def load_spot_cards_by_ids(
     session: AsyncSession,
     content_ids: list[str],
 ) -> dict[str, SpotCardRow]:
-    """{content_id: SpotCardRow}; missing ids absent. Public seam for other modules."""
     rows = await _load_spot_cards(session, content_ids)
     return {r.content_id: r for r in rows}
 
@@ -100,9 +83,6 @@ async def load_active_spot_cards_by_ids(
     session: AsyncSession,
     content_ids: list[str],
 ) -> dict[str, SpotCardRow]:
-    """Like load_spot_cards_by_ids but active-only (show_flag=1). Lets CRS diff
-    requested vs returned ids to reject unknown/inactive spots before the
-    RESTRICT FK on course_items.content_id would trip."""
     if not content_ids:
         return {}
     stmt = (

@@ -1,5 +1,3 @@
-"""Type1 표시 URL — 서명 변환(t1) 발급과 무변형 pass-through 분기."""
-
 from __future__ import annotations
 
 import pytest

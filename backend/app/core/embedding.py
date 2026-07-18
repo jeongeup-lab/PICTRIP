@@ -1,5 +1,3 @@
-"""CLIP image embedding (ADR-006, inline/CPU). Images processed in-memory, never persisted."""
-
 from __future__ import annotations
 
 import io
@@ -14,8 +12,6 @@ EMBEDDING_DIM = 512
 
 
 class ClipEmbedder:
-    """Lazy-loaded CLIP embedder, single model instance per process."""
-
     _model: Any = None
     _processor: Any = None
     _torch: Any = None
@@ -40,10 +36,6 @@ class ClipEmbedder:
         self._torch = torch
 
     def embed_image(self, image_bytes: bytes) -> list[float]:
-        """Return a 512-dim L2-normalised embedding for the given image bytes.
-
-        transformers <5 returns the features tensor directly; >=5 wraps it in
-        ``ModelOutput.pooler_output`` — both shapes are handled."""
         from PIL import Image
 
         self._ensure_loaded()

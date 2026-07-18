@@ -1,11 +1,3 @@
-"""Application settings (pydantic-settings, validated at startup).
-
-ADMIN_SESSION_SECRET signs the /admin session cookie — rotating it invalidates
-all admin sessions (cookie is Secure only in production). Admin console
-credentials are NOT here: auth is DB-backed (`admin_users` table, decision
-2026-06-27) — see app/modules/admin/security.py.
-"""
-
 from __future__ import annotations
 
 from functools import lru_cache
@@ -89,10 +81,6 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _merge_google_client_ids(self) -> Settings:
-        """Fold the per-platform Google client IDs into GOOGLE_CLIENT_IDS — the
-        set the OIDC verifier reads as accepted id_token `aud` — so filling
-        GOOGLE_OAUTH_CLIENT_ID_{IOS,ANDROID,WEB} actually enables Google login
-        (they were otherwise dead config, never read by the verifier)."""
         merged = list(self.GOOGLE_CLIENT_IDS)
         for cid in (
             self.GOOGLE_OAUTH_CLIENT_ID_IOS,

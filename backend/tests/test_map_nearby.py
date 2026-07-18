@@ -1,9 +1,3 @@
-"""GET /v1/map/nearby — spots query + haversine + bbox + category/subtype enrichment.
-
-card.category is the subtype label (lcls_systm3_nm), not a coarse chip.
-crowd/firstImage2Url/congestion were removed.
-"""
-
 from __future__ import annotations
 
 from sqlalchemy import text

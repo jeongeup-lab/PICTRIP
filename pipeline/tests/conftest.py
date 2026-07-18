@@ -109,8 +109,6 @@ def _cleanup(conn: psycopg.Connection) -> None:
 
 @pytest.fixture
 def db_conn():
-    """Connect to pictrip_test (schema = backend Alembic head). Explicit cleanup
-    before and after, because record_run/sync_daily commit mid-test."""
     conn = psycopg.connect(TEST_DSN, autocommit=False)
     _ensure_test_schema(conn)
     from pictrip_data.sync.audit import ensure_table
@@ -127,8 +125,6 @@ def db_conn():
 
 @pytest.fixture
 def seed_refs(db_conn):
-    """Insert one region/sigungu/lcls code so FK targets exist, then COMMIT
-    (so commits inside record_run/upsert can see them)."""
     cur = db_conn.cursor()
     cur.execute(
         "INSERT INTO regions (ldong_regn_cd, ldong_regn_nm) VALUES ('11','서울특별시') ON CONFLICT DO NOTHING"

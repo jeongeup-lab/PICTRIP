@@ -1,5 +1,3 @@
-"""USR service layer."""
-
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -53,8 +51,6 @@ def _normalize_email(email: str) -> str:
 async def authenticate_with_oauth(
     session: AsyncSession, provider: str, body: OAuthLoginIn
 ) -> TokenPair:
-    """Verify the provider id_token and mint a token pair (identity key =
-    provider + sub, zero Redis writes)."""
     claims = await verify_oauth_id_token(provider, body.idToken, expected_nonce=body.nonce)
 
     user = await repo.get_or_create_user_via_provider(
@@ -78,11 +74,6 @@ async def authenticate_with_oauth(
 
 
 async def signup_with_email(session: AsyncSession, body: EmailSignupIn) -> TokenPair:
-    """Create a new email/password account and mint a token pair.
-
-    Identity key is provider='email' + the normalized email. A pre-check rejects
-    a duplicate active email with 409; a concurrent race is caught via the
-    partial-unique index / provider UNIQUE constraint (IntegrityError → 409)."""
     email = _normalize_email(body.email)
 
     if await repo.get_active_user_by_email(session, email) is not None:
@@ -100,13 +91,6 @@ async def signup_with_email(session: AsyncSession, body: EmailSignupIn) -> Token
 
 
 async def login_with_email(session: AsyncSession, body: EmailLoginIn) -> TokenPair:
-    """Verify an email/password credential and mint a token pair.
-
-    Unknown email, an account with no password set, or a bad password all raise
-    the same ``InvalidCredentials`` (401) so the response can't distinguish
-    them. A dummy bcrypt verify (against a precomputed hash of a random value)
-    on the missing-user path keeps timing roughly uniform, reducing a timing
-    oracle for email enumeration."""
     email = _normalize_email(body.email)
     user = await repo.get_active_user_by_email(session, email)
 
@@ -135,18 +119,6 @@ async def get_user_public(session: AsyncSession, user_id: int) -> UserPublic:
 
 
 async def delete_user_account(session: AsyncSession, redis: Redis, user_id: int) -> None:
-    """회원 탈퇴 — App Store/Play 심사 가이드(5.1.1(v))를 만족하는 실제 계정 삭제.
-
-    Soft-delete (``deleted_at``) keeps the row for referential integrity, but PII
-    is scrubbed, the password credential is cleared, and OAuth links are removed
-    so the account is genuinely gone, not merely deactivated: re-logging-in with
-    the same Kakao/Google/Apple identity creates a *new* account (the provider
-    link no longer maps to this user) and the email login no longer has a
-    credential to verify against.
-    Idempotent — a second call (or a deleted user) is a no-op. Personal child rows
-    fall away on the eventual hard delete via ``ondelete=CASCADE``; the
-    soft-deleted row carries no personal data in the meantime.
-    """
     user = await repo.get_user(session, user_id)
     if user is not None and user.deleted_at is None:
         user.email = None

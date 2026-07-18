@@ -1,6 +1,3 @@
-"""hires_kto_image: KTO 대표이미지 URL을 `_image2_1`(940px)에서 `_image1_1`(≈1620px)
-원본으로 승격한다. https_kto_image와 동일한 transport-only 규약 — 다운로드·저장 없음."""
-
 from __future__ import annotations
 
 import hashlib

@@ -1,11 +1,3 @@
-"""admin routes — /admin (HTML) + /admin/api/* (JSON).
-
-Serves the static console pages (운영 개요 · 수집 이력 · 서비스 헬스 · 게시물 관리) and
-the read-only JSON API (A01 §3). Auth is a login page + signed-cookie session:
-HTML pages redirect to /admin/login when logged out; /admin/api/* raises 401
-(``AdminAuth``). Routes do HTTP I/O only — aggregation lives in ``services``.
-"""
-
 from __future__ import annotations
 
 from datetime import date as date_type
@@ -48,7 +40,6 @@ def _logged_in(request: Request) -> bool:
 
 @router.get("/login")
 async def admin_login_page(request: Request) -> Response:
-    """Public login page; redirect to the console if already signed in."""
     if _logged_in(request):
         return RedirectResponse("/admin", status_code=303)
     return _page("login.html")
@@ -64,7 +55,6 @@ async def admin_login_submit(
     username: Annotated[str, Form()],
     password: Annotated[str, Form()],
 ) -> RedirectResponse:
-    """Verify credentials (bcrypt); on success set the session, else bounce back."""
     if not await authenticate(db, username, password):
         return RedirectResponse("/admin/login?error=1", status_code=303)
     request.session[SESSION_KEY] = username
@@ -73,7 +63,6 @@ async def admin_login_submit(
 
 @router.post("/logout")
 async def admin_logout(request: Request) -> RedirectResponse:
-    """Clear the session and return to the login page."""
     request.session.clear()
     return RedirectResponse("/admin/login", status_code=303)
 
@@ -81,7 +70,6 @@ async def admin_logout(request: Request) -> RedirectResponse:
 @router.get("")
 @router.get("/")
 async def admin_index(request: Request) -> Response:
-    """운영 개요 (index.html). Served at both /admin and /admin/."""
     if not _logged_in(request):
         return RedirectResponse("/admin/login", status_code=303)
     return _page("index.html")
@@ -89,7 +77,6 @@ async def admin_index(request: Request) -> Response:
 
 @router.get("/history")
 async def admin_history(request: Request) -> Response:
-    """수집 이력 (history.html)."""
     if not _logged_in(request):
         return RedirectResponse("/admin/login", status_code=303)
     return _page("history.html")
@@ -97,7 +84,6 @@ async def admin_history(request: Request) -> Response:
 
 @router.get("/health")
 async def admin_health(request: Request) -> Response:
-    """서비스 헬스 (health.html)."""
     if not _logged_in(request):
         return RedirectResponse("/admin/login", status_code=303)
     return _page("health.html")
@@ -105,7 +91,6 @@ async def admin_health(request: Request) -> Response:
 
 @router.get("/overseas")
 async def admin_overseas(request: Request) -> Response:
-    """게시물(해외 스팟) 숨김 관리 (overseas.html; A7)."""
     if not _logged_in(request):
         return RedirectResponse("/admin/login", status_code=303)
     return _page("overseas.html")
@@ -113,27 +98,16 @@ async def admin_overseas(request: Request) -> Response:
 
 @router.get("/api/collection")
 async def api_collection(_: AdminAuth, db: DbSession) -> dict[str, Any]:
-    """CollectionStatus — totalSpots + latest run + next schedule (A01 §2.1)."""
     return ok(await services.get_collection_status(db))
 
 
 @router.post("/api/collection/trigger")
 async def api_collection_trigger(_: AdminAuth, db: DbSession) -> dict[str, Any]:
-    """TriggerResult — kick sync-daily (A01 §3 / ADM-009).
-
-    On failure (not configured / GitHub error / already running) the service
-    raises AdminTriggerFailed → ADMIN_TRIGGER_FAILED(502) envelope.
-    """
     return ok(await services.trigger_collection(db))
 
 
 @router.get("/api/embedding")
 async def api_embedding(_: AdminAuth, db: DbSession, redis: RedisDep) -> dict[str, Any]:
-    """EmbeddingStatus — coverage + failure backlog + this-collection progress.
-
-    Embedding is a separate step from collection (CLIP → spot_embeddings), so this
-    is its own endpoint rather than folded into /collection.
-    """
     return ok(await services.get_embedding_status(db, redis))
 
 
@@ -144,8 +118,6 @@ async def api_embedding_trigger(
     background_tasks: BackgroundTasks,
     scope: str = Query("failed", pattern="^(failed|missing)$"),
 ) -> dict[str, Any]:
-    """Kick an in-process re-embed job. ``scope=failed`` retries recorded failures;
-    ``scope=missing`` processes the (capped) backlog. 502 if already running."""
     return ok(await services.trigger_embedding(redis, background_tasks, scope))
 
 
@@ -153,19 +125,16 @@ async def api_embedding_trigger(
 async def api_history(
     _: AdminAuth, db: DbSession, days: int = Query(7, ge=1, le=90)
 ) -> dict[str, Any]:
-    """HistoryList — per-day success/error/running rollup over N days (A01 §2.2)."""
     return ok(await services.get_history(db, days))
 
 
 @router.get("/api/history/{run_date}")
 async def api_history_detail(_: AdminAuth, db: DbSession, run_date: date_type) -> dict[str, Any]:
-    """HistoryDetail — runs for one day; 404 ADMIN_HISTORY_NOT_FOUND if none."""
     return ok(await services.get_history_detail(db, run_date))
 
 
 @router.get("/api/health")
 async def api_health(_: AdminAuth, db: DbSession) -> dict[str, Any]:
-    """Health — api/db/tunnel/users component status (A01 §2.3)."""
     return ok(await services.get_health(db))
 
 
@@ -177,7 +146,6 @@ async def api_overseas_list(
     cursor: int | None = Query(None),
     limit: int = Query(50, ge=1, le=100),
 ) -> dict[str, Any]:
-    """OverseasList — id-cursor page, optional name_ko search (A7)."""
     return ok(await services.list_overseas(db, q=q, cursor_id=cursor, limit=limit))
 
 
@@ -185,5 +153,4 @@ async def api_overseas_list(
 async def api_overseas_visibility(
     _: AdminAuth, db: DbSession, redis: RedisDep, overseas_id: int, body: OverseasVisibilityUpdate
 ) -> dict[str, Any]:
-    """Toggle overseas_spots.is_hidden; 404 ADMIN_OVERSEAS_NOT_FOUND if absent."""
     return ok(await services.set_overseas_visibility(db, redis, overseas_id, body.isHidden))

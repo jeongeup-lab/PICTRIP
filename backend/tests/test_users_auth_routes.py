@@ -1,5 +1,3 @@
-"""Integration tests for the auth/user routes (oauth/refresh/logout, GET /users/me)."""
-
 from __future__ import annotations
 
 import uuid

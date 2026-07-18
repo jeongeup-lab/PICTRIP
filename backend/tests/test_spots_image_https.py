@@ -1,11 +1,3 @@
-"""SpotCard image URLs are upgraded http -> https for the KTO host.
-
-iOS ATS blocks plain http:// loads in expo-image (the Media exception only
-covers AVFoundation), so KTO image URLs must leave the API as https. KTO
-serves the same asset over both schemes, so this is a transport upgrade of the
-same URL, not a content rewrite.
-"""
-
 from __future__ import annotations
 
 import pytest

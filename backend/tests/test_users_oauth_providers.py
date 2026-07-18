@@ -1,9 +1,3 @@
-"""Provider-agnostic OIDC verification (app.modules.users.oidc).
-
-Reuses the RSA `kakao_signing_key` fixture (conftest) to mint Google id_tokens
-signed by a fake JWKS, served via httpx_mock at the Google certs URL.
-"""
-
 from __future__ import annotations
 
 import time
@@ -87,9 +81,6 @@ async def test_google_happy_path(httpx_mock, kakao_signing_key, monkeypatch):
 async def test_google_rejected_when_no_audience_configured(
     httpx_mock, kakao_signing_key, monkeypatch
 ):
-    """Security: with GOOGLE_CLIENT_IDS empty (the default), a validly-signed
-    google token must be REJECTED, not silently accepted (empty `aud` list would
-    otherwise make PyJWT skip audience validation -> token substitution)."""
     priv, _jwks = kakao_signing_key
     monkeypatch.setattr("app.config.settings.GOOGLE_CLIENT_IDS", [])
     token = _mint_google(priv, aud="some-client", sub="g-99")
@@ -99,8 +90,6 @@ async def test_google_rejected_when_no_audience_configured(
 
 @pytest.mark.asyncio
 async def test_apple_rejected_when_no_bundle_id_configured(kakao_signing_key, monkeypatch):
-    """Mirror of the google guard for apple: APPLE_BUNDLE_ID=None (default) must
-    reject any apple token rather than skip `aud` validation."""
     priv, _ = kakao_signing_key
     monkeypatch.setattr("app.config.settings.APPLE_BUNDLE_ID", None)
     token = _mint_google(priv, aud="any.bundle.id", iss="https://appleid.apple.com", sub="a-1")

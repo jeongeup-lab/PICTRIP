@@ -1,5 +1,3 @@
-"""Category derivation rules (spec §3) — pure function, no DB."""
-
 from __future__ import annotations
 
 import pytest

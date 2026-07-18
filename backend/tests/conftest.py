@@ -1,5 +1,3 @@
-"""Pytest fixtures for async FastAPI + SQLAlchemy."""
-
 from __future__ import annotations
 
 import time
@@ -64,7 +62,6 @@ async def redis_client_fake() -> AsyncGenerator[FakeRedis, None]:
 
 @pytest_asyncio.fixture
 async def redis_client_real():
-    """Real Redis 7 via testcontainers. Skipped if Docker is unavailable."""
     pytest_docker = pytest.importorskip("testcontainers.redis", reason="testcontainers required")
     from redis.asyncio import from_url
 
@@ -91,7 +88,6 @@ def _b64url_uint(n: int) -> str:
 
 @pytest.fixture(scope="session")
 def kakao_signing_key() -> tuple[rsa.RSAPrivateKey, dict]:
-    """RSA-2048 keypair + JWKS dict (single key with kid='test-kid-1')."""
     private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     pub = private.public_key().public_numbers()
     jwks = {
@@ -111,7 +107,6 @@ def kakao_signing_key() -> tuple[rsa.RSAPrivateKey, dict]:
 
 @pytest.fixture
 def mock_kakao_jwks(httpx_mock, kakao_signing_key):
-    """Default JWKS HTTP response. Tests can override via httpx_mock."""
     _, jwks = kakao_signing_key
     httpx_mock.add_response(
         url="https://kauth.kakao.com/.well-known/jwks.json",

@@ -1,11 +1,3 @@
-"""IMG gallery job — centroid embedding of firstimage + detailImage2 photos.
-
-CLIP is faked (bytes-keyed one-hot vectors so centroid math is assertable), KTO
-is a stub object, and downloads are mocked. Asserts target selection (attraction
-gate + staleness), the upserted centroid row, and the no-row-on-failure contract
-that makes reruns resumable.
-"""
-
 from __future__ import annotations
 
 import asyncio

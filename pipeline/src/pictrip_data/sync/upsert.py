@@ -1,5 +1,3 @@
-"""Spots upsert / soft-delete logic."""
-
 from __future__ import annotations
 
 import psycopg

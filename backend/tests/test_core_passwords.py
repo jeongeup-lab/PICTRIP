@@ -1,5 +1,3 @@
-"""Unit tests for password hashing helpers (app.core.passwords)."""
-
 from __future__ import annotations
 
 from app.core.passwords import hash_password, verify_password

@@ -1,16 +1,3 @@
-"""ADM Phase 1 — read-only JSON API (A01 §3).
-
-Exercises the four endpoints (collection · history · history/{date} · health)
-behind the Basic-auth gate, asserting the exact §3 camelCase payload shapes and
-the date-grouping / 404 / aggregate semantics.
-
-``sync_runs`` is owned by pipeline/ and is NOT a backend model or Alembic table
-(monorepo invariant), so the test DB has no such table. We create it inside the
-rolled-back test transaction with the measured schema (A01 §0): timestamptz for
-the time columns, int counters, ``double precision`` duration_sec, ``text`` error.
-Everything is seeded via raw ``text()`` and discarded on rollback.
-"""
-
 from __future__ import annotations
 
 import pytest
@@ -60,7 +47,6 @@ async def _insert_run(
     error: str | None = None,
     finished: bool = True,
 ) -> None:
-    """Insert one run started ``started_offset_days`` ago (relative to now())."""
     await session.execute(
         text(
             "INSERT INTO sync_runs "
@@ -88,7 +74,6 @@ async def _insert_run(
 
 @pytest.fixture
 def admin_password() -> str:
-    """The DB-seeded default admin credential (migration 0016)."""
     return _PASSWORD
 
 
@@ -236,11 +221,6 @@ async def test_history_grouping_7d(
 async def test_history_days_out_of_bounds_422(
     db_session: AsyncSession, client: AsyncClient, admin_password: str, days: int
 ) -> None:
-    """days is bounded to [1, 90]; out-of-range → 422 (after the DB-backed auth gate).
-
-    get_db is overridden so the auth lookup uses the per-test session, not the
-    module engine (which would leak a connection across the function-scoped loop).
-    """
     _override(db_session)
     try:
         resp = await client.get(f"/admin/api/history?days={days}", auth=_AUTH)

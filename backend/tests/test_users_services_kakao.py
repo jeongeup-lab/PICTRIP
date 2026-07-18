@@ -89,10 +89,6 @@ async def test_authenticate_with_oauth_distinct_providers_same_sub_are_separate(
 async def test_authenticate_with_oauth_email_collision_does_not_crash(
     db_session: AsyncSession,
 ) -> None:
-    """An OAuth login whose profile email already belongs to an active account
-    must not 500 on the partial-unique active-email index. The OAuth account is
-    created separately (identity = provider+sub, no auto-linking) with the
-    conflicting profile email dropped."""
     from app.modules.users.schemas import EmailSignupIn
     from app.modules.users.services import signup_with_email
 
@@ -122,11 +118,6 @@ async def test_authenticate_with_oauth_email_collision_does_not_crash(
 async def test_authenticate_with_oauth_savepoint_rollback_on_race(
     db_session: AsyncSession,
 ) -> None:
-    """Force the IntegrityError path: the pre-check is mocked to miss the first
-    time (simulating concurrent race where the other transaction hasn't committed
-    yet), so the service enters the savepoint, the UserAuthProvider INSERT
-    collides with a pre-existing row, savepoint rolls back the orphan User
-    insert, and the reselect picks up the winning row."""
 
     winner = User(email=None, name="Winner")
     db_session.add(winner)

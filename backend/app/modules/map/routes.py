@@ -1,5 +1,3 @@
-"""MAP routes. Endpoints mirror API spec §11."""
-
 from __future__ import annotations
 
 from typing import Any

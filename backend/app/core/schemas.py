@@ -1,5 +1,3 @@
-"""Common response envelope schemas matching API spec §1-4."""
-
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -39,8 +37,6 @@ class ResponseMeta(BaseModel):
 
 
 class Envelope(BaseModel, Generic[DataT]):
-    """Standard response envelope: { data, error, meta }."""
-
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     data: DataT | None = None

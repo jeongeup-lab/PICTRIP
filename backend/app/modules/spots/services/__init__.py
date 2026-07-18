@@ -1,5 +1,3 @@
-"""SPT service layer — re-exports the public surface from the submodules."""
-
 from __future__ import annotations
 
 from app.modules.spots.services.cards import (

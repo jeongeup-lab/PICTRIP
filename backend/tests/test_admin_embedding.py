@@ -1,14 +1,3 @@
-"""ADM embedding status + re-embed trigger (collection/embedding are separate).
-
-GET /admin/api/embedding surfaces coverage, the failure backlog, and the
-"this collection" progress (spots synced since the latest sync run). POST
-/admin/api/embedding/trigger kicks an in-process job guarded by a Redis lock.
-
-``sync_runs`` (pipeline-owned, A05) is created in-transaction with the measured
-schema, mirroring test_admin_api.py. The embed job itself is monkeypatched in the
-trigger tests so no CLIP/model/network is touched.
-"""
-
 from __future__ import annotations
 
 import pytest

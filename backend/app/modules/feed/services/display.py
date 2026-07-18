@@ -1,10 +1,3 @@
-"""Type1 이미지의 표시 URL 결정 — 서명 변환(t1) 또는 무변형 pass-through.
-
-폭 1620 = KTO 원본(~1620px)의 scale-down 상한. 일반 원본은 리사이즈 없이 WebP
-재인코딩만 일어나 해상도 손실 없이 바이트가 줄어든다. 카드 cover는 높이가
-병목이라 이보다 작은 폭은 원본 대비 유효 해상도를 깎는다.
-"""
-
 from __future__ import annotations
 
 from app.config import settings

@@ -1,8 +1,3 @@
-"""MAP repositories — DB queries; SQLAlchemy lives here.
-
-Centroids are runtime AVG of visible spot coordinates. mapx=lng, mapy=lat
-(S07 ERD) — do not swap."""
-
 from __future__ import annotations
 
 from collections.abc import Sequence

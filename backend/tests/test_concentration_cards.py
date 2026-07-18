@@ -1,5 +1,3 @@
-"""집중률 Hot/Hidden 서빙 쿼리 — load_hot_spots / load_hidden_spots."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

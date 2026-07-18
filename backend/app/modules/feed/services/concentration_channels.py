@@ -1,10 +1,3 @@
-"""hot·hidden 채널 — 집중률 DB 시드 + Redis 캐시.
-
-집중률은 오프라인 sync(scripts.sync_concentration)로만 바뀌는 전역 데이터라
-festa·pets·snap과 같은 캐시 대상이다. 캐싱으로 콜드 버퍼 캐시 스파이크 변동과
-동시 홈 오픈 시 반복 DB 조회를 없앤다. 카드·메타가 같은 키를 공유한다.
-"""
-
 from __future__ import annotations
 
 import json

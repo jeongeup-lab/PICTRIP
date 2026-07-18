@@ -1,5 +1,3 @@
-"""Integration tests for PUT/GET /v1/users/me/consents."""
-
 from __future__ import annotations
 
 import uuid

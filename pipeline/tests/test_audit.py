@@ -1,5 +1,3 @@
-"""Tests for the sync_runs audit table (DDL + run lifecycle)."""
-
 import pytest
 
 from pictrip_data.sync.audit import ensure_table, last_success_watermark, record_run

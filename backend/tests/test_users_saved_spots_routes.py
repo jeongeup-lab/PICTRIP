@@ -1,9 +1,3 @@
-"""Integration tests for the saved-spot (bookmark) routes.
-
-Routes live in USR but user_saved_spots + spot-card DB access goes through SPT
-services (no cross-module model imports — ADR-0002 / ADR-0011).
-"""
-
 from __future__ import annotations
 
 import uuid

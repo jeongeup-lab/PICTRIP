@@ -1,5 +1,3 @@
-"""hot·hidden 채널 Redis 캐시 — 미스 시 DB 조회·저장, 히트 시 DB 우회."""
-
 from __future__ import annotations
 
 import pytest_asyncio

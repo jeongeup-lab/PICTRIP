@@ -1,5 +1,3 @@
-"""SPT routes. Endpoints mirror API spec §7."""
-
 from __future__ import annotations
 
 from typing import Any

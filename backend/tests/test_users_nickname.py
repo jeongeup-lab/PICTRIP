@@ -1,5 +1,3 @@
-"""Unit tests for the random Korean nickname generator (app.modules.users.nickname)."""
-
 from __future__ import annotations
 
 import random

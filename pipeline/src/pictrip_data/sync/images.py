@@ -1,22 +1,3 @@
-"""Liveness validation for spots' KTO image URLs.
-
-tong.visitkorea.or.kr rejects HEAD (405), so liveness is a GET with
-`Range: bytes=0-0` — one byte for a live file, 404 for a deleted one.
-Probes go over https and a 2xx only counts as alive with an `image/*`
-content-type, so WAF/interception pages served as 200 classify as
-unknown instead of masking dead files.
-Dead `_image1_1` originals fall back to the `_image2_1` mid-size variant
-when that survives; if the variant's liveness is uncertain (5xx/timeout)
-the row is left untouched for the next sweep, and only a confirmed-dead
-variant nulls the URL. The mid-size is KTO's own published rendition of
-the same photo (no bytes are transformed by us), so the swap is fine for
-`cpyrhtDivCd=Type3` (변경금지) too — the shipped mobile client already does
-the same `_image1_1` → `_image2_1` swap on 404. Either write fires the
-0019 trigger on spots.first_image_url: a rewrite queues the spot in
-embedding_failures as source_changed (run backend-backfill-embeddings to
-restore matching), a NULL removes it from matching cleanly.
-"""
-
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor

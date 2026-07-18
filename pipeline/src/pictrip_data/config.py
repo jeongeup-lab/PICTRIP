@@ -1,8 +1,3 @@
-"""Pipeline settings (independent of backend config).
-
-kto_api_key is stored URL-DECODED; httpx re-encodes it via params=.
-"""
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 

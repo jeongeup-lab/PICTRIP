@@ -1,22 +1,3 @@
-"""admin repositories — read-only cross-module aggregates (A01 §1.1).
-
-The *only* admin file that imports SQLAlchemy. All access is read-only:
-
-- ``sync_runs`` is owned by pipeline/ (A05) → accessed via raw ``text()`` only,
-  no ORM model, never in ``Base``/Alembic. Column names are the measured schema
-  (A01 §0) and shared with pipeline/ (rename breaks both — see PR notes).
-- ``spots`` / ``users`` / ``user_auth_providers`` aggregates use raw SQL too,
-  keeping this layer uniform and free of cross-module model imports.
-
-Functions return plain Python (``Row`` / ``dict`` / scalars), never Pydantic —
-shaping into DTOs is the service layer's job.
-
-The only ORM import is the admin module's own surface: ``admin_users`` (console
-credentials, DB-backed auth A01 §1.3). ``overseas_spots`` is owned by the feed
-module; admin's sanctioned write is the single ``is_hidden`` column (CLAUDE.md
-grant) — reads stay raw SQL like the other cross-module aggregates.
-"""
-
 from __future__ import annotations
 
 from datetime import date
@@ -30,7 +11,6 @@ from app.modules.admin.models import AdminUser
 
 
 async def get_admin_user(session: AsyncSession, username: str) -> AdminUser | None:
-    """The admin-console login for ``username`` (None if absent). Read-only."""
     return (
         await session.execute(select(AdminUser).where(AdminUser.username == username))
     ).scalar_one_or_none()
@@ -42,7 +22,6 @@ async def count_spots(session: AsyncSession) -> int:
 
 
 async def count_embeddings(session: AsyncSession) -> int:
-    """Spots with a CLIP embedding (spot_embeddings is the vector store)."""
     result = await session.execute(
         text(
             "SELECT count(*) FROM spot_embeddings e JOIN spots s "
@@ -53,7 +32,6 @@ async def count_embeddings(session: AsyncSession) -> int:
 
 
 async def latest_sync_run(session: AsyncSession) -> Row[Any] | None:
-    """Newest run (idx_sync_runs_recent, id DESC). ``None`` if never synced."""
     result = await session.execute(
         text(
             "SELECT id, started_at, finished_at, status, mode, api_calls, "
@@ -65,7 +43,6 @@ async def latest_sync_run(session: AsyncSession) -> Row[Any] | None:
 
 
 async def sync_run_daily_counts(session: AsyncSession, days: int) -> list[Row[Any]]:
-    """Per-day rollup over the last ``days`` calendar days (most recent first)."""
     result = await session.execute(
         text(
             "SELECT started_at::date AS day, "
@@ -84,7 +61,6 @@ async def sync_run_daily_counts(session: AsyncSession, days: int) -> list[Row[An
 
 
 async def sync_runs_on_date(session: AsyncSession, day: date) -> list[Row[Any]]:
-    """All runs whose ``started_at`` date equals ``day`` (chronological)."""
     result = await session.execute(
         text(
             "SELECT id, status, mode, started_at, finished_at, api_calls, "
@@ -97,12 +73,6 @@ async def sync_runs_on_date(session: AsyncSession, day: date) -> list[Row[Any]]:
 
 
 async def embedding_totals(session: AsyncSession) -> Row[Any]:
-    """Coverage + backlog in one round-trip.
-
-    ``missing`` is computed directly (image-bearing spots with no embedding row),
-    matching the embed job's target query; ``embedded`` is derived as
-    ``with_image - missing`` so embedded + missing == with_image exactly.
-    """
     result = await session.execute(
         text(
             "SELECT "
@@ -128,7 +98,6 @@ async def embedding_totals(session: AsyncSession) -> Row[Any]:
 
 
 async def embedding_failures_by_reason(session: AsyncSession) -> list[Row[Any]]:
-    """(reason, count) rollup of the live failure backlog."""
     result = await session.execute(
         text(
             "SELECT f.reason, count(*) AS n FROM embedding_failures f JOIN spots s "
@@ -143,10 +112,6 @@ async def embedding_failures_by_reason(session: AsyncSession) -> list[Row[Any]]:
 
 
 async def embedding_recent_window(session: AsyncSession, since: Any) -> Row[Any]:
-    """Image-bearing spots synced at/after ``since`` and how many are embedded.
-
-    Scopes the "this collection" view to the latest sync run's start.
-    """
     result = await session.execute(
         text(
             "SELECT "
@@ -164,7 +129,6 @@ async def embedding_recent_window(session: AsyncSession, since: Any) -> Row[Any]
 
 
 async def db_ping(session: AsyncSession) -> bool:
-    """``SELECT 1`` liveness probe; False on any failure."""
     try:
         result = await session.execute(text("SELECT 1"))
         return bool(result.scalar_one() == 1)
@@ -173,7 +137,6 @@ async def db_ping(session: AsyncSession) -> bool:
 
 
 async def user_aggregates(session: AsyncSession) -> Row[Any]:
-    """Total / active / new-7d / deleted-30d / kakao counts in one round-trip."""
     result = await session.execute(
         text(
             "SELECT "
@@ -191,8 +154,6 @@ async def user_aggregates(session: AsyncSession) -> Row[Any]:
 async def list_overseas(
     session: AsyncSession, *, q: str | None, cursor_id: int | None, limit: int
 ) -> list[Row[Any]]:
-    """One id-ordered page (id > cursor). ``q`` is a case-insensitive name_ko
-    substring with LIKE wildcards escaped (% and _ are literals)."""
     pattern = None
     if q:
         esc = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -211,10 +172,6 @@ async def list_overseas(
 
 
 async def set_overseas_hidden(session: AsyncSession, overseas_id: int, hidden: bool) -> bool:
-    """Set is_hidden (+ updated_at) for one overseas spot. False iff no such row.
-
-    Mutates the passed session; the service commits.
-    """
     result = await session.execute(
         text(
             "UPDATE overseas_spots SET is_hidden = :h, updated_at = now() "

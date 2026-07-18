@@ -1,5 +1,3 @@
-"""feed festa·pets·snap 채널 — KTO fetch + 자정 Redis 캐시 단위 테스트."""
-
 from __future__ import annotations
 
 import json

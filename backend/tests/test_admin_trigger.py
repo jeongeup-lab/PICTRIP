@@ -1,16 +1,3 @@
-"""ADM-009/010 — collection trigger (POST /admin/api/collection/trigger).
-
-Exercises the trigger endpoint behind the Basic-auth gate (A01 §3): the
-``ADMIN_TRIGGER_FAILED(502)`` envelope for the not-configured and concurrency
-cases, the happy path (token set, GitHub returns 204), and the structured audit
-line (ADM-010).
-
-The actual GitHub ``workflow_dispatch`` HTTP call is mocked at the
-``WorkflowDispatchTrigger._dispatch`` boundary so the suite never hits the
-network. ``sync_runs`` (pipeline-owned, A05) is created in-transaction with the
-measured schema, mirroring ``test_admin_api.py``.
-"""
-
 from __future__ import annotations
 
 import pytest
@@ -50,13 +37,11 @@ CREATE TABLE IF NOT EXISTS sync_runs (
 
 @pytest.fixture
 def admin_password() -> str:
-    """The DB-seeded default admin credential (migration 0016)."""
     return _PASSWORD
 
 
 @pytest.fixture
 def token_set(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Configure the trigger: a non-empty dispatch token = "configured"."""
     monkeypatch.setattr(settings, "GITHUB_DISPATCH_TOKEN", "ghp_test_token")
     monkeypatch.setattr(settings, "GITHUB_REPO", "jeongeup-lab/PICTRIP")
     monkeypatch.setattr(settings, "COLLECTION_WORKFLOW", "pipeline-sync.yml")

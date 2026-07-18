@@ -1,11 +1,3 @@
-"""IMG embedding job — embed_spots records successes/failures, collect_targets scopes.
-
-Exercises the shared embed path (CLI backfill + admin re-embed button) against the
-per-test rolled-back session: CLIP is faked (no model load) and image downloads
-are mocked (no network), so we assert the DB side-effects — ``spot_embeddings``
-upsert + ``embedding_failures`` upsert/clear — and the target-selection filters.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -22,12 +14,6 @@ from app.modules.images.embedding_job import collect_targets, count_missing, emb
 
 @pytest.fixture
 def fake_clip(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Patch CLIP at the class boundary (no model load).
-
-    Must patch the CLASS, not the singleton instance — an instance-attribute
-    monkeypatch leaks onto the shared ``embedder`` and shadows the class-level
-    patching other suites rely on.
-    """
     monkeypatch.setattr(ClipEmbedder, "embed_image", lambda _self, _b: [0.1] * 512)
 
 

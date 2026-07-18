@@ -1,5 +1,3 @@
-"""festa·pets·snap 채널 — 라이브 KTO fetch + KST 일자 기준 stale-while-revalidate 캐시."""
-
 from __future__ import annotations
 
 import asyncio

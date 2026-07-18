@@ -1,6 +1,3 @@
-"""Saved spots / bookmarks (ADR-0011). user_saved_spots FKs spots.content_id, so
-its DB access stays in SPT; USR routes call these via the service seam."""
-
 from __future__ import annotations
 
 import base64
@@ -33,7 +30,6 @@ def decode_saved_cursor(cursor: str) -> tuple[datetime, str]:
 
 
 async def save_spot(session: AsyncSession, *, user_id: int, content_id: str) -> bool:
-    """Idempotent save. True if inserted, False if already saved. 404 if no spot."""
     exists = await session.scalar(
         select(Spot.content_id).where(Spot.content_id == content_id, Spot.show_flag == 1)
     )
@@ -52,7 +48,6 @@ async def save_spot(session: AsyncSession, *, user_id: int, content_id: str) -> 
 
 
 async def unsave_spot(session: AsyncSession, *, user_id: int, content_id: str) -> bool:
-    """Idempotent unsave. True if a row was removed, False if nothing to remove."""
     stmt = (
         delete(UserSavedSpot)
         .where(UserSavedSpot.user_id == user_id, UserSavedSpot.content_id == content_id)
@@ -70,8 +65,6 @@ async def list_saved_spots(
     limit: int = 24,
     cursor: str | None = None,
 ) -> tuple[list[SpotCardRow], str | None, bool]:
-    """User's saved spots as cards, newest first. Keyset on (saved_at, content_id)
-    DESC. Returns (rows, next_cursor, has_more); next_cursor None on the last page."""
     stmt = (
         select(
             Spot.content_id,

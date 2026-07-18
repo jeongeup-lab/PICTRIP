@@ -1,16 +1,3 @@
-"""Per-IP fixed-window rate limiting on Redis.
-
-Fail-open (S08): a Redis blip must never block authentication, matching the
-denylist model in ``app.core.auth``. Only the over-limit decision raises
-``RateLimited``; any Redis error degrades to "allow" and logs a warning.
-
-Used as a route dependency, e.g.::
-
-    @router.post("/auth/email/login", dependencies=[
-        Depends(rate_limit(bucket="email_login", limit=10, window_seconds=60)),
-    ])
-"""
-
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
@@ -26,11 +13,6 @@ logger = get_logger(__name__)
 
 
 def _client_ip(request: Request) -> str:
-    """Resolve the caller IP behind the Cloudflare tunnel.
-
-    The CF edge sets ``CF-Connecting-IP``; fall back to the first
-    ``X-Forwarded-For`` hop, then the socket peer. A spoofed header only lets an
-    attacker spread their own quota, never bypass another client's bucket."""
     cf = request.headers.get("cf-connecting-ip")
     if cf:
         return cf.strip()
@@ -55,7 +37,6 @@ async def _enforce(redis: Redis, *, key: str, limit: int, window_seconds: int) -
 def rate_limit(
     *, bucket: str, limit: int, window_seconds: int
 ) -> Callable[[Request, Redis], Awaitable[None]]:
-    """Build a FastAPI dependency throttling ``limit`` requests / window per IP."""
 
     async def _dep(request: Request, redis: RedisDep) -> None:
         await _enforce(

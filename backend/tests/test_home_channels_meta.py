@@ -1,5 +1,3 @@
-"""GET /v1/home/channels — 채널 메타 목록 조립 (fail-soft)."""
-
 from __future__ import annotations
 
 import asyncio

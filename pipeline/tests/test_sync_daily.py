@@ -42,7 +42,6 @@ def test_sync_daily_pages_until_empty_and_records(seed_refs):
 
 
 def _seed_active_spot(conn, content_id):
-    """Insert an ACTIVE (show_flag=1) spot with valid FK refs (from seed_refs)."""
     cur = conn.cursor()
     cur.execute(
         "INSERT INTO spots (content_id, content_type_id, title, ldong_regn_cd, "

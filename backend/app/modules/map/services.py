@@ -1,5 +1,3 @@
-"""MAP service layer — nearby enrichment + region reverse geocode."""
-
 from __future__ import annotations
 
 import json
@@ -33,7 +31,6 @@ _REGIONS_TREE_TTL = 86_400
 
 
 async def _enrich(session: AsyncSession, rows: list[NearbySpotRow]) -> list[NearbySpotRow]:
-    """Merge region meta onto SPT's distance-ranked rows, capped at 30."""
     rows = rows[:_NEARBY_LIMIT]
     if not rows:
         return rows
@@ -55,7 +52,6 @@ async def nearby_spots(
     radius: int,
     category: NearbyCategory | None,
 ) -> list[NearbySpotRow]:
-    """Center+radius nearby (legacy/fallback path)."""
     rows = await find_nearby_spots(session, lat=lat, lng=lng, radius=radius, category=category)
     return await _enrich(session, rows)
 
@@ -69,7 +65,6 @@ async def nearby_spots_bbox(
     ne_lng: float,
     category: NearbyCategory | None,
 ) -> list[NearbySpotRow]:
-    """Nearby spots inside the visible map rectangle (what the user sees on screen)."""
     rows = await find_nearby_spots_bbox(
         session,
         sw_lat=sw_lat,
@@ -93,7 +88,6 @@ async def nearby_cards(
     ne_lat: float | None,
     ne_lng: float | None,
 ) -> list[NearbySpotCard]:
-    """/map/nearby entry: bbox (all four corners) beats center+radius; neither → 422."""
     if sw_lat is not None and sw_lng is not None and ne_lat is not None and ne_lng is not None:
         rows = await nearby_spots_bbox(
             session, sw_lat=sw_lat, sw_lng=sw_lng, ne_lat=ne_lat, ne_lng=ne_lng, category=category
@@ -136,10 +130,6 @@ def _to_region_label(payload: dict[str, Any]) -> RegionLabel | None:
 
 
 async def reverse_geocode(redis: Redis, *, lat: float, lng: float) -> RegionLabel | None:
-    """Return a region label from Kakao coord2regioncode with Redis caching.
-
-    Failures and empty responses degrade to None for a generic "near me" fallback.
-    """
     key = _REGION_CACHE_KEY.format(lat=lat, lng=lng)
     cached = None
     try:
@@ -168,7 +158,6 @@ async def reverse_geocode(redis: Redis, *, lat: float, lng: float) -> RegionLabe
 
 
 async def regions_tree(session: AsyncSession, redis: Redis) -> list[dict[str, Any]]:
-    """17 sido + their sigungus, each with a runtime-AVG centroid, cached 24h."""
     try:
         cached = await redis.get(REGIONS_TREE_KEY)
     except Exception as exc:

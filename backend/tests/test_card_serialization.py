@@ -1,5 +1,3 @@
-"""Canonical SpotCard serialization: subtype-category join."""
-
 from __future__ import annotations
 
 from sqlalchemy import text

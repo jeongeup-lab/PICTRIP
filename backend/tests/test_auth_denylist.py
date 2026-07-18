@@ -1,7 +1,3 @@
-"""Denylist auth model (S08): issuance writes nothing to Redis; refresh is a
-sliding re-mint with the SAME jti; logout adds denyjti; refresh fails open when
-Redis is unavailable."""
-
 from __future__ import annotations
 
 import pytest

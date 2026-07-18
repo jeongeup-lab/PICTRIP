@@ -80,14 +80,6 @@ def _cleanup_codes(conn):
 
 @pytest.fixture
 def seed_codes_guard(db_conn):
-    """Snapshot the real code rows these tests delete, and restore them after.
-
-    The fixtures use REAL sido codes ('11','26','36'), which exist in a shared,
-    Alembic-migrated pictrip_test as the backend's 17-sido regions seed. Without
-    this guard the trailing _cleanup_codes permanently strips those seed rows,
-    breaking the backend suite's regions-seed asserts on the next local run
-    (CI is unaffected — each job gets a fresh DB).
-    """
     cur = db_conn.cursor()
     cur.execute(
         "SELECT ldong_regn_cd, ldong_regn_nm FROM regions WHERE ldong_regn_cd IN ('11','26','36')"

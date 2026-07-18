@@ -1,5 +1,3 @@
-"""Smoke tests: app boots and responds with the standard envelope."""
-
 from __future__ import annotations
 
 import pytest

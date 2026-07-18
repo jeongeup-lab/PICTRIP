@@ -1,5 +1,3 @@
-"""SPT ORM models. spot_embeddings lives in img/models.py; moods is shared with TST."""
-
 from __future__ import annotations
 
 from datetime import date, datetime
@@ -29,8 +27,6 @@ from app.core.db import Base
 
 
 class Mood(Base):
-    """8 base moods exposed in the UI."""
-
     __tablename__ = "moods"
 
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
@@ -41,8 +37,6 @@ class Mood(Base):
 
 
 class Region(Base):
-    """17 sido (provinces)."""
-
     __tablename__ = "regions"
 
     ldong_regn_cd: Mapped[str] = mapped_column(String(8), primary_key=True)
@@ -50,8 +44,6 @@ class Region(Base):
 
 
 class Sigungu(Base):
-    """~250 sigungu (districts)."""
-
     __tablename__ = "sigungus"
 
     ldong_signgu_cd: Mapped[str] = mapped_column(String(8), primary_key=True)
@@ -62,8 +54,6 @@ class Sigungu(Base):
 
 
 class LclsSystmCode(Base):
-    """KTO classification system (lclsSystmCode2)."""
-
     __tablename__ = "lcls_systm_codes"
 
     lcls_systm3_cd: Mapped[str] = mapped_column(String(16), primary_key=True)
@@ -75,8 +65,6 @@ class LclsSystmCode(Base):
 
 
 class Spot(Base):
-    """KTO spot master. Synced by the pipeline repo; this repo owns the schema."""
-
     __tablename__ = "spots"
     __table_args__ = (
         CheckConstraint(
@@ -149,9 +137,6 @@ class Spot(Base):
 
 
 class SpotDetail(Base):
-    """Lazy 7-day cache of detail* responses. overview lives here (not spots)
-    per ADR-0007 and is stored verbatim — never derive or summarize."""
-
     __tablename__ = "spot_details"
     __table_args__ = (Index("idx_spot_details_cached", "cached_at"),)
 
@@ -172,8 +157,6 @@ class SpotDetail(Base):
 
 
 class SpotImage(Base):
-    """Additional images from detailImage2. KTO URLs only — never store bytes."""
-
     __tablename__ = "spot_images"
     __table_args__ = (
         UniqueConstraint("content_id", "sort_order", name="uq_spot_images_content_sort"),
@@ -194,8 +177,6 @@ class SpotImage(Base):
 
 
 class SpotMood(Base):
-    """M:N spots <-> moods. confidence: 1.0 = code match, 0.0-1.0 = image match."""
-
     __tablename__ = "spot_moods"
     __table_args__ = (
         CheckConstraint(
@@ -220,10 +201,6 @@ class SpotMood(Base):
 
 
 class SpotConcentration(Base):
-    """KTO 관광지 집중률 (ADR-0016). concentration_rate is a relative 0-100 figure
-    (100 = that spot's own peak), not an absolute count. Source is name-keyed
-    (tAtsNm + 시군구), so rows are name-matched to active spots; no row = excluded."""
-
     __tablename__ = "spot_concentration"
     __table_args__ = (
         CheckConstraint(
@@ -248,8 +225,6 @@ class SpotConcentration(Base):
 
 
 class UserSavedSpot(Base):
-    """User saves a spot. CASCADE both sides."""
-
     __tablename__ = "user_saved_spots"
     __table_args__ = (Index("idx_user_saved_spots_user", "user_id", text("saved_at DESC")),)
 

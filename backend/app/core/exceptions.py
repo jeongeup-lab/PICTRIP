@@ -1,13 +1,9 @@
-"""Application error taxonomy aligned with API spec §4-2 envelope error codes."""
-
 from __future__ import annotations
 
 from typing import Any, ClassVar
 
 
 class AppError(Exception):
-    """Base for all application errors. Mapped to envelope `error.code`."""
-
     code: str = "INTERNAL_ERROR"
     http_status: int = 500
     message: str = "Internal server error."
@@ -128,10 +124,6 @@ class SessionStoreUnavailable(AppError):
 
 
 class AdminUnauthorized(AppError):
-    """Deliberately no WWW-Authenticate header: the console uses a login page +
-    signed-cookie session, not HTTP Basic, so the browser must not pop its
-    native auth dialog."""
-
     code = "ADMIN_UNAUTHORIZED"
     http_status = 401
     message = "관리자 인증이 필요합니다."

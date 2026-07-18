@@ -1,9 +1,3 @@
-"""JWT issuance, verification, and FastAPI dependencies.
-
-RS256 in prod, HS256 dev fallback when keys are empty. Uses PyJWT not python-jose:
-python-jose pulls in python-ecdsa with an unfixed P-256 timing attack (CVE-2024-23342, ADR-0005).
-"""
-
 from __future__ import annotations
 
 import time
@@ -34,7 +28,6 @@ _DEV_HS256_SECRET = "pictrip-local-dev-only-not-for-prod"
 
 
 def _signing_key() -> tuple[str, str]:
-    """Return (key, algorithm). RS256 in prod, HS256 fallback in local without keys."""
     if settings.JWT_PRIVATE_KEY and settings.JWT_PUBLIC_KEY:
         return settings.JWT_PRIVATE_KEY, settings.JWT_ALGORITHM
     if settings.is_production:
@@ -91,7 +84,6 @@ def decode_token(token: str) -> dict[str, Any]:
 async def get_current_user_id(
     authorization: Annotated[str | None, Header()] = None,
 ) -> int:
-    """FastAPI dependency: extract user_id from Bearer token."""
     if not authorization or not authorization.lower().startswith("bearer "):
         raise AuthTokenInvalid()
     token = authorization.split(" ", 1)[1].strip()
@@ -108,7 +100,6 @@ CurrentUserId = Annotated[int, Depends(get_current_user_id)]
 
 
 def mint_token_pair(*, user_id: int, user: UserPublic | None = None) -> TokenPair:
-    """Issue a fresh access+refresh pair (no Redis writes — denylist model)."""
     from app.modules.users.schemas import TokenPair, UserPublic
 
     access = create_access_token(user_id=user_id)
@@ -122,7 +113,6 @@ def mint_token_pair(*, user_id: int, user: UserPublic | None = None) -> TokenPai
 
 
 async def refresh_tokens(redis: Redis, refresh_token: str) -> TokenPair:
-    """Sliding refresh, no rotation: re-mint with the SAME jti, fresh exp."""
     from app.modules.users.schemas import TokenPair, UserPublic
 
     payload = decode_token(refresh_token)
@@ -151,7 +141,6 @@ async def refresh_tokens(redis: Redis, refresh_token: str) -> TokenPair:
 
 
 async def deny_refresh(redis: Redis, refresh_token: str | None) -> None:
-    """Logout/withdraw: denylist the refresh jti for its remaining TTL (idempotent)."""
     if not refresh_token:
         return
     try:
