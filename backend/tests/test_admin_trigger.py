@@ -186,7 +186,7 @@ async def test_trigger_github_error_502(
     sync_runs_table: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.core.exceptions import AdminTriggerFailed
+    from app.web.errors import AdminTriggerFailed
 
     async def fake_dispatch(self: triggers.WorkflowDispatchTrigger, job: str) -> None:
         raise AdminTriggerFailed("GitHub workflow_dispatch 실패 (HTTP 404).")

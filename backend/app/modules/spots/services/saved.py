@@ -8,9 +8,9 @@ from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ResourceNotFound, ValidationFailed
 from app.modules.spots.models import LclsSystmCode, Spot, UserSavedSpot
 from app.modules.spots.services.rows import SpotCardRow
+from app.web.errors import ResourceNotFound, ValidationFailed
 
 _CURSOR_SEP = "\x1f"
 

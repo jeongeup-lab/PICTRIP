@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 
-from app.core.kto_images import hires_kto_image, https_kto_image, t1_transform_url
+from app.kto.client import hires_kto_image, https_kto_image, t1_transform_url
 
 MID_HTTPS = "https://tong.visitkorea.or.kr/cms/resource/98/3045598_image2_1.jpg"
 BIG_HTTPS = "https://tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg"

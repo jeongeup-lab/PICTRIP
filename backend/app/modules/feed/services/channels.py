@@ -8,12 +8,12 @@ from typing import Any, TypeVar
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ResourceNotFound, ValidationFailed
-from app.core.kto_client import KtoClient
+from app.kto.client import KtoClient
 from app.modules.feed.services.display import T1_TILE_WIDTH, t1_display_url
 from app.modules.map import services as map_services
 from app.modules.map.schemas import NearbySpotCard
 from app.modules.spots import services as spots_services
+from app.web.errors import ResourceNotFound, ValidationFailed
 
 CHANNEL_LABELS = {
     "around": "Around",

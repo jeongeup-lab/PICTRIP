@@ -5,8 +5,8 @@ from typing import Any
 from fastapi import APIRouter, status
 
 from app.config import settings
-from app.core.schemas import ok
 from app.core.version import API_VERSION
+from app.web.envelope import ok
 
 router = APIRouter(tags=["SYS · system/meta"])
 

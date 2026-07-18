@@ -6,7 +6,6 @@ from typing import Any
 from redis.asyncio import Redis
 
 from app.core.db import AsyncSession
-from app.core.exceptions import ValidationFailed
 from app.core.logging import get_logger
 from app.modules.map import repositories as repo
 from app.modules.map.kakao_local import kakao_local_get
@@ -18,6 +17,7 @@ from app.modules.spots.services import (
     find_nearby_spots_bbox,
     load_region_meta,
 )
+from app.web.errors import ValidationFailed
 
 logger = get_logger(__name__)
 

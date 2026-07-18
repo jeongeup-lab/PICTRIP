@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.embedding import ClipEmbedder
+from app.ml.embedding import ClipEmbedder
 from app.modules.feed import embedding_job
 from app.modules.feed.embedding_job import run_overseas_embedding_job
 

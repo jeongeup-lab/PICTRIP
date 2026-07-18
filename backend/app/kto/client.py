@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 from enum import StrEnum
 from typing import Annotated, Any
+from urllib.parse import urlparse
 
 import httpx
 from fastapi import Depends, Request
@@ -13,8 +16,8 @@ from tenacity import (
 )
 
 from app.config import settings
-from app.core.exceptions import KtoApiUnavailable
 from app.core.logging import get_logger
+from app.web.errors import KtoApiUnavailable
 
 logger = get_logger(__name__)
 
@@ -97,3 +100,37 @@ def get_kto(request: Request) -> KtoClient:
 
 
 KtoDep = Annotated[KtoClient, Depends(get_kto)]
+
+KTO_IMAGE_HOST = "tong.visitkorea.or.kr"
+
+
+def _is_kto_host(url: str) -> bool:
+    return urlparse(url).hostname == KTO_IMAGE_HOST
+
+
+def https_kto_image(url: str | None) -> str | None:
+    if url and url.startswith("http://") and _is_kto_host(url):
+        return "https://" + url[len("http://") :]
+    return url
+
+
+def t1_transform_url(url: str | None, *, width: int, secret: str, origin: str) -> str | None:
+    if not url or not secret:
+        return None
+    upgraded = https_kto_image(url)
+    if not upgraded or not _is_kto_host(upgraded):
+        return None
+    parsed = urlparse(upgraded)
+    target = f"{parsed.hostname}{parsed.path}"
+    if parsed.query:
+        target = f"{target}?{parsed.query}"
+    payload = f"{width}/{target}"
+    sig = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return f"{origin}/t1/{width}/{sig}/{target}"
+
+
+def hires_kto_image(url: str | None) -> str | None:
+    upgraded = https_kto_image(url)
+    if upgraded and _is_kto_host(upgraded):
+        return upgraded.replace("_image2_1", "_image1_1")
+    return upgraded

@@ -75,7 +75,7 @@ async def test_oauth_kakao_returns_token_pair(client, patched_verify):
 
 
 async def test_oauth_kakao_bad_token_returns_401(client):
-    from app.core.exceptions import OAuthIdTokenInvalid
+    from app.web.errors import OAuthIdTokenInvalid
 
     with patch(
         "app.modules.users.services.verify_oauth_id_token",

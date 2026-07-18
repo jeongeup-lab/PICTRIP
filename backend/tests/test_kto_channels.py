@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.core.kto_client import KtoClient, KtoService
+from app.kto.client import KtoClient, KtoService
 from app.modules.feed.services.channels import ChannelCardRow
 from app.modules.feed.services.kto_channels import (
     _bg_tasks,
@@ -292,7 +292,7 @@ async def test_channel_cache_fail_open_on_redis_error(kto_mock_snap: KtoClient) 
 
 
 async def test_channel_cache_propagates_kto_failure(redis_client_fake) -> None:
-    from app.core.exceptions import KtoApiUnavailable
+    from app.web.errors import KtoApiUnavailable
 
     kto = AsyncMock(spec=KtoClient)
     kto.call = AsyncMock(side_effect=KtoApiUnavailable())

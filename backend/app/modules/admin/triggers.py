@@ -5,8 +5,8 @@ from typing import Protocol
 import httpx
 
 from app.config import settings
-from app.core.exceptions import AdminTriggerFailed
 from app.core.logging import get_logger
+from app.web.errors import AdminTriggerFailed
 
 logger = get_logger(__name__)
 

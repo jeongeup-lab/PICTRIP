@@ -37,7 +37,7 @@
 
 ## 에러 코드
 
-정본 `app/core/exceptions.py` — union은 `mobile/src/lib/app-error.ts`와 동기.
+정본 `app/web/errors.py` — union은 `mobile/src/lib/app-error.ts`와 동기.
 **새 코드는 양쪽을 함께 갱신한다.**
 
 | code | HTTP | 용도 |

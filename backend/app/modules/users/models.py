@@ -19,7 +19,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
-from app.core.embedding import EMBEDDING_DIM
+from app.ml.embedding import EMBEDDING_DIM
 
 
 class User(Base):

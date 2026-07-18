@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from app.core.kto_client import _is_transient
+from app.kto.client import _is_transient
 
 
 def _status_error(status: int) -> httpx.HTTPStatusError:

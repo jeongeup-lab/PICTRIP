@@ -6,7 +6,6 @@ from fastapi import APIRouter, Query, status
 
 from app.core.db import DbSession
 from app.core.redis import RedisDep
-from app.core.schemas import ok
 from app.modules.map.schemas import RegionLabel, RegionNode
 from app.modules.map.services import (
     nearby_cards,
@@ -14,6 +13,7 @@ from app.modules.map.services import (
     reverse_geocode,
 )
 from app.modules.spots.services import NearbyCategory
+from app.web.envelope import ok
 
 router = APIRouter(tags=["MAP · map"])
 

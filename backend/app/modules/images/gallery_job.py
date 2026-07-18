@@ -10,11 +10,11 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.db import async_session_factory
-from app.core.exceptions import KtoApiUnavailable
-from app.core.kto_client import KtoClient, KtoService
 from app.core.logging import get_logger
+from app.kto.client import KtoClient, KtoService
 from app.modules.images.embedding_job import OK, SOURCE_CHANGED, _embed_one
 from app.modules.images.models import SpotEmbeddingGallery
+from app.web.errors import KtoApiUnavailable
 
 logger = get_logger(__name__)
 

@@ -10,8 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.config import settings
-from app.core.auth import create_access_token
 from app.main import app
+from app.security.jwt import create_access_token
 
 
 @pytest_asyncio.fixture(autouse=True)

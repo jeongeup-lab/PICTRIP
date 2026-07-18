@@ -11,12 +11,12 @@ from jwt import ExpiredSignatureError, InvalidTokenError
 from redis.asyncio import Redis
 
 from app.config import settings
-from app.core.exceptions import (
+from app.core.logging import get_logger
+from app.web.errors import (
     AuthSessionRevoked,
     AuthTokenExpired,
     AuthTokenInvalid,
 )
-from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 

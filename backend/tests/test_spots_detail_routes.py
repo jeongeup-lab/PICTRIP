@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.config import settings
-from app.core.kto_client import get_kto
 from app.core.redis import get_redis
+from app.kto.client import get_kto
 from app.main import app
 
 

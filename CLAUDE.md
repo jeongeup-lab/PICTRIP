@@ -62,6 +62,20 @@ uv run ruff check . && uv run pytest
 
 ## Architecture
 
+Backend shared packages (layered, import-linter enforced: `modules` >
+`security|kto|ml` > `web` > `core`):
+
+```
+app/
+├── core/      infra plumbing only — db · redis · logging · version
+├── web/       HTTP contract — envelope (ok/err) · errors (AppError+handlers) ·
+│              middleware · ratelimit
+├── security/  jwt (auth deps) · passwords
+├── kto/       client — KTO API client + image-URL helpers
+├── ml/        embedding — CLIP
+└── modules/   domain modules (below)
+```
+
 Backend module layout (uniform per domain):
 
 ```
@@ -74,15 +88,13 @@ app/modules/<code>/
 └── schemas.py   Pydantic DTOs — no ORM imports
 ```
 
-- Routes import services/schemas/`app.core.*` only — never `models`/`sqlalchemy`.
+- Routes import services/schemas/shared packages only — never `models`/`sqlalchemy`.
 - Cross-module reads go through the other module's `services.py`, never `models`.
 - `admin` is the exception: read-only cross-module aggregates via its own
   `repositories.py`, plus a scoped write to `overseas_spots.is_hidden` only.
-- `app/core/` admission rule: infrastructure plumbing (db, redis, auth,
-  middleware, logging, envelope, errors) or utilities imported by **2+ modules**
-  (`embedding`, `passwords`, `kto_client`, `kto_images`). Single-consumer code
-  lives inside its module (e.g. `users/oidc.py`, `map/kakao_local.py`) — don't
-  park it in core.
+- Shared-package admission rule: only code imported by **2+ modules** goes into
+  `web`/`security`/`kto`/`ml`; `core` is infra plumbing only. Single-consumer
+  code lives inside its module (e.g. `users/oidc.py`, `map/kakao_local.py`).
 
 Mobile layers: `src/app` (thin Expo Router screens) · `src/features/<domain>`
 (api/queries/stores/usecases/components) · `src/lib` · `src/components` · `src/constants` · `src/hooks`.
@@ -106,8 +118,8 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
 ## Conventions
 
 - Every API response uses the JSend envelope `{ data, error, meta }` via `ok()`/
-  `err()` (`app.core.schemas`). `traceId` auto-injected.
-- Errors raise `AppError` subclasses (`app/core/exceptions.py`) — the subclass
+  `err()` (`app.web.envelope`). `traceId` auto-injected.
+- Errors raise `AppError` subclasses (`app/web/errors.py`) — the subclass
   sets HTTP status. Mobile branches on `err.code`, never `err.message`.
 - Settings module is `app/config.py` (`Settings(BaseSettings)`, `env_file=".env"`)
   — **not** `app/core/`. `SENTRY_DSN`/KTO/Kakao keys live here. Admin-console auth

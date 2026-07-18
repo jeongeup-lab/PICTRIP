@@ -1,4 +1,4 @@
-from app.core.auth import create_refresh_token, decode_token
+from app.security.jwt import create_refresh_token, decode_token
 
 
 def test_create_refresh_token_embeds_claims():

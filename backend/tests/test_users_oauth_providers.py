@@ -6,12 +6,12 @@ import jwt
 import pytest
 from cryptography.hazmat.primitives import serialization
 
-from app.core.exceptions import (
+from app.modules.users.oidc import _jwks_caches, verify_oauth_id_token
+from app.web.errors import (
     OAuthIdTokenInvalid,
     OAuthProviderUnavailable,
     ValidationFailed,
 )
-from app.modules.users.oidc import _jwks_caches, verify_oauth_id_token
 
 _GOOGLE_CERTS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 

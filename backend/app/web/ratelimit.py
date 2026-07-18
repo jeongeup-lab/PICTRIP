@@ -5,9 +5,9 @@ from collections.abc import Awaitable, Callable
 from fastapi import Request
 from redis.asyncio import Redis
 
-from app.core.exceptions import RateLimited
 from app.core.logging import get_logger
 from app.core.redis import RedisDep
+from app.web.errors import RateLimited
 
 logger = get_logger(__name__)
 

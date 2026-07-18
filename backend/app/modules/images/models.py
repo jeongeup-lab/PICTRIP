@@ -7,7 +7,7 @@ from sqlalchemy import DateTime, ForeignKey, Index, Integer, SmallInteger, Strin
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
-from app.core.embedding import EMBEDDING_DIM
+from app.ml.embedding import EMBEDDING_DIM
 
 
 class SpotEmbedding(Base):

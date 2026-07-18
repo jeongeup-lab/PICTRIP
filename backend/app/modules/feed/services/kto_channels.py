@@ -10,8 +10,8 @@ from typing import Any
 
 from redis.asyncio import Redis
 
-from app.core.kto_client import KtoClient, KtoService
 from app.core.logging import get_logger
+from app.kto.client import KtoClient, KtoService
 from app.modules.feed.services.channels import ChannelCardRow
 
 logger = get_logger(__name__)

@@ -20,8 +20,11 @@ mobile(Expo) · web(CF Pages) · pipeline(ETL CLI, CT111) · deploy(IaC) ·
   모듈마다 `routes → services → repositories → models/schemas` 층. routes는
   HTTP I/O만(DB·비즈니스 로직 금지), 교차 모듈 읽기는 상대 `services.py` 경유.
   admin만 예외: read-only 집계 + `overseas_spots.is_hidden` 한정 쓰기.
-- **`app/core` 입장 규칙** — 인프라 배관(db·redis·auth·middleware·envelope)이거나
-  **2+ 모듈이 소비**하는 유틸만. 단일 소비자 코드는 모듈 안에 둔다.
+- **공유 패키지 레이어링** — `modules` > `security|kto|ml` > `web` > `core`
+  (import-linter 강제). `core`=인프라 배관(db·redis·logging·version),
+  `web`=HTTP 계약(envelope·errors·middleware·ratelimit), `security`=jwt·passwords,
+  `kto`=KTO 클라이언트+이미지 URL 헬퍼, `ml`=CLIP embedding. 공유 패키지 입장
+  자격은 **2+ 모듈 소비** — 단일 소비자 코드는 모듈 안에 둔다.
 - **JSend + AppError** — 모든 응답은 `{data, error, meta}`(`ok()`/`err()`),
   에러는 `AppError` 서브클래스가 HTTP 상태를 결정. 모바일은 `err.code`로만
   분기하며 코드 union은 `mobile/src/lib/app-error.ts`와 동기다.

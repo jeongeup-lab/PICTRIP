@@ -4,11 +4,8 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Response, status
 
-from app.core.auth import CurrentUserId
 from app.core.db import DbSession
-from app.core.ratelimit import rate_limit
 from app.core.redis import RedisDep
-from app.core.schemas import PaginationMeta, ok
 from app.modules.spots import services as spots_services
 from app.modules.spots.schemas import SpotCard
 from app.modules.users import services
@@ -21,6 +18,9 @@ from app.modules.users.schemas import (
     RefreshBody,
     SavedSpotToggle,
 )
+from app.security.jwt import CurrentUserId
+from app.web.envelope import PaginationMeta, ok
+from app.web.ratelimit import rate_limit
 
 router = APIRouter(tags=["USR · user/auth"])
 

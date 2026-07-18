@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, field_validator
 
-from app.core.kto_images import https_kto_image
+from app.kto.client import https_kto_image
 
 
 class NearbySpotCard(BaseModel):

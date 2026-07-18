@@ -11,12 +11,12 @@ import httpx
 import jwt
 
 from app.config import settings
-from app.core.exceptions import (
+from app.modules.users.kakao_oidc import verify_id_token as _verify_kakao
+from app.web.errors import (
     OAuthIdTokenInvalid,
     OAuthProviderUnavailable,
     ValidationFailed,
 )
-from app.modules.users.kakao_oidc import verify_id_token as _verify_kakao
 
 log = logging.getLogger("app.auth.oidc")
 

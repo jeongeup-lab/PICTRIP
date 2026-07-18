@@ -9,12 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.db import engine
-from app.core.exceptions import (
-    AdminHistoryNotFound,
-    AdminOverseasNotFound,
-    AdminTriggerFailed,
-    AdminValidationFailed,
-)
 from app.core.logging import get_logger
 from app.core.version import API_VERSION, uptime_seconds
 from app.modules.admin import repositories as repo
@@ -42,6 +36,12 @@ from app.modules.admin.schemas import (
 from app.modules.admin.triggers import get_collection_trigger
 from app.modules.feed.services import invalidate_all_match_cache, invalidate_match_cache
 from app.modules.images import services as image_services
+from app.web.errors import (
+    AdminHistoryNotFound,
+    AdminOverseasNotFound,
+    AdminTriggerFailed,
+    AdminValidationFailed,
+)
 
 _SOURCE_NAME = "국문 관광정보 서비스"
 _SOURCE_ENDPOINT = "areaBasedSyncList2"

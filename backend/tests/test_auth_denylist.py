@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.core.auth import decode_token, deny_refresh, mint_token_pair, refresh_tokens
-from app.core.exceptions import AuthSessionRevoked
+from app.security.jwt import decode_token, deny_refresh, mint_token_pair, refresh_tokens
+from app.web.errors import AuthSessionRevoked
 
 
 async def test_mint_writes_nothing_to_redis(redis_client_fake):

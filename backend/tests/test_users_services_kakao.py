@@ -10,7 +10,6 @@ from fakeredis.aioredis import FakeRedis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import AuthSessionRevoked, AuthTokenInvalid
 from app.modules.users.models import User, UserAuthProvider
 from app.modules.users.oidc import OidcClaims
 from app.modules.users.schemas import OAuthLoginIn
@@ -20,6 +19,7 @@ from app.modules.users.services import (
     logout_session,
     refresh_session,
 )
+from app.web.errors import AuthSessionRevoked, AuthTokenInvalid
 
 
 @pytest.mark.asyncio

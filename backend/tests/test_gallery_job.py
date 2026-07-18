@@ -8,13 +8,13 @@ from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.embedding import ClipEmbedder
-from app.core.exceptions import KtoApiUnavailable
+from app.ml.embedding import ClipEmbedder
 from app.modules.images.gallery_job import (
     centroid,
     collect_gallery_targets,
     embed_gallery_spots,
 )
+from app.web.errors import KtoApiUnavailable
 
 _DIM = 512
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, field_validator
 
-from app.core.kto_images import hires_kto_image, https_kto_image
+from app.kto.client import hires_kto_image, https_kto_image
 
 
 class OverseasPost(BaseModel):

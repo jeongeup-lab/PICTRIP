@@ -8,7 +8,7 @@ from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.embedding import ClipEmbedder
+from app.ml.embedding import ClipEmbedder
 from app.modules.images.embedding_job import collect_targets, count_missing, embed_spots
 
 

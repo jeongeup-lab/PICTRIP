@@ -14,16 +14,10 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.config import settings
-from app.core.error_handlers import register_error_handlers
-from app.core.kto_client import KtoClient
 from app.core.logging import configure_logging, get_logger
-from app.core.middleware import (
-    CacheControlMiddleware,
-    TraceIdMiddleware,
-)
 from app.core.redis import redis_lifespan
-from app.core.schemas import ok
 from app.core.version import API_VERSION
+from app.kto.client import KtoClient
 from app.modules.admin import router as admin_router
 from app.modules.feed import router as feed_router
 from app.modules.images import router as images_router
@@ -31,6 +25,12 @@ from app.modules.map import router as map_router
 from app.modules.spots import router as spots_router
 from app.modules.system import router as system_router
 from app.modules.users import router as users_router
+from app.web.envelope import ok
+from app.web.errors import register_error_handlers
+from app.web.middleware import (
+    CacheControlMiddleware,
+    TraceIdMiddleware,
+)
 
 
 @asynccontextmanager

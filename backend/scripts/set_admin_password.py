@@ -9,7 +9,7 @@ import sys
 from sqlalchemy import text
 
 from app.core.db import engine
-from app.core.passwords import hash_password
+from app.security.passwords import hash_password
 
 
 async def _upsert(username: str, password: str) -> None:

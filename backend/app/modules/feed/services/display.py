@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.config import settings
-from app.core.kto_images import hires_kto_image, t1_transform_url
+from app.kto.client import hires_kto_image, t1_transform_url
 
 T1_WIDTH = 1620
 T1_TILE_WIDTH = 320

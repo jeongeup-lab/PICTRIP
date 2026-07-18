@@ -6,8 +6,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
-from app.core.kto_client import get_kto
 from app.core.redis import get_redis
+from app.kto.client import get_kto
 from app.main import app
 
 LAT, LNG = 35.15, 129.05

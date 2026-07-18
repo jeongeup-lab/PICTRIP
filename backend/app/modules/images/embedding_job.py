@@ -10,8 +10,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.db import async_session_factory
-from app.core.embedding import embedder
 from app.core.logging import get_logger
+from app.ml.embedding import embedder
 from app.modules.images.models import EmbeddingFailure, SpotEmbedding
 
 logger = get_logger(__name__)

@@ -8,9 +8,9 @@ from fakeredis.aioredis import FakeRedis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import KtoApiUnavailable, ResourceNotFound
 from app.modules.spots.services import load_spot_detail
 from app.modules.spots.services.detail import _DetailCache, _redis_set_detail
+from app.web.errors import KtoApiUnavailable, ResourceNotFound
 
 
 @pytest.fixture

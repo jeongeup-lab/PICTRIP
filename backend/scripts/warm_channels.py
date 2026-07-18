@@ -5,8 +5,8 @@ import asyncio
 from redis.asyncio import Redis, from_url
 
 from app.config import settings
-from app.core.kto_client import KtoClient
 from app.core.logging import get_logger
+from app.kto.client import KtoClient
 from app.modules.feed.services.kto_channels import warm_all_channels
 
 logger = get_logger(__name__)

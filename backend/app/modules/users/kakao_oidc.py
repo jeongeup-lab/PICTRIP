@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 
 from app.config import settings
-from app.core.exceptions import OAuthProviderUnavailable
+from app.web.errors import OAuthProviderUnavailable
 
 _JWKS_TIMEOUT = httpx.Timeout(connect=2.0, read=3.0, write=2.0, pool=2.0)
 
@@ -80,7 +80,7 @@ def _jwk_to_pem(jwk: dict[str, Any]) -> bytes:
 async def verify_id_token(token: str, *, expected_nonce: str | None = None) -> KakaoClaims:
     import logging
 
-    from app.core.exceptions import OAuthIdTokenInvalid
+    from app.web.errors import OAuthIdTokenInvalid
 
     log = logging.getLogger("app.auth.oidc")
 

@@ -286,6 +286,23 @@ forbidden_modules = [
 ]
 allow_indirect_imports = true
 
+# Shared-package layering: modules on top, then the shared utility packages
+# (mutually independent), then web (HTTP contract), then core (infra plumbing).
+# security.jwt -> users.schemas is the one sanctioned upward edge (lazy import
+# for TokenPair/UserPublic — breaking it needs a token-DTO move, not worth it).
+[[tool.importlinter.contracts]]
+name = "Shared packages are layered (modules > security|kto|ml > web > core)"
+type = "layers"
+layers = [
+    "app.modules",
+    "app.security | app.kto | app.ml",
+    "app.web",
+    "app.core",
+]
+ignore_imports = [
+    "app.security.jwt -> app.modules.users.schemas",
+]
+
 # ---------- pytest ----------
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

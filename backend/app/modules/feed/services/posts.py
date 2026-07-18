@@ -7,10 +7,10 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ValidationFailed
 from app.modules.feed import repositories
 from app.modules.feed.repositories import OverseasPostRow
 from app.modules.feed.schemas import OverseasPost
+from app.web.errors import ValidationFailed
 
 
 @dataclass(frozen=True)

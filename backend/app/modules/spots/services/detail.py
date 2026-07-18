@@ -11,9 +11,8 @@ from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import KtoApiUnavailable, ResourceNotFound
-from app.core.kto_client import KtoClient, KtoService
 from app.core.logging import get_logger
+from app.kto.client import KtoClient, KtoService
 from app.modules.spots.models import (
     LclsSystmCode,
     Region,
@@ -28,6 +27,7 @@ from app.modules.spots.services.rows import (
     SpotIntroRow,
 )
 from app.modules.spots.text import clean_homepage, clean_scalar, verbatim
+from app.web.errors import KtoApiUnavailable, ResourceNotFound
 
 logger = get_logger(__name__)
 

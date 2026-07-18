@@ -5,9 +5,9 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import AdminUnauthorized
-from app.core.passwords import verify_password
 from app.modules.admin import repositories as repo
+from app.security.passwords import verify_password
+from app.web.errors import AdminUnauthorized
 
 SESSION_KEY = "admin"
 
