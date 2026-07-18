@@ -101,7 +101,7 @@ class Settings(BaseSettings):
     KTO_MOBILE_APP: str = "PicTrip"
 
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-flash-latest"
+    GEMINI_MODEL: str = "gemini-flash-lite-latest"
     GEMINI_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta"
     NAVER_CLIENT_ID: str = ""
     NAVER_CLIENT_SECRET: str = ""
