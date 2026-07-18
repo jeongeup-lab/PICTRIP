@@ -170,6 +170,27 @@ async def test_create_plan_with_pool_shows_picker_then_generates_from_picks(
     assert set(picked) <= attraction_ids
 
 
+async def test_spot_level_request_skips_picker(db_session, monkeypatch):
+    _turn_stub(
+        monkeypatch,
+        AgentTurn(
+            call_name="create_plan",
+            call_args={"region": "안목해변", "days": 1, "place_type": "spot"},
+        ),
+    )
+    _narrate_stub(monkeypatch)
+    _candidates_stubs(monkeypatch)
+    for i in range(5):
+        await _seed_spot(db_session, f"s{i}", lat=ANCHOR_LAT + 0.004 + i * 0.002, lng=ANCHOR_LNG)
+    redis = FakeRedis(decode_responses=False)
+
+    res = await handle_chat(
+        db_session, redis, req=ChatRequest(message="안목해변으로 코스 짜줘"), user_id=None
+    )
+    assert res.reply.type == "plan"
+    assert res.reply.pick is None
+
+
 async def test_auto_message_after_picker_generates(db_session, monkeypatch):
     _turn_stub(
         monkeypatch, AgentTurn(call_name="create_plan", call_args={"region": "강릉", "days": 1})

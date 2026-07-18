@@ -37,7 +37,8 @@ _MAX_CONTEXT_MESSAGES = 12
 _SYSTEM = (
     "너는 PICTRIP AI, 한국 국내여행 도우미다. 항상 한국어 해요체로 짧게 답한다. 이모지 금지. "
     "도구 규칙: "
-    "1) 사용자가 특정 지역의 여행 일정(코스)을 원하면 create_plan을 호출한다. "
+    "1) 사용자가 여행 일정(코스)을 원하면 create_plan을 호출한다. "
+    "목적지가 도시·시군구면 place_type=region, 특정 명소·해변·역이면 place_type=spot으로 구분한다. "
     "당일치기=1, 1박 2일=2, 2박 3일=3, 상한 3. '주말'처럼 기간을 유추할 수 있으면 유추하되, "
     "기간을 전혀 알 수 없으면 days를 생략하고 호출한다(임의로 정하지 않는다). "
     "2) 특정 장소·역·동네 주변의 맛집·카페·가볼 곳 같은 단건 추천 질문에는 recommend_places를 호출한다. "
@@ -57,7 +58,12 @@ _TOOLS: list[dict[str, Any]] = [
             "properties": {
                 "region": {
                     "type": "STRING",
-                    "description": "시·군 단위 지역명 또는 중심 장소. 예: 강릉, 전주, 어린이대공원역",
+                    "description": "여행 목적지. 예: 강릉, 전주, 안목해변, 어린이대공원역",
+                },
+                "place_type": {
+                    "type": "STRING",
+                    "enum": ["region", "spot"],
+                    "description": "region=도시·시군구 단위(강릉·전주), spot=특정 명소·해변·역·동네(안목해변·한옥마을)",
                 },
                 "days": {
                     "type": "INTEGER",
@@ -251,6 +257,10 @@ async def handle_chat(
                 text=_ASK_DAYS.format(region=intent.region),
                 chips=["당일치기", "1박 2일", "2박 3일"],
             )
+        elif (turn.call_args or {}).get("place_type") == "spot":
+            payload, reply_text = await _generate(session, tid=tid, user_id=user_id, intent=intent)
+            state["planId"] = payload.planId
+            reply = ChatReply(type="plan", text=reply_text, plan=payload)
         else:
             pool = await picker_pool(session, intent)
             spots = [
