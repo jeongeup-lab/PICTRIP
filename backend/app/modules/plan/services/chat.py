@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from redis.asyncio import Redis
 
@@ -106,7 +108,13 @@ _TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "recommend_places",
-        "description": "특정 위치 주변의 맛집·카페·가볼 곳을 단건 추천한다. 일정 생성이 아닐 때 사용.",
+        "description": (
+            "특정 위치 주변의 맛집·카페·가볼 곳을 새로 검색한다. "
+            "사용자가 새 장소나 새 조건을 요청할 때만 호출한다. "
+            "호출 금지: 이미 보여준 결과에 대한 확인·평가 질문(조용한지, 맛있는지, 몇 시까지 하는지), "
+            "결과 목록에 대한 비교·선택 질문. 이런 질문은 런타임 컨텍스트의 목록을 근거로 대화로 답하고, "
+            "모르는 속성은 모른다고 말한다."
+        ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
@@ -436,6 +444,7 @@ async def _recommend_places(session: AsyncSession, state: dict[str, Any], query:
     state["places"] = [
         {
             "name": c.name,
+            "category": c.category,
             "lat": c.lat,
             "lng": c.lng,
             "address": c.address,
@@ -502,6 +511,47 @@ def _distance_reply(state: dict[str, Any], req: ChatRequest, target: str) -> Cha
     return ChatReply(type="text", text=text)
 
 
+_WEEKDAYS = "월화수목금토일"
+
+
+def _runtime_context(state: dict[str, Any], req: ChatRequest) -> str:
+    now = datetime.now(ZoneInfo("Asia/Seoul"))
+    lines = ["[런타임 컨텍스트 — 아래 값만 런타임 사실로 사용한다]"]
+    lines.append(f"현재 시각: {now:%Y-%m-%d}({_WEEKDAYS[now.weekday()]}) {now:%H:%M} KST")
+    if req.location is not None:
+        lines.append(
+            f"사용자 위치: 수신됨 — 위도 {req.location.lat:.4f}, 경도 {req.location.lng:.4f} "
+            "(GPS 좌표. 동네·건물 등 좌표 이상의 정밀도는 추정하지 않는다)"
+        )
+    else:
+        lines.append(
+            "사용자 위치: 미수신 — 위치 관련 질문에는 위치 권한이 없어 알 수 없다고 답한다"
+        )
+
+    matches = state.get("matches") or []
+    if matches:
+        names = ", ".join(str(m.get("name")) for m in matches[:12])
+        lines.append(f"사진 매칭 여행지 목록: {names}")
+    selected = state.get("selected")
+    if isinstance(selected, dict) and selected.get("name"):
+        lines.append(f"선택된 여행지: {selected['name']} ({selected.get('address') or ''})")
+    places = state.get("places") or []
+    if places:
+        listed = " / ".join(
+            f"{i + 1}. {p.get('name')}({p.get('category') or '장소'})"
+            for i, p in enumerate(places[:6])
+        )
+        lines.append(
+            f"직전에 보여준 장소 목록: {listed} — '저기·거기·첫번째'는 이 목록을 가리킨다. "
+            "이 목록에 대한 질문은 재검색 없이 답하되, 목록에 없는 속성(소음·영업시간 등)은 모른다고 말한다"
+        )
+    lines.append(
+        "할 수 없는 것: 날씨·실시간 혼잡도·영업시간 확인, 예약, 전화. "
+        "이 블록과 대화에 없는 런타임 사실은 지어내지 말고 알 수 없다고 답한다."
+    )
+    return "\n".join(lines)
+
+
 async def handle_chat(
     session: AsyncSession,
     redis: Redis,
@@ -546,14 +596,7 @@ async def handle_chat(
         {"role": m["role"], "parts": [{"text": m["text"]}]}
         for m in messages[-_MAX_CONTEXT_MESSAGES:]
     ]
-    system = _SYSTEM
-    matches = state.get("matches") or []
-    if matches:
-        names = ", ".join(str(m.get("name")) for m in matches[:12])
-        system += f" [컨텍스트] 사진 매칭 여행지 목록: {names}."
-    selected = state.get("selected")
-    if isinstance(selected, dict) and selected.get("name"):
-        system += f" [컨텍스트] 선택된 여행지: {selected['name']}({selected.get('address') or ''})."
+    system = _SYSTEM + "\n\n" + _runtime_context(state, req)
     turn = await generate_turn(system=system, contents=contents, tools=_TOOLS)
     if turn is None:
         raise PlanAgentUnavailable()
