@@ -100,6 +100,13 @@ class Settings(BaseSettings):
     KTO_BASE_URL_GALLERY: str = "https://apis.data.go.kr/B551011/PhotoGalleryService1"
     KTO_MOBILE_APP: str = "PicTrip"
 
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta"
+    NAVER_CLIENT_ID: str = ""
+    NAVER_CLIENT_SECRET: str = ""
+    ODSAY_API_KEY: str = ""
+
     CLIP_MODEL_NAME: str = "openai/clip-vit-base-patch32"
     CLIP_DEVICE: Literal["cpu", "cuda", "mps"] = "cpu"
 

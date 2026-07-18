@@ -162,6 +162,24 @@ class AdminOverseasNotFound(AppError):
     message = "해당 게시물을 찾을 수 없습니다."
 
 
+class PlanAgentUnavailable(AppError):
+    code = "PLAN_AGENT_UNAVAILABLE"
+    http_status = 502
+    message = "플랜 서비스를 잠시 사용할 수 없습니다."
+
+
+class PlanRegionNotFound(AppError):
+    code = "PLAN_REGION_NOT_FOUND"
+    http_status = 422
+    message = "요청한 지역을 찾지 못했습니다."
+
+
+class PlanNotEnoughSpots(AppError):
+    code = "PLAN_NOT_ENOUGH_SPOTS"
+    http_status = 422
+    message = "해당 지역의 장소 데이터가 부족해 일정을 만들지 못했습니다."
+
+
 _HTTP_STATUS_TO_CODE = {
     401: "AUTH_TOKEN_INVALID",
     403: "PERMISSION_DENIED",

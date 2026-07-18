@@ -28,6 +28,18 @@ _COORD2REGIONCODE_PATH = "/geo/coord2regioncode.json"
 
 REGIONS_TREE_KEY = "regions:tree"
 _REGIONS_TREE_TTL = 86_400
+_KEYWORD_SEARCH_PATH = "/search/keyword.json"
+
+
+async def search_place(query: str) -> tuple[float, float] | None:
+    payload = await kakao_local_get(_KEYWORD_SEARCH_PATH, params={"query": query, "size": 1})
+    docs = (payload or {}).get("documents") or []
+    if not docs:
+        return None
+    try:
+        return float(docs[0]["y"]), float(docs[0]["x"])
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 async def _enrich(session: AsyncSession, rows: list[NearbySpotRow]) -> list[NearbySpotRow]:

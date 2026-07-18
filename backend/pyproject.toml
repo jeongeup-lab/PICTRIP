@@ -131,6 +131,7 @@ source_modules = [
     "app.modules.spots.routes",
     "app.modules.images.routes",
     "app.modules.map.routes",
+    "app.modules.plan.routes",
     "app.modules.system.routes",
     "app.modules.admin.routes",
     "app.modules.feed.routes",
@@ -154,6 +155,7 @@ source_modules = [
     "app.modules.spots.routes",
     "app.modules.images.routes",
     "app.modules.map.routes",
+    "app.modules.plan.routes",
     "app.modules.system.routes",
     "app.modules.admin.routes",
     "app.modules.feed.routes",
@@ -163,6 +165,7 @@ forbidden_modules = [
     "app.modules.spots.models",
     "app.modules.images.models",
     "app.modules.map.models",
+    "app.modules.plan.models",
     "app.modules.system.models",
     "app.modules.admin.models",
     "app.modules.feed.models",
@@ -179,6 +182,7 @@ source_modules = [
     "app.modules.spots.schemas",
     "app.modules.images.schemas",
     "app.modules.map.schemas",
+    "app.modules.plan.schemas",
     # system has no schemas.py (removed as dead code) — re-add if it returns.
     "app.modules.admin.schemas",
     "app.modules.feed.schemas",
@@ -200,6 +204,7 @@ source_modules = [
     "app.modules.spots.services",
     "app.modules.images.services",
     "app.modules.map.services",
+    "app.modules.plan.services",
     "app.modules.system.services",
     "app.modules.admin.services",
     "app.modules.feed.services",
@@ -209,6 +214,7 @@ forbidden_modules = [
     "app.modules.spots.models",
     "app.modules.images.models",
     "app.modules.map.models",
+    "app.modules.plan.models",
     "app.modules.system.models",
     "app.modules.admin.models",
     "app.modules.feed.models",
@@ -235,6 +241,10 @@ ignore_imports = [
     # 잡히지 않게 한다. spots 내부의 직접 spots.models import는 의도된 것(#22).
     "app.modules.spots.services -> app.modules.spots.services.*",
     "app.modules.spots.services.* -> app.modules.spots.models",
+    # PLN seam: services 패키지 → 자체 repositories → 자체 ORM 체인만 허용.
+    "app.modules.plan.services -> app.modules.plan.services.*",
+    "app.modules.plan.services.* -> app.modules.plan.repositories",
+    "app.modules.plan.repositories -> app.modules.plan.models",
     # ADM seam: own-module ORM via its repository.
     "app.modules.admin.services -> app.modules.admin.models",
     "app.modules.admin.services -> app.modules.admin.repositories",
@@ -278,6 +288,7 @@ source_modules = [
     "app.modules.users.services",
     "app.modules.images.services",
     "app.modules.map.services",
+    "app.modules.plan.services",
 ]
 forbidden_modules = [
     "sqlalchemy",
