@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 SlotType = Literal["attraction", "meal", "cafe"]
 SlotSource = Literal["kto", "naver"]
-ReplyType = Literal["clarify", "plan"]
+ReplyType = Literal["text", "plan", "places", "clarify"]
 TravelMode = Literal["walk", "transit"]
 
 
@@ -53,11 +53,21 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=500)
 
 
+class PlaceCard(BaseModel):
+    name: str
+    category: str | None = None
+    address: str | None = None
+    lat: float | None = None
+    lng: float | None = None
+    links: ExternalLinks = Field(default_factory=ExternalLinks)
+
+
 class ChatReply(BaseModel):
     type: ReplyType
     text: str
     chips: list[str] | None = None
     plan: PlanPayload | None = None
+    places: list[PlaceCard] | None = None
 
 
 class ChatResponse(BaseModel):

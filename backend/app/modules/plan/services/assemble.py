@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import itertools
 import math
-from urllib.parse import quote
 
+from app.modules.plan.links import place_links
 from app.modules.plan.odsay import transit_minutes
-from app.modules.plan.schemas import ExternalLinks, PlanDay, PlanSlot, SlotType, TravelLeg
+from app.modules.plan.schemas import PlanDay, PlanSlot, SlotType, TravelLeg
 from app.modules.plan.services.candidates import FoodCandidate, PlanCandidates
 from app.modules.plan.services.intent import PlanIntent
 from app.modules.spots.services import NearbySpotRow
@@ -45,12 +45,6 @@ def _order_by_chain(
         ordered.append(nearest)
         cur_lat, cur_lng = coords[nearest.content_id]
     return ordered
-
-
-def _naver_links(name: str, lat: float | None, lng: float | None) -> ExternalLinks:
-    naver = f"https://map.naver.com/p/search/{quote(name)}"
-    kakao = f"https://map.kakao.com/link/map/{quote(name)},{lat},{lng}" if lat and lng else None
-    return ExternalLinks(naver=naver, kakao=kakao)
 
 
 def _attraction_slot(row: NearbySpotRow, label: str) -> PlanSlot:
@@ -109,7 +103,7 @@ async def assemble_days(intent: PlanIntent, cand: PlanCandidates) -> list[PlanDa
             lat=c.lat,
             lng=c.lng,
             imageUrl=c.image_url,
-            links=_naver_links(c.name, c.lat, c.lng),
+            links=place_links(c.name, c.lat, c.lng),
         )
 
     meals = list(cand.meals)

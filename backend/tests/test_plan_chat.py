@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.redis import get_redis
 from app.main import app
 from app.modules.plan import repositories
+from app.modules.plan.llm import AgentTurn
 from app.modules.plan.naver_local import NaverPlace
 from app.modules.plan.schemas import ChatRequest
 from app.modules.plan.services.chat import get_plan_payload, handle_chat
@@ -29,11 +30,11 @@ async def _seed_spot(session: AsyncSession, cid: str, *, lat: float, lng: float)
     )
 
 
-def _intent_stub(monkeypatch, payload: dict | None):
+def _turn_stub(monkeypatch, turn: AgentTurn | None):
     async def fake(**kwargs):
-        return payload
+        return turn
 
-    monkeypatch.setattr("app.modules.plan.services.intent.generate_json", fake)
+    monkeypatch.setattr("app.modules.plan.services.chat.generate_turn", fake)
 
 
 def _narrate_stub(monkeypatch):
@@ -49,10 +50,12 @@ def _candidates_stubs(monkeypatch):
 
     async def fake_local(query: str, *, display: int = 5):
         if "카페" in query:
-            return [NaverPlace("툇마루", "카페", "강릉", ANCHOR_LAT + 0.002, ANCHOR_LNG)]
+            return [
+                NaverPlace("툇마루", "카페,디저트>카페", "강릉", ANCHOR_LAT + 0.002, ANCHOR_LNG)
+            ]
         return [
-            NaverPlace("초당순두부", "한식", "강릉", ANCHOR_LAT + 0.001, ANCHOR_LNG),
-            NaverPlace("중앙시장", "시장", "강릉", ANCHOR_LAT + 0.003, ANCHOR_LNG),
+            NaverPlace("초당순두부", "한식>두부요리", "강릉", ANCHOR_LAT + 0.001, ANCHOR_LNG),
+            NaverPlace("동화가든", "한식>두부요리", "강릉", ANCHOR_LAT + 0.003, ANCHOR_LNG),
         ]
 
     async def fake_transit(**kwargs):
@@ -63,34 +66,25 @@ def _candidates_stubs(monkeypatch):
     monkeypatch.setattr("app.modules.plan.services.assemble.transit_minutes", fake_transit)
 
 
-async def test_clarifies_region_when_missing(db_session, monkeypatch):
-    _intent_stub(monkeypatch, {"region": None, "days": None, "themes": []})
-    redis = FakeRedis(decode_responses=False)
-
-    res = await handle_chat(
-        db_session, redis, req=ChatRequest(message="이번 주말에 어디 가지?"), user_id=None
-    )
-    assert res.reply.type == "clarify"
-    assert res.reply.chips and "강릉" in res.reply.chips
-    assert res.threadId
-
-
-async def test_clarifies_days_when_missing(db_session, monkeypatch):
-    _intent_stub(monkeypatch, {"region": "강릉", "days": None, "themes": []})
+async def test_plain_text_turn_replies_text(db_session, monkeypatch):
+    _turn_stub(monkeypatch, AgentTurn(text="며칠 일정으로 다녀오세요?"))
     redis = FakeRedis(decode_responses=False)
 
     res = await handle_chat(
         db_session, redis, req=ChatRequest(message="강릉 가고 싶어"), user_id=None
     )
-    assert res.reply.type == "clarify"
-    assert res.reply.chips == ["당일치기", "1박 2일", "2박 3일"]
-    assert "강릉" in res.reply.text
+    assert res.reply.type == "text"
+    assert "며칠" in res.reply.text
+    assert res.threadId
 
 
-async def test_generates_plan_and_persists(db_session, monkeypatch):
-    _intent_stub(
+async def test_create_plan_turn_generates_and_persists(db_session, monkeypatch):
+    _turn_stub(
         monkeypatch,
-        {"region": "강릉", "days": 1, "party": "혼자", "themes": ["바다"], "mobility": "walk"},
+        AgentTurn(
+            call_name="create_plan",
+            call_args={"region": "강릉", "days": 1, "party": "혼자", "mobility": "walk"},
+        ),
     )
     _narrate_stub(monkeypatch)
     _candidates_stubs(monkeypatch)
@@ -105,11 +99,10 @@ async def test_generates_plan_and_persists(db_session, monkeypatch):
     plan = res.reply.plan
     assert plan is not None
     assert plan.title == "강릉 당일치기"
-    assert plan.region == "강릉"
     assert len(plan.days) == 1
     slots = plan.days[0].slots
     assert [s.label for s in slots] == ["오전", "점심", "오후", "카페", "저녁"]
-    kto_slots = [s for s in slots if s.source == "kto"]
+    kto_slots = [s for s in slots if s.type == "attraction"]
     assert all(s.contentId and s.imageUrl for s in kto_slots)
 
     row = await repositories.get_plan(db_session, uuid.UUID(plan.planId))
@@ -119,8 +112,53 @@ async def test_generates_plan_and_persists(db_session, monkeypatch):
     assert payload["planId"] == plan.planId
 
 
+async def test_create_plan_without_region_falls_back_to_ask(db_session, monkeypatch):
+    _turn_stub(monkeypatch, AgentTurn(call_name="create_plan", call_args={"days": 2}))
+    redis = FakeRedis(decode_responses=False)
+
+    res = await handle_chat(db_session, redis, req=ChatRequest(message="일정 짜줘"), user_id=None)
+    assert res.reply.type == "text"
+
+
+async def test_recommend_places_turn_returns_cards(db_session, monkeypatch):
+    _turn_stub(
+        monkeypatch,
+        AgentTurn(call_name="recommend_places", call_args={"query": "어린이대공원역 카페"}),
+    )
+
+    async def fake_local(query: str, *, display: int = 5):
+        assert "어린이대공원역" in query
+        return [NaverPlace("카페 온도", "카페,디저트>카페", "서울 광진구", 37.548, 127.074)]
+
+    monkeypatch.setattr("app.modules.plan.services.chat.search_local", fake_local)
+    redis = FakeRedis(decode_responses=False)
+
+    res = await handle_chat(
+        db_session,
+        redis,
+        req=ChatRequest(message="어린이대공원역 근처 작업하기 좋은 카페 추천해줘"),
+        user_id=None,
+    )
+    assert res.reply.type == "places"
+    assert res.reply.places and res.reply.places[0].name == "카페 온도"
+    assert res.reply.places[0].links.naver and "map.naver.com" in res.reply.places[0].links.naver
+
+
+async def test_recommend_places_empty_returns_text(db_session, monkeypatch):
+    _turn_stub(monkeypatch, AgentTurn(call_name="recommend_places", call_args={"query": "화성"}))
+
+    async def fake_local(query: str, *, display: int = 5):
+        return []
+
+    monkeypatch.setattr("app.modules.plan.services.chat.search_local", fake_local)
+    redis = FakeRedis(decode_responses=False)
+
+    res = await handle_chat(db_session, redis, req=ChatRequest(message="화성 카페"), user_id=None)
+    assert res.reply.type == "text"
+
+
 async def test_raises_when_llm_unavailable(db_session, monkeypatch):
-    _intent_stub(monkeypatch, None)
+    _turn_stub(monkeypatch, None)
     redis = FakeRedis(decode_responses=False)
 
     with pytest.raises(PlanAgentUnavailable):
@@ -133,18 +171,18 @@ async def test_get_plan_payload_unknown_raises(db_session):
 
 
 async def test_chat_route_returns_envelope(client, monkeypatch):
-    _intent_stub(monkeypatch, {"region": None, "days": None, "themes": []})
+    _turn_stub(monkeypatch, AgentTurn(text="어디로 떠나볼까요?"))
     redis = FakeRedis(decode_responses=False)
     app.dependency_overrides[get_redis] = lambda: redis
     try:
-        resp = await client.post("/v1/plan/chat", json={"message": "어디 가지?"})
+        resp = await client.post("/v1/plan/chat", json={"message": "여행 가고 싶다"})
     finally:
         app.dependency_overrides.clear()
 
     assert resp.status_code == 200
     body = resp.json()
     assert body["error"] is None
-    assert body["data"]["reply"]["type"] == "clarify"
+    assert body["data"]["reply"]["type"] == "text"
     assert body["data"]["threadId"]
 
 

@@ -97,23 +97,46 @@ async def test_gemini_without_key_returns_none(monkeypatch):
     assert await generate_json(system="s", user="u", schema={"type": "OBJECT"}) is None
 
 
-async def test_intent_clamps_days_and_normalizes(monkeypatch):
-    from app.modules.plan.services.intent import extract_intent
+async def test_clamp_days_bounds():
+    from app.modules.plan.services.intent import clamp_days
 
-    async def fake(**kwargs):
-        return {
-            "region": " 강릉 ",
-            "days": 7,
-            "party": "",
-            "themes": ["바다", " "],
-            "mobility": "walk",
-        }
+    assert clamp_days(7) == 3
+    assert clamp_days(2) == 2
+    assert clamp_days(0) is None
+    assert clamp_days("당일") is None
 
-    monkeypatch.setattr("app.modules.plan.services.intent.generate_json", fake)
-    intent = await extract_intent(previous=None, messages=["강릉 일주일"])
-    assert intent is not None
-    assert intent.region == "강릉"
-    assert intent.days == 3
-    assert intent.party is None
-    assert intent.themes == ["바다"]
-    assert intent.mobility == "walk"
+
+async def test_gemini_turn_parses_function_call(_gemini_key, httpx_mock):
+    from app.modules.plan.llm import generate_turn
+
+    httpx_mock.add_response(
+        url=_GEMINI_URL,
+        json={
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            {"functionCall": {"name": "create_plan", "args": {"region": "강릉"}}}
+                        ]
+                    }
+                }
+            ]
+        },
+    )
+    turn = await generate_turn(system="s", contents=[], tools=[])
+    assert turn is not None
+    assert turn.call_name == "create_plan"
+    assert turn.call_args == {"region": "강릉"}
+
+
+async def test_gemini_turn_parses_text(_gemini_key, httpx_mock):
+    from app.modules.plan.llm import generate_turn
+
+    httpx_mock.add_response(
+        url=_GEMINI_URL,
+        json={"candidates": [{"content": {"parts": [{"text": "며칠 일정이세요?"}]}}]},
+    )
+    turn = await generate_turn(system="s", contents=[], tools=[])
+    assert turn is not None
+    assert turn.call_name is None
+    assert turn.text == "며칠 일정이세요?"
