@@ -17,7 +17,7 @@
    ```
 
 2. **대표사진 백필** — `backend-backfill-embeddings.yml` dispatch(기본 dry-run).
-   사전조건: api 컨테이너 정확히 1개·healthy·마이그레이션 0019 적용.
+   사전조건: api 컨테이너 정확히 1개·healthy·alembic head 적용.
    ```bash
    gh workflow run backend-backfill-embeddings.yml -f write=true
    ```

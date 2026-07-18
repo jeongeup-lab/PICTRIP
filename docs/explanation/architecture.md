@@ -75,7 +75,7 @@ attraction 버킷으로 게이트하고, 대표사진 편향은 갤러리(최대
   7일 캐시한다. 전량 선수집은 쿼터(~1k/일)가 허용하지 않는다. 대가는 콜드
   첫 조회 지연이고, 채널 워밍·엣지 캐시가 이를 줄인다.
 - **HNSW 파라미터는 마이그레이션과 일치 필수** — 모델의 m/ef_construction이
-  마이그레이션 0005와 어긋나면 autogenerate가 드리프트를 낸다.
+  베이스라인 마이그레이션과 어긋나면 autogenerate가 드리프트를 낸다.
   `hnsw.ef_search=80`은 `app/core/db.py`의 asyncpg `server_settings`.
 
 ---

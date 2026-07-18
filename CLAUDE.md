@@ -113,8 +113,9 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
   — **not** `app/core/`. `SENTRY_DSN`/KTO/Kakao keys live here. Admin-console auth
   is **DB-backed** (`admin_users` table, not an env var) — see below.
 - Admin console (`/admin`) auth = `admin_users` table (username + bcrypt
-  `password_hash`), checked in `app/modules/admin/security.py`. Migration 0016
-  seeds `admin`/`admin` (weak default — rotate via `scripts/set_admin_password.py`).
+  `password_hash`), checked in `app/modules/admin/security.py`. 베이스라인
+  마이그레이션이 seeds `admin`/`admin` (weak default — rotate via
+  `scripts/set_admin_password.py`).
   Provisioning/rotation needs only DB write (CT110), no CT112 `.env`/shell.
 - File names: components PascalCase; runtime modules (api/lib/stores/hooks/
   usecases/constants) kebab-case; `src/app/**` follows Expo Router.
@@ -131,7 +132,7 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
   `GET /overseas/{id}/matches`로 국내 매칭 3곳. 구 `/home/feed`(히어로+레일)·
   `/curations/{slug}`·`/taste/photo-search`는 제거 — `curations`/`curation_spots`
   테이블은 잔존(서빙 표면·ORM 모델 없음; autogenerate에서 `include_object`로 제외).
-- `overseas_spots`는 **백엔드 Alembic 소유**(마이그레이션 0018), 행 적재는
+- `overseas_spots`는 **백엔드 Alembic 소유**, 행 적재는
   `pipeline/` Wikidata ETL. 매칭 캐시는 Redis `match:{revision}:{overseasId}`
   (TTL 6h, `matching:revision`으로 무효화).
 - `spot_concentration`은 일일 크론 적재(`concentration-sync.yml`, 04:30 KST) —
