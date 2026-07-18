@@ -6,7 +6,6 @@ on:
 # This is the enforcement gate. Make it a REQUIRED status check on `main`
 # (Settings → Rules/Branch protection) so PRs can't merge until it passes.
 # `edited` stays in the trigger because this validates the PR BODY — the
-# admin drift check lives in admin-drift.yml (path-filtered) for that reason.
 jobs:
   template:
     runs-on: ubuntu-latest

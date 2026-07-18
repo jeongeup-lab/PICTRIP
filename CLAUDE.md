@@ -6,7 +6,7 @@ Contest — 1차 deadline **2026-09-21 16:00 KST**.
 Monorepo with 5 deploy units + docs (`AGENTS.md` is a symlink to this file).
 화면 기준(디자인 SSOT)은 **구현된 앱**(`mobile/src`) — 신규 화면 디자인은
 일회성 핸드오프(html 프로토타입)로 만들고 구현 후 폐기한다(리포에 목업을
-쌓지 않는다; `admin/mockups/`만 예외 — 어드민 UI의 소스다). 문서는
+쌓지 않는다). 문서는
 [Diátaxis](https://diataxis.fr) 4분류 — `docs/explanation/`(이해) ·
 `docs/how-to/`(작업) · `docs/reference/`(조회) · `docs/adr/`(결정, 불변) —
 인덱스·작성 규칙은 `docs/README.md`. 현행만 기록하고 히스토리는 ADR+git이 담당.
@@ -21,7 +21,6 @@ Monorepo with 5 deploy units + docs (`AGENTS.md` is a symlink to this file).
 | `pipeline/` | KTO ETL CLI + Streamlit (`pictrip-data`) | CT111 |
 | `workers/img-proxy/` | 이미지 프록시 Worker — `img.pictrip.org` | Cloudflare |
 | `deploy/api-host/` · `deploy/monitoring/` | Ops/IaC | CT112 / CT113 |
-| `admin/` | 어드민 UI 소스(`mockups/`) — code lives in `backend/app/modules/admin/` | — |
 | `docs/` | Diátaxis 문서 (explanation · how-to · reference · adr) | — |
 
 ## Commands
@@ -110,8 +109,8 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
   (`include_object`). Backend reads it read-only via raw SQL.
 - **`backend/` and `pipeline/` stay separate Python projects** — no shared venv,
   no uv workspace. Only coupling = CT110 prod DB tables `spots` + `sync_runs`.
-- **admin `static/` is a copy of `admin/mockups/`** (UI SSOT) + CI drift
-  check; not a symlink.
+- **admin UI SSOT = `backend/app/modules/admin/static/`** — 직접 편집; 별도
+  목업 사본을 두지 않는다.
 - **CF Pages build root = `web/`**. `.well-known/*` needs fixed JSON
   MIME and no redirects (`web/_headers`).
 
@@ -185,8 +184,7 @@ skip minor style nits. Focus on:
 - Module-boundary violations: `routes.py` importing DB/models/sqlalchemy, or
   cross-module access to another module's `models` instead of its `services.py`.
 - Monorepo invariants: `sync_runs` is pipeline-owned (never in backend Alembic),
-  backend/pipeline stay separate Python projects, admin `static/` must be a
-  byte-identical copy of `admin/mockups/`.
+  backend/pipeline stay separate Python projects.
 - JSend envelope (`ok()`/`err()`) and `AppError` subclasses — mobile must branch
   on `err.code`, never `err.message`.
 - KTO compliance (see Prohibitions): `cpyrhtDivCd=Type3` 이미지 변형(리사이즈 등)

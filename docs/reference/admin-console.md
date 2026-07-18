@@ -1,16 +1,15 @@
-# PicTrip 어드민 콘솔
+# 어드민 콘솔
 
-> 갱신: 2026-07-17 · 코드 = `backend/app/modules/admin/` · UI 소스 = `admin/mockups/`
+> 운영자용 내부 콘솔(`https://api.pictrip.org/admin`)의 화면·인증·구성 조회용.
 
-운영자용 내부 콘솔 (`https://api.pictrip.org/admin`). read-only 집계 +
-해외 게시물 숨김 토글만 — 회원 관리·콘텐츠 편집은 비목표.
+read-only 집계 + 해외 게시물 숨김 토글만 — 회원 관리·콘텐츠 편집은 비목표.
 
 ## 구성
 
 | 조각 | 위치 | 비고 |
 |---|---|---|
 | 코드 | `backend/app/modules/admin/` | `/admin` 페이지 + `/admin/api/*` JSON |
-| **UI 소스** | `admin/mockups/` | served copy = `backend/.../admin/static/` — 바이트 동일, CI(`admin-drift.yml`)가 강제. **UI 수정은 여기서 하고 static에 복사** |
+| UI | `backend/app/modules/admin/static/` | HTML/CSS/JS 유일본(SSOT) — 여기서 직접 편집 |
 
 ## 화면
 
@@ -23,7 +22,7 @@
 
 ## 인증·보안
 
-- **DB-backed**: `admin_users` 테이블(bcrypt) — env 아님. 마이그레이션 0016이
+- **DB-backed**: `admin_users` 테이블(bcrypt) — env 아님. 베이스라인 마이그레이션이
   `admin`/`admin`을 시드하므로 **배포 후 즉시 로테이션**:
   `python -m scripts.set_admin_password --username admin` (CT110 DB 쓰기만 필요).
 - `/admin/login` 5회/분/IP 레이트리밋. 세션 = 서명 쿠키
@@ -33,4 +32,8 @@
 ## 보류
 
 - 수집 즉시 실행 버튼(Phase 2/A7) — `pipeline-sync.yml` 미배선.
-  조건·근거는 [`docs/reference/crons-and-workflows.md`](../docs/reference/crons-and-workflows.md) 참조.
+  조건·근거는 [crons-and-workflows](crons-and-workflows.md) 참조.
+
+---
+
+관련: [crons-and-workflows](crons-and-workflows.md) · [api](api.md)

@@ -6,12 +6,12 @@
 |---|---|---|
 | **이해하기** | [explanation/](explanation/) | [architecture](explanation/architecture.md) · [product](explanation/product.md) · [data-model](explanation/data-model.md) · [glossary](explanation/glossary.md) |
 | **작업하기** | [how-to/](how-to/) | [run-the-backend](how-to/run-the-backend.md) · [run-the-mobile-app](how-to/run-the-mobile-app.md) · [deploy-and-release](how-to/deploy-and-release.md) · [operate-embeddings](how-to/operate-embeddings.md) · [inspect-prod](how-to/inspect-prod.md) |
-| **찾아보기** | [reference/](reference/) | [api](reference/api.md) · [database-schema](reference/database-schema.md) · [crons-and-workflows](reference/crons-and-workflows.md) · [cli](reference/cli.md) |
+| **찾아보기** | [reference/](reference/) | [api](reference/api.md) · [database-schema](reference/database-schema.md) · [crons-and-workflows](reference/crons-and-workflows.md) · [cli](reference/cli.md) · [admin-console](reference/admin-console.md) |
 | **계획** | | [todo](todo.md) |
 | **결정 이력** | [adr/](adr/) | 채택 후 불변 — 뒤집으면 새 ADR로 대체 |
 
 개발 규칙·금지사항의 SSOT는 루트 [`CLAUDE.md`](../CLAUDE.md), 유닛 로컬 요약은
-[`admin/README.md`](../admin/README.md) · [`pipeline/README.md`](../pipeline/README.md).
+[`pipeline/README.md`](../pipeline/README.md).
 
 ## 문서 작성 규칙
 

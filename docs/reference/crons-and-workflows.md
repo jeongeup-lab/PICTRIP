@@ -41,7 +41,6 @@ main = 릴리스 마커(web·CodeQL), `v*` 태그 = TestFlight(→
 | `backend-ci` / `mobile-ci` / `pipeline-ci` / `web-ci` | PR (경로) | 유닛별 게이트. web-ci=`.well-known` JSON 유효성(무효 JSON은 딥링크를 조용히 깨뜨림) | ubuntu |
 | `pr-check` | PR 본문 | 템플릿 섹션·체크박스 (required) | ubuntu |
 | `pr-review` | PR | codexproxy(127.0.0.1:8787) diff 리뷰 — fork PR 미실행 | ct112 |
-| `admin-drift` | PR (admin 경로) | `static/` ↔ `admin/mockups/` 바이트 동일성 | ubuntu |
 | `backend-deploy` | push dev | test → GHCR → CT112 `deploy.sh` | ubuntu+ct112 |
 | `pipeline-deploy` | push dev | rsync(`.env`·`.venv` 보존) + 타이머가 다음 발화 때 픽업 | ct111 |
 | `mobile-ota` | push dev | EAS Update — `EXPO_PUBLIC_*` 주입 스텝 필수(빠지면 로그인 전멸 OTA) | ubuntu |

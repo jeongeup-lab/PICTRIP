@@ -71,7 +71,7 @@ BootGate(스플래시) → 온보딩(최초 1회) → 탭 셸
 ## 비목표
 
 코스 · 텍스트 검색 · 사진 업로드 검색 · 트렌딩 화면 · 알림 · 회원 관리 어드민.
-어드민 콘솔은 운영 집계 + 해외 게시물 숨김 토글만(→ `admin/README.md`).
+어드민 콘솔은 운영 집계 + 해외 게시물 숨김 토글만(→ [admin-console](../reference/admin-console.md)).
 
 ---
 관련: [architecture](architecture.md) · [glossary](glossary.md) · [api](../reference/api.md) · [deploy-and-release](../how-to/deploy-and-release.md)

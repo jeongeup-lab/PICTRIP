@@ -47,4 +47,4 @@
 | 시크릿 수정이 반영 안 됨 | `.env`는 :ro 마운트 | CT112에서 `docker restart` |
 
 ---
-관련: [crons-and-workflows](../reference/crons-and-workflows.md) · [deploy-and-release](deploy-and-release.md) · `admin/README.md`
+관련: [crons-and-workflows](../reference/crons-and-workflows.md) · [deploy-and-release](deploy-and-release.md) · [admin-console](../reference/admin-console.md)
