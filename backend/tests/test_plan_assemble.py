@@ -5,7 +5,7 @@ import pytest
 from app.modules.plan.naver_local import NaverPlace
 from app.modules.plan.services import assemble
 from app.modules.plan.services.assemble import assemble_days
-from app.modules.plan.services.candidates import PlanCandidates
+from app.modules.plan.services.candidates import FoodCandidate, PlanCandidates
 from app.modules.plan.services.intent import PlanIntent
 from app.modules.spots.services import NearbySpotRow
 from app.web.errors import PlanNotEnoughSpots
@@ -26,15 +26,27 @@ def _spot(cid: str, lat: float, lng: float) -> NearbySpotRow:
     )
 
 
-def _place(name: str, lat: float | None = BASE_LAT, lng: float | None = BASE_LNG) -> NaverPlace:
-    return NaverPlace(name=name, category="한식", address="강릉", lat=lat, lng=lng)
+def _food(
+    name: str,
+    lat: float | None = BASE_LAT,
+    lng: float | None = BASE_LNG,
+    image: str | None = None,
+) -> FoodCandidate:
+    return FoodCandidate(
+        name=name,
+        category="한식",
+        address="강릉",
+        lat=lat,
+        lng=lng,
+        source="naver",
+        image_url=image,
+    )
 
 
 def _cand(
     attractions: list[NearbySpotRow],
-    meals: list[NaverPlace] | None = None,
-    cafes: list[NaverPlace] | None = None,
-    food_images: dict[str, str] | None = None,
+    meals: list[FoodCandidate] | None = None,
+    cafes: list[FoodCandidate] | None = None,
 ) -> PlanCandidates:
     return PlanCandidates(
         anchor_lat=BASE_LAT,
@@ -42,7 +54,6 @@ def _cand(
         attractions=attractions,
         meals=meals or [],
         cafes=cafes or [],
-        food_images=food_images or {},
     )
 
 
@@ -67,9 +78,8 @@ async def test_orders_attractions_by_chain_from_anchor():
 async def test_day_slot_labels_and_sources():
     cand = _cand(
         [_spot("a1", BASE_LAT + 0.001, BASE_LNG), _spot("a2", BASE_LAT + 0.002, BASE_LNG)],
-        meals=[_place("한국집"), _place("왱이집")],
-        cafes=[_place("툇마루")],
-        food_images={"한국집": "http://kto/food.jpg"},
+        meals=[_food("한국집", image="http://kto/food.jpg"), _food("왱이집")],
+        cafes=[_food("툇마루")],
     )
     days = await assemble_days(PlanIntent(region="강릉", days=1), cand)
     slots = days[0].slots
@@ -84,7 +94,7 @@ async def test_day_slot_labels_and_sources():
 async def test_walk_leg_for_short_distance_and_transit_fallback():
     cand = _cand(
         [_spot("a1", BASE_LAT, BASE_LNG), _spot("a2", BASE_LAT + 0.05, BASE_LNG)],
-        meals=[_place("한국집", BASE_LAT + 0.001, BASE_LNG)],
+        meals=[_food("한국집", BASE_LAT + 0.001, BASE_LNG)],
     )
     days = await assemble_days(PlanIntent(region="강릉", days=1), cand)
     slots = days[0].slots
@@ -105,3 +115,27 @@ async def test_multi_day_chunks_attractions():
 async def test_raises_without_attractions():
     with pytest.raises(PlanNotEnoughSpots):
         await assemble_days(PlanIntent(region="강릉", days=1), _cand([]))
+
+
+def test_prepare_food_filters_cafes_from_meals_and_dedupes():
+    from app.modules.plan.services.candidates import prepare_food
+
+    meals_raw = [
+        NaverPlace("동화가든", "한식>두부요리", "강릉", BASE_LAT, BASE_LNG),
+        NaverPlace("테라로사", "카페,디저트>카페", "강릉", BASE_LAT, BASE_LNG),
+        NaverPlace("어묵고로케", "분식>간식", "강릉", BASE_LAT, BASE_LNG),
+        NaverPlace("동화가든", "한식>두부요리", "강릉", BASE_LAT, BASE_LNG),
+    ]
+    cafes_raw = [
+        NaverPlace("테라로사", "카페,디저트>카페", "강릉", BASE_LAT, BASE_LNG),
+        NaverPlace("카페 이진리", "카페", "강릉", BASE_LAT, BASE_LNG),
+        NaverPlace("동화가든", "한식>두부요리", "강릉", BASE_LAT, BASE_LNG),
+    ]
+    far_meal = NaverPlace("서울집", "한식", "서울", BASE_LAT + 2.0, BASE_LNG)
+    shop = NaverPlace("소품샵", "소품샵>선물가게", "강릉", BASE_LAT, BASE_LNG)
+    meals, cafes = prepare_food(
+        meals_raw + [far_meal], cafes_raw + [shop], anchor_lat=BASE_LAT, anchor_lng=BASE_LNG
+    )
+    assert [c.name for c in meals] == ["동화가든"]
+    assert all(c.source == "naver" for c in meals + cafes)
+    assert [c.name for c in cafes] == ["테라로사", "카페 이진리"]

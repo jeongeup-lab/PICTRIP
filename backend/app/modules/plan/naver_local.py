@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import json
 import re
 from dataclasses import dataclass
@@ -27,7 +28,7 @@ class NaverPlace:
 
 
 def _clean(text: str) -> str:
-    return _TAG_RE.sub("", text).strip()
+    return html.unescape(_TAG_RE.sub("", text)).strip()
 
 
 def _coord(raw: object) -> float | None:

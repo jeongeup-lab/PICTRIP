@@ -53,7 +53,9 @@ async def test_naver_strips_tags_and_scales_coords(_naver_keys, httpx_mock):
     assert places[0].lng == pytest.approx(128.9112345)
 
 
-async def test_naver_without_keys_returns_empty():
+async def test_naver_without_keys_returns_empty(monkeypatch):
+    monkeypatch.setattr(settings, "NAVER_CLIENT_ID", "")
+    monkeypatch.setattr(settings, "NAVER_CLIENT_SECRET", "")
     assert await search_local("강릉 맛집") == []
 
 
@@ -90,7 +92,8 @@ async def test_gemini_bad_response_returns_none(_gemini_key, httpx_mock):
     assert await generate_json(system="s", user="u", schema={"type": "OBJECT"}) is None
 
 
-async def test_gemini_without_key_returns_none():
+async def test_gemini_without_key_returns_none(monkeypatch):
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "")
     assert await generate_json(system="s", user="u", schema={"type": "OBJECT"}) is None
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 
@@ -11,6 +12,8 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 _TIMEOUT = httpx.Timeout(25.0, connect=5.0)
+_RETRY_STATUS = (429, 500, 503)
+_RETRY_DELAY_SECONDS = 2.0
 
 
 async def generate_json(
@@ -34,17 +37,26 @@ async def generate_json(
             "responseSchema": schema,
         },
     }
+    payload: dict[str, Any] | None = None
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            resp = await client.post(
-                url,
-                json=body,
-                headers={"x-goog-api-key": settings.GEMINI_API_KEY},
-            )
-            resp.raise_for_status()
-            payload = resp.json()
+            for attempt in range(2):
+                resp = await client.post(
+                    url,
+                    json=body,
+                    headers={"x-goog-api-key": settings.GEMINI_API_KEY},
+                )
+                if resp.status_code in _RETRY_STATUS and attempt == 0:
+                    logger.warning("plan.llm.retrying", status=resp.status_code)
+                    await asyncio.sleep(_RETRY_DELAY_SECONDS)
+                    continue
+                resp.raise_for_status()
+                payload = resp.json()
+                break
     except (httpx.HTTPError, json.JSONDecodeError, ValueError) as exc:
         logger.warning("plan.llm.request_failed", error=str(exc))
+        return None
+    if payload is None:
         return None
 
     try:
