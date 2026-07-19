@@ -17,6 +17,13 @@ from app.modules.spots.services.concentration import (
     load_hot_spots,
 )
 from app.modules.spots.services.detail import load_spot_detail
+from app.modules.spots.services.discover import (
+    DiscoverFilters,
+    DiscoverRow,
+    discover_spots,
+    pool_total,
+    resolve_region,
+)
 from app.modules.spots.services.nearby import (
     NearbyCategory,
     NearbySpotRow,
@@ -36,6 +43,8 @@ from app.modules.spots.services.saved import list_saved_spots, save_spot, unsave
 
 __all__ = [
     "ConcentrationCardRow",
+    "DiscoverFilters",
+    "DiscoverRow",
     "NearbyCategory",
     "NearbySpotRow",
     "SpotCardRow",
@@ -46,6 +55,7 @@ __all__ = [
     "category_predicate",
     "curations",
     "derive_category",
+    "discover_spots",
     "feed",
     "find_nearby_spots",
     "find_nearby_spots_bbox",
@@ -59,6 +69,8 @@ __all__ = [
     "load_spot_cards_by_ids",
     "load_spot_detail",
     "lock_current_spot_image",
+    "pool_total",
+    "resolve_region",
     "save_spot",
     "unsave_spot",
 ]

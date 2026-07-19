@@ -28,6 +28,7 @@ from app.core.redis import redis_lifespan
 from app.core.schemas import ok
 from app.core.version import API_VERSION
 from app.modules.admin import router as admin_router
+from app.modules.chat import router as chat_router
 from app.modules.feed import router as feed_router
 from app.modules.images import router as images_router
 from app.modules.map import router as map_router
@@ -127,6 +128,7 @@ def create_app() -> FastAPI:
     app.include_router(feed_router, prefix=prefix)
     app.include_router(images_router, prefix=prefix)
     app.include_router(map_router, prefix=prefix)
+    app.include_router(chat_router, prefix=prefix)
     app.include_router(system_router, prefix=prefix)
 
     return app

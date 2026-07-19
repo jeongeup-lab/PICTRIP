@@ -29,6 +29,8 @@ dependencies = [
     "transformers>=4.45.0",
     "torch>=2.4.0",
     "pillow>=10.4.0",
+    # LLM (discovery chat)
+    "anthropic>=0.40",
     # Crypto
     "cryptography>=48.0.1",
     # Observability
@@ -132,6 +134,7 @@ source_modules = [
     "app.modules.spots.routes",
     "app.modules.images.routes",
     "app.modules.map.routes",
+    "app.modules.chat.routes",
     "app.modules.system.routes",
     "app.modules.admin.routes",
     "app.modules.feed.routes",
@@ -156,6 +159,7 @@ source_modules = [
     "app.modules.spots.routes",
     "app.modules.images.routes",
     "app.modules.map.routes",
+    "app.modules.chat.routes",
     "app.modules.system.routes",
     "app.modules.admin.routes",
     "app.modules.feed.routes",
@@ -183,6 +187,7 @@ source_modules = [
     "app.modules.spots.schemas",
     "app.modules.images.schemas",
     "app.modules.map.schemas",
+    "app.modules.chat.schemas",
     # system has no schemas.py (removed as dead code) — re-add if it returns.
     "app.modules.admin.schemas",
     "app.modules.feed.schemas",
@@ -205,6 +210,7 @@ source_modules = [
     "app.modules.spots.services",
     "app.modules.images.services",
     "app.modules.map.services",
+    "app.modules.chat.services",
     "app.modules.system.services",
     "app.modules.admin.services",
     "app.modules.feed.services",

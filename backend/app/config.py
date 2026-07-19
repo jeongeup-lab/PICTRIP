@@ -130,6 +130,14 @@ class Settings(BaseSettings):
     PHOTO_SEARCH_SIMILARITY_FLOOR: float = 0.60
     PHOTO_SEARCH_MAX: int = 30
 
+    # --- Discovery chat (CHT) ---
+    # LLM seam: keyed -> Anthropic Haiku, unkeyed -> deterministic heuristic (tests/demo).
+    ANTHROPIC_API_KEY: str = ""
+    CHAT_MODEL: str = "claude-haiku-4-5-20251001"
+    CHAT_SESSION_TTL_SECONDS: int = 1800
+    CHAT_CANDIDATE_CARDS: int = 6
+    CHAT_CONVERGE_AT: int = 3
+
     # --- Overseas → domestic matching (S13) ---
     MATCH_DISTANCE_MAX: float = 0.32
     MATCH_CANDIDATES: int = 40
