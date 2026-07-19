@@ -193,12 +193,12 @@ def _empty_board(session: ChatSession) -> tuple[str, list[ChatAnswer]]:
     droppable = list(session.conditions)[-3:]
     answers = [
         ChatAnswer(
-            id=f"drop:{c.id}", label=f"{c.label} 풀기", kind="remove", removeConditionId=c.id
+            id=f"drop:{c.id}", label=f"{c.label} 제거", kind="remove", removeConditionId=c.id
         )
         for c in reversed(droppable)
     ]
     answers.append(ChatAnswer(id="restart", label="다른 결로 다시", kind="restart"))
-    return "어떤 조건을 풀까요?", answers
+    return "어떤 조건을 제거할까요?", answers
 
 
 async def run_turn(
@@ -277,3 +277,18 @@ async def run_turn(
         question=question,
         answers=answers,
     )
+
+
+async def mood_covers(
+    session_db: AsyncSession,
+    utterances: list[str],
+    llm: ChatLLM | None = None,
+) -> list[tuple[str, str | None]]:
+    llm = llm or build_chat_llm()
+    out: list[tuple[str, str | None]] = []
+    for utterance in utterances:
+        chat = new_session()
+        await _apply_utterance(session_db, chat, utterance, llm)
+        rows, _ = await discover_spots(session_db, filters=_to_filters(chat), limit=1)
+        out.append((utterance, rows[0].first_image_url if rows else None))
+    return out

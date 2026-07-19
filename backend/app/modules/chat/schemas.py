@@ -57,3 +57,16 @@ class ChatTurnResponse(BaseModel):
     cards: list[ChatCard]
     question: str
     answers: list[ChatAnswer]
+
+
+class ChatMoodCoversRequest(BaseModel):
+    utterances: list[str]
+
+
+class ChatMoodCover(BaseModel):
+    utterance: str
+    coverUrl: str | None
+
+
+class ChatMoodCoversResponse(BaseModel):
+    covers: list[ChatMoodCover]
