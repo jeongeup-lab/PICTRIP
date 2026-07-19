@@ -6,6 +6,7 @@ import { AppError } from "@/lib/app-error";
 import { registerAuthSession } from "@/lib/auth-session";
 import { getIdToken, type Provider } from "@/features/auth/usecases/oauth-providers";
 import { recordConsentSnapshot } from "@/features/auth/usecases/record-consent";
+import { syncGuestSavedToServer } from "@/features/saved/lib/sync-guest-saved";
 import {
   oauthLogin,
   emailLogin,
@@ -39,6 +40,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setSession: async (pair) => {
     await setRefreshToken(pair.refreshToken);
     set({ accessToken: pair.accessToken, user: pair.user, isAuthenticated: true });
+    void syncGuestSavedToServer().catch(() => undefined);
   },
 
   refresh: async () => {

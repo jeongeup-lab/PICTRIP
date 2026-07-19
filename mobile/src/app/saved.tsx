@@ -5,13 +5,23 @@ import { Icon } from "@/components/Icon";
 import { Skeleton } from "@/components/Skeleton";
 import { SavedCard } from "@/features/saved/components/SavedCard";
 import { useSavedList, useUnsaveMutation } from "@/features/saved/queries";
+import { useGuestSavedStore } from "@/features/saved/stores/guest-saved-store";
+import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { prefetchSpot } from "@/features/spots/queries";
 import { colors, spacing, radii } from "@/constants/theme";
 
 export default function SavedScreen() {
   const insets = useSafeAreaInsets();
-  const { data, isLoading } = useSavedList();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const { data: serverSaved, isLoading: serverLoading } = useSavedList();
   const unsave = useUnsaveMutation();
+  const guestItems = useGuestSavedStore((s) => s.items);
+  const removeGuest = useGuestSavedStore((s) => s.remove);
+
+  const data = isAuthenticated ? serverSaved : guestItems;
+  const isLoading = isAuthenticated && serverLoading;
+  const onUnsave = (contentId: string) =>
+    isAuthenticated ? unsave.mutate(contentId) : removeGuest(contentId);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -32,7 +42,7 @@ export default function SavedScreen() {
               spot={spot}
               onPressIn={() => prefetchSpot(spot)}
               onPress={() => router.push(`/spots/${spot.contentId}`)}
-              onUnsave={() => unsave.mutate(spot.contentId)}
+              onUnsave={() => onUnsave(spot.contentId)}
             />
           ))
         ) : (
