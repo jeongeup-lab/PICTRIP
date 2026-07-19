@@ -1,0 +1,135 @@
+import { useCallback, useEffect, useState } from "react";
+import { Animated, View, Text, Pressable, StyleSheet } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { router } from "expo-router";
+import { Icon } from "@/components/Icon";
+import { usePhotoFlowStore } from "@/features/photo/stores/photo-flow-store";
+import { useLoadingAnimation } from "@/features/photo/hooks/use-loading-animation";
+import { PickAnimation } from "@/features/photo/components/PickAnimation";
+import { MIN_VISIBLE_MS } from "@/features/photo/constants/timing";
+import type { ErrorCode } from "@/lib/app-error";
+import { colors, spacing, radii } from "@/constants/theme";
+
+// Branch on error code only — never message (S01).
+function messageForPhotoError(code: ErrorCode | null): { title: string; sub: string } {
+  switch (code) {
+    case "RATE_LIMITED":
+      return { title: "잠시 후 다시 시도해 주세요", sub: "사진 분석 요청이 너무 많아요." };
+    case "NETWORK_ERROR":
+      return { title: "분석하지 못했어요", sub: "네트워크에 연결할 수 없어요." };
+    default:
+      return { title: "분석하지 못했어요", sub: "잠시 후 다시 시도해 주세요" };
+  }
+}
+
+export default function PhotoAnalyzingScreen() {
+  const insets = useSafeAreaInsets();
+  const asset = usePhotoFlowStore((s) => s.asset);
+  const status = usePhotoFlowStore((s) => s.status);
+  const errorCode = usePhotoFlowStore((s) => s.errorCode);
+  const startSearch = usePhotoFlowStore((s) => s.startSearch);
+  const abort = usePhotoFlowStore((s) => s.abort);
+
+  const [mountedAt] = useState(() => Date.now());
+  const [finaleDone, setFinaleDone] = useState(false);
+  const { translateX } = useLoadingAnimation();
+  const handleFinaleComplete = useCallback(() => setFinaleDone(true), []);
+
+  useEffect(() => {
+    if (status !== "success" || !finaleDone) return;
+    const elapsed = Date.now() - mountedAt;
+    const wait = Math.max(0, MIN_VISIBLE_MS - elapsed);
+    const t = setTimeout(() => router.replace("/photo/result"), wait);
+    return () => clearTimeout(t);
+  }, [status, finaleDone, mountedAt]);
+
+  const goBack = () => {
+    abort();
+    router.back();
+  };
+
+  const isError = status === "error";
+  const errorMessage = messageForPhotoError(errorCode);
+
+  return (
+    <View style={[styles.root, { paddingTop: insets.top + spacing.sm }]}>
+      <Pressable style={styles.back} onPress={goBack} hitSlop={8}>
+        <Icon name="chevron-left" size={23} />
+      </Pressable>
+
+      <View style={styles.wrap}>
+        <PickAnimation asset={asset} status={status} onFinaleComplete={handleFinaleComplete} />
+
+        {isError ? (
+          <>
+            <Text style={styles.title}>{errorMessage.title}</Text>
+            <Text style={styles.sub}>{errorMessage.sub}</Text>
+            <View style={styles.errorActions}>
+              <Pressable style={[styles.errBtn, styles.errPrimary]} onPress={() => startSearch()}>
+                <Text style={styles.errPrimaryText}>다시 시도</Text>
+              </Pressable>
+              <Pressable style={styles.errBtn} onPress={() => router.back()}>
+                <Text style={styles.errText}>돌아가기</Text>
+              </Pressable>
+            </View>
+          </>
+        ) : (
+          <>
+            <Text style={styles.title}>사진을 분석하고 있어요</Text>
+            <Text style={styles.sub}>잠시만 기다려 주세요</Text>
+            <View style={styles.bar}>
+              <Animated.View style={[styles.barFill, { transform: [{ translateX }] }]} />
+            </View>
+            <View style={styles.status}>
+              <View style={styles.statusDot} />
+              <Text style={styles.statusText}>색감과 분위기를 읽는 중</Text>
+            </View>
+          </>
+        )}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.bg },
+  back: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: spacing.xs,
+  },
+  wrap: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 44 },
+  title: {
+    fontSize: 19,
+    fontWeight: "700",
+    letterSpacing: -0.36,
+    marginBottom: 6,
+    color: colors.ink,
+  },
+  sub: { fontSize: 13, color: colors.sec, marginBottom: 30 },
+  bar: {
+    width: "100%",
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.skeleton,
+    overflow: "hidden",
+  },
+  barFill: { width: "42%", height: "100%", borderRadius: 2, backgroundColor: colors.accent },
+  status: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 22 },
+  statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.accent },
+  statusText: { fontSize: 12, color: colors.ter },
+  errorActions: { flexDirection: "row", gap: 11, marginTop: 4 },
+  errBtn: {
+    height: 48,
+    paddingHorizontal: 22,
+    borderRadius: radii.sm,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.inset,
+  },
+  errPrimary: { backgroundColor: colors.ink },
+  errPrimaryText: { fontSize: 15, fontWeight: "700", color: colors.onImage },
+  errText: { fontSize: 15, fontWeight: "700", color: colors.ink },
+});

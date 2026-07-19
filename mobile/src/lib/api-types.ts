@@ -37,6 +37,18 @@ export interface SpotCard {
   category: string | null;
 }
 
+export interface PhotoMatch extends SpotCard {
+  similarity: number; // 0..1 (1 - cosine distance)
+  distance?: number | null; // metres; present only when query carried lat/lng
+  regionName?: string | null;
+  sigunguName?: string | null;
+}
+
+export interface PhotoSearchResult {
+  matches: PhotoMatch[];
+  queryHadLocation: boolean;
+}
+
 export interface SpotImage {
   originImageUrl: string;
   smallImageUrl: string | null;

@@ -24,6 +24,7 @@ export default function RootLayout() {
           <Stack.Screen name="onboarding" />
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="spots/[contentId]" />
+          <Stack.Screen name="photo" options={{ presentation: "modal", headerShown: false }} />
           <Stack.Screen
             name="channels"
             options={{ presentation: "fullScreenModal", headerShown: false }}
