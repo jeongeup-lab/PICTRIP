@@ -24,7 +24,7 @@ import { sheetSnapY } from "@/features/map/lib/sheet-snap";
 import { NEARBY_CAP } from "@/constants/map";
 import { colors, spacing, radii } from "@/constants/theme";
 
-export default function MapTab() {
+export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const s = useMapStore();
   const { perm, allow, skipToSeoul, recenter } = useMapInit();
@@ -37,9 +37,8 @@ export default function MapTab() {
     [nearby.data, s.gpsCoords],
   );
 
-  // useBottomTabBarHeight isn't exported by expo-router and bottom-tabs isn't
-  // installed, so use the iOS default tab content height (49) + safe-area inset.
-  const tabBarHeight = TAB_BAR_CONTENT_HEIGHT + insets.bottom;
+  // Pushed route (not a tab) — only the home-indicator safe-area inset sits below.
+  const tabBarHeight = insets.bottom;
   // Snap geometry from the REAL tab-bar height so peek reveals exactly 1 card and
   // half exactly 2 on every device (a fixed 83 over-reveals on small-inset phones).
   const snapY = useMemo(() => sheetSnapY(H, tabBarHeight), [tabBarHeight]);
@@ -100,6 +99,9 @@ export default function MapTab() {
       />
 
       <View style={[styles.header, { top: insets.top + spacing.xs }]}>
+        <Pressable style={styles.back} onPress={() => router.back()}>
+          <Icon name="chevron-left" size={20} color={colors.ink} />
+        </Pressable>
         <Pressable style={styles.label} onPress={() => setPickerOpen(true)}>
           <Icon name="location" size={15} color={colors.accentText} />
           <Text numberOfLines={1} style={styles.labelText}>
@@ -203,15 +205,33 @@ export default function MapTab() {
   );
 }
 
-// RN bottom-tab content height on iOS (excludes the safe-area inset, added separately).
-const TAB_BAR_CONTENT_HEIGHT = 49;
 const PILL_HEIGHT = 38; // SearchHerePill height
 const FAB_HEIGHT = 44; // RecenterFab height
 const SHEET_GAP = 14; // mockup: control bottom sits 14px above the sheet top edge
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  header: { position: "absolute", left: spacing.lg, right: spacing.lg },
+  header: {
+    position: "absolute",
+    left: spacing.lg,
+    right: spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  back: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.bg,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#100E12",
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
   label: {
     flexDirection: "row",
     alignItems: "center",

@@ -28,7 +28,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{ title: "홈", tabBarIcon: tabIcon("home") }} />
       <Tabs.Screen name="explore" options={{ title: "탐색", tabBarIcon: tabIcon("search") }} />
-      <Tabs.Screen name="map" options={{ title: "지도", tabBarIcon: tabIcon("map-pin") }} />
+      <Tabs.Screen name="ai" options={{ title: "AI", tabBarIcon: tabIcon("sparkle") }} />
       <Tabs.Screen name="profile" options={{ title: "마이", tabBarIcon: tabIcon("person") }} />
     </Tabs>
   );
