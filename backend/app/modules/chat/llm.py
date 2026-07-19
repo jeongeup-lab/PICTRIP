@@ -1,4 +1,4 @@
-"""CHT LLM seam — Anthropic when keyed, deterministic heuristic otherwise (tests/demo).
+"""CHT LLM seam — Gemini (product default), Anthropic, else deterministic heuristic.
 
 The seam has two jobs: translate a Korean utterance into structured filters
 (extract) and write the warm grounded reaction line + per-card rationale
@@ -173,6 +173,58 @@ _GUARDRAIL = (
 )
 
 
+def _extract_prompt(utterance: str, conditions: list[Condition]) -> str:
+    cond_desc = ", ".join(f"{c.kind}:{c.label}" for c in conditions) or "없음"
+    return (
+        f"현재 누적 조건: {cond_desc}\n사용자 발화: {utterance}\n"
+        "발화를 조건으로 번역하라. 지역명은 region_names에, 분위기/활동/풍경 단어는 "
+        "keywords에 짧은 명사로 넣어라. 한적함 요구는 quiet=true."
+    )
+
+
+def _compose_prompt(conditions: list[Condition], rows: list[DiscoverRow], total: int) -> str:
+    rows_json = json.dumps(
+        [
+            {
+                "contentId": r.content_id,
+                "title": r.title,
+                "category": r.category,
+                "region": r.region_label,
+                "overviewHead": r.overview_head,
+                "quiet": r.quiet,
+            }
+            for r in rows
+        ],
+        ensure_ascii=False,
+    )
+    cond_desc = ", ".join(f"{c.kind}:{c.label}" for c in conditions) or "없음"
+    return (
+        f"누적 조건: {cond_desc}\n총 후보 수: {total}\n카드 데이터: {rows_json}\n"
+        "bot_text는 후보 수를 언급하는 따뜻한 안내 1~2문장. whys는 카드마다 위 데이터 "
+        "필드에만 근거한 선정 이유 1줄(quiet=true면 한산함 언급 가능)."
+    )
+
+
+def _to_extract_result(data: dict[str, Any]) -> ExtractResult:
+    return ExtractResult(
+        region_names=list(data.get("region_names", [])),
+        categories=list(data.get("categories", [])),
+        exclude_categories=list(data.get("exclude_categories", [])),
+        quiet=bool(data.get("quiet", False)),
+        keywords=list(data.get("keywords", [])),
+    )
+
+
+def _to_compose_result(data: dict[str, Any], rows: list[DiscoverRow], total: int) -> ComposeResult:
+    whys = {w["contentId"]: w["why"] for w in data.get("whys", []) if "contentId" in w}
+    for r in rows:
+        whys.setdefault(r.content_id, r.category or "조건과 결이 맞는 곳")
+    return ComposeResult(
+        bot_text=str(data.get("bot_text", "")) or f"{total}곳이 남았어요.",
+        whys=whys,
+    )
+
+
 class AnthropicChatLLM:
     def __init__(self) -> None:
         from anthropic import AsyncAnthropic
@@ -199,59 +251,105 @@ class AnthropicChatLLM:
         return None
 
     async def extract(self, utterance: str, conditions: list[Condition]) -> ExtractResult:
-        cond_desc = ", ".join(f"{c.kind}:{c.label}" for c in conditions) or "없음"
-        data = await self._tool_call(
-            f"현재 누적 조건: {cond_desc}\n사용자 발화: {utterance}\n"
-            "발화를 조건으로 번역하라. 지역명은 region_names에, 분위기/활동/풍경 단어는 "
-            "keywords에 짧은 명사로 넣어라. 한적함 요구는 quiet=true.",
-            _EXTRACT_TOOL,
-        )
+        data = await self._tool_call(_extract_prompt(utterance, conditions), _EXTRACT_TOOL)
         if data is None:
             return await self._fallback.extract(utterance, conditions)
-        return ExtractResult(
-            region_names=list(data.get("region_names", [])),
-            categories=list(data.get("categories", [])),
-            exclude_categories=list(data.get("exclude_categories", [])),
-            quiet=bool(data.get("quiet", False)),
-            keywords=list(data.get("keywords", [])),
-        )
+        return _to_extract_result(data)
 
     async def compose(
         self, conditions: list[Condition], rows: list[DiscoverRow], total: int
     ) -> ComposeResult:
-        rows_json = json.dumps(
-            [
-                {
-                    "contentId": r.content_id,
-                    "title": r.title,
-                    "category": r.category,
-                    "region": r.region_label,
-                    "overviewHead": r.overview_head,
-                    "quiet": r.quiet,
-                }
-                for r in rows
-            ],
-            ensure_ascii=False,
-        )
-        cond_desc = ", ".join(f"{c.kind}:{c.label}" for c in conditions) or "없음"
-        data = await self._tool_call(
-            f"누적 조건: {cond_desc}\n총 후보 수: {total}\n카드 데이터: {rows_json}\n"
-            "bot_text는 후보 수를 언급하는 따뜻한 안내 1~2문장. whys는 카드마다 위 데이터 "
-            "필드에만 근거한 선정 이유 1줄(quiet=true면 한산함 언급 가능).",
-            _COMPOSE_TOOL,
-        )
+        data = await self._tool_call(_compose_prompt(conditions, rows, total), _COMPOSE_TOOL)
         if data is None:
             return await self._fallback.compose(conditions, rows, total)
-        whys = {w["contentId"]: w["why"] for w in data.get("whys", []) if "contentId" in w}
-        for r in rows:
-            whys.setdefault(r.content_id, r.category or "조건과 결이 맞는 곳")
-        return ComposeResult(
-            bot_text=str(data.get("bot_text", "")) or f"{total}곳이 남았어요.",
-            whys=whys,
-        )
+        return _to_compose_result(data, rows, total)
+
+
+_CATEGORY_ENUM = ["attraction", "food", "cafe", "leisure", "shopping"]
+
+_EXTRACT_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "region_names": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "categories": {"type": "ARRAY", "items": {"type": "STRING", "enum": _CATEGORY_ENUM}},
+        "exclude_categories": {
+            "type": "ARRAY",
+            "items": {"type": "STRING", "enum": _CATEGORY_ENUM},
+        },
+        "quiet": {"type": "BOOLEAN"},
+        "keywords": {"type": "ARRAY", "items": {"type": "STRING"}},
+    },
+    "required": ["region_names", "categories", "exclude_categories", "quiet", "keywords"],
+}
+
+_COMPOSE_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "bot_text": {"type": "STRING"},
+        "whys": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "contentId": {"type": "STRING"},
+                    "why": {"type": "STRING"},
+                },
+                "required": ["contentId", "why"],
+            },
+        },
+    },
+    "required": ["bot_text", "whys"],
+}
+
+
+class GeminiChatLLM:
+    def __init__(self) -> None:
+        from google import genai
+
+        self._client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        self._fallback = HeuristicChatLLM()
+
+    async def _generate(self, prompt: str, schema: dict[str, Any]) -> dict[str, Any] | None:
+        from google.genai import types
+
+        try:
+            resp = await self._client.aio.models.generate_content(
+                model=settings.GEMINI_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=_GUARDRAIL,
+                    response_mime_type="application/json",
+                    response_schema=schema,
+                    max_output_tokens=1024,
+                    thinking_config=types.ThinkingConfig(thinking_budget=0),
+                ),
+            )
+            raw = resp.text
+            if not raw:
+                return None
+            data = json.loads(raw)
+        except Exception:
+            return None
+        return data if isinstance(data, dict) else None
+
+    async def extract(self, utterance: str, conditions: list[Condition]) -> ExtractResult:
+        data = await self._generate(_extract_prompt(utterance, conditions), _EXTRACT_SCHEMA)
+        if data is None:
+            return await self._fallback.extract(utterance, conditions)
+        return _to_extract_result(data)
+
+    async def compose(
+        self, conditions: list[Condition], rows: list[DiscoverRow], total: int
+    ) -> ComposeResult:
+        data = await self._generate(_compose_prompt(conditions, rows, total), _COMPOSE_SCHEMA)
+        if data is None:
+            return await self._fallback.compose(conditions, rows, total)
+        return _to_compose_result(data, rows, total)
 
 
 def build_chat_llm() -> ChatLLM:
+    if settings.GEMINI_API_KEY:
+        return GeminiChatLLM()
     if settings.ANTHROPIC_API_KEY:
         return AnthropicChatLLM()
     return HeuristicChatLLM()

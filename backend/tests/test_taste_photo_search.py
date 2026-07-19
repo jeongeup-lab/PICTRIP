@@ -172,14 +172,14 @@ async def test_photo_search_with_location_includes_distance(
     assert near["distance"] < 50.0
 
 
-async def test_photo_search_soft_floor_returns_best_when_all_below_floor(
+async def test_photo_search_below_floor_returns_empty(
     client: AsyncClient,
     override_db_and_seed: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Stub embed to a vector unrelated to seeded embeddings → all neighbors are
-    # far (similarity < floor). The top-N soft floor still surfaces the best ones
-    # rather than returning an empty list.
+    # far (similarity < 0.75 hard cut). No fallback: the result must be empty,
+    # not a top-N of the best-available-but-still-poor matches.
     from app.core.embedding import ClipEmbedder
 
     monkeypatch.setattr(ClipEmbedder, "embed_image", lambda _self, _b: _unit_vec(31), raising=True)
@@ -194,10 +194,30 @@ async def test_photo_search_soft_floor_returns_best_when_all_below_floor(
     assert resp.status_code == 200
     body = resp.json()
     assert body["error"] is None
-    matches = body["data"]["matches"]
-    assert isinstance(matches, list)
-    # Soft floor: non-empty even though everything is below the calibrated floor.
-    assert len(matches) >= 1
-    # Still capped + sorted.
-    sims = [m["similarity"] for m in matches]
-    assert sims == sorted(sims, reverse=True)
+    assert body["data"]["matches"] == []
+
+
+async def test_photo_search_filters_out_matches_below_floor(
+    client: AsyncClient,
+    override_db_and_seed: AsyncSession,
+    fixed_embedding: list[float],
+) -> None:
+    # One spot near-exactly matches the query (similarity ~1.0, clears 0.75);
+    # one spot is unrelated (similarity near 0, well below 0.75). Only the
+    # first should come back — the hard filter drops the second outright.
+    await _seed_spot_with_embedding(override_db_and_seed, "ps_hit", list(fixed_embedding))
+    await _seed_spot_with_embedding(override_db_and_seed, "ps_miss", _unit_vec(42))
+
+    resp = await client.post(
+        "/v1/taste/photo-search",
+        files={"image": ("photo.png", _png_bytes(), "image/png")},
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    cids = [m["contentId"] for m in body["data"]["matches"]]
+    assert "ps_hit" in cids
+    assert "ps_miss" not in cids
+    assert all(
+        m["similarity"] >= settings.PHOTO_SEARCH_SIMILARITY_FLOOR for m in body["data"]["matches"]
+    )

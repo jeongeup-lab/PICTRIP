@@ -278,3 +278,11 @@ DB/인프라/API 세션은 화면 세션들의 data needs를 종합해 형식화
 - **B3 카피 등록**: 온보딩 서브캡션 3종(S1)·히어로 6 카피(S2) 목업 verbatim 레지스트리화.
 - **C3 셸 소유=S1 §5.1**(4탭·모달규칙·사진 런처).
 - **D1 이모지 제거**(S6 house 이모지→홈 라인-SVG), **D2 홈 푸터 "문의" 제거**(목업 05+S2; 목적지 없는 고아).
+
+## 발견 대화 LLM 결정 (2026-07-19)
+
+- **발견 대화(CHT) LLM = Google Gemini(무료 flash) 제품 기본.** 비용 0 목적. `GEMINI_API_KEY`
+  있으면 `GeminiChatLLM`, 없으면 `ANTHROPIC_API_KEY`→`AnthropicChatLLM`, 둘 다 없으면
+  규칙기반 `HeuristicChatLLM`. Gemini 호출/파싱 실패(401·타임아웃·스키마 위반)는 heuristic으로
+  폴백해 앱이 죽지 않는다. 구조화 출력=`response_mime_type=application/json`+`response_schema`
+  (Anthropic tool-calling 매핑). 모델 기본 `gemini-2.5-flash`(2.0-flash 2026-06-01 종료).

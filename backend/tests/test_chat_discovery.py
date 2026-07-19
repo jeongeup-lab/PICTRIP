@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
+import json
+from types import SimpleNamespace
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.db import get_db
 from app.core.redis import get_redis
 from app.main import app
-from app.modules.chat.llm import HeuristicChatLLM
+from app.modules.chat.llm import (
+    AnthropicChatLLM,
+    GeminiChatLLM,
+    HeuristicChatLLM,
+    build_chat_llm,
+)
 from app.modules.chat.schemas import ChatTurnRequest
 from app.modules.chat.services import run_turn
 from app.modules.chat.state import (
@@ -20,6 +29,7 @@ from app.modules.chat.state import (
 )
 from app.modules.spots.services.discover import (
     DiscoverFilters,
+    DiscoverRow,
     discover_spots,
     pool_total,
     resolve_region,
@@ -230,6 +240,113 @@ async def test_extract_exclusion_and_quiet():
     assert "cafe" in r.exclude_categories
     assert "cafe" not in r.categories
     assert r.quiet is True
+
+
+# ── Gemini LLM (mocked; no live API) ──────────────────────────────────────
+
+
+class _FakeGeminiModels:
+    def __init__(self, text: str | None, *, raise_exc: bool = False) -> None:
+        self._text = text
+        self._raise = raise_exc
+        self.calls: list[dict] = []
+
+    async def generate_content(self, **kwargs):
+        self.calls.append(kwargs)
+        if self._raise:
+            raise RuntimeError("boom")
+        return SimpleNamespace(text=self._text)
+
+
+class _FakeGeminiClient:
+    def __init__(self, text: str | None, *, raise_exc: bool = False) -> None:
+        self._models = _FakeGeminiModels(text, raise_exc=raise_exc)
+        self.aio = SimpleNamespace(models=self._models)
+
+
+def _gemini(monkeypatch, text: str | None, *, raise_exc: bool = False) -> GeminiChatLLM:
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "test-key")
+    llm = GeminiChatLLM()
+    llm._client = _FakeGeminiClient(text, raise_exc=raise_exc)  # type: ignore[assignment]
+    return llm
+
+
+def test_build_chat_llm_prefers_gemini(monkeypatch):
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "g")
+    monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "a")
+    assert isinstance(build_chat_llm(), GeminiChatLLM)
+
+
+def test_build_chat_llm_anthropic_when_no_gemini(monkeypatch):
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "")
+    monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "a")
+    assert isinstance(build_chat_llm(), AnthropicChatLLM)
+
+
+def test_build_chat_llm_heuristic_when_no_keys(monkeypatch):
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "")
+    monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "")
+    assert isinstance(build_chat_llm(), HeuristicChatLLM)
+
+
+async def test_gemini_extract_parses_json(monkeypatch):
+    payload = json.dumps(
+        {
+            "region_names": ["강릉"],
+            "categories": ["cafe"],
+            "exclude_categories": [],
+            "quiet": True,
+            "keywords": ["감성"],
+        }
+    )
+    r = await _gemini(monkeypatch, payload).extract("강릉 감성 카페", [])
+    assert r.region_names == ["강릉"]
+    assert r.categories == ["cafe"]
+    assert r.quiet is True
+    assert r.keywords == ["감성"]
+
+
+async def test_gemini_compose_parses_json(monkeypatch):
+    rows = [
+        DiscoverRow(
+            content_id="c1",
+            title="안목해변 카페",
+            first_image_url="http://kto/i.jpg",
+            category="cafe",
+            region_label="강원특별자치도 강릉시",
+            overview_head=None,
+            quiet=True,
+        )
+    ]
+    payload = json.dumps(
+        {"bot_text": "1곳 남았어요.", "whys": [{"contentId": "c1", "why": "바다 정면 카페"}]}
+    )
+    res = await _gemini(monkeypatch, payload).compose([], rows, 1)
+    assert res.bot_text == "1곳 남았어요."
+    assert res.whys["c1"] == "바다 정면 카페"
+
+
+async def test_gemini_extract_falls_back_on_error(monkeypatch):
+    r = await _gemini(monkeypatch, None, raise_exc=True).extract("강릉 카페 말고 한적한 데", [])
+    assert "cafe" in r.exclude_categories
+    assert r.quiet is True
+    assert "강릉" in r.region_names
+
+
+async def test_gemini_compose_falls_back_on_empty(monkeypatch):
+    rows = [
+        DiscoverRow(
+            content_id="c1",
+            title="안목해변 카페",
+            first_image_url="http://kto/i.jpg",
+            category="cafe",
+            region_label="강원특별자치도 강릉시",
+            overview_head=None,
+            quiet=False,
+        )
+    ]
+    res = await _gemini(monkeypatch, "").compose([], rows, 1)
+    assert res.whys["c1"] == "cafe · 강원특별자치도 강릉시"
 
 
 # ── turn orchestration ────────────────────────────────────────────────────

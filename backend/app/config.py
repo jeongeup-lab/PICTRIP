@@ -126,12 +126,15 @@ class Settings(BaseSettings):
     CLIP_DEVICE: Literal["cpu", "cuda", "mps"] = "cpu"
 
     # --- Photo search (TST) ---
-    # Cosine-similarity floor (S07 §10); soft top-N floor keeps a sparse result non-empty.
-    PHOTO_SEARCH_SIMILARITY_FLOOR: float = 0.60
+    # Cosine-similarity hard cut (S07 §10); matches below this are dropped, not backfilled.
+    PHOTO_SEARCH_SIMILARITY_FLOOR: float = 0.75
     PHOTO_SEARCH_MAX: int = 30
 
     # --- Discovery chat (CHT) ---
-    # LLM seam: keyed -> Anthropic Haiku, unkeyed -> deterministic heuristic (tests/demo).
+    # LLM seam priority: Gemini (product default) -> Anthropic -> deterministic
+    # heuristic (unkeyed; tests/demo). Any call/parse failure falls back to heuristic.
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-flash-latest"
     ANTHROPIC_API_KEY: str = ""
     CHAT_MODEL: str = "claude-haiku-4-5-20251001"
     CHAT_SESSION_TTL_SECONDS: int = 1800

@@ -88,8 +88,5 @@ async def photo_search(
     scored.sort(key=lambda m: m.similarity, reverse=True)
 
     floor = settings.PHOTO_SEARCH_SIMILARITY_FLOOR
-    above = [m for m in scored if m.similarity >= floor]
-    # Top-N soft floor: if nothing clears the calibrated floor, surface the best
-    # candidates anyway so a sparse pool isn't silently empty.
-    matches = (above or scored)[:cap]
+    matches = [m for m in scored if m.similarity >= floor][:cap]
     return PhotoSearchResult(matches=matches, query_had_location=query_had_location)
