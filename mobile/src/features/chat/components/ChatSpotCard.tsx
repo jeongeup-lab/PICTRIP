@@ -1,7 +1,10 @@
 import { Pressable, View, Text, StyleSheet } from "react-native";
 import { RemoteImage } from "@/components/RemoteImage";
+import { Icon } from "@/components/Icon";
 import { colors, radii, spacing } from "@/constants/theme";
 import type { ChatCard } from "@/features/chat/types";
+import { useDiscoverySave } from "@/features/saved/hooks/use-discovery-save";
+import type { SpotCard } from "@/lib/api-types";
 
 interface Props {
   card: ChatCard;
@@ -11,6 +14,14 @@ interface Props {
 
 export function ChatSpotCard({ card, onPress, onPressIn }: Props) {
   const meta = [card.regionLabel, card.category].filter(Boolean).join(" · ");
+  const spotCard: SpotCard = {
+    contentId: card.contentId,
+    title: card.title,
+    firstImageUrl: card.firstImageUrl,
+    category: card.category,
+    addr1: card.regionLabel,
+  };
+  const { saved, toggle } = useDiscoverySave(spotCard);
   return (
     <Pressable style={styles.card} onPress={onPress} onPressIn={onPressIn}>
       <View>
@@ -20,6 +31,9 @@ export function ChatSpotCard({ card, onPress, onPressIn }: Props) {
             <Text style={styles.quietText}>지금 한산</Text>
           </View>
         ) : null}
+        <Pressable style={styles.heart} onPress={toggle} hitSlop={8}>
+          <Icon name={saved ? "heart-fill" : "heart"} size={14} color={colors.onImage} />
+        </Pressable>
       </View>
       <Text numberOfLines={1} style={styles.title}>
         {card.title}
@@ -51,6 +65,17 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.94)",
   },
   quietText: { fontSize: 10.5, fontWeight: "800", color: colors.ink },
+  heart: {
+    position: "absolute",
+    top: 7,
+    right: 7,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.control,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   title: { marginTop: spacing.xs, fontSize: 13.5, fontWeight: "700", color: colors.ink },
   meta: { marginTop: 1, fontSize: 12, color: colors.ter },
   why: { marginTop: 3, fontSize: 11.5, lineHeight: 16, color: colors.sec },

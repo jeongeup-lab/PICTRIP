@@ -3,6 +3,8 @@ import { RemoteImage } from "@/components/RemoteImage";
 import { Icon } from "@/components/Icon";
 import { colors, radii, spacing } from "@/constants/theme";
 import type { ChatCard } from "@/features/chat/types";
+import { useDiscoverySave } from "@/features/saved/hooks/use-discovery-save";
+import type { SpotCard } from "@/lib/api-types";
 
 interface Props {
   title: string;
@@ -23,30 +25,9 @@ export function ConclusionCard({ title, summary, spots, onOpenSpot, onMap, onRes
       {summary ? <Text style={styles.summary}>{summary}</Text> : null}
 
       <View style={styles.rows}>
-        {spots.map((s) => {
-          const meta = [s.regionLabel, s.category].filter(Boolean).join(" · ");
-          return (
-            <Pressable key={s.contentId} style={styles.row} onPress={() => onOpenSpot(s.contentId)}>
-              <RemoteImage uri={s.firstImageUrl} radius={radii.md} style={styles.rowImg} />
-              <View style={styles.rowText}>
-                <Text numberOfLines={1} style={styles.rowName}>
-                  {s.title}
-                </Text>
-                {meta ? (
-                  <Text numberOfLines={1} style={styles.rowMeta}>
-                    {meta}
-                  </Text>
-                ) : null}
-                {s.why ? (
-                  <Text numberOfLines={1} style={styles.rowWhy}>
-                    {s.why}
-                  </Text>
-                ) : null}
-              </View>
-              <Icon name="chevron-right" size={16} color={colors.ter} />
-            </Pressable>
-          );
-        })}
+        {spots.map((s) => (
+          <ConclusionRow key={s.contentId} spot={s} onPress={() => onOpenSpot(s.contentId)} />
+        ))}
       </View>
 
       <View style={styles.cta}>
@@ -55,10 +36,51 @@ export function ConclusionCard({ title, summary, spots, onOpenSpot, onMap, onRes
           <Text style={styles.btnPriText}>지도로 한눈에 보기</Text>
         </Pressable>
         <Pressable style={[styles.btn, styles.btnGhost]} onPress={onRestart}>
-          <Text style={styles.btnGhostText}>새로운 스무고개 시작</Text>
+          <Text style={styles.btnGhostText}>처음부터 다시</Text>
         </Pressable>
       </View>
     </View>
+  );
+}
+
+interface RowProps {
+  spot: ChatCard;
+  onPress: () => void;
+}
+
+function ConclusionRow({ spot, onPress }: RowProps) {
+  const meta = [spot.regionLabel, spot.category].filter(Boolean).join(" · ");
+  const spotCard: SpotCard = {
+    contentId: spot.contentId,
+    title: spot.title,
+    firstImageUrl: spot.firstImageUrl,
+    category: spot.category,
+    addr1: spot.regionLabel,
+  };
+  const { saved, toggle } = useDiscoverySave(spotCard);
+  return (
+    <Pressable style={styles.row} onPress={onPress}>
+      <RemoteImage uri={spot.firstImageUrl} radius={radii.md} style={styles.rowImg} />
+      <View style={styles.rowText}>
+        <Text numberOfLines={1} style={styles.rowName}>
+          {spot.title}
+        </Text>
+        {meta ? (
+          <Text numberOfLines={1} style={styles.rowMeta}>
+            {meta}
+          </Text>
+        ) : null}
+        {spot.why ? (
+          <Text numberOfLines={1} style={styles.rowWhy}>
+            {spot.why}
+          </Text>
+        ) : null}
+      </View>
+      <Pressable style={styles.rowHeart} onPress={toggle} hitSlop={8}>
+        <Icon name={saved ? "heart-fill" : "heart"} size={17} color={saved ? colors.ink : colors.ter} />
+      </Pressable>
+      <Icon name="chevron-right" size={16} color={colors.ter} />
+    </Pressable>
   );
 }
 
@@ -103,6 +125,7 @@ const styles = StyleSheet.create({
   rowName: { fontSize: 15, fontWeight: "800", color: colors.ink, letterSpacing: -0.2 },
   rowMeta: { marginTop: 1, fontSize: 12, color: colors.ter },
   rowWhy: { marginTop: 2, fontSize: 11.5, color: colors.sec },
+  rowHeart: { padding: 4 },
   cta: { marginTop: spacing.md, gap: spacing.sm },
   btn: {
     height: 48,

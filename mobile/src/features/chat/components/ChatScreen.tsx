@@ -1,9 +1,9 @@
 import {
   View,
   Text,
-  Alert,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
 } from "react-native";
@@ -22,17 +22,18 @@ export function ChatScreen() {
 
   const openSpot = (contentId: string) => router.push(`/spots/${contentId}`);
   const openMap = () => router.push("/map");
-  const photoSoon = () =>
-    Alert.alert(
-      "사진으로 시작하기",
-      "곧 열려요. 지금은 무드를 고르거나 직접 적어서 시작해 주세요.",
-    );
+  const openPhoto = () => router.push("/photo/select");
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.topbar}>
         <Icon name="sparkle" size={18} color={colors.accentText} />
         <Text style={styles.title}>AI 발견</Text>
+        {!empty ? (
+          <Pressable style={styles.restart} onPress={store.reset} hitSlop={8}>
+            <Text style={styles.restartText}>처음부터</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <KeyboardAvoidingView
@@ -45,7 +46,7 @@ export function ChatScreen() {
             <View style={styles.greeting}>
               <View style={styles.sig}>
                 <View style={styles.sigDot} />
-                <Text style={styles.sigText}>픽트립 · 스무고개처럼 좁혀가요</Text>
+                <Text style={styles.sigText}>픽트립 · 대화로 좁혀가요</Text>
               </View>
               <Text style={styles.greetTitle}>오늘은 어떤 결이 끌리세요?</Text>
               <Text style={styles.greetSub}>
@@ -53,7 +54,7 @@ export function ChatScreen() {
               </Text>
               <Text style={styles.greetLimit}>예약이나 일정 짜기는 못 해요.</Text>
             </View>
-            <MoodGrid onPick={store.send} onPhoto={photoSoon} disabled={store.pending} />
+            <MoodGrid onPick={store.send} onPhoto={openPhoto} disabled={store.pending} />
           </ScrollView>
         ) : (
           <ChatThread
@@ -90,6 +91,14 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.line,
   },
   title: { fontSize: 17, fontWeight: "800", color: colors.ink, letterSpacing: -0.4 },
+  restart: {
+    position: "absolute",
+    right: spacing.lg,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+  },
+  restartText: { fontSize: 12.5, fontWeight: "700", color: colors.sec },
   body: { flex: 1 },
   emptyWrap: { padding: spacing.lg, gap: spacing.lg },
   greeting: { gap: 5, paddingTop: spacing.xs },

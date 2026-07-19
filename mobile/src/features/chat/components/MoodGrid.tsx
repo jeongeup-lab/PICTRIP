@@ -1,6 +1,11 @@
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, Image, StyleSheet } from "react-native";
+import { useQuery } from "@tanstack/react-query";
 import { Icon } from "@/components/Icon";
+import { RemoteImage } from "@/components/RemoteImage";
 import { colors, radii, spacing } from "@/constants/theme";
+import { fetchMoodCovers } from "@/features/chat/api";
+
+const LOGO = require("../../../../assets/icon.png");
 
 interface Mood {
   label: string;
@@ -22,6 +27,14 @@ interface Props {
 }
 
 export function MoodGrid({ onPick, onPhoto, disabled }: Props) {
+  const { data: covers } = useQuery({
+    queryKey: ["mood-covers"],
+    queryFn: () => fetchMoodCovers(MOODS.map((m) => m.utterance)),
+    staleTime: 10 * 60 * 1000,
+  });
+  const coverOf = (utterance: string) =>
+    covers?.find((c) => c.utterance === utterance)?.coverUrl ?? null;
+
   return (
     <View style={styles.wrap}>
       <View style={styles.grid}>
@@ -32,6 +45,8 @@ export function MoodGrid({ onPick, onPhoto, disabled }: Props) {
             disabled={disabled}
             onPress={() => onPick(m.utterance)}
           >
+            <RemoteImage uri={coverOf(m.utterance)} radius={radii.lg} style={styles.tileImg} />
+            <View style={styles.tileOverlay} />
             <Text style={styles.tileLabel}>{m.label}</Text>
             <Text style={styles.tileSub}>{m.sub}</Text>
           </Pressable>
@@ -46,7 +61,7 @@ export function MoodGrid({ onPick, onPhoto, disabled }: Props) {
 
       <Pressable style={styles.photo} disabled={disabled} onPress={onPhoto}>
         <View style={styles.photoIcon}>
-          <Icon name="image" size={24} color={colors.ink} />
+          <Image source={LOGO} style={styles.photoLogo} resizeMode="contain" />
         </View>
         <View style={styles.photoText}>
           <Text style={styles.photoLabel}>내 사진으로 시작</Text>
@@ -68,18 +83,41 @@ const styles = StyleSheet.create({
   tile: {
     width: "47%",
     flexGrow: 1,
-    minHeight: 92,
+    minHeight: 108,
     borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.line,
     backgroundColor: colors.inset,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     justifyContent: "flex-end",
     gap: 3,
+    overflow: "hidden",
   },
-  tileLabel: { fontSize: 15.5, fontWeight: "800", color: colors.ink, letterSpacing: -0.3 },
-  tileSub: { fontSize: 11, fontWeight: "600", color: colors.ter },
+  tileImg: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
+  tileOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.34)",
+  },
+  tileLabel: {
+    fontSize: 15.5,
+    fontWeight: "800",
+    color: colors.onImage,
+    letterSpacing: -0.3,
+    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  tileSub: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.9)",
+    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
   orRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   orLine: { flex: 1, height: 1, backgroundColor: colors.line },
   orText: { fontSize: 11, fontWeight: "700", color: colors.ter },
@@ -98,10 +136,12 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: radii.lg,
-    backgroundColor: colors.inset,
+    backgroundColor: colors.ink,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
+  photoLogo: { width: 50, height: 50 },
   photoText: { flex: 1, minWidth: 0 },
   photoLabel: { fontSize: 14.5, fontWeight: "800", color: colors.ink, letterSpacing: -0.2 },
   photoSub: { marginTop: 3, fontSize: 12, lineHeight: 17, color: colors.sec },
