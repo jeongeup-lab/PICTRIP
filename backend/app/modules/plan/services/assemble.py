@@ -14,6 +14,7 @@ from app.modules.plan.schemas import (
     ScheduleSlot,
     TimeOfDay,
 )
+from app.modules.plan.services.titles import plan_title
 
 logger = get_logger(__name__)
 
@@ -24,7 +25,6 @@ WALK_MAX_KM = 1.2
 WALK_MINUTES_PER_KM = 12.0
 DRIVE_BASE_MINUTES = 5.0
 DRIVE_MINUTES_PER_KM = 2.0
-DAYS_QUESTION = "몇 박 며칠 일정으로 만들까요? (예: 당일치기, 1박 2일)"
 
 
 async def build_schedule(session: AsyncSession, payload: AssembleRequest) -> PlanResponse:
@@ -33,14 +33,6 @@ async def build_schedule(session: AsyncSession, payload: AssembleRequest) -> Pla
         raise PlanNoPlacesFound("일정에 넣을 수 있는 장소가 없습니다. 장소를 다시 선택해 주세요.")
     ordered = _order_places(placed)
     days_count = payload.days or _infer_days(len(ordered))
-    if days_count is None:
-        return PlanResponse(
-            sourceTitle=payload.sourceTitle,
-            days=[],
-            unplaced=unplaced,
-            needsDaysInput=True,
-            question=DAYS_QUESTION,
-        )
     days_count = min(days_count, MAX_DAYS, len(ordered))
     capacity = days_count * MAX_SLOTS_PER_DAY
     overflow = ordered[capacity:]
@@ -49,7 +41,8 @@ async def build_schedule(session: AsyncSession, payload: AssembleRequest) -> Pla
         for index, chunk in enumerate(_chunk(ordered[:capacity], days_count))
     ]
     response = PlanResponse(
-        sourceTitle=payload.sourceTitle,
+        sourceTitle=plan_title(ordered, days_count) or payload.sourceTitle,
+        sourceUrl=payload.sourceUrl,
         days=days,
         unplaced=unplaced + overflow,
     )
@@ -114,9 +107,8 @@ def _region_label(place: ResolvedPlace) -> str:
     return " ".join(address.split()[:2])
 
 
-def _infer_days(place_count: int) -> int | None:
-    needed = math.ceil(place_count / TARGET_SLOTS_PER_DAY)
-    return 1 if needed <= 1 else None
+def _infer_days(place_count: int) -> int:
+    return max(1, math.ceil(place_count / TARGET_SLOTS_PER_DAY))
 
 
 def _chunk(places: list[ResolvedPlace], days_count: int) -> list[list[ResolvedPlace]]:

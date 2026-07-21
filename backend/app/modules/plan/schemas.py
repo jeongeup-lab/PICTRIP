@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 PlaceType = Literal["attraction", "restaurant", "cafe", "hotel", "region"]
 ResolveStatus = Literal["matched", "ambiguous", "naver_only", "unmatched"]
-SourceKind = Literal["text", "youtube", "image"]
+SourceKind = Literal["text", "youtube", "image", "photo"]
 TimeOfDay = Literal["morning", "afternoon", "evening"]
 
 
@@ -72,7 +72,37 @@ class ScheduleDay(BaseModel):
 class PlanResponse(BaseModel):
     planId: int | None = None
     sourceTitle: str | None = None
+    sourceUrl: str | None = None
     days: list[ScheduleDay]
     unplaced: list[ResolvedPlace] = Field(default_factory=list)
-    needsDaysInput: bool = False
-    question: str | None = None
+
+
+class PhotoMatchCard(BaseModel):
+    contentId: str
+    title: str
+    category: str | None = None
+    address: str | None = None
+    lat: float | None = None
+    lng: float | None = None
+    imageUrl: str | None = None
+    similarity: float
+
+
+class PhotoMatchResponse(BaseModel):
+    matches: list[PhotoMatchCard]
+
+
+class FromSpotRequest(BaseModel):
+    contentId: str
+    days: int = Field(ge=1, le=7)
+
+
+class AlternativesResponse(BaseModel):
+    alternatives: list[ResolvedSpot]
+
+
+class PlanEditRequest(BaseModel):
+    op: Literal["remove", "replace"]
+    day: int = Field(ge=1)
+    slot: int = Field(ge=0)
+    contentId: str | None = None

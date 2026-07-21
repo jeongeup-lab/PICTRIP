@@ -21,6 +21,15 @@ class PlanNoPlacesFound(AppError):
     message = "콘텐츠에서 장소 이름을 찾지 못했습니다. 장소명이 나오는 콘텐츠를 보내주세요."
 
 
+class PlanTranscriptThin(AppError):
+    code = "PLAN_TRANSCRIPT_THIN"
+    http_status = 422
+    message = (
+        "이 영상은 음성 자막이 거의 없어 장소를 찾지 못했어요. "
+        "화면 글씨는 읽지 못하고 말로 소개한 내용만 이해할 수 있어요."
+    )
+
+
 class PlanLlmUnavailable(AppError):
     code = "PLAN_LLM_UNAVAILABLE"
     http_status = 502
@@ -37,3 +46,21 @@ class PlanNotFound(AppError):
     code = "PLAN_NOT_FOUND"
     http_status = 404
     message = "요청한 일정을 찾을 수 없습니다."
+
+
+class PlanNotEnoughSpots(AppError):
+    code = "PLAN_NOT_ENOUGH_SPOTS"
+    http_status = 422
+    message = "이 주변에서 일정을 만들 만큼 장소를 찾지 못했습니다."
+
+
+class PlanSpotNotFound(AppError):
+    code = "PLAN_SPOT_NOT_FOUND"
+    http_status = 404
+    message = "선택한 장소를 찾을 수 없습니다."
+
+
+class PlanSlotInvalid(AppError):
+    code = "PLAN_SLOT_INVALID"
+    http_status = 422
+    message = "요청한 일정 슬롯이 존재하지 않습니다."

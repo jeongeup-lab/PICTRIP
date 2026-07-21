@@ -7,10 +7,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_db
 from app.kto.client import get_kto
 from app.main import app
-from app.modules.plan.errors import PlanNoPlacesFound, PlanNotFound, PlanSourceInvalid
+from app.modules.plan.errors import (
+    PlanNoPlacesFound,
+    PlanNotFound,
+    PlanSourceInvalid,
+    PlanTranscriptThin,
+)
 from app.modules.plan.schemas import AssembleRequest, ExtractedPlace, ResolvedPlace, ResolvedSpot
 from app.modules.plan.services import assemble, ingest
-from app.modules.plan.services.extract import _validate_places
+from app.modules.plan.services.extract import (
+    THIN_TRANSCRIPT_CHARS,
+    _no_places_error,
+    _validate_places,
+)
+from app.modules.plan.services.ingest import IngestInput
 from app.modules.plan.youtube import extract_video_id
 from app.web.errors import ImageInvalid
 
@@ -75,6 +85,20 @@ def test_validate_places_dedupes_and_fills_order() -> None:
     assert places[1].orderHint == 7
 
 
+def test_no_places_error_by_source() -> None:
+    thin = IngestInput(kind="youtube", raw_text="[음악] 짧은 자막")
+    assert isinstance(_no_places_error(thin), PlanTranscriptThin)
+
+    long_text = "자막 " * THIN_TRANSCRIPT_CHARS
+    spoken = _no_places_error(IngestInput(kind="youtube", raw_text=long_text))
+    assert isinstance(spoken, PlanNoPlacesFound)
+    assert "영상 자막" in spoken.message
+
+    generic = _no_places_error(IngestInput(kind="text", raw_text="장소 없는 글"))
+    assert isinstance(generic, PlanNoPlacesFound)
+    assert generic.message.startswith("콘텐츠에서")
+
+
 def _place(
     name: str,
     order: int,
@@ -122,15 +146,33 @@ async def test_assemble_builds_days_and_persists(db_session: AsyncSession) -> No
     assert len(loaded.days) == 2
 
 
-async def test_assemble_asks_for_days_when_ambiguous(db_session: AsyncSession) -> None:
+async def test_assemble_generates_region_title(db_session: AsyncSession) -> None:
+    places = [_place(f"장소{i}", i) for i in range(1, 5)]
+    response = await assemble.build_schedule(
+        db_session,
+        AssembleRequest(
+            places=places,
+            days=2,
+            sourceKind="youtube",
+            sourceTitle="강릉 카페 맛집 브이로그 (ft.남친)",
+            sourceUrl="https://youtu.be/abc",
+        ),
+    )
+    assert response.sourceTitle == "여수 2일 코스"
+    assert response.sourceUrl == "https://youtu.be/abc"
+
+    loaded = await assemble.load_plan(db_session, response.planId or 0)
+    assert loaded.sourceTitle == "여수 2일 코스"
+    assert loaded.sourceUrl == "https://youtu.be/abc"
+
+
+async def test_assemble_infers_days_from_place_count(db_session: AsyncSession) -> None:
     places = [_place(f"장소{i}", i) for i in range(1, 9)]
     response = await assemble.build_schedule(
         db_session, AssembleRequest(places=places, sourceKind="text")
     )
-    assert response.needsDaysInput is True
-    assert response.question
-    assert response.planId is None
-    assert response.days == []
+    assert len(response.days) == 2
+    assert response.planId is not None
 
 
 async def test_assemble_single_day_without_asking(db_session: AsyncSession) -> None:
@@ -138,7 +180,6 @@ async def test_assemble_single_day_without_asking(db_session: AsyncSession) -> N
     response = await assemble.build_schedule(
         db_session, AssembleRequest(places=places, sourceKind="text")
     )
-    assert response.needsDaysInput is False
     assert len(response.days) == 1
 
 
