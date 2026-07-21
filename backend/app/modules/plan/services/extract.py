@@ -7,13 +7,14 @@ from pydantic import ValidationError
 
 from app.core.logging import get_logger
 from app.modules.plan import llm
-from app.modules.plan.errors import PlanLlmUnavailable, PlanNoPlacesFound
+from app.modules.plan.errors import PlanLlmUnavailable, PlanNoPlacesFound, PlanTranscriptThin
 from app.modules.plan.schemas import ExtractedPlace
 from app.modules.plan.services.ingest import IngestInput
 
 logger = get_logger(__name__)
 
 MAX_TRIP_DAYS = 7
+THIN_TRANSCRIPT_CHARS = 400
 
 _SYSTEM_PROMPT = """\
 너는 여행 콘텐츠에서 장소를 추출하는 도우미다.
@@ -80,7 +81,7 @@ async def extract_places(source: IngestInput) -> Extraction:
         raise PlanLlmUnavailable()
     places = _validate_places(data["places"])
     if not places:
-        raise PlanNoPlacesFound()
+        raise _no_places_error(source)
     trip_days = data.get("tripDays")
     if not isinstance(trip_days, int) or not 1 <= trip_days <= MAX_TRIP_DAYS:
         trip_days = None
@@ -91,6 +92,16 @@ async def extract_places(source: IngestInput) -> Extraction:
         trip_days=trip_days,
     )
     return Extraction(places=places, trip_days=trip_days)
+
+
+def _no_places_error(source: IngestInput) -> PlanNoPlacesFound | PlanTranscriptThin:
+    if source.kind != "youtube":
+        return PlanNoPlacesFound()
+    if len(source.raw_text or "") < THIN_TRANSCRIPT_CHARS:
+        return PlanTranscriptThin()
+    return PlanNoPlacesFound(
+        "영상 자막에서 장소 이름을 찾지 못했어요. 장소를 말로 소개하는 영상이면 잘 찾을 수 있어요."
+    )
 
 
 def _validate_places(raw_places: list[Any]) -> list[ExtractedPlace]:

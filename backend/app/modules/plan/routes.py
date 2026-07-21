@@ -9,8 +9,13 @@ from starlette.datastructures import UploadFile
 from app.core.db import DbSession
 from app.kto.client import KtoDep
 from app.modules.plan.errors import PlanSourceInvalid
-from app.modules.plan.schemas import AssembleRequest, ImportResponse
-from app.modules.plan.services import assemble, extract, ingest, resolve
+from app.modules.plan.schemas import (
+    AssembleRequest,
+    FromSpotRequest,
+    ImportResponse,
+    PlanEditRequest,
+)
+from app.modules.plan.services import assemble, edit, extract, ingest, photo, resolve, seed
 from app.web.envelope import ok
 
 router = APIRouter(tags=["plan"])
@@ -40,10 +45,48 @@ async def assemble_plan(session: DbSession, payload: AssembleRequest) -> dict[st
     return ok(plan)
 
 
+@router.post("/plan/photo-match")
+async def photo_match(request: Request, session: DbSession) -> dict[str, Any]:
+    image_bytes, image_mime = await _read_photo_payload(request)
+    result = await photo.match_photo(session, image_bytes=image_bytes, image_mime=image_mime)
+    return ok(result)
+
+
+@router.post("/plan/from-spot")
+async def plan_from_spot(session: DbSession, payload: FromSpotRequest) -> dict[str, Any]:
+    plan = await seed.build_from_spot(session, payload)
+    return ok(plan)
+
+
 @router.get("/plan/{plan_id}")
 async def get_plan(session: DbSession, plan_id: int) -> dict[str, Any]:
     plan = await assemble.load_plan(session, plan_id)
     return ok(plan)
+
+
+@router.get("/plan/{plan_id}/alternatives")
+async def plan_alternatives(
+    session: DbSession, plan_id: int, day: int, slot: int
+) -> dict[str, Any]:
+    result = await edit.list_alternatives(session, plan_id, day=day, slot=slot)
+    return ok(result)
+
+
+@router.patch("/plan/{plan_id}")
+async def edit_plan(session: DbSession, plan_id: int, payload: PlanEditRequest) -> dict[str, Any]:
+    plan = await edit.apply_edit(session, plan_id, payload)
+    return ok(plan)
+
+
+async def _read_photo_payload(request: Request) -> tuple[bytes, str | None]:
+    content_type = request.headers.get("content-type", "")
+    if not content_type.startswith("multipart/"):
+        raise PlanSourceInvalid()
+    form = await request.form()
+    upload = form.get("image")
+    if not isinstance(upload, UploadFile):
+        raise PlanSourceInvalid()
+    return await upload.read(), upload.content_type
 
 
 async def _read_import_payload(
