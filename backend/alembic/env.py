@@ -15,6 +15,7 @@ from app.modules.admin import models as _admin_models
 from app.modules.feed import models as _feed_models
 from app.modules.images import models as _images_models
 from app.modules.map import models as _map_models
+from app.modules.plan import models as _plan_models
 from app.modules.spots import models as _spots_models
 from app.modules.system import models as _system_models
 from app.modules.users import models as _users_models
