@@ -32,6 +32,11 @@ from app.modules.spots.services.rows import (
     SpotImageRow,
 )
 from app.modules.spots.services.saved import list_saved_spots, save_spot, unsave_spot
+from app.modules.spots.services.search import (
+    SpotSearchRow,
+    map_region_tokens_to_sido,
+    search_spots_by_title,
+)
 
 __all__ = [
     "ConcentrationCardRow",
@@ -40,6 +45,7 @@ __all__ = [
     "SpotCardRow",
     "SpotDetailRow",
     "SpotImageRow",
+    "SpotSearchRow",
     "all_categories_predicate",
     "all_categories_sql",
     "attraction_category_sql",
@@ -58,6 +64,8 @@ __all__ = [
     "load_spot_cards_by_ids",
     "load_spot_detail",
     "lock_current_spot_image",
+    "map_region_tokens_to_sido",
     "save_spot",
+    "search_spots_by_title",
     "unsave_spot",
 ]

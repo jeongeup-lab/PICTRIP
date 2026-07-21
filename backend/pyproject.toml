@@ -36,6 +36,7 @@ dependencies = [
     "sentry-sdk[fastapi]>=2.16.0",
     "pyjwt[crypto]>=2.13.0",
     "itsdangerous>=2.2.0",
+    "youtube-transcript-api>=1.2.4",
 ]
 
 [dependency-groups]
@@ -134,6 +135,7 @@ source_modules = [
     "app.modules.system.routes",
     "app.modules.admin.routes",
     "app.modules.feed.routes",
+    "app.modules.plan.routes",
 ]
 forbidden_modules = [
     "sqlalchemy",
@@ -157,6 +159,7 @@ source_modules = [
     "app.modules.system.routes",
     "app.modules.admin.routes",
     "app.modules.feed.routes",
+    "app.modules.plan.routes",
 ]
 forbidden_modules = [
     "app.modules.users.models",
@@ -166,6 +169,7 @@ forbidden_modules = [
     "app.modules.system.models",
     "app.modules.admin.models",
     "app.modules.feed.models",
+    "app.modules.plan.models",
 ]
 # Routes -> services -> models is fine (services is the documented seam).
 allow_indirect_imports = true
@@ -182,6 +186,7 @@ source_modules = [
     # system has no schemas.py (removed as dead code) — re-add if it returns.
     "app.modules.admin.schemas",
     "app.modules.feed.schemas",
+    "app.modules.plan.schemas",
 ]
 forbidden_modules = [
     "sqlalchemy",
@@ -203,6 +208,7 @@ source_modules = [
     "app.modules.system.services",
     "app.modules.admin.services",
     "app.modules.feed.services",
+    "app.modules.plan.services",
 ]
 forbidden_modules = [
     "app.modules.users.models",
@@ -212,6 +218,7 @@ forbidden_modules = [
     "app.modules.system.models",
     "app.modules.admin.models",
     "app.modules.feed.models",
+    "app.modules.plan.models",
 ]
 ignore_imports = [
     "app.modules.users.services -> app.modules.users.models",
@@ -239,6 +246,10 @@ ignore_imports = [
     "app.modules.admin.services -> app.modules.admin.models",
     "app.modules.admin.services -> app.modules.admin.repositories",
     "app.modules.admin.repositories -> app.modules.admin.models",
+    # PLAN seam: services submodules use own-module ORM via the repository.
+    "app.modules.plan.services -> app.modules.plan.services.*",
+    "app.modules.plan.services.* -> app.modules.plan.repositories",
+    "app.modules.plan.repositories -> app.modules.plan.models",
 ]
 # Most services are still placeholders that don't import their own models yet.
 # Allow these ignores to be inactive until the services get implemented.
