@@ -4,7 +4,7 @@ import asyncio
 
 from app.core.db import AsyncSession
 from app.core.logging import get_logger
-from app.kto.client import https_kto_image
+from app.kto.display import t1_display_url
 from app.ml.embedding import embedder
 from app.modules.plan import repositories
 from app.modules.plan.errors import PlanNotEnoughSpots
@@ -43,7 +43,7 @@ async def match_photo(
             address=row.addr1,
             lat=row.lat,
             lng=row.lng,
-            imageUrl=https_kto_image(row.image_url),
+            imageUrl=t1_display_url(row.image_url, row.cpyrht_div_cd),
             similarity=round(max(0.0, min(1.0, 1.0 - row.distance)), 3),
         )
         for row in rows

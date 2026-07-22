@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.logging import get_logger
+from app.kto.display import t1_display_url
 from app.modules.feed import repositories
-from app.modules.feed.services.display import t1_display_url
 from app.modules.feed.text import first_sentence
 from app.modules.spots import services as spots_services
 from app.web.errors import ResourceNotFound

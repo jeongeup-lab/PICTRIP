@@ -3,9 +3,9 @@ from __future__ import annotations
 import pytest
 
 from app.config import settings
+from app.kto.display import T1_TILE_WIDTH, t1_display_url
 from app.modules.feed.routes import _channel_card
 from app.modules.feed.services.channels import ChannelCardRow
-from app.modules.feed.services.display import T1_TILE_WIDTH, t1_display_url
 
 KTO_MID = "https://tong.visitkorea.or.kr/cms/resource/98/3045598_image2_1.jpg"
 KTO_HIRES = "https://tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg"

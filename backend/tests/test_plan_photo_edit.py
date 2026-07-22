@@ -6,6 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
+from app.kto import display
 from app.main import app
 from app.modules.plan.errors import (
     PlanNotEnoughSpots,
@@ -122,6 +123,34 @@ async def test_photo_match_route_rejects_oversized_upload(
         app.dependency_overrides.clear()
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "IMAGE_INVALID"
+
+
+async def test_from_spot_issues_images_through_copyright_seam(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(display.settings, "IMG_PROXY_T1_SECRET", "s3cret")
+    monkeypatch.setattr(display.settings, "IMG_PROXY_ORIGIN", "https://img.pictrip.org")
+    await _insert_spot(db_session, "cp-seed", lat=37.0, lng=127.0)
+    await _insert_spot(db_session, "cp-food", lat=37.004, lng=127.0, lcls1="FD", lcls2="FD01")
+    await db_session.execute(
+        text(
+            "UPDATE spots SET first_image_url = 'http://tong.visitkorea.or.kr/a_image2_1.jpg', "
+            "cpyrht_div_cd = CASE content_id WHEN 'cp-seed' THEN 'Type1' ELSE 'Type3' END "
+            "WHERE content_id IN ('cp-seed', 'cp-food')"
+        )
+    )
+    await db_session.commit()
+
+    response = await seed.build_from_spot(db_session, FromSpotRequest(contentId="cp-seed", days=1))
+    urls = {
+        slot.place.spot.contentId: slot.place.spot.imageUrl
+        for day in response.days
+        for slot in day.slots
+        if slot.place.spot is not None
+    }
+
+    assert urls["cp-seed"].startswith("https://img.pictrip.org")
+    assert urls["cp-food"] == "https://tong.visitkorea.or.kr/a_image2_1.jpg"
 
 
 async def test_from_spot_builds_plan(db_session: AsyncSession) -> None:

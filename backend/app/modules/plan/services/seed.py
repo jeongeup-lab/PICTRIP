@@ -8,7 +8,7 @@ import httpx
 
 from app.core.db import AsyncSession
 from app.core.logging import get_logger
-from app.kto.client import https_kto_image
+from app.kto.display import t1_display_url
 from app.modules.plan import naver, repositories
 from app.modules.plan.errors import PlanNotEnoughSpots, PlanSpotNotFound
 from app.modules.plan.schemas import (
@@ -249,7 +249,7 @@ def _seed_place(seed: repositories.SpotBrief) -> ResolvedPlace:
             address=seed.addr1,
             lat=seed.lat,
             lng=seed.lng,
-            imageUrl=https_kto_image(seed.image_url),
+            imageUrl=t1_display_url(seed.image_url, seed.cpyrht_div_cd),
         ),
         confidence=1.0,
         status="matched",
@@ -271,7 +271,7 @@ def _row_place(row: NearbySpotRow, place_type: PlaceType) -> ResolvedPlace:
             address=row.addr1,
             lat=row.mapy,
             lng=row.mapx,
-            imageUrl=https_kto_image(row.first_image_url),
+            imageUrl=t1_display_url(row.first_image_url, row.cpyrht_div_cd),
         ),
         confidence=1.0,
         status="matched",

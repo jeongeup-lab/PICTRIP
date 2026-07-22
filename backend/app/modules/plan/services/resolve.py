@@ -10,7 +10,8 @@ import httpx
 from app.config import settings
 from app.core.db import AsyncSession
 from app.core.logging import get_logger
-from app.kto.client import KtoClient, KtoService, https_kto_image
+from app.kto.client import KtoClient, KtoService
+from app.kto.display import t1_display_url
 from app.modules.plan import naver
 from app.modules.plan.schemas import (
     ExtractedPlace,
@@ -226,7 +227,7 @@ def _kto_result(place: ExtractedPlace, row: SpotSearchRow, status: ResolveStatus
             address=row.addr1,
             lat=row.lat,
             lng=row.lng,
-            imageUrl=https_kto_image(row.image_url),
+            imageUrl=t1_display_url(row.image_url, row.cpyrht_div_cd),
         ),
         confidence=round(row.similarity, 3),
         status=status,
@@ -373,7 +374,10 @@ def _kto_item_to_spot(item: dict[str, Any]) -> ResolvedSpot | None:
         address=str(item.get("addr1") or "").strip() or None,
         lat=_to_float(item.get("mapy")),
         lng=_to_float(item.get("mapx")),
-        imageUrl=https_kto_image(str(item.get("firstimage") or "").strip() or None),
+        imageUrl=t1_display_url(
+            str(item.get("firstimage") or "").strip() or None,
+            str(item.get("cpyrhtDivCd") or "").strip() or None,
+        ),
     )
 
 

@@ -61,6 +61,7 @@ class VectorMatchRow:
     lat: float | None
     lng: float | None
     image_url: str | None
+    cpyrht_div_cd: str | None
     distance: float
 
 
@@ -72,6 +73,7 @@ SELECT spots.content_id,
        spots.mapy AS lat,
        spots.mapx AS lng,
        spots.first_image_url AS image_url,
+       spots.cpyrht_div_cd,
        (se.embedding <=> CAST(:vec AS halfvec(512)))::float AS distance
 FROM spot_embeddings se
 JOIN spots ON spots.content_id = se.content_id
@@ -104,6 +106,7 @@ async def match_spots_by_vector(
             lat=float(row.lat) if row.lat is not None else None,
             lng=float(row.lng) if row.lng is not None else None,
             image_url=row.image_url,
+            cpyrht_div_cd=row.cpyrht_div_cd,
             distance=float(row.distance),
         )
         for row in result
@@ -119,6 +122,7 @@ class SpotBrief:
     lat: float | None
     lng: float | None
     image_url: str | None
+    cpyrht_div_cd: str | None
 
 
 _SPOT_BRIEF_SQL = """
@@ -128,7 +132,8 @@ SELECT s.content_id,
        s.addr1,
        s.mapy AS lat,
        s.mapx AS lng,
-       s.first_image_url AS image_url
+       s.first_image_url AS image_url,
+       s.cpyrht_div_cd
 FROM spots s
 LEFT JOIN lcls_systm_codes c ON c.lcls_systm3_cd = s.lcls_systm3
 WHERE s.content_id = :cid AND s.show_flag = 1
@@ -147,4 +152,5 @@ async def get_spot_brief(session: AsyncSession, content_id: str) -> SpotBrief | 
         lat=float(row.lat) if row.lat is not None else None,
         lng=float(row.lng) if row.lng is not None else None,
         image_url=row.image_url,
+        cpyrht_div_cd=row.cpyrht_div_cd,
     )

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.config import settings
-from app.kto.client import hires_kto_image, t1_transform_url
+from app.kto.client import hires_kto_image, https_kto_image, t1_transform_url
 
 T1_WIDTH = 1620
 T1_TILE_WIDTH = 320
@@ -19,4 +19,4 @@ def t1_display_url(
         )
         if transformed:
             return transformed
-    return image_url
+    return https_kto_image(image_url)
