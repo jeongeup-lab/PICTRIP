@@ -7,6 +7,7 @@ from fastapi import APIRouter, Query
 from app.core.db import DbSession
 from app.core.redis import RedisDep
 from app.kto.client import KtoDep
+from app.kto.display import t1_display_url
 from app.modules.feed.schemas import (
     ChannelCard,
     ChannelCardsResponse,
@@ -17,7 +18,6 @@ from app.modules.feed.schemas import (
     PostsResponse,
 )
 from app.modules.feed.services import channels, matching, posts
-from app.modules.feed.services.display import t1_display_url
 from app.web.envelope import ok
 
 router = APIRouter(tags=["feed"])

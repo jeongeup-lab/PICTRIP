@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.core.db import AsyncSession
 from app.core.logging import get_logger
-from app.kto.client import https_kto_image
+from app.kto.display import t1_display_url
 from app.modules.plan import repositories
 from app.modules.plan.errors import PlanNotFound, PlanSlotInvalid, PlanSpotNotFound
 from app.modules.plan.schemas import (
@@ -77,7 +77,7 @@ async def list_alternatives(
             address=row.addr1,
             lat=row.mapy,
             lng=row.mapx,
-            imageUrl=https_kto_image(row.first_image_url),
+            imageUrl=t1_display_url(row.first_image_url, row.cpyrht_div_cd),
         )
         if is_near_duplicate(spot, others + alternatives):
             continue
@@ -186,7 +186,7 @@ async def _replacement_place(
             address=brief.addr1,
             lat=brief.lat,
             lng=brief.lng,
-            imageUrl=https_kto_image(brief.image_url),
+            imageUrl=t1_display_url(brief.image_url, brief.cpyrht_div_cd),
         ),
         confidence=1.0,
         status="matched",

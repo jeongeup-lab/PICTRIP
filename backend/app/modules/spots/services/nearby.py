@@ -34,6 +34,7 @@ class NearbySpotRow:
     mapx: float | None
     mapy: float | None
     dist: float | None
+    cpyrht_div_cd: str | None = None
     category: str | None = None
     category_group: str | None = None
     overview: str | None = None
@@ -118,6 +119,7 @@ def _base_select(dist: ColumnElement[float], category: NearbyCategory | None):  
             Spot.content_id.label("content_id"),
             Spot.title.label("title"),
             Spot.first_image_url.label("first_image_url"),
+            Spot.cpyrht_div_cd.label("cpyrht_div_cd"),
             Spot.addr1.label("addr1"),
             Spot.mapx.label("mapx"),
             Spot.mapy.label("mapy"),
@@ -154,6 +156,7 @@ def _materialize(result: object) -> list[NearbySpotRow]:
                 mapx=float(r.mapx) if r.mapx is not None else None,
                 mapy=float(r.mapy) if r.mapy is not None else None,
                 dist=float(r.dist) if r.dist is not None else None,
+                cpyrht_div_cd=r.cpyrht_div_cd,
                 category=r.category,
                 category_group=derive_category(r.lcls_systm1, r.lcls_systm2, r.lcls_systm3),
                 overview=r.overview,
