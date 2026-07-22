@@ -20,7 +20,7 @@ from app.modules.plan.schemas import (
     ResolvedPlace,
     ResolvedSpot,
 )
-from app.modules.plan.services import assemble, chains, edit, photo, seed
+from app.modules.plan.services import assemble, chains, edit, ingest, photo, seed
 from app.web.errors import ImageInvalid
 
 _DIM = 512
@@ -106,6 +106,22 @@ async def test_photo_match_route_requires_multipart(
         app.dependency_overrides.clear()
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "PLAN_SOURCE_INVALID"
+
+
+async def test_photo_match_route_rejects_oversized_upload(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    app.dependency_overrides[get_db] = lambda: db_session
+    oversized = b"x" * (ingest.MAX_IMAGE_BYTES + 1024)
+    try:
+        resp = await client.post(
+            "/v1/plan/photo-match",
+            files={"image": ("big.jpg", oversized, "image/jpeg")},
+        )
+    finally:
+        app.dependency_overrides.clear()
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "IMAGE_INVALID"
 
 
 async def test_from_spot_builds_plan(db_session: AsyncSession) -> None:
