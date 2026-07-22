@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import secrets
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from app.core.db import AsyncSession
 from app.modules.plan.models import Plan
 from app.modules.spots.services import attraction_category_sql
+
+
+def _new_public_id() -> str:
+    return secrets.token_urlsafe(12)
 
 
 async def create_plan(
@@ -19,6 +24,7 @@ async def create_plan(
     payload: dict[str, Any],
 ) -> Plan:
     plan = Plan(
+        public_id=_new_public_id(),
         source_kind=source_kind,
         source_url=source_url,
         source_title=source_title,
@@ -29,17 +35,18 @@ async def create_plan(
     return plan
 
 
-async def get_plan(session: AsyncSession, plan_id: int) -> Plan | None:
-    return await session.get(Plan, plan_id)
+async def get_plan(session: AsyncSession, public_id: str) -> Plan | None:
+    result = await session.execute(select(Plan).where(Plan.public_id == public_id))
+    return result.scalar_one_or_none()
 
 
-async def get_plan_payload(session: AsyncSession, plan_id: int) -> dict[str, Any] | None:
-    plan = await session.get(Plan, plan_id)
+async def get_plan_payload(session: AsyncSession, public_id: str) -> dict[str, Any] | None:
+    plan = await get_plan(session, public_id)
     return None if plan is None else plan.payload
 
 
-async def set_plan_payload(session: AsyncSession, plan_id: int, payload: dict[str, Any]) -> None:
-    plan = await session.get(Plan, plan_id)
+async def set_plan_payload(session: AsyncSession, public_id: str, payload: dict[str, Any]) -> None:
+    plan = await get_plan(session, public_id)
     if plan is not None:
         plan.payload = payload
         await session.flush()

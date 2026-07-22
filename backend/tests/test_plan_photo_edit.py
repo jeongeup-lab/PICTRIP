@@ -20,7 +20,7 @@ from app.modules.plan.schemas import (
     ResolvedPlace,
     ResolvedSpot,
 )
-from app.modules.plan.services import assemble, edit, photo, seed
+from app.modules.plan.services import assemble, chains, edit, photo, seed
 from app.web.errors import ImageInvalid
 
 _DIM = 512
@@ -40,13 +40,14 @@ async def _insert_spot(
     lng: float = 127.0,
     lcls1: str | None = "NA",
     lcls2: str | None = None,
+    ctype: int = 12,
     vec: list[float] | None = None,
 ) -> None:
     await session.execute(
         text(
             "INSERT INTO spots (content_id, content_type_id, title, first_image_url, "
             "addr1, mapx, mapy, show_flag, lcls_systm1, lcls_systm2) "
-            "VALUES (:cid, 12, :t, 'http://kto/p.jpg', '전라남도 여수시', :lng, :lat, 1, "
+            "VALUES (:cid, :ctype, :t, 'http://kto/p.jpg', '전라남도 여수시', :lng, :lat, 1, "
             ":lcls1, :lcls2) ON CONFLICT (content_id) DO NOTHING"
         ),
         {
@@ -56,6 +57,7 @@ async def _insert_spot(
             "lng": lng,
             "lcls1": lcls1,
             "lcls2": lcls2,
+            "ctype": ctype,
         },
     )
     if vec is not None:
@@ -127,6 +129,119 @@ async def test_from_spot_builds_plan(db_session: AsyncSession) -> None:
     assert len(loaded.days) == 1
 
 
+async def _insert_concentration(session: AsyncSession, content_id: str, rate: float) -> None:
+    await session.execute(
+        text(
+            "INSERT INTO spot_concentration (content_id, concentration_rate, base_ymd, raw_name) "
+            "VALUES (:cid, :rate, '2026-06-06', :name) ON CONFLICT (content_id) DO NOTHING"
+        ),
+        {"cid": content_id, "rate": rate, "name": f"raw-{content_id}"},
+    )
+    await session.commit()
+
+
+async def _from_spot_ids(session: AsyncSession, seed_id: str, *, days: int = 1) -> set[str]:
+    return set(await _from_spot_picks(session, seed_id, days=days))
+
+
+async def _from_spot_picks(session: AsyncSession, seed_id: str, *, days: int = 1) -> list[str]:
+    response = await seed.build_from_spot(session, FromSpotRequest(contentId=seed_id, days=days))
+    places = [
+        slot.place for day in response.days for slot in day.slots if slot.place.spot is not None
+    ]
+    places.sort(key=lambda p: p.extracted.orderHint or 0)
+    return [p.spot.contentId for p in places if p.spot is not None and p.spot.contentId]
+
+
+def test_popularity_score_trades_distance_for_popularity() -> None:
+    near_unranked = seed.popularity_score(500.0, None)
+    far_popular = seed.popularity_score(2_000.0, 95.0)
+    assert far_popular < near_unranked
+    assert seed.popularity_score(1_000.0, 100.0) == pytest.approx(1.0 - seed.POPULARITY_MAX_KM)
+
+
+async def test_from_spot_excludes_lodging(db_session: AsyncSession) -> None:
+    await _insert_spot(db_session, "lg-seed", lat=37.0, lng=127.0)
+    await _insert_spot(
+        db_session, "lg-hotel", lat=37.005, lng=127.0, lcls1="VE", lcls2="VE05", ctype=32
+    )
+    await _insert_spot(db_session, "lg-food", lat=37.001, lng=127.001, lcls1="FD", lcls2="FD01")
+
+    ids = await _from_spot_ids(db_session, "lg-seed")
+
+    assert "lg-hotel" not in ids
+    assert {"lg-seed", "lg-food"} <= ids
+
+
+async def test_from_spot_prefers_popular_over_merely_close(db_session: AsyncSession) -> None:
+    await _insert_spot(db_session, "pp-seed", lat=37.0, lng=127.0)
+    await _insert_spot(db_session, "pp-noise", lat=37.005, lng=127.0)
+    await _insert_spot(db_session, "pp-popular", lat=37.02, lng=127.0)
+    await _insert_concentration(db_session, "pp-popular", 95.0)
+    await _insert_spot(db_session, "pp-food", lat=37.001, lng=127.001, lcls1="FD", lcls2="FD01")
+    await _insert_spot(db_session, "pp-cafe", lat=37.002, lng=127.001, lcls1="FD", lcls2="FD05")
+
+    picks = await _from_spot_picks(db_session, "pp-seed")
+
+    assert picks.index("pp-popular") < picks.index("pp-noise")
+
+
+async def test_from_spot_skips_near_duplicate_of_picked_spot(db_session: AsyncSession) -> None:
+    await _insert_spot(db_session, "nd-seed", lat=37.0, lng=127.0)
+    await _insert_spot(db_session, "nd-twin", lat=37.002, lng=127.0)
+    await _insert_spot(db_session, "nd-far", lat=37.01, lng=127.0)
+    await _insert_spot(db_session, "nd-food", lat=37.001, lng=127.001, lcls1="FD", lcls2="FD01")
+    await _insert_spot(db_session, "nd-cafe", lat=37.002, lng=127.001, lcls1="FD", lcls2="FD05")
+
+    ids = await _from_spot_ids(db_session, "nd-seed")
+
+    assert "nd-twin" not in ids
+    assert {"nd-seed", "nd-far"} <= ids
+
+
+async def test_from_spot_keeps_meal_near_attraction(db_session: AsyncSession) -> None:
+    await _insert_spot(db_session, "mn-seed", lat=37.0, lng=127.0)
+    await _insert_spot(db_session, "mn-food", lat=37.0005, lng=127.0, lcls1="FD", lcls2="FD01")
+
+    ids = await _from_spot_ids(db_session, "mn-seed")
+
+    assert {"mn-seed", "mn-food"} <= ids
+
+
+@pytest.mark.parametrize(
+    ("title", "expected"),
+    [
+        ("스타벅스 강릉강문해변점", True),
+        ("빽다방 포남점", True),
+        ("바다김밥 돌산직영점", True),
+        ("순두부젤라또 2호점", True),
+        ("촌골닭갈비 본점", False),
+        ("화복반점", False),
+        ("보영반점", False),
+        ("백촌막국수", False),
+        ("카페 라피끄", False),
+        ("", False),
+    ],
+)
+def test_is_chain_branch(title: str, expected: bool) -> None:
+    assert chains.is_chain_branch(title) is expected
+
+
+async def test_from_spot_excludes_chain_branch(db_session: AsyncSession) -> None:
+    await _insert_spot(db_session, "cb-seed", lat=37.0, lng=127.0)
+    await _insert_spot(db_session, "cb-food", lat=37.004, lng=127.0, lcls1="FD", lcls2="FD01")
+    await db_session.execute(
+        text("UPDATE spots SET title = '빽다방 포남점' WHERE content_id = 'cb-food'")
+    )
+    await _insert_spot(db_session, "cb-local", lat=37.006, lng=127.0, lcls1="FD", lcls2="FD01")
+    await db_session.commit()
+
+    ids = await _from_spot_ids(db_session, "cb-seed")
+
+    assert "cb-food" not in ids
+    assert {"cb-seed", "cb-local"} <= ids
+
+
 async def test_from_spot_unknown_spot(db_session: AsyncSession) -> None:
     with pytest.raises(PlanSpotNotFound):
         await seed.build_from_spot(db_session, FromSpotRequest(contentId="fs-none", days=1))
@@ -153,7 +268,7 @@ def _place(name: str, content_id: str, order: int, *, lat: float, lng: float) ->
     )
 
 
-async def _build_plan(db_session: AsyncSession, count: int, *, days: int = 1) -> int:
+async def _build_plan(db_session: AsyncSession, count: int, *, days: int = 1) -> str:
     places = [
         _place(f"장소{i}", f"pl-{i}", i, lat=37.0 + i * 0.001, lng=127.0)
         for i in range(1, count + 1)

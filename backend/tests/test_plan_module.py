@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import itertools
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -107,13 +109,14 @@ def _place(
     lat: float | None = 34.7,
     lng: float | None = 127.7,
     status: str = "matched",
+    address: str = "전라남도 여수시 어딘가",
 ) -> ResolvedPlace:
     spot = None
     if status in ("matched", "ambiguous"):
         spot = ResolvedSpot(
             contentId=f"c{order}",
             title=name,
-            address="전라남도 여수시 어딘가",
+            address=address,
             lat=lat,
             lng=lng,
         )
@@ -146,6 +149,99 @@ async def test_assemble_builds_days_and_persists(db_session: AsyncSession) -> No
     assert len(loaded.days) == 2
 
 
+async def test_assemble_keeps_regions_together(db_session: AsyncSession) -> None:
+    places = []
+    for i in range(4):
+        places.append(
+            _place(
+                f"여수{i}",
+                1 + i * 2,
+                lat=34.76 + i * 0.005,
+                lng=127.66,
+                address="전라남도 여수시 어딘가",
+            )
+        )
+        places.append(
+            _place(
+                f"순천{i}",
+                2 + i * 2,
+                lat=34.95 + i * 0.005,
+                lng=127.49,
+                address="전라남도 순천시 어딘가",
+            )
+        )
+    response = await assemble.build_schedule(
+        db_session, AssembleRequest(places=places, days=2, sourceKind="text")
+    )
+    day_names = [[slot.place.extracted.name for slot in day.slots] for day in response.days]
+    assert all(name.startswith("여수") for name in day_names[0])
+    assert all(name.startswith("순천") for name in day_names[1])
+    assert response.days[0].regionLabel == "전라남도 여수시"
+    assert response.days[1].regionLabel == "전라남도 순천시"
+
+
+async def test_assemble_routes_day_without_zigzag(db_session: AsyncSession) -> None:
+    scrambled_lats = [34.73, 34.71, 34.74, 34.70, 34.72]
+    places = [_place(f"장소{i}", i + 1, lat=lat, lng=127.7) for i, lat in enumerate(scrambled_lats)]
+    response = await assemble.build_schedule(
+        db_session, AssembleRequest(places=places, days=1, sourceKind="text")
+    )
+    lats = [
+        slot.place.spot.lat
+        for slot in response.days[0].slots
+        if slot.place.spot is not None and slot.place.spot.lat is not None
+    ]
+    diffs = [b - a for a, b in itertools.pairwise(lats)]
+    assert all(d > 0 for d in diffs) or all(d < 0 for d in diffs)
+
+
+async def test_assemble_day_two_starts_near_day_one_end(db_session: AsyncSession) -> None:
+    lats = [34.70, 34.71, 34.72, 34.75, 34.74, 34.73]
+    places = [_place(f"장소{i}", i + 1, lat=lat, lng=127.7) for i, lat in enumerate(lats)]
+    response = await assemble.build_schedule(
+        db_session, AssembleRequest(places=places, days=2, sourceKind="text")
+    )
+    all_lats = [
+        slot.place.spot.lat
+        for day in response.days
+        for slot in day.slots
+        if slot.place.spot is not None and slot.place.spot.lat is not None
+    ]
+    assert all_lats == sorted(all_lats)
+
+
+async def test_assemble_places_meals_and_lodging_sensibly(db_session: AsyncSession) -> None:
+    places = [
+        _place("카페", 1, place_type="cafe"),
+        _place("식당", 2, place_type="restaurant"),
+        _place("명소", 3, place_type="attraction"),
+        _place("숙소", 4, place_type="hotel"),
+    ]
+    response = await assemble.build_schedule(
+        db_session, AssembleRequest(places=places, days=1, sourceKind="text")
+    )
+    slots = response.days[0].slots
+    assert slots[0].place.extracted.placeType == "attraction"
+    assert slots[-1].place.extracted.placeType == "hotel"
+
+
+async def test_assemble_follows_daily_meal_rhythm(db_session: AsyncSession) -> None:
+    places = [
+        _place("점심", 1, place_type="restaurant", lat=34.702),
+        _place("카페", 2, place_type="cafe", lat=34.703),
+        _place("저녁", 3, place_type="restaurant", lat=34.705),
+        _place("명소A", 4, lat=34.701),
+        _place("명소B", 5, lat=34.704),
+    ]
+    response = await assemble.build_schedule(
+        db_session, AssembleRequest(places=places, days=1, sourceKind="photo")
+    )
+    types = [slot.place.extracted.placeType for slot in response.days[0].slots]
+    assert types[0] == "attraction"
+    assert types[-1] == "restaurant"
+    assert types.index("cafe") > types.index("restaurant")
+
+
 async def test_assemble_generates_region_title(db_session: AsyncSession) -> None:
     places = [_place(f"장소{i}", i) for i in range(1, 5)]
     response = await assemble.build_schedule(
@@ -161,7 +257,7 @@ async def test_assemble_generates_region_title(db_session: AsyncSession) -> None
     assert response.sourceTitle == "여수 2일 코스"
     assert response.sourceUrl == "https://youtu.be/abc"
 
-    loaded = await assemble.load_plan(db_session, response.planId or 0)
+    loaded = await assemble.load_plan(db_session, response.planId or "")
     assert loaded.sourceTitle == "여수 2일 코스"
     assert loaded.sourceUrl == "https://youtu.be/abc"
 
@@ -193,7 +289,7 @@ async def test_assemble_requires_placeable_spot(db_session: AsyncSession) -> Non
 
 async def test_load_plan_missing_raises(db_session: AsyncSession) -> None:
     with pytest.raises(PlanNotFound):
-        await assemble.load_plan(db_session, 999_999_999)
+        await assemble.load_plan(db_session, "no-such-plan")
 
 
 async def test_import_rejects_invalid_body(client: AsyncClient, db_session: AsyncSession) -> None:
