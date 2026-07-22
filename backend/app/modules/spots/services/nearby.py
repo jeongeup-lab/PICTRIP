@@ -14,6 +14,7 @@ from app.modules.spots.models import LclsSystmCode, Spot, SpotDetail
 _MAX_NUM_OF_ROWS = 50
 _EARTH_RADIUS_M = 6_371_000.0
 _VE_EXCLUDE = ("VE06", "VE07", "VE08", "VE09", "VE10", "VE11")
+_LODGING_CONTENT_TYPE = 32
 
 
 class NearbyCategory(StrEnum):
@@ -42,11 +43,14 @@ class NearbySpotRow:
 
 def category_predicate(cat: NearbyCategory) -> ColumnElement[bool]:
     if cat is NearbyCategory.attraction:
-        return or_(
-            Spot.lcls_systm1.in_(("HS", "NA", "EX")),
-            and_(
-                Spot.lcls_systm1 == "VE",
-                or_(Spot.lcls_systm2.is_(None), Spot.lcls_systm2.notin_(_VE_EXCLUDE)),
+        return and_(
+            Spot.content_type_id != _LODGING_CONTENT_TYPE,
+            or_(
+                Spot.lcls_systm1.in_(("HS", "NA", "EX")),
+                and_(
+                    Spot.lcls_systm1 == "VE",
+                    or_(Spot.lcls_systm2.is_(None), Spot.lcls_systm2.notin_(_VE_EXCLUDE)),
+                ),
             ),
         )
     if cat is NearbyCategory.food:

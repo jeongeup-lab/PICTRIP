@@ -14,6 +14,7 @@ class Plan(Base):
     __tablename__ = "plans"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    public_id: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
     source_kind: Mapped[str] = mapped_column(String(16), nullable=False)
     source_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     source_title: Mapped[str | None] = mapped_column(String(255), nullable=True)

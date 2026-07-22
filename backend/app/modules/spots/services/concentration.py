@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -28,6 +29,18 @@ async def load_hidden_spots(
     session: AsyncSession, *, limit: int = 10
 ) -> list[ConcentrationCardRow]:
     return await _load(session, limit=limit, ascending=True, require_overview=True)
+
+
+async def load_concentration_rates(
+    session: AsyncSession, content_ids: Sequence[str]
+) -> dict[str, float]:
+    if not content_ids:
+        return {}
+    stmt = select(SpotConcentration.content_id, SpotConcentration.concentration_rate).where(
+        SpotConcentration.content_id.in_(set(content_ids))
+    )
+    rows = (await session.execute(stmt)).all()
+    return {row.content_id: float(row.concentration_rate) for row in rows}
 
 
 async def _load(

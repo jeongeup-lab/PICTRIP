@@ -16,7 +16,14 @@ from app.modules.plan.schemas import (
     ScheduleSlot,
 )
 from app.modules.plan.services.assemble import _time_of_day, _travel_minutes
-from app.modules.spots.services import NearbyCategory, find_nearby_spots
+from app.modules.plan.services.chains import is_chain_branch
+from app.modules.plan.services.geo import is_near_duplicate
+from app.modules.plan.services.seed import popularity_score
+from app.modules.spots.services import (
+    NearbyCategory,
+    find_nearby_spots,
+    load_concentration_rates,
+)
 
 logger = get_logger(__name__)
 
@@ -31,7 +38,7 @@ _CATEGORY_BY_PLACE_TYPE: dict[str, NearbyCategory] = {
 
 
 async def list_alternatives(
-    session: AsyncSession, plan_id: int, *, day: int, slot: int
+    session: AsyncSession, plan_id: str, *, day: int, slot: int
 ) -> AlternativesResponse:
     response = await _load(session, plan_id)
     target = _get_slot(response, day, slot)
@@ -41,6 +48,7 @@ async def list_alternatives(
         return AlternativesResponse(alternatives=[])
 
     used = _used_content_ids(response)
+    others = _other_slot_spots(response, target)
     rows = await find_nearby_spots(
         session,
         lat=place.spot.lat,
@@ -48,8 +56,20 @@ async def list_alternatives(
         radius=ALTERNATIVES_RADIUS_M,
         category=category,
     )
-    alternatives = [
-        ResolvedSpot(
+    rows = [
+        row
+        for row in rows
+        if row.content_id not in used
+        and row.mapy is not None
+        and row.mapx is not None
+        and not is_chain_branch(row.title)
+    ]
+    rates = await load_concentration_rates(session, [row.content_id for row in rows])
+    candidates = sorted(rows, key=lambda row: popularity_score(row.dist, rates.get(row.content_id)))
+
+    alternatives: list[ResolvedSpot] = []
+    for row in candidates:
+        spot = ResolvedSpot(
             source="kto",
             contentId=row.content_id,
             title=row.title,
@@ -59,13 +79,15 @@ async def list_alternatives(
             lng=row.mapx,
             imageUrl=https_kto_image(row.first_image_url),
         )
-        for row in rows
-        if row.content_id not in used and row.mapy is not None and row.mapx is not None
-    ]
-    return AlternativesResponse(alternatives=alternatives[:ALTERNATIVES_LIMIT])
+        if is_near_duplicate(spot, others + alternatives):
+            continue
+        alternatives.append(spot)
+        if len(alternatives) == ALTERNATIVES_LIMIT:
+            break
+    return AlternativesResponse(alternatives=alternatives)
 
 
-async def apply_edit(session: AsyncSession, plan_id: int, payload: PlanEditRequest) -> PlanResponse:
+async def apply_edit(session: AsyncSession, plan_id: str, payload: PlanEditRequest) -> PlanResponse:
     response = await _load(session, plan_id)
     day_index = _day_index(response, payload.day)
     day_obj = response.days[day_index]
@@ -99,7 +121,7 @@ async def apply_edit(session: AsyncSession, plan_id: int, payload: PlanEditReque
     return response
 
 
-async def _load(session: AsyncSession, plan_id: int) -> PlanResponse:
+async def _load(session: AsyncSession, plan_id: str) -> PlanResponse:
     payload = await repositories.get_plan_payload(session, plan_id)
     if payload is None:
         raise PlanNotFound()
@@ -120,6 +142,18 @@ def _get_slot(response: PlanResponse, day: int, slot: int) -> ScheduleSlot:
     if not 0 <= slot < len(day_obj.slots):
         raise PlanSlotInvalid()
     return day_obj.slots[slot]
+
+
+def _other_slot_spots(response: PlanResponse, target: ScheduleSlot) -> list[ResolvedSpot]:
+    place_type = target.place.extracted.placeType
+    return [
+        slot.place.spot
+        for day in response.days
+        for slot in day.slots
+        if slot is not target
+        and slot.place.spot is not None
+        and slot.place.extracted.placeType == place_type
+    ]
 
 
 def _used_content_ids(response: PlanResponse) -> set[str]:

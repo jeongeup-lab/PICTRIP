@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import math
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
@@ -19,6 +18,7 @@ from app.modules.plan.schemas import (
     ResolvedSpot,
     ResolveStatus,
 )
+from app.modules.plan.services.geo import haversine_km
 from app.modules.spots.services import (
     SpotSearchRow,
     map_region_tokens_to_sido,
@@ -331,16 +331,7 @@ def _address_region_token(address: str | None) -> str | None:
 def _close_enough(row: SpotSearchRow, hit: naver.NaverPlace) -> bool:
     if None in (row.lat, row.lng, hit.lat, hit.lng):
         return False
-    return _haversine_km(row.lat, row.lng, hit.lat, hit.lng) <= NAVER_PROMOTE_MAX_KM  # type: ignore[arg-type]
-
-
-def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
-    radius_km = 6371.0
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lng2 - lng1)
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
-    return 2 * radius_km * math.asin(math.sqrt(a))
+    return haversine_km(row.lat, row.lng, hit.lat, hit.lng) <= NAVER_PROMOTE_MAX_KM  # type: ignore[arg-type]
 
 
 async def _kto_api_fallback(

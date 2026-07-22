@@ -70,7 +70,7 @@ class ScheduleDay(BaseModel):
 
 
 class PlanResponse(BaseModel):
-    planId: int | None = None
+    planId: str | None = None
     sourceTitle: str | None = None
     sourceUrl: str | None = None
     days: list[ScheduleDay]

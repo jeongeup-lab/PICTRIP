@@ -59,21 +59,21 @@ async def plan_from_spot(session: DbSession, payload: FromSpotRequest) -> dict[s
 
 
 @router.get("/plan/{plan_id}")
-async def get_plan(session: DbSession, plan_id: int) -> dict[str, Any]:
+async def get_plan(session: DbSession, plan_id: str) -> dict[str, Any]:
     plan = await assemble.load_plan(session, plan_id)
     return ok(plan)
 
 
 @router.get("/plan/{plan_id}/alternatives")
 async def plan_alternatives(
-    session: DbSession, plan_id: int, day: int, slot: int
+    session: DbSession, plan_id: str, day: int, slot: int
 ) -> dict[str, Any]:
     result = await edit.list_alternatives(session, plan_id, day=day, slot=slot)
     return ok(result)
 
 
 @router.patch("/plan/{plan_id}")
-async def edit_plan(session: DbSession, plan_id: int, payload: PlanEditRequest) -> dict[str, Any]:
+async def edit_plan(session: DbSession, plan_id: str, payload: PlanEditRequest) -> dict[str, Any]:
     plan = await edit.apply_edit(session, plan_id, payload)
     return ok(plan)
 
