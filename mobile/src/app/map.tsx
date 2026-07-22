@@ -24,7 +24,7 @@ import { sheetSnapY } from "@/features/map/lib/sheet-snap";
 import { NEARBY_CAP } from "@/constants/map";
 import { colors, spacing, radii } from "@/constants/theme";
 
-export default function MapTab() {
+export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const s = useMapStore();
   const { perm, allow, skipToSeoul, recenter } = useMapInit();
@@ -37,8 +37,8 @@ export default function MapTab() {
     [nearby.data, s.gpsCoords],
   );
 
-  const tabBarHeight = TAB_BAR_CONTENT_HEIGHT + insets.bottom;
-  const snapY = useMemo(() => sheetSnapY(H, tabBarHeight), [tabBarHeight]);
+  const bottomInset = insets.bottom;
+  const snapY = useMemo(() => sheetSnapY(H, bottomInset), [bottomInset]);
 
   const [sheetY, setSheetY] = useState<Animated.Value>(() => new Animated.Value(snapY[s.snap]));
   const handleTranslate = useCallback((v: Animated.Value) => setSheetY(v), []);
@@ -48,7 +48,7 @@ export default function MapTab() {
   );
   const fabTranslateY = useMemo(() => Animated.subtract(sheetY, SHEET_GAP + FAB_HEIGHT), [sheetY]);
 
-  const listPaddingBottom = mapListPaddingBottom(snapY[s.snap], tabBarHeight, spacing.xxl);
+  const listPaddingBottom = mapListPaddingBottom(snapY[s.snap], bottomInset, spacing.xxl);
 
   useEffect(() => {
     if (label.data) s.setLabel(label.data);
@@ -82,6 +82,9 @@ export default function MapTab() {
       />
 
       <View style={[styles.header, { top: insets.top + spacing.xs }]}>
+        <Pressable style={styles.back} onPress={() => router.back()} hitSlop={8} testID="map-back">
+          <Icon name="chevron-left" size={22} color={colors.ink} />
+        </Pressable>
         <Pressable style={styles.label} onPress={() => setPickerOpen(true)}>
           <Icon name="location" size={15} color={colors.accentText} />
           <Text numberOfLines={1} style={styles.labelText}>
@@ -164,7 +167,7 @@ export default function MapTab() {
           key={s.selectedSpotId}
           contentId={s.selectedSpotId}
           seed={spots.find((sp) => sp.contentId === s.selectedSpotId) ?? null}
-          tabBarHeight={tabBarHeight}
+          tabBarHeight={bottomInset}
           onClose={() => s.selectSpot(null)}
         />
       ) : null}
@@ -182,19 +185,37 @@ export default function MapTab() {
   );
 }
 
-const TAB_BAR_CONTENT_HEIGHT = 49;
 const PILL_HEIGHT = 38;
 const FAB_HEIGHT = 44;
 const SHEET_GAP = 14;
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  header: { position: "absolute", left: spacing.lg, right: spacing.lg },
+  header: {
+    position: "absolute",
+    left: spacing.lg,
+    right: spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  back: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.bg,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#100E12",
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
   label: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    alignSelf: "flex-start",
     height: 40,
     paddingHorizontal: 14,
     borderRadius: 20,
