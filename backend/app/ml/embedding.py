@@ -15,11 +15,21 @@ class ClipEmbedder:
     _model: Any = None
     _processor: Any = None
     _torch: Any = None
+    _heif_registered: bool = False
 
     def __init__(self) -> None:
         self._model = None
         self._processor = None
         self._torch = None
+        self._heif_registered = False
+
+    def _ensure_heif_decoder(self) -> None:
+        if self._heif_registered:
+            return
+        from pillow_heif import register_heif_opener
+
+        register_heif_opener()
+        self._heif_registered = True
 
     def _ensure_loaded(self) -> None:
         if self._model is not None:
@@ -38,6 +48,7 @@ class ClipEmbedder:
     def embed_image(self, image_bytes: bytes) -> list[float]:
         from PIL import Image
 
+        self._ensure_heif_decoder()
         self._ensure_loaded()
 
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
