@@ -16,7 +16,9 @@ from app.modules.plan.schemas import (
     PlanEditRequest,
 )
 from app.modules.plan.services import assemble, edit, extract, ingest, photo, resolve, seed
+from app.modules.plan.services.ingest import MAX_IMAGE_BYTES
 from app.web.envelope import ok
+from app.web.errors import ImageInvalid
 
 router = APIRouter(tags=["plan"])
 
@@ -86,7 +88,14 @@ async def _read_photo_payload(request: Request) -> tuple[bytes, str | None]:
     upload = form.get("image")
     if not isinstance(upload, UploadFile):
         raise PlanSourceInvalid()
-    return await upload.read(), upload.content_type
+    return await _read_capped(upload), upload.content_type
+
+
+async def _read_capped(upload: UploadFile) -> bytes:
+    payload = await upload.read(MAX_IMAGE_BYTES + 1)
+    if len(payload) > MAX_IMAGE_BYTES:
+        raise ImageInvalid()
+    return payload
 
 
 async def _read_import_payload(
@@ -101,7 +110,7 @@ async def _read_import_payload(
         image_bytes = None
         image_mime = None
         if isinstance(upload, UploadFile):
-            image_bytes = await upload.read()
+            image_bytes = await _read_capped(upload)
             image_mime = upload.content_type
         return (
             text if isinstance(text, str) else None,
