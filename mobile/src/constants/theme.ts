@@ -17,6 +17,7 @@ export const colors = {
   glassBorder: "rgba(255,255,255,0.22)",
   onImage: "#FFFFFF",
   onDim: "rgba(255,255,255,0.85)",
+  danger: "#E5484D",
 } as const;
 
 export const spacing = {
