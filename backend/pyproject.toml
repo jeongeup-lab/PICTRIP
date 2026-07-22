@@ -29,6 +29,7 @@ dependencies = [
     "transformers>=4.45.0",
     "torch>=2.4.0",
     "pillow>=10.4.0",
+    "pillow-heif>=0.18.0",
     # Crypto
     "cryptography>=48.0.1",
     # Observability
@@ -113,7 +114,7 @@ plugins = ["pydantic.mypy"]
 exclude = ["alembic/versions"]
 
 [[tool.mypy.overrides]]
-module = ["transformers.*", "torch.*", "pgvector.*"]
+module = ["transformers.*", "torch.*", "pgvector.*", "pillow_heif.*"]
 ignore_missing_imports = true
 
 # ---------- import-linter ----------
