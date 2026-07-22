@@ -383,4 +383,23 @@ describe("RemoteImage", () => {
     expect(images(r!)).toHaveLength(1);
     expect(images(r!)[0].props.source.uri).toBe(A);
   });
+
+  const T1_SIGNED =
+    "https://img.pictrip.org/t1/1620/deadbeef/tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg";
+
+  it("passes a backend-signed t1 transform url through untouched", async () => {
+    let r: renderer.ReactTestRenderer;
+    await act(async () => {
+      r = renderer.create(<RemoteImage uri={T1_SIGNED} />);
+    });
+    expect(images(r!)[0].props.source.uri).toBe(T1_SIGNED);
+  });
+
+  it("does not downgrade a signed t1 url when midSize is asked for", async () => {
+    let r: renderer.ReactTestRenderer;
+    await act(async () => {
+      r = renderer.create(<RemoteImage uri={T1_SIGNED} midSize />);
+    });
+    expect(images(r!)[0].props.source.uri).toBe(T1_SIGNED);
+  });
 });
