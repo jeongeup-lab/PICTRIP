@@ -100,7 +100,7 @@ async def build_from_spot(session: AsyncSession, payload: FromSpotRequest) -> Pl
 
     response = await assemble.build_schedule(
         session,
-        AssembleRequest(places=ordered, days=payload.days, sourceKind="photo"),
+        AssembleRequest(places=ordered, days=payload.days, sourceKind="photo", pinFirst=True),
     )
     logger.info(
         "plan.from_spot.done",

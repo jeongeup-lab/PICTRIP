@@ -55,6 +55,7 @@ class AssembleRequest(BaseModel):
     sourceKind: SourceKind = "text"
     sourceUrl: str | None = None
     sourceTitle: str | None = None
+    pinFirst: bool = False
 
 
 class ScheduleSlot(BaseModel):
