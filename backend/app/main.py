@@ -23,6 +23,7 @@ from app.modules.feed import router as feed_router
 from app.modules.images import router as images_router
 from app.modules.map import router as map_router
 from app.modules.plan import router as plan_router
+from app.modules.plan.llm import close_client as close_llm_client
 from app.modules.spots import router as spots_router
 from app.modules.system import router as system_router
 from app.modules.users import router as users_router
@@ -56,6 +57,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             yield
         finally:
             await app.state.kto.aclose()
+            await close_llm_client()
             logger.info("app.shutdown")
 
 
