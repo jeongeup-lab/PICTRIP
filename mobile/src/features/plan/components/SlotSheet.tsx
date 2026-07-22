@@ -152,7 +152,7 @@ function SwapBody({
             style={({ pressed }) => [styles.altRow, pressed && styles.pressed]}
             onPress={() => onPick(alt)}
           >
-            <RemoteImage uri={alt.imageUrl} style={styles.altImage} radius={radii.md} midSize />
+            <RemoteImage uri={alt.imageUrl} style={styles.altImage} radius={radii.md} />
             <View style={styles.altBody}>
               <Text style={styles.altTitle} numberOfLines={1}>
                 {alt.title}

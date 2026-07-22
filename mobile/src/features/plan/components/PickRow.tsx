@@ -22,12 +22,7 @@ export function PickRow({ place, selected, onPress }: Props) {
       <View style={[styles.box, selected && styles.boxOn]}>
         {selected ? <Icon name="check" size={12} color={colors.onImage} strokeWidth={2.4} /> : null}
       </View>
-      <RemoteImage
-        uri={place.spot?.imageUrl ?? null}
-        style={styles.image}
-        radius={radii.md}
-        midSize
-      />
+      <RemoteImage uri={place.spot?.imageUrl ?? null} style={styles.image} radius={radii.md} />
       <View style={styles.body}>
         <Text style={styles.title} numberOfLines={1}>
           {placeName(place)}

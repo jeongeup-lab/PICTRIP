@@ -20,7 +20,7 @@ export function MatchCard({ match, rank, selected, onPress }: Props) {
       onPress={onPress}
     >
       <View style={[styles.frame, selected && styles.frameSelected]}>
-        <RemoteImage uri={match.imageUrl} style={styles.image} radius={radii.lg} midSize />
+        <RemoteImage uri={match.imageUrl} style={styles.image} radius={radii.lg} />
         <View style={styles.rank}>
           <Text style={styles.rankText}>{rank}</Text>
         </View>
