@@ -34,6 +34,7 @@ FIRST_SLOT_MEAL_PENALTY_KM = 6.0
 ADJACENT_MEAL_PENALTY_KM = 4.0
 CAFE_BEFORE_MEAL_PENALTY_KM = 3.0
 DINNER_LAST_PENALTY_KM = 5.0
+LUNCH_SLOT_INDEX = 1
 
 
 async def build_schedule(session: AsyncSession, payload: AssembleRequest) -> PlanResponse:
@@ -49,7 +50,7 @@ async def build_schedule(session: AsyncSession, payload: AssembleRequest) -> Pla
     days: list[ScheduleDay] = []
     previous_last: ResolvedPlace | None = None
     for index, chunk in enumerate(chunks):
-        day = _build_day(index + 1, chunk, previous_last)
+        day = _build_day(index + 1, chunk, previous_last, pin_first=index == 0 and payload.pinFirst)
         days.append(day)
         previous_last = day.slots[-1].place
     response = PlanResponse(
@@ -180,9 +181,13 @@ def _spread_km(places: list[ResolvedPlace]) -> float:
 
 
 def _build_day(
-    day_number: int, places: list[ResolvedPlace], previous_last: ResolvedPlace | None
+    day_number: int,
+    places: list[ResolvedPlace],
+    previous_last: ResolvedPlace | None,
+    *,
+    pin_first: bool = False,
 ) -> ScheduleDay:
-    ordered = _day_order(places, previous_last)
+    ordered = _day_order(places, previous_last, pin_first=pin_first)
     slots = []
     for index, place in enumerate(ordered):
         travel = _travel_minutes(ordered[index - 1], place) if index > 0 else None
@@ -208,14 +213,18 @@ def _majority_region(places: list[ResolvedPlace]) -> str | None:
 
 
 def _day_order(
-    places: list[ResolvedPlace], previous_last: ResolvedPlace | None
+    places: list[ResolvedPlace], previous_last: ResolvedPlace | None, *, pin_first: bool = False
 ) -> list[ResolvedPlace]:
     lodgings = [p for p in places if p.extracted.placeType == "hotel"]
     others = [p for p in places if p.extracted.placeType != "hotel"]
     if len(others) <= 1 or any(_coords(place) is None for place in others):
         return others + lodgings
     anchor = _coords(previous_last) if previous_last is not None else None
-    orders = list(permutations(others))
+    if pin_first:
+        head, tail = others[:1], others[1:]
+        orders = [(*head, *rest) for rest in permutations(tail)]
+    else:
+        orders = list(permutations(others))
     in_rhythm = [order for order in orders if _rhythm_ok(order)]
     best_order = others + lodgings
     best_cost = math.inf
@@ -236,6 +245,9 @@ def _rhythm_ok(order: tuple[ResolvedPlace, ...]) -> bool:
         if types[-1] != "restaurant":
             return False
         if "cafe" in types and types.index("cafe") < types.index("restaurant"):
+            return False
+        meals = [index for index, place_type in enumerate(types) if place_type == "restaurant"]
+        if len(meals) >= 2 and meals[0] != LUNCH_SLOT_INDEX:
             return False
     for index in range(1, len(types)):
         if types[index] in ("restaurant", "cafe") and types[index] == types[index - 1]:

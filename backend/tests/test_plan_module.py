@@ -238,8 +238,26 @@ async def test_assemble_follows_daily_meal_rhythm(db_session: AsyncSession) -> N
     )
     types = [slot.place.extracted.placeType for slot in response.days[0].slots]
     assert types[0] == "attraction"
+    assert types.index("restaurant") == 1
     assert types[-1] == "restaurant"
     assert types.index("cafe") > types.index("restaurant")
+
+
+async def test_assemble_pins_first_place_when_requested(db_session: AsyncSession) -> None:
+    places = [
+        _place("씨앗", 1, lat=34.720),
+        _place("남쪽", 2, lat=34.701),
+        _place("북쪽", 3, lat=34.760),
+    ]
+    free = await assemble.build_schedule(
+        db_session, AssembleRequest(places=places, days=1, sourceKind="photo")
+    )
+    pinned = await assemble.build_schedule(
+        db_session, AssembleRequest(places=places, days=1, sourceKind="photo", pinFirst=True)
+    )
+
+    assert free.days[0].slots[0].place.extracted.name == "남쪽"
+    assert pinned.days[0].slots[0].place.extracted.name == "씨앗"
 
 
 async def test_assemble_generates_region_title(db_session: AsyncSession) -> None:
