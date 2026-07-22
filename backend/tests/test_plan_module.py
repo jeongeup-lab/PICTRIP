@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_db
 from app.kto.client import get_kto
 from app.main import app
+from app.modules.plan import llm
 from app.modules.plan.errors import (
     PlanNoPlacesFound,
     PlanNotFound,
@@ -43,6 +44,18 @@ from app.web.errors import ImageInvalid
 )
 def test_extract_video_id(url: str, expected: str | None) -> None:
     assert extract_video_id(url) == expected
+
+
+async def test_close_llm_client_releases_and_is_idempotent() -> None:
+    client = llm.get_client()
+    assert llm.get_client() is client
+
+    await llm.close_client()
+    assert client._client.is_closed
+    await llm.close_client()
+
+    assert llm.get_client() is not client
+    await llm.close_client()
 
 
 async def test_ingest_rejects_empty_input() -> None:

@@ -100,3 +100,10 @@ def get_client() -> GeminiClient:
     if _client is None:
         _client = GeminiClient()
     return _client
+
+
+async def close_client() -> None:
+    global _client
+    if _client is not None:
+        await _client.aclose()
+        _client = None
