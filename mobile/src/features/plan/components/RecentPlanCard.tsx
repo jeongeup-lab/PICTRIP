@@ -18,7 +18,7 @@ export function RecentPlanCard({ plan, onPress }: Props) {
     >
       {plan.thumb ? (
         <>
-          <RemoteImage uri={plan.thumb} style={StyleSheet.absoluteFill} midSize />
+          <RemoteImage uri={plan.thumb} style={StyleSheet.absoluteFill} />
           <View style={styles.scrim} />
         </>
       ) : null}

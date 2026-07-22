@@ -33,7 +33,7 @@ export function SlotRow({ slot, first, onPress }: Props) {
       <View style={[styles.dot, first && styles.dotFirst]} />
       <Text style={styles.tod}>{TIME_OF_DAY_LABEL[slot.timeOfDay]}</Text>
       <View style={styles.card}>
-        <RemoteImage uri={spot?.imageUrl ?? null} style={styles.image} radius={radii.md} midSize />
+        <RemoteImage uri={spot?.imageUrl ?? null} style={styles.image} radius={radii.md} />
         <View style={styles.body}>
           <Text style={styles.title} numberOfLines={1}>
             {placeName(slot.place)}

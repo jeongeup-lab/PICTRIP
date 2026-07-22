@@ -12,17 +12,17 @@ export function PlanCollage({ images }: Props) {
   if (images.length === 1) {
     return (
       <View style={styles.frame}>
-        <RemoteImage uri={images[0]} style={styles.full} midSize />
+        <RemoteImage uri={images[0]} style={styles.full} />
       </View>
     );
   }
 
   return (
     <View style={[styles.frame, styles.split]}>
-      <RemoteImage uri={images[0]} style={styles.lead} midSize />
+      <RemoteImage uri={images[0]} style={styles.lead} />
       <View style={styles.column}>
-        <RemoteImage uri={images[1]} style={styles.stacked} midSize />
-        <RemoteImage uri={images[2]} style={styles.stacked} midSize />
+        <RemoteImage uri={images[1]} style={styles.stacked} />
+        <RemoteImage uri={images[2]} style={styles.stacked} />
       </View>
     </View>
   );
