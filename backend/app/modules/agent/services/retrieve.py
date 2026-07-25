@@ -3,9 +3,10 @@ from __future__ import annotations
 from app.core.db import AsyncSession
 from app.kto.display import t1_display_url
 from app.modules.agent import repositories
-from app.modules.agent.repositories import CandidateRow
+from app.modules.agent.repositories import CandidateOrder, CandidateRow
 from app.modules.agent.schemas import AgentSpotCard, CrowdPreference, Region, Who
 from app.modules.agent.services.geo import haversine_km
+from app.modules.spots.services import map_region_tokens_to_sido
 
 CANDIDATE_LIMIT = 400
 RESULT_LIMIT = 4
@@ -54,52 +55,73 @@ async def resolve_category_codes(session: AsyncSession, keywords: list[str]) -> 
     return codes
 
 
+async def resolve_region_prefixes(
+    session: AsyncSession, *, region: Region, hints: list[str]
+) -> list[str]:
+    if hints:
+        tokens = {token for hint in hints for token in _hint_tokens(hint)}
+        mapping = await map_region_tokens_to_sido(session, tokens)
+        if mapping:
+            return sorted(set(mapping.values()))
+    return list(REGION_PREFIXES[region])
+
+
+def _hint_tokens(hint: str) -> list[str]:
+    cleaned = hint.strip()
+    tokens = cleaned.split()
+    return [cleaned, *tokens] if len(tokens) > 1 else tokens
+
+
 async def search_candidates(
-    session: AsyncSession, *, codes: list[str], region: Region
+    session: AsyncSession,
+    *,
+    codes: list[str],
+    region_prefixes: list[str],
+    preference: CrowdPreference,
+    lat: float | None,
+    lng: float | None,
+    near: bool,
 ) -> list[CandidateRow]:
-    prefixes = list(REGION_PREFIXES[region])
     return await repositories.find_candidates(
         session,
         codes=codes or None,
-        region_prefixes=prefixes or None,
+        region_prefixes=region_prefixes or None,
         limit=CANDIDATE_LIMIT,
+        order=candidate_order(preference=preference, near=near),
+        rated_only=preference != "any",
+        lat=lat,
+        lng=lng,
     )
+
+
+def candidate_order(*, preference: CrowdPreference, near: bool) -> CandidateOrder:
+    if near:
+        return "distance"
+    if preference == "quiet":
+        return "rate_asc"
+    if preference == "popular":
+        return "rate_desc"
+    return "id"
 
 
 def filter_by_crowd(rows: list[CandidateRow], preference: CrowdPreference) -> list[CandidateRow]:
-    rated = [row for row in rows if row.concentration_rate is not None]
-    if preference == "any" or not rated:
+    if preference == "any":
         return rows
-    ascending = preference == "quiet"
-    ratio = QUIET_KEEP_RATIO if ascending else POPULAR_KEEP_RATIO
-    ordered = sorted(
-        rated,
-        key=lambda row: (row.concentration_rate or 0.0, row.content_id),
-        reverse=not ascending,
-    )
-    keep = max(1, int(len(ordered) * ratio))
-    return ordered[:keep]
-
-
-def sort_by_distance(rows: list[CandidateRow], *, lat: float, lng: float) -> list[CandidateRow]:
-    locatable = [row for row in rows if row.lat is not None and row.lng is not None]
-    return sorted(locatable, key=lambda row: distance_km(row, lat=lat, lng=lng) or 0.0)
+    ceiling = round(QUIET_KEEP_RATIO * 100)
+    floor = 100 - round(POPULAR_KEEP_RATIO * 100)
+    kept = [
+        row
+        for row in rows
+        if row.percentile is not None
+        and (row.percentile <= ceiling if preference == "quiet" else row.percentile >= floor)
+    ]
+    return kept or rows
 
 
 def distance_km(row: CandidateRow, *, lat: float, lng: float) -> float | None:
     if row.lat is None or row.lng is None:
         return None
     return haversine_km(lat, lng, row.lat, row.lng)
-
-
-def percentile(row: CandidateRow, pool: list[CandidateRow]) -> int | None:
-    if row.concentration_rate is None:
-        return None
-    rated = [r.concentration_rate for r in pool if r.concentration_rate is not None]
-    if not rated:
-        return None
-    below = sum(1 for rate in rated if rate < row.concentration_rate)
-    return max(1, round(below / len(rated) * 100))
 
 
 def crowd_label(row: CandidateRow) -> str | None:

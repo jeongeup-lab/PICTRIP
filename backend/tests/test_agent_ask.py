@@ -19,7 +19,14 @@ from app.modules.agent.services import retrieve
 LAT, LNG = 35.15, 129.05
 
 
-def _row(cid: str, *, rate: float | None, lat: float = LAT, lng: float = LNG) -> CandidateRow:
+def _row(
+    cid: str,
+    *,
+    rate: float | None,
+    lat: float = LAT,
+    lng: float = LNG,
+    percentile: int | None = None,
+) -> CandidateRow:
     return CandidateRow(
         content_id=cid,
         title=f"t-{cid}",
@@ -31,36 +38,37 @@ def _row(cid: str, *, rate: float | None, lat: float = LAT, lng: float = LNG) ->
         image_url="http://kto/i.jpg",
         cpyrht_div_cd="Type1",
         concentration_rate=rate,
+        percentile=percentile,
     )
 
 
-def test_quiet_preference_keeps_the_least_crowded_slice() -> None:
-    rows = [_row(f"c{i}", rate=float(i * 10)) for i in range(10)]
+def _pool() -> list[CandidateRow]:
+    return [_row(f"c{i}", rate=float(i * 10), percentile=(i + 1) * 10) for i in range(10)]
 
-    kept = retrieve.filter_by_crowd(rows, "quiet")
+
+def test_quiet_preference_keeps_the_lowest_percentiles() -> None:
+    kept = retrieve.filter_by_crowd(_pool(), "quiet")
 
     assert [row.content_id for row in kept] == ["c0", "c1", "c2"]
 
 
-def test_popular_preference_keeps_the_most_crowded_slice() -> None:
-    rows = [_row(f"c{i}", rate=float(i * 10)) for i in range(10)]
+def test_popular_preference_keeps_the_highest_percentiles() -> None:
+    kept = retrieve.filter_by_crowd(_pool(), "popular")
 
-    kept = retrieve.filter_by_crowd(rows, "popular")
-
-    assert [row.content_id for row in kept] == ["c9", "c8", "c7"]
+    assert [row.content_id for row in kept] == ["c6", "c7", "c8", "c9"]
 
 
-def test_crowd_filter_is_a_no_op_without_concentration_rows() -> None:
+def test_crowd_filter_falls_back_when_no_row_carries_a_percentile() -> None:
     rows = [_row("a", rate=None), _row("b", rate=None)]
 
     assert retrieve.filter_by_crowd(rows, "quiet") == rows
 
 
-def test_percentile_is_relative_to_the_candidate_pool() -> None:
-    pool = [_row(f"c{i}", rate=float(i * 10)) for i in range(10)]
-
-    assert retrieve.percentile(pool[0], pool) == 1
-    assert retrieve.percentile(pool[5], pool) == 50
+def test_candidate_order_follows_intent() -> None:
+    assert retrieve.candidate_order(preference="quiet", near=False) == "rate_asc"
+    assert retrieve.candidate_order(preference="popular", near=False) == "rate_desc"
+    assert retrieve.candidate_order(preference="any", near=False) == "id"
+    assert retrieve.candidate_order(preference="quiet", near=True) == "distance"
 
 
 def test_crowd_label_buckets_by_rate() -> None:
@@ -87,22 +95,19 @@ def test_every_region_option_has_prefixes_except_all() -> None:
 
 
 def test_card_tag_prefers_distance_then_percentile() -> None:
-    pool = [_row(f"c{i}", rate=float(i * 10)) for i in range(10)]
+    pool = _pool()
     quiet = QueryIntent(crowdPreference="quiet")
 
-    near_card = ask_service._card(pool[0], pool=pool, intent=quiet, lat=LAT, lng=LNG, near=True)
-    quiet_card = ask_service._card(pool[0], pool=pool, intent=quiet, lat=None, lng=None, near=False)
+    near_card = ask_service._card(pool[0], intent=quiet, lat=LAT, lng=LNG, near=True)
+    quiet_card = ask_service._card(pool[0], intent=quiet, lat=None, lng=None, near=False)
 
     assert near_card.tag is not None and near_card.tag.endswith("km")
-    assert quiet_card.tag == "하위 1%"
+    assert quiet_card.tag == "하위 10%"
 
 
 def test_answer_emphasises_the_result_count() -> None:
-    pool = [_row(f"c{i}", rate=float(i * 10)) for i in range(10)]
-
     segments = ask_service._answer(
-        pool[:4],
-        pool,
+        _pool()[:4],
         intent=QueryIntent(),
         filters=AskFilters(when="weekend"),
         near=False,
@@ -142,7 +147,13 @@ async def _seed(session: AsyncSession) -> None:
             "ON CONFLICT DO NOTHING"
         )
     )
-    for cid, rate in (("v1", "12.00"), ("v2", "48.00"), ("v3", "88.00")):
+    await session.execute(
+        text(
+            "INSERT INTO regions (ldong_regn_cd, ldong_regn_nm) "
+            "VALUES ('50', '제주특별자치도') ON CONFLICT DO NOTHING"
+        )
+    )
+    for cid, rate, offset in (("v1", "12.00", 0.03), ("v2", "48.00", 0.02), ("v3", "88.00", 0.01)):
         await session.execute(
             text(
                 "INSERT INTO spots (content_id, content_type_id, title, addr1, "
@@ -151,7 +162,7 @@ async def _seed(session: AsyncSession) -> None:
                 "VALUES (:cid, 12, :t, '부산광역시 사하구 1', 'http://kto/i.jpg', 1, "
                 ":lng, :lat, 'NA', 'NA010100', '26', '26380')"
             ),
-            {"cid": cid, "t": f"계곡-{cid}", "lng": LNG, "lat": LAT},
+            {"cid": cid, "t": f"계곡-{cid}", "lng": LNG, "lat": LAT + offset},
         )
         await session.execute(
             text(
@@ -161,6 +172,22 @@ async def _seed(session: AsyncSession) -> None:
             ),
             {"cid": cid, "rate": rate, "rn": f"n-{cid}"},
         )
+    await session.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, addr1, "
+            "first_image_url, show_flag, mapx, mapy, lcls_systm1, lcls_systm3, "
+            "ldong_regn_cd) "
+            "VALUES ('j1', 12, '제주계곡', '제주특별자치도 서귀포시 1', "
+            "'http://kto/i.jpg', 1, 126.5, 33.4, 'NA', 'NA010100', '50')"
+        )
+    )
+    await session.execute(
+        text(
+            "INSERT INTO spot_concentration "
+            "(content_id, concentration_rate, base_ymd, raw_name) "
+            "VALUES ('j1', 30.00, DATE '2026-07-01', 'n-j1')"
+        )
+    )
     await session.flush()
 
 
@@ -222,9 +249,75 @@ async def test_ask_reports_no_results_when_nothing_matches(
     monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
     _override(db_session)
     try:
-        res = await client.post("/v1/agent/ask", json={"question": "제주 계곡", "region": "jeju"})
+        res = await client.post(
+            "/v1/agent/ask", json={"question": "강원 계곡", "region": "gangwon"}
+        )
     finally:
         app.dependency_overrides.clear()
 
     assert res.status_code == 422
     assert res.json()["error"]["code"] == "AGENT_NO_RESULTS"
+
+
+@pytest.mark.integration
+async def test_question_region_hint_narrows_the_search_without_a_sheet_filter(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"], regionHints=["제주"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "제주 계곡", "region": "all"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert [spot["contentId"] for spot in data["spots"]] == ["j1"]
+    assert data["totalCount"] == 1
+
+
+@pytest.mark.integration
+async def test_near_me_orders_candidates_by_distance_in_sql(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"], nearMe=True)
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={"question": "근처 계곡", "region": "gyeongsang", "lat": LAT, "lng": LNG},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert [spot["contentId"] for spot in data["spots"]] == ["v3", "v2", "v1"]
+    assert [step["tool"] for step in data["steps"]][-1] == "nearby"
+    assert all(spot["tag"].endswith("km") for spot in data["spots"])
+
+
+@pytest.mark.integration
+async def test_quiet_percentile_comes_from_sql_not_the_truncated_pool(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"], crowdPreference="quiet")
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "한적한 계곡", "region": "all"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    spots = res.json()["data"]["spots"]
+    assert spots[0]["contentId"] == "v1"
+    assert spots[0]["tag"] == "하위 25%"

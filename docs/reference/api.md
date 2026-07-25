@@ -59,7 +59,7 @@
 
 | 조건 | 효과 |
 |---|---|
-| `region` | `spots.addr1` 접두사 하드 필터 (`capital` = 서울·경기·인천 …) |
+| `region` | `spots.addr1` 접두사 하드 필터 (`capital` = 서울·경기·인천 …). **질문에 지역이 나오면 그쪽이 이긴다** — `제주 계곡`이면 시트가 `전국`이어도 제주로 좁힌다 (`regions` 테이블로 시도 매핑) |
 | `who` | 카테고리 키워드를 보탠다 (`kids` → 테마파크·동물원·체험, `pets` → 공원·산책로) |
 | `when` | **필터하지 않는다** — `spot_concentration`은 일일 스냅숏이라 미래 예측이 없다. 답변 문구에만 실린다 |
 
@@ -84,11 +84,16 @@
 | `photo_match` | `agent/services/photo.py` | CLIP 임베딩 → pgvector 유사도 |
 | `resolve_place` | `agent/services/resolve.py` | 장소명 → KTO 스팟 (질문이 특정 장소를 지목할 때) |
 | `category_search` | `agent/repositories.py` + `lcls_systm_codes` | 카테고리 키워드 → lcls 코드 → 스팟 조회 |
-| `concentration` | `agent/services/retrieve.py` | 집중률 하위/상위 30%로 추림 |
-| `nearby` | `agent/services/retrieve.py` | 현재 위치 기준 거리순 정렬 |
+| `concentration` | `agent/services/retrieve.py` | 집중률 백분위 하위/상위 30%로 추림 |
+| `nearby` | `agent/repositories.py` | 현재 위치 기준 거리순 (SQL `ORDER BY`) |
 
-카드 태그 우선순위는 거리(`4.2km`) → 혼잡도 백분위(`하위 8%`, 이 질의의 후보군
-기준) → 혼잡 라벨(`붐빔`·`보통`·`한산`), 사진 질의는 `유사도 86%`.
+**정렬은 SQL에서 끝낸다.** 후보 400개를 임의 순서로 자른 뒤 파이썬에서 정렬하면
+진짜 가까운/한적한 곳이 잘려나간다. 거리·집중률 정렬은 `ORDER BY`로 내려가고
+`LIMIT`은 그 뒤에 붙는다. 혼잡도 백분위도 `cume_dist()` 윈도로 **필터를 만족하는
+전체 집합** 기준으로 계산한다 — 잘린 400개 안의 상대 순위가 아니다.
+
+카드 태그 우선순위는 거리(`4.2km`) → 혼잡도 백분위(`하위 8%`) → 혼잡 라벨
+(`붐빔`·`보통`·`한산`), 사진 질의는 `유사도 86%`.
 
 ## 에러 코드
 

@@ -121,13 +121,25 @@ async def _ask_with_question(
         pinned = [briefs[cid] for cid in content_ids if cid in briefs]
         steps.append(AskStep(tool="resolve_place", label="질문 속 장소 확인", badge=_count(pinned)))
 
+    near = intent.nearMe and lat is not None and lng is not None
     keywords = _keywords(intent, filters)
     codes = await retrieve.resolve_category_codes(session, keywords)
-    candidates = await retrieve.search_candidates(session, codes=codes, region=filters.region)
+    prefixes = await retrieve.resolve_region_prefixes(
+        session, region=filters.region, hints=intent.regionHints
+    )
+    candidates = await retrieve.search_candidates(
+        session,
+        codes=codes,
+        region_prefixes=prefixes,
+        preference=intent.crowdPreference,
+        lat=lat,
+        lng=lng,
+        near=near,
+    )
     steps.append(
         AskStep(
             tool="category_search",
-            label=_search_label(keywords, filters),
+            label=_search_label(keywords, prefixes, filters),
             badge=_count(candidates),
         )
     )
@@ -137,8 +149,7 @@ async def _ask_with_question(
         pool = retrieve.filter_by_crowd(pool, intent.crowdPreference)
         steps.append(AskStep(tool="concentration", label="혼잡도로 추림", badge=_count(pool)))
 
-    if intent.nearMe and lat is not None and lng is not None:
-        pool = retrieve.sort_by_distance(pool, lat=lat, lng=lng)
+    if near:
         steps.append(AskStep(tool="nearby", label="현재 위치에서 가까운 순", badge=_count(pool)))
 
     merged = _merge(pinned, pool)
@@ -146,8 +157,7 @@ async def _ask_with_question(
         raise AgentNoResults()
 
     top = merged[: retrieve.RESULT_LIMIT]
-    near = intent.nearMe and lat is not None and lng is not None
-    spots = [_card(row, pool=merged, intent=intent, lat=lat, lng=lng, near=near) for row in top]
+    spots = [_card(row, intent=intent, lat=lat, lng=lng, near=near) for row in top]
     logger.info(
         "agent.ask.done",
         candidates=len(candidates),
@@ -157,7 +167,7 @@ async def _ask_with_question(
     )
     return AskResponse(
         steps=steps,
-        answer=_answer(top, merged, intent=intent, filters=filters, near=near, lat=lat, lng=lng),
+        answer=_answer(top, intent=intent, filters=filters, near=near, lat=lat, lng=lng),
         spots=spots,
         totalCount=len(merged),
         suggestions=BASE_SUGGESTIONS,
@@ -173,8 +183,13 @@ def _keywords(intent: QueryIntent, filters: AskFilters) -> list[str]:
     return keywords
 
 
-def _search_label(keywords: list[str], filters: AskFilters) -> str:
-    head = " · ".join(keywords[:2]) if keywords else retrieve.REGION_LABELS[filters.region]
+def _search_label(keywords: list[str], prefixes: list[str], filters: AskFilters) -> str:
+    if keywords:
+        head = " · ".join(keywords[:2])
+    elif prefixes:
+        head = prefixes[0]
+    else:
+        head = retrieve.REGION_LABELS[filters.region]
     return f"{head} 관광지 조회"
 
 
@@ -193,7 +208,6 @@ def _merge(pinned: list[CandidateRow], pool: list[CandidateRow]) -> list[Candida
 def _card(
     row: CandidateRow,
     *,
-    pool: list[CandidateRow],
     intent: QueryIntent,
     lat: float | None,
     lng: float | None,
@@ -203,16 +217,13 @@ def _card(
         km = retrieve.distance_km(row, lat=lat, lng=lng)
         if km is not None:
             return retrieve.to_card(row, tag=f"{km:.1f}km")
-    if intent.crowdPreference == "quiet":
-        pct = retrieve.percentile(row, pool)
-        if pct is not None:
-            return retrieve.to_card(row, tag=f"하위 {pct}%")
+    if intent.crowdPreference == "quiet" and row.percentile is not None:
+        return retrieve.to_card(row, tag=f"하위 {row.percentile}%")
     return retrieve.to_card(row, tag=retrieve.crowd_label(row))
 
 
 def _answer(
     top: list[CandidateRow],
-    pool: list[CandidateRow],
     *,
     intent: QueryIntent,
     filters: AskFilters,
@@ -229,7 +240,7 @@ def _answer(
         segments.append(AnswerSegment(text=f" ({when_label} 기준)"))
 
     if intent.crowdPreference == "quiet":
-        pcts = [p for row in top if (p := retrieve.percentile(row, pool)) is not None]
+        pcts = [row.percentile for row in top if row.percentile is not None]
         if pcts:
             segments.append(AnswerSegment(text=". 모두 이 조건 안에서 혼잡도 "))
             segments.append(AnswerSegment(text=f"하위 {max(pcts)}%", emphasis=True))
