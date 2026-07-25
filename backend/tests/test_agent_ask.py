@@ -24,6 +24,7 @@ from app.modules.agent.services import photo as photo_service
 from app.modules.agent.services import retrieve
 
 LAT, LNG = 35.15, 129.05
+_VEC = "[" + ",".join(["0.1"] * 512) + "]"
 
 
 def _row(
@@ -83,15 +84,6 @@ def test_crowd_label_buckets_by_rate() -> None:
     assert retrieve.crowd_label(_row("b", rate=50.0)) == "보통"
     assert retrieve.crowd_label(_row("c", rate=10.0)) == "한산"
     assert retrieve.crowd_label(_row("d", rate=None)) is None
-
-
-def test_region_filter_keeps_only_matching_address_prefixes() -> None:
-    busan = _row("a", rate=None)
-    seoul = CandidateRow(**{**busan.__dict__, "content_id": "b", "addr1": "서울특별시 종로구 1"})
-
-    kept = ask_service._apply_prefixes([busan, seoul], ["서울", "경기", "인천"])
-
-    assert [row.content_id for row in kept] == ["b"]
 
 
 def test_every_region_option_has_prefixes_except_all() -> None:
@@ -331,30 +323,24 @@ async def test_quiet_percentile_comes_from_sql_not_the_truncated_pool(
 
 
 @pytest.mark.integration
-async def test_photo_query_applies_the_region_hint_from_the_attached_text(
+async def test_photo_query_applies_the_region_hint_inside_the_vector_query(
     db_session, client, seeded, monkeypatch
 ) -> None:
+    for cid in ("v1", "j1"):
+        await db_session.execute(
+            text("INSERT INTO spot_embeddings (content_id, embedding) VALUES (:c, :v)"),
+            {"c": cid, "v": _VEC},
+        )
+    await db_session.flush()
+
     async def fake_intent(question: str) -> QueryIntent:
         return QueryIntent(regionHints=["제주"])
 
-    async def fake_match(session, *, image_bytes, image_mime):
-        return [
-            VectorMatchRow(
-                content_id=cid,
-                title=f"t-{cid}",
-                category=None,
-                addr1=None,
-                lat=None,
-                lng=None,
-                image_url=None,
-                cpyrht_div_cd=None,
-                distance=0.2,
-            )
-            for cid in ("v1", "j1")
-        ]
+    async def fake_embed(*, image_bytes, image_mime):
+        return [0.1] * 512
 
     monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
-    monkeypatch.setattr(photo_service, "match_photo", fake_match)
+    monkeypatch.setattr(photo_service, "embed_photo", fake_embed)
     _override(db_session)
     try:
         res = await client.post(
@@ -368,7 +354,7 @@ async def test_photo_query_applies_the_region_hint_from_the_attached_text(
     assert res.status_code == 200
     data = res.json()["data"]
     assert [spot["contentId"] for spot in data["spots"]] == ["j1"]
-    assert [step["tool"] for step in data["steps"]] == ["intent", "photo_match", "region_filter"]
+    assert [step["tool"] for step in data["steps"]] == ["intent", "photo_match"]
 
 
 @pytest.mark.integration
@@ -418,7 +404,10 @@ async def test_photo_query_survives_intent_extraction_failure(
     async def failing_intent(question: str) -> QueryIntent:
         raise AgentIntentUnavailable()
 
-    async def fake_match(session, *, image_bytes, image_mime):
+    async def fake_embed(*, image_bytes, image_mime):
+        return [0.1] * 512
+
+    async def fake_match(session, vector, *, region_prefixes):
         return [
             VectorMatchRow(
                 content_id="v1",
@@ -434,7 +423,8 @@ async def test_photo_query_survives_intent_extraction_failure(
         ]
 
     monkeypatch.setattr(intent_service, "extract_intent", failing_intent)
-    monkeypatch.setattr(photo_service, "match_photo", fake_match)
+    monkeypatch.setattr(photo_service, "embed_photo", fake_embed)
+    monkeypatch.setattr(photo_service, "match_vector", fake_match)
     _override(db_session)
     try:
         res = await client.post(
@@ -469,7 +459,10 @@ async def test_photo_upload_never_rolls_over_to_disk(
         handle.rollover = rollover  # type: ignore[method-assign]
         return handle
 
-    async def fake_match(session, *, image_bytes, image_mime):
+    async def fake_embed(*, image_bytes, image_mime):
+        return [0.1] * 512
+
+    async def fake_match(session, vector, *, region_prefixes):
         return [
             VectorMatchRow(
                 content_id="v1",
@@ -485,7 +478,8 @@ async def test_photo_upload_never_rolls_over_to_disk(
         ]
 
     monkeypatch.setattr(formparsers, "SpooledTemporaryFile", spy)
-    monkeypatch.setattr(photo_service, "match_photo", fake_match)
+    monkeypatch.setattr(photo_service, "embed_photo", fake_embed)
+    monkeypatch.setattr(photo_service, "match_vector", fake_match)
     _override(db_session)
     try:
         res = await client.post(
@@ -681,3 +675,12 @@ async def test_place_only_question_fails_loudly_when_the_place_is_unresolvable(
 
     assert res.status_code == 422
     assert res.json()["error"]["code"] == "AGENT_NO_RESULTS"
+
+
+@pytest.mark.integration
+async def test_title_search_queries_each_region_instead_of_filtering_after_the_limit(
+    db_session, seeded
+) -> None:
+    found = await retrieve.search_by_title(db_session, ["계곡"], region_prefixes=["제주특별자치도"])
+
+    assert [row.content_id for row in found] == ["j1"]
