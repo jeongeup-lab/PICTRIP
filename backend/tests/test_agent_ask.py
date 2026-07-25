@@ -684,3 +684,55 @@ async def test_title_search_queries_each_region_instead_of_filtering_after_the_l
     found = await retrieve.search_by_title(db_session, ["계곡"], region_prefixes=["제주특별자치도"])
 
     assert [row.content_id for row in found] == ["j1"]
+
+
+@pytest.mark.integration
+async def test_quiet_threshold_is_applied_in_sql_before_the_limit(db_session, seeded) -> None:
+    within = await repositories.find_candidates(
+        db_session,
+        codes=None,
+        region_prefixes=None,
+        limit=400,
+        order="rate_asc",
+        rated_only=True,
+        percentile_ceiling=30,
+    )
+
+    assert [row.content_id for row in within] == ["v1"]
+    assert within[0].percentile is not None and within[0].percentile <= 30
+
+
+@pytest.mark.integration
+async def test_near_with_quiet_still_filters_by_percentile_in_sql(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"], crowdPreference="quiet", nearMe=True)
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={"question": "근처 한적한 계곡", "region": "all", "lat": LAT, "lng": LNG},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    assert [spot["contentId"] for spot in res.json()["data"]["spots"]] == ["v1"]
+
+
+def test_answer_reports_a_zero_kilometre_distance() -> None:
+    here = _row("c0", rate=10.0, percentile=10, lat=LAT, lng=LNG)
+
+    segments = ask_service._answer(
+        [here],
+        intent=QueryIntent(nearMe=True),
+        filters=AskFilters(),
+        near=True,
+        lat=LAT,
+        lng=LNG,
+    )
+
+    assert "0.0km" in "".join(s.text for s in segments)

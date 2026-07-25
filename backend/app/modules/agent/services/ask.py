@@ -327,7 +327,7 @@ def _answer(
             segments.append(AnswerSegment(text=" 안쪽이에요."))
             return segments
     if near and lat is not None and lng is not None:
-        kms = [km for row in top if (km := retrieve.distance_km(row, lat=lat, lng=lng))]
+        kms = [km for row in top if (km := retrieve.distance_km(row, lat=lat, lng=lng)) is not None]
         if kms:
             segments.append(AnswerSegment(text=". 가장 가까운 곳은 "))
             segments.append(AnswerSegment(text=f"{min(kms):.1f}km", emphasis=True))

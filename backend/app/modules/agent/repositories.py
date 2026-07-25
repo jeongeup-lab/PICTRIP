@@ -119,28 +119,33 @@ class CandidateRow:
 CandidateOrder = Literal["id", "rate_asc", "rate_desc", "distance"]
 
 _CANDIDATE_SQL = """
-SELECT spots.content_id,
-       spots.title,
-       spots.addr1,
-       r.ldong_regn_nm AS region_name,
-       g.ldong_signgu_nm AS sigungu_name,
-       spots.mapy AS lat,
-       spots.mapx AS lng,
-       spots.first_image_url AS image_url,
-       spots.cpyrht_div_cd,
-       sc.concentration_rate,
-       {percentile} AS percentile
-FROM spots
-LEFT JOIN regions r ON r.ldong_regn_cd = spots.ldong_regn_cd
-LEFT JOIN sigungus g ON g.ldong_signgu_cd = spots.ldong_signgu_cd
-{concentration_join} spot_concentration sc ON sc.content_id = spots.content_id
-WHERE spots.show_flag = 1
-  AND spots.first_image_url IS NOT NULL
-  AND spots.first_image_url <> ''
-  AND ({attraction})
-  {code_clause}
-  {region_clause}
-  {locatable_clause}
+WITH scored AS (
+    SELECT spots.content_id,
+           spots.title,
+           spots.addr1,
+           r.ldong_regn_nm AS region_name,
+           g.ldong_signgu_nm AS sigungu_name,
+           spots.mapy AS lat,
+           spots.mapx AS lng,
+           spots.first_image_url AS image_url,
+           spots.cpyrht_div_cd,
+           sc.concentration_rate,
+           {percentile} AS percentile
+    FROM spots
+    LEFT JOIN regions r ON r.ldong_regn_cd = spots.ldong_regn_cd
+    LEFT JOIN sigungus g ON g.ldong_signgu_cd = spots.ldong_signgu_cd
+    {concentration_join} spot_concentration sc ON sc.content_id = spots.content_id
+    WHERE spots.show_flag = 1
+      AND spots.first_image_url IS NOT NULL
+      AND spots.first_image_url <> ''
+      AND ({attraction})
+      {code_clause}
+      {region_clause}
+      {locatable_clause}
+)
+SELECT * FROM scored
+WHERE TRUE
+  {percentile_clause}
 ORDER BY {order}
 LIMIT :lim
 """
@@ -148,18 +153,20 @@ LIMIT :lim
 _CODE_CLAUSE = "AND spots.lcls_systm3 = ANY(CAST(:codes AS text[]))"
 _REGION_CLAUSE = "AND spots.addr1 LIKE ANY(CAST(:region_patterns AS text[]))"
 _LOCATABLE_CLAUSE = "AND spots.mapx IS NOT NULL AND spots.mapy IS NOT NULL"
+_CEILING_CLAUSE = "AND percentile <= :ceiling"
+_FLOOR_CLAUSE = "AND percentile >= :floor"
 _PERCENTILE_EXPR = (
     "round(greatest(1.0, cume_dist() OVER (ORDER BY sc.concentration_rate) * 100))::int"
 )
 _DISTANCE_ORDER = (
-    "power(spots.mapy - CAST(:lat AS numeric), 2) "
-    "+ power((spots.mapx - CAST(:lng AS numeric)) * CAST(:lng_scale AS numeric), 2)"
+    "power(lat - CAST(:lat AS numeric), 2) "
+    "+ power((lng - CAST(:lng AS numeric)) * CAST(:lng_scale AS numeric), 2)"
 )
 _ORDER_BY: dict[CandidateOrder, str] = {
-    "id": "spots.content_id",
-    "rate_asc": "sc.concentration_rate ASC, spots.content_id",
-    "rate_desc": "sc.concentration_rate DESC, spots.content_id",
-    "distance": f"{_DISTANCE_ORDER}, spots.content_id",
+    "id": "content_id",
+    "rate_asc": "concentration_rate ASC, content_id",
+    "rate_desc": "concentration_rate DESC, content_id",
+    "distance": f"{_DISTANCE_ORDER}, content_id",
 }
 
 
@@ -171,10 +178,19 @@ async def find_candidates(
     limit: int,
     order: CandidateOrder = "id",
     rated_only: bool = False,
+    percentile_ceiling: int | None = None,
+    percentile_floor: int | None = None,
     lat: float | None = None,
     lng: float | None = None,
 ) -> list[CandidateRow]:
     params: dict[str, object] = {"lim": limit}
+    percentile_clause = ""
+    if rated_only and percentile_ceiling is not None:
+        percentile_clause = _CEILING_CLAUSE
+        params["ceiling"] = percentile_ceiling
+    elif rated_only and percentile_floor is not None:
+        percentile_clause = _FLOOR_CLAUSE
+        params["floor"] = percentile_floor
     code_clause = ""
     if codes:
         code_clause = _CODE_CLAUSE
@@ -196,6 +212,7 @@ async def find_candidates(
         locatable_clause=_LOCATABLE_CLAUSE if order == "distance" else "",
         concentration_join="JOIN" if rated_only else "LEFT JOIN",
         percentile=_PERCENTILE_EXPR if rated_only else "NULL",
+        percentile_clause=percentile_clause,
         order=_ORDER_BY[order],
     )
     result = await session.execute(text(sql), params)

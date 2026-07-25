@@ -84,16 +84,29 @@ async def search_candidates(
     lng: float | None,
     near: bool,
 ) -> list[CandidateRow]:
-    return await repositories.find_candidates(
-        session,
-        codes=codes or None,
-        region_prefixes=region_prefixes or None,
-        limit=CANDIDATE_LIMIT,
-        order=candidate_order(preference=preference, near=near),
-        rated_only=preference != "any",
-        lat=lat,
-        lng=lng,
+    quiet = preference == "quiet"
+
+    async def query(*, ceiling: int | None, floor: int | None) -> list[CandidateRow]:
+        return await repositories.find_candidates(
+            session,
+            codes=codes or None,
+            region_prefixes=region_prefixes or None,
+            limit=CANDIDATE_LIMIT,
+            order=candidate_order(preference=preference, near=near),
+            rated_only=preference != "any",
+            percentile_ceiling=ceiling,
+            percentile_floor=floor,
+            lat=lat,
+            lng=lng,
+        )
+
+    if preference == "any":
+        return await query(ceiling=None, floor=None)
+    within = await query(
+        ceiling=round(QUIET_KEEP_RATIO * 100) if quiet else None,
+        floor=None if quiet else 100 - round(POPULAR_KEEP_RATIO * 100),
     )
+    return within or await query(ceiling=None, floor=None)
 
 
 async def search_by_title(
