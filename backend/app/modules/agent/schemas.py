@@ -18,7 +18,6 @@ ToolName = Literal[
     "resolve_place",
     "category_search",
     "title_search",
-    "region_filter",
     "concentration",
     "nearby",
 ]
