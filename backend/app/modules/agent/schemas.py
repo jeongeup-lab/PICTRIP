@@ -58,6 +58,7 @@ class QueryIntent(BaseModel):
     crowdPreference: CrowdPreference = "any"
     indoorOnly: bool = False
     nearMe: bool = False
+    outOfScope: bool = False
 
 
 class AskFilters(BaseModel):

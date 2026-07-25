@@ -13,3 +13,9 @@ class AgentNoResults(AppError):
     code = "AGENT_NO_RESULTS"
     http_status = 422
     message = "조건에 맞는 곳을 찾지 못했어요. 조건을 조금 넓혀 보세요."
+
+
+class AgentOutOfScope(AppError):
+    code = "AGENT_OUT_OF_SCOPE"
+    http_status = 422
+    message = "국내 여행지만 찾을 수 있어요. 가고 싶은 국내 지역이나 분위기로 물어봐 주세요."
