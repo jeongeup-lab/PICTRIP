@@ -188,8 +188,6 @@ async def _ask_with_question(
                 badge=_count(candidates),
             )
         )
-        if not candidates:
-            raise AgentNoResults()
     else:
         candidates = await retrieve.search_candidates(
             session,

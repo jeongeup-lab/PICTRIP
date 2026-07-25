@@ -86,7 +86,7 @@
 | `category_search` | `agent/repositories.py` + `lcls_systm_codes` | 카테고리 키워드 → lcls 코드 → 스팟 조회 |
 | `title_search` | `spots/services/search.py` | 키워드가 lcls 코드에 하나도 안 걸릴 때의 폴백 (스팟 이름 trigram) |
 | `region_filter` | `agent/services/ask.py` | 사진 결과에 지역 조건 적용 |
-| `concentration` | `agent/services/retrieve.py` | 집중률 백분위 하위/상위 30%로 추림 |
+| `concentration` | `agent/services/retrieve.py` | 집중률 백분위 하위/상위 30%로 추림. 후보가 적어 아무도 30% 안에 못 들면 가장 한적한/붐비는 쪽 4곳을 남긴다 (선호를 버리고 전체로 되돌리지 않는다) |
 | `nearby` | `agent/repositories.py` | 현재 위치 기준 거리순 (SQL `ORDER BY`) |
 
 **업로드 사진은 디스크에 닿지 않는다.** Starlette의 multipart 파서는 파일 파트를
