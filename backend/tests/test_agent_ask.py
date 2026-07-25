@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import tempfile
+
 import pytest
 import pytest_asyncio
 from fakeredis.aioredis import FakeRedis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette import formparsers
 
 from app.core.db import get_db
 from app.core.redis import get_redis
@@ -12,6 +15,7 @@ from app.kto.client import get_kto
 from app.main import app
 from app.modules.agent.errors import AgentIntentUnavailable
 from app.modules.agent.repositories import CandidateRow, VectorMatchRow
+from app.modules.agent.routes import MAX_BODY_BYTES
 from app.modules.agent.schemas import AskFilters, QueryIntent
 from app.modules.agent.services import ask as ask_service
 from app.modules.agent.services import intent as intent_service
@@ -444,3 +448,72 @@ async def test_photo_query_survives_intent_extraction_failure(
     data = res.json()["data"]
     assert [step["tool"] for step in data["steps"]] == ["photo_match"]
     assert data["spots"][0]["contentId"] == "v1"
+
+
+@pytest.mark.integration
+async def test_photo_upload_never_rolls_over_to_disk(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    rolled: list[int] = []
+    real = tempfile.SpooledTemporaryFile
+
+    def spy(*args, **kwargs):  # type: ignore[no-untyped-def]
+        handle = real(*args, **kwargs)
+        original = handle.rollover
+
+        def rollover() -> None:
+            rolled.append(1)
+            original()
+
+        handle.rollover = rollover  # type: ignore[method-assign]
+        return handle
+
+    async def fake_match(session, *, image_bytes, image_mime):
+        return [
+            VectorMatchRow(
+                content_id="v1",
+                title="t-v1",
+                category=None,
+                addr1=None,
+                lat=None,
+                lng=None,
+                image_url=None,
+                cpyrht_div_cd=None,
+                distance=0.2,
+            )
+        ]
+
+    monkeypatch.setattr(formparsers, "SpooledTemporaryFile", spy)
+    monkeypatch.setattr(photo_service, "match_photo", fake_match)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            files={"photo": ("a.jpg", b"x" * (4 * 1024 * 1024), "image/jpeg")},
+            data={"region": "all"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    assert rolled == []
+
+
+@pytest.mark.integration
+async def test_oversized_body_is_rejected_before_parsing(db_session, client) -> None:
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            files={"photo": ("a.jpg", b"x" * (MAX_BODY_BYTES + 1), "image/jpeg")},
+            data={"region": "all"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "IMAGE_INVALID"
+
+
+def test_multipart_spool_threshold_covers_the_accepted_upload_size() -> None:
+    assert formparsers.MultiPartParser.spool_max_size >= MAX_BODY_BYTES

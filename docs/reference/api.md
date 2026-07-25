@@ -47,7 +47,7 @@
 | 필드 | 타입 | 비고 |
 |---|---|---|
 | `question` | string | 사진이 없으면 필수. 사진에 덧붙이면 지역·근처 조건으로 함께 적용된다 |
-| `photo` | file | multipart 전용. 임베딩 후 즉시 폐기, 저장하지 않는다 |
+| `photo` | file | multipart 전용. 임베딩 후 즉시 폐기, **디스크에 닿지 않는다**(아래) |
 | `region` | `all`\|`capital`\|`gangwon`\|`chungcheong`\|`jeolla`\|`gyeongsang`\|`jeju` | 기본 `all` |
 | `when` | `any`\|`today`\|`weekend`\|`next_week` | 기본 `any` |
 | `who` | `any`\|`solo`\|`duo`\|`kids`\|`pets` | 기본 `any` |
@@ -88,6 +88,14 @@
 | `region_filter` | `agent/services/ask.py` | 사진 결과에 지역 조건 적용 |
 | `concentration` | `agent/services/retrieve.py` | 집중률 백분위 하위/상위 30%로 추림 |
 | `nearby` | `agent/repositories.py` | 현재 위치 기준 거리순 (SQL `ORDER BY`) |
+
+**업로드 사진은 디스크에 닿지 않는다.** Starlette의 multipart 파서는 파일 파트를
+`SpooledTemporaryFile(max_size=1MB)`에 담아 1MB를 넘으면 임시 파일로 롤오버한다 —
+일반적인 폰 사진이 전부 여기 걸린다. 그래서 (1) 본문을 `MAX_BODY_BYTES`(8MB +
+64KB) 상한으로 **스트리밍하며** 버퍼링해 초과분은 파싱 전에 `IMAGE_INVALID`로
+끊고, (2) `MultiPartParser.spool_max_size`를 그 상한까지 올려 허용 범위는
+메모리에만 머물게 한다. 롤오버가 일어나면 실패하는 회귀 테스트가 있다
+(`test_photo_upload_never_rolls_over_to_disk`).
 
 **키워드가 코드에 안 걸리면 넓히지 않고 좁힌다.** LLM이 뽑은 카테고리 키워드가
 `lcls` 코드로 하나도 매핑되지 않으면 조건 없는 전국 검색이 아니라 `title_search`
