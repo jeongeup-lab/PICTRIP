@@ -642,3 +642,42 @@ async def test_vague_domestic_question_still_returns_spots(
 
     assert res.status_code == 200
     assert res.json()["data"]["spots"]
+
+
+@pytest.mark.integration
+async def test_place_only_question_returns_the_place_without_a_nationwide_search(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(namedPlaces=[ExtractedPlace(name="계곡-v2", nameKo="계곡-v2")])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "계곡-v2", "region": "all"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert [step["tool"] for step in data["steps"]] == ["intent", "resolve_place"]
+    assert [spot["contentId"] for spot in data["spots"]] == ["v2"]
+    assert data["totalCount"] == 1
+
+
+@pytest.mark.integration
+async def test_place_only_question_fails_loudly_when_the_place_is_unresolvable(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(namedPlaces=[ExtractedPlace(name="없는장소이름", nameKo="없는장소이름")])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "없는장소이름", "region": "all"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "AGENT_NO_RESULTS"

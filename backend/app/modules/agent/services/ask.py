@@ -181,7 +181,11 @@ async def _ask_with_question(
     prefixes = await retrieve.resolve_region_prefixes(
         session, region=filters.region, hints=intent.regionHints
     )
-    if keywords and not codes:
+    if _named_place_is_the_only_constraint(intent, keywords=keywords, prefixes=prefixes, near=near):
+        if not pinned:
+            raise AgentNoResults()
+        candidates = []
+    elif keywords and not codes:
         candidates = await retrieve.search_by_title(session, keywords, region_prefixes=prefixes)
         steps.append(
             AskStep(
@@ -236,6 +240,18 @@ async def _ask_with_question(
         spots=spots,
         totalCount=len(merged),
         suggestions=BASE_SUGGESTIONS,
+    )
+
+
+def _named_place_is_the_only_constraint(
+    intent: QueryIntent, *, keywords: list[str], prefixes: list[str], near: bool
+) -> bool:
+    return bool(
+        intent.namedPlaces
+        and not keywords
+        and not prefixes
+        and not near
+        and intent.crowdPreference == "any"
     )
 
 
