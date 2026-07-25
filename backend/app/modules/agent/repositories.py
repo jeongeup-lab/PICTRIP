@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
+from typing import Literal
 
 from sqlalchemy import text
 
@@ -99,7 +101,10 @@ class CandidateRow:
     image_url: str | None
     cpyrht_div_cd: str | None
     concentration_rate: float | None
+    percentile: int | None = None
 
+
+CandidateOrder = Literal["id", "rate_asc", "rate_desc", "distance"]
 
 _CANDIDATE_SQL = """
 SELECT spots.content_id,
@@ -111,23 +116,39 @@ SELECT spots.content_id,
        spots.mapx AS lng,
        spots.first_image_url AS image_url,
        spots.cpyrht_div_cd,
-       sc.concentration_rate
+       sc.concentration_rate,
+       {percentile} AS percentile
 FROM spots
 LEFT JOIN regions r ON r.ldong_regn_cd = spots.ldong_regn_cd
 LEFT JOIN sigungus g ON g.ldong_signgu_cd = spots.ldong_signgu_cd
-LEFT JOIN spot_concentration sc ON sc.content_id = spots.content_id
+{concentration_join} spot_concentration sc ON sc.content_id = spots.content_id
 WHERE spots.show_flag = 1
   AND spots.first_image_url IS NOT NULL
   AND spots.first_image_url <> ''
   AND ({attraction})
   {code_clause}
   {region_clause}
-ORDER BY spots.content_id
+  {locatable_clause}
+ORDER BY {order}
 LIMIT :lim
 """
 
 _CODE_CLAUSE = "AND spots.lcls_systm3 = ANY(CAST(:codes AS text[]))"
 _REGION_CLAUSE = "AND spots.addr1 LIKE ANY(CAST(:region_patterns AS text[]))"
+_LOCATABLE_CLAUSE = "AND spots.mapx IS NOT NULL AND spots.mapy IS NOT NULL"
+_PERCENTILE_EXPR = (
+    "round(greatest(1.0, cume_dist() OVER (ORDER BY sc.concentration_rate) * 100))::int"
+)
+_DISTANCE_ORDER = (
+    "power(spots.mapy - CAST(:lat AS numeric), 2) "
+    "+ power((spots.mapx - CAST(:lng AS numeric)) * CAST(:lng_scale AS numeric), 2)"
+)
+_ORDER_BY: dict[CandidateOrder, str] = {
+    "id": "spots.content_id",
+    "rate_asc": "sc.concentration_rate ASC, spots.content_id",
+    "rate_desc": "sc.concentration_rate DESC, spots.content_id",
+    "distance": f"{_DISTANCE_ORDER}, spots.content_id",
+}
 
 
 async def find_candidates(
@@ -136,6 +157,10 @@ async def find_candidates(
     codes: list[str] | None,
     region_prefixes: list[str] | None,
     limit: int,
+    order: CandidateOrder = "id",
+    rated_only: bool = False,
+    lat: float | None = None,
+    lng: float | None = None,
 ) -> list[CandidateRow]:
     params: dict[str, object] = {"lim": limit}
     code_clause = ""
@@ -146,10 +171,20 @@ async def find_candidates(
     if region_prefixes:
         region_clause = _REGION_CLAUSE
         params["region_patterns"] = [f"{prefix}%" for prefix in region_prefixes]
+    if order == "distance":
+        if lat is None or lng is None:
+            raise ValueError("distance order requires lat/lng")
+        params["lat"] = lat
+        params["lng"] = lng
+        params["lng_scale"] = math.cos(math.radians(lat))
     sql = _CANDIDATE_SQL.format(
         attraction=attraction_category_sql(),
         code_clause=code_clause,
         region_clause=region_clause,
+        locatable_clause=_LOCATABLE_CLAUSE if order == "distance" else "",
+        concentration_join="JOIN" if rated_only else "LEFT JOIN",
+        percentile=_PERCENTILE_EXPR if rated_only else "NULL",
+        order=_ORDER_BY[order],
     )
     result = await session.execute(text(sql), params)
     return [
@@ -166,6 +201,7 @@ async def find_candidates(
             concentration_rate=(
                 float(row.concentration_rate) if row.concentration_rate is not None else None
             ),
+            percentile=int(row.percentile) if row.percentile is not None else None,
         )
         for row in result
     ]
