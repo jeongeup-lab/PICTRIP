@@ -6,6 +6,7 @@ export type TurnStatus = "pending" | "playing" | "done" | "failed";
 export interface Turn {
   id: string;
   question: string;
+  request: string;
   photo: PhotoUpload | null;
   status: TurnStatus;
   answer: AgentAnswer | null;
@@ -15,7 +16,12 @@ export interface Turn {
 interface ConversationState {
   turns: Turn[];
   busy: boolean;
-  start: (turn: { id: string; question: string; photo: PhotoUpload | null }) => void;
+  start: (turn: {
+    id: string;
+    question: string;
+    request: string;
+    photo: PhotoUpload | null;
+  }) => void;
   retry: (id: string) => void;
   resolve: (id: string, answer: AgentAnswer) => void;
   fail: (id: string, errorMessage: string) => void;
@@ -30,12 +36,12 @@ function patch(turns: Turn[], id: string, next: Partial<Turn>): Turn[] {
 export const useConversation = create<ConversationState>((set) => ({
   turns: [],
   busy: false,
-  start: ({ id, question, photo }) =>
+  start: ({ id, question, request, photo }) =>
     set((s) => ({
       busy: true,
       turns: [
         ...s.turns,
-        { id, question, photo, status: "pending", answer: null, errorMessage: null },
+        { id, question, request, photo, status: "pending", answer: null, errorMessage: null },
       ],
     })),
   retry: (id) =>

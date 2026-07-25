@@ -10,10 +10,12 @@ from app.core.db import get_db
 from app.core.redis import get_redis
 from app.kto.client import get_kto
 from app.main import app
-from app.modules.agent.repositories import CandidateRow
+from app.modules.agent.errors import AgentIntentUnavailable
+from app.modules.agent.repositories import CandidateRow, VectorMatchRow
 from app.modules.agent.schemas import AskFilters, QueryIntent
 from app.modules.agent.services import ask as ask_service
 from app.modules.agent.services import intent as intent_service
+from app.modules.agent.services import photo as photo_service
 from app.modules.agent.services import retrieve
 
 LAT, LNG = 35.15, 129.05
@@ -82,7 +84,7 @@ def test_region_filter_keeps_only_matching_address_prefixes() -> None:
     busan = _row("a", rate=None)
     seoul = CandidateRow(**{**busan.__dict__, "content_id": "b", "addr1": "서울특별시 종로구 1"})
 
-    kept = ask_service._apply_region([busan, seoul], AskFilters(region="capital"))
+    kept = ask_service._apply_prefixes([busan, seoul], ["서울", "경기", "인천"])
 
     assert [row.content_id for row in kept] == ["b"]
 
@@ -321,3 +323,124 @@ async def test_quiet_percentile_comes_from_sql_not_the_truncated_pool(
     spots = res.json()["data"]["spots"]
     assert spots[0]["contentId"] == "v1"
     assert spots[0]["tag"] == "하위 25%"
+
+
+@pytest.mark.integration
+async def test_photo_query_applies_the_region_hint_from_the_attached_text(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(regionHints=["제주"])
+
+    async def fake_match(session, *, image_bytes, image_mime):
+        return [
+            VectorMatchRow(
+                content_id=cid,
+                title=f"t-{cid}",
+                category=None,
+                addr1=None,
+                lat=None,
+                lng=None,
+                image_url=None,
+                cpyrht_div_cd=None,
+                distance=0.2,
+            )
+            for cid in ("v1", "j1")
+        ]
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    monkeypatch.setattr(photo_service, "match_photo", fake_match)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            files={"photo": ("a.jpg", b"x", "image/jpeg")},
+            data={"question": "제주에서 이런 분위기", "region": "all"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert [spot["contentId"] for spot in data["spots"]] == ["j1"]
+    assert [step["tool"] for step in data["steps"]] == ["intent", "photo_match", "region_filter"]
+
+
+@pytest.mark.integration
+async def test_unmatched_category_keyword_falls_back_to_title_search(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡-v2"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "계곡-v2", "region": "all"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert [step["tool"] for step in data["steps"]] == ["intent", "title_search"]
+    assert data["spots"][0]["contentId"] == "v2"
+
+
+@pytest.mark.integration
+async def test_unmatched_keyword_with_no_title_hit_does_not_widen_to_everything(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["존재하지않는유형"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask", json={"question": "존재하지않는유형", "region": "all"}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "AGENT_NO_RESULTS"
+
+
+@pytest.mark.integration
+async def test_photo_query_survives_intent_extraction_failure(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def failing_intent(question: str) -> QueryIntent:
+        raise AgentIntentUnavailable()
+
+    async def fake_match(session, *, image_bytes, image_mime):
+        return [
+            VectorMatchRow(
+                content_id="v1",
+                title="t-v1",
+                category=None,
+                addr1=None,
+                lat=None,
+                lng=None,
+                image_url=None,
+                cpyrht_div_cd=None,
+                distance=0.2,
+            )
+        ]
+
+    monkeypatch.setattr(intent_service, "extract_intent", failing_intent)
+    monkeypatch.setattr(photo_service, "match_photo", fake_match)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            files={"photo": ("a.jpg", b"x", "image/jpeg")},
+            data={"question": "이 사진 같은 분위기의 여행지", "region": "all"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert [step["tool"] for step in data["steps"]] == ["photo_match"]
+    assert data["spots"][0]["contentId"] == "v1"

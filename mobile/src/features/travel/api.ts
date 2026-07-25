@@ -71,7 +71,7 @@ const ASK_TIMEOUT_MS = 60_000;
 function askForm(input: AskInput, photo: PhotoUpload): FormData {
   const form = new FormData();
   form.append("photo", photo as unknown as Blob);
-  form.append("question", input.question);
+  if (input.question) form.append("question", input.question);
   form.append("region", input.conditions.region);
   form.append("when", input.conditions.when);
   form.append("who", input.conditions.who);

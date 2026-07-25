@@ -39,6 +39,7 @@ const answer = {
 const turn = (over: Partial<Turn> = {}): Turn => ({
   id: "t1",
   question: "여름에 시원한 계곡",
+  request: "여름에 시원한 계곡",
   photo: null,
   status: "playing",
   answer,

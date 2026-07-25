@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from app.core.db import AsyncSession
 from app.core.logging import get_logger
 from app.kto.client import KtoClient
@@ -18,7 +20,7 @@ from app.modules.agent.services import intent as intent_service
 from app.modules.agent.services import photo as photo_service
 from app.modules.agent.services import resolve as resolve_service
 from app.modules.agent.services import retrieve
-from app.web.errors import ValidationFailed
+from app.web.errors import AppError, ValidationFailed
 
 logger = get_logger(__name__)
 
@@ -44,26 +46,51 @@ async def ask(
     image_bytes: bytes | None,
     image_mime: str | None,
 ) -> AskResponse:
+    cleaned = (question or "").strip()
     if image_bytes:
         return await _ask_with_photo(
-            session, image_bytes=image_bytes, image_mime=image_mime, filters=filters
+            session,
+            question=cleaned,
+            image_bytes=image_bytes,
+            image_mime=image_mime,
+            filters=filters,
+            lat=lat,
+            lng=lng,
         )
-    if not question or not question.strip():
+    if not cleaned:
         raise ValidationFailed("question or photo is required")
     return await _ask_with_question(
-        session, kto, question=question.strip(), filters=filters, lat=lat, lng=lng
+        session, kto, question=cleaned, filters=filters, lat=lat, lng=lng
     )
 
 
 async def _ask_with_photo(
     session: AsyncSession,
     *,
+    question: str,
     image_bytes: bytes,
     image_mime: str | None,
     filters: AskFilters,
+    lat: float | None,
+    lng: float | None,
 ) -> AskResponse:
     steps: list[AskStep] = []
-    rows = await photo_service.match_photo(session, image_bytes=image_bytes, image_mime=image_mime)
+    intent_task = asyncio.create_task(intent_service.extract_intent(question)) if question else None
+    try:
+        rows = await photo_service.match_photo(
+            session, image_bytes=image_bytes, image_mime=image_mime
+        )
+    except BaseException:
+        if intent_task is not None:
+            intent_task.cancel()
+        raise
+    intent = QueryIntent()
+    if intent_task is not None:
+        try:
+            intent = await intent_task
+            steps.append(AskStep(tool="intent", label="덧붙인 말에서 조건 추출", badge="Gemini"))
+        except AppError as exc:
+            logger.warning("agent.photo.intent_skipped", code=exc.code)
     steps.append(
         AskStep(tool="photo_match", label="사진을 CLIP으로 임베딩해 벡터 비교", badge="pgvector")
     )
@@ -71,17 +98,27 @@ async def _ask_with_photo(
     similarity = {row.content_id: photo_service.similarity(row) for row in rows}
     briefs = await repositories.load_candidates_by_ids(session, [row.content_id for row in rows])
     ordered = [briefs[row.content_id] for row in rows if row.content_id in briefs]
-    ordered = _apply_region(ordered, filters)
-    steps.append(AskStep(tool="concentration", label="지역 조건 확인", badge=_count(ordered)))
+
+    prefixes = await retrieve.resolve_region_prefixes(
+        session, region=filters.region, hints=intent.regionHints
+    )
+    if prefixes:
+        ordered = _apply_prefixes(ordered, prefixes)
+        steps.append(AskStep(tool="region_filter", label="지역 조건 확인", badge=_count(ordered)))
+
+    near = intent.nearMe and lat is not None and lng is not None
+    if near and lat is not None and lng is not None:
+        ordered = sorted(
+            [row for row in ordered if row.lat is not None and row.lng is not None],
+            key=lambda row: retrieve.distance_km(row, lat=lat, lng=lng) or 0.0,
+        )
+        steps.append(AskStep(tool="nearby", label="현재 위치에서 가까운 순", badge=_count(ordered)))
 
     if not ordered:
         raise AgentNoResults()
 
     top = ordered[: retrieve.RESULT_LIMIT]
-    spots = [
-        retrieve.to_card(row, tag=f"유사도 {round(similarity.get(row.content_id, 0.0) * 100)}%")
-        for row in top
-    ]
+    spots = [_photo_card(row, similarity=similarity, lat=lat, lng=lng, near=near) for row in top]
     answer = [
         AnswerSegment(text="사진과 닮은 곳으로 "),
         AnswerSegment(text=f"{len(top)}곳", emphasis=True),
@@ -94,6 +131,21 @@ async def _ask_with_photo(
         totalCount=len(ordered),
         suggestions=NEAR_SUGGESTIONS,
     )
+
+
+def _photo_card(
+    row: CandidateRow,
+    *,
+    similarity: dict[str, float],
+    lat: float | None,
+    lng: float | None,
+    near: bool,
+) -> AgentSpotCard:
+    if near and lat is not None and lng is not None:
+        km = retrieve.distance_km(row, lat=lat, lng=lng)
+        if km is not None:
+            return retrieve.to_card(row, tag=f"{km:.1f}km")
+    return retrieve.to_card(row, tag=f"유사도 {round(similarity.get(row.content_id, 0.0) * 100)}%")
 
 
 async def _ask_with_question(
@@ -127,29 +179,42 @@ async def _ask_with_question(
     prefixes = await retrieve.resolve_region_prefixes(
         session, region=filters.region, hints=intent.regionHints
     )
-    candidates = await retrieve.search_candidates(
-        session,
-        codes=codes,
-        region_prefixes=prefixes,
-        preference=intent.crowdPreference,
-        lat=lat,
-        lng=lng,
-        near=near,
-    )
-    steps.append(
-        AskStep(
-            tool="category_search",
-            label=_search_label(keywords, prefixes, filters),
-            badge=_count(candidates),
+    if keywords and not codes:
+        candidates = await retrieve.search_by_title(session, keywords, region_prefixes=prefixes)
+        steps.append(
+            AskStep(
+                tool="title_search",
+                label=f"{keywords[0]} 이름으로 조회",
+                badge=_count(candidates),
+            )
         )
-    )
+        if not candidates:
+            raise AgentNoResults()
+    else:
+        candidates = await retrieve.search_candidates(
+            session,
+            codes=codes,
+            region_prefixes=prefixes,
+            preference=intent.crowdPreference,
+            lat=lat,
+            lng=lng,
+            near=near,
+        )
+        steps.append(
+            AskStep(
+                tool="category_search",
+                label=_search_label(keywords, prefixes, filters),
+                badge=_count(candidates),
+            )
+        )
 
     pool = candidates
     if intent.crowdPreference != "any":
         pool = retrieve.filter_by_crowd(pool, intent.crowdPreference)
         steps.append(AskStep(tool="concentration", label="혼잡도로 추림", badge=_count(pool)))
 
-    if near:
+    if near and lat is not None and lng is not None:
+        pool = retrieve.sort_by_distance(pool, lat=lat, lng=lng)
         steps.append(AskStep(tool="nearby", label="현재 위치에서 가까운 순", badge=_count(pool)))
 
     merged = _merge(pinned, pool)
@@ -193,11 +258,10 @@ def _search_label(keywords: list[str], prefixes: list[str], filters: AskFilters)
     return f"{head} 관광지 조회"
 
 
-def _apply_region(rows: list[CandidateRow], filters: AskFilters) -> list[CandidateRow]:
-    prefixes = retrieve.REGION_PREFIXES[filters.region]
+def _apply_prefixes(rows: list[CandidateRow], prefixes: list[str]) -> list[CandidateRow]:
     if not prefixes:
         return rows
-    return [row for row in rows if row.addr1 and row.addr1.startswith(prefixes)]
+    return [row for row in rows if row.addr1 and row.addr1.startswith(tuple(prefixes))]
 
 
 def _merge(pinned: list[CandidateRow], pool: list[CandidateRow]) -> list[CandidateRow]:
