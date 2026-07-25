@@ -5,7 +5,7 @@ import io
 from PIL import Image
 
 from app.ml.embedding import ClipEmbedder
-from app.modules.plan.services.ingest import ALLOWED_IMAGE_MIMES
+from app.modules.agent.services.photo import ALLOWED_IMAGE_MIMES
 
 
 def _heic_bytes() -> bytes:

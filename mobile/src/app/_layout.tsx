@@ -32,10 +32,7 @@ export default function RootLayout() {
           <Stack.Screen name="auth/email" options={{ presentation: "fullScreenModal" }} />
           <Stack.Screen name="saved" />
           <Stack.Screen name="map" />
-          <Stack.Screen name="plan/photo-match" />
-          <Stack.Screen name="plan/from-video" />
-          <Stack.Screen name="plan/places" />
-          <Stack.Screen name="plan/[planId]" />
+          <Stack.Screen name="travel/results" />
           <Stack.Screen name="consent" />
           <Stack.Screen name="legal/index" />
           <Stack.Screen name="legal/[slug]" />
