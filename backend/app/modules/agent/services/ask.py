@@ -6,7 +6,7 @@ from app.core.db import AsyncSession
 from app.core.logging import get_logger
 from app.kto.client import KtoClient
 from app.modules.agent import repositories
-from app.modules.agent.errors import AgentNoResults
+from app.modules.agent.errors import AgentNoResults, AgentOutOfScope
 from app.modules.agent.repositories import CandidateRow
 from app.modules.agent.schemas import (
     AgentSpotCard,
@@ -159,6 +159,8 @@ async def _ask_with_question(
 ) -> AskResponse:
     steps: list[AskStep] = []
     intent = await intent_service.extract_intent(question)
+    if intent.outOfScope:
+        raise AgentOutOfScope()
     steps.append(AskStep(tool="intent", label="질문에서 지역·조건 추출", badge="Gemini"))
 
     pinned: list[CandidateRow] = []

@@ -55,7 +55,10 @@
 
 정형 조건 3종은 LLM을 거치지 않는다. Gemini Flash는 `question` → 구조화 의도
 (카테고리 키워드 · 지역 힌트 · 지목된 장소 · 혼잡도 선호 · 실내 여부 · 근처 여부)
-추출에만 쓴다. 세 조건이 실제로 하는 일은 다르다:
+추출에만 쓴다. 의도에 `outOfScope`가 서면("파리 가볼 만한 곳") 검색을 돌리지 않고
+`AGENT_OUT_OF_SCOPE`로 끊는다 — 빈 의도로 전국 검색이 돌아 엉뚱한 국내 스팟을
+추천하는 일이 없도록. 단 사진 질의는 예외로, 해외 사진 → 국내 매칭이 제품의 본래
+동작이라 그대로 진행한다. 세 조건이 실제로 하는 일은 다르다:
 
 | 조건 | 효과 |
 |---|---|
@@ -139,6 +142,7 @@
 | `ADMIN_UNAUTHORIZED` · `ADMIN_HISTORY_NOT_FOUND` · `ADMIN_TRIGGER_FAILED` · `ADMIN_VALIDATION` | 401·404·502·422 | 어드민 전용 |
 | `AGENT_INTENT_UNAVAILABLE` | 502 | Gemini Flash 무응답 → 재시도 칩 |
 | `AGENT_NO_RESULTS` | 422 | 조건에 맞는 곳 0 → 조건 완화 안내 |
+| `AGENT_OUT_OF_SCOPE` | 422 | 해외 여행지 질의 → 국내만 가능 안내 |
 | `INTERNAL_ERROR` | 500 | 미분류 기본값 |
 
 ---

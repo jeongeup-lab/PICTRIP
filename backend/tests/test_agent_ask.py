@@ -604,3 +604,41 @@ async def test_id_lookup_skips_hidden_and_imageless_spots(db_session, seeded) ->
     found = await repositories.load_candidates_by_ids(db_session, ["v1", "hidden1", "noimg1"])
 
     assert set(found) == {"v1"}
+
+
+@pytest.mark.integration
+async def test_overseas_question_is_rejected_instead_of_recommending_random_domestic_spots(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(outOfScope=True)
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask", json={"question": "파리 여행지 추천", "region": "all"}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "AGENT_OUT_OF_SCOPE"
+
+
+@pytest.mark.integration
+async def test_vague_domestic_question_still_returns_spots(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent()
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "어디 갈까", "region": "all"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    assert res.json()["data"]["spots"]

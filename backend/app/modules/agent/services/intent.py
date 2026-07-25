@@ -26,7 +26,8 @@ _SYSTEM_PROMPT = """\
 - crowdPreference: 한적함을 원하면 "quiet", 유명한 곳을 원하면 "popular", 언급이 없으면 "any".
 - indoorOnly: 비·더위·추위를 피하거나 실내를 명시하면 true, 아니면 false.
 - nearMe: "근처", "가까운", "여기서" 처럼 현재 위치 기준을 요구하면 true, 아니면 false.
-- 대한민국 밖의 장소를 묻는 질문이면 모든 배열을 비우고 나머지는 기본값으로 둔다.
+- outOfScope: 대한민국 밖의 여행지를 묻는 질문이면 true (예: "파리 가볼 만한 곳"). 국내 질문이면 false.
+- outOfScope가 true면 나머지 배열은 모두 비운다.
 - 추측으로 조건을 만들어내지 않는다. 질문에 없으면 비운다.
 """
 
@@ -54,8 +55,16 @@ _RESPONSE_SCHEMA: dict[str, Any] = {
         "crowdPreference": {"type": "STRING", "enum": ["quiet", "any", "popular"]},
         "indoorOnly": {"type": "BOOLEAN"},
         "nearMe": {"type": "BOOLEAN"},
+        "outOfScope": {"type": "BOOLEAN"},
     },
-    "required": ["categoryKeywords", "regionHints", "crowdPreference", "indoorOnly", "nearMe"],
+    "required": [
+        "categoryKeywords",
+        "regionHints",
+        "crowdPreference",
+        "indoorOnly",
+        "nearMe",
+        "outOfScope",
+    ],
 }
 
 
@@ -74,6 +83,7 @@ async def extract_intent(question: str) -> QueryIntent:
         crowdPreference=_crowd(data.get("crowdPreference")),
         indoorOnly=bool(data.get("indoorOnly")),
         nearMe=bool(data.get("nearMe")),
+        outOfScope=bool(data.get("outOfScope")),
     )
     logger.info(
         "agent.intent.done",
@@ -81,6 +91,7 @@ async def extract_intent(question: str) -> QueryIntent:
         regions=len(intent.regionHints),
         named=len(intent.namedPlaces),
         crowd=intent.crowdPreference,
+        out_of_scope=intent.outOfScope,
     )
     return intent
 
