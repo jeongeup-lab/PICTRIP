@@ -130,15 +130,24 @@ def candidate_order(*, preference: CrowdPreference, near: bool) -> CandidateOrde
 def filter_by_crowd(rows: list[CandidateRow], preference: CrowdPreference) -> list[CandidateRow]:
     if preference == "any":
         return rows
+    rated = [row for row in rows if row.percentile is not None]
+    if not rated:
+        return rows
+    quiet = preference == "quiet"
     ceiling = round(QUIET_KEEP_RATIO * 100)
     floor = 100 - round(POPULAR_KEEP_RATIO * 100)
-    kept = [
-        row
-        for row in rows
-        if row.percentile is not None
-        and (row.percentile <= ceiling if preference == "quiet" else row.percentile >= floor)
-    ]
-    return kept or rows
+
+    def passes(row: CandidateRow) -> bool:
+        rank = row.percentile or 0
+        return rank <= ceiling if quiet else rank >= floor
+
+    kept = [row for row in rated if passes(row)]
+    if kept:
+        return kept
+    extreme = sorted(
+        rated, key=lambda row: (row.percentile or 0, row.content_id), reverse=not quiet
+    )
+    return extreme[:RESULT_LIMIT]
 
 
 def distance_km(row: CandidateRow, *, lat: float, lng: float) -> float | None:

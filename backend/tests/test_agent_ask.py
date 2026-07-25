@@ -16,7 +16,7 @@ from app.main import app
 from app.modules.agent.errors import AgentIntentUnavailable
 from app.modules.agent.repositories import CandidateRow, VectorMatchRow
 from app.modules.agent.routes import MAX_BODY_BYTES
-from app.modules.agent.schemas import AskFilters, QueryIntent
+from app.modules.agent.schemas import AskFilters, ExtractedPlace, QueryIntent
 from app.modules.agent.services import ask as ask_service
 from app.modules.agent.services import intent as intent_service
 from app.modules.agent.services import photo as photo_service
@@ -517,3 +517,43 @@ async def test_oversized_body_is_rejected_before_parsing(db_session, client) -> 
 
 def test_multipart_spool_threshold_covers_the_accepted_upload_size() -> None:
     assert formparsers.MultiPartParser.spool_max_size >= MAX_BODY_BYTES
+
+
+def test_crowd_filter_keeps_the_quiet_end_when_no_row_meets_the_threshold() -> None:
+    rows = [_row(f"c{i}", rate=float(i), percentile=p) for i, p in enumerate((34, 67, 100))]
+
+    kept = retrieve.filter_by_crowd(rows, "quiet")
+
+    assert [row.content_id for row in kept] == ["c0", "c1", "c2"]
+    assert kept[0].percentile == 34
+
+
+def test_crowd_filter_keeps_the_popular_end_when_no_row_meets_the_threshold() -> None:
+    rows = [_row(f"c{i}", rate=float(i), percentile=p) for i, p in enumerate((10, 20, 34))]
+
+    kept = retrieve.filter_by_crowd(rows, "popular")
+
+    assert [row.content_id for row in kept] == ["c2", "c1", "c0"]
+
+
+@pytest.mark.integration
+async def test_named_place_survives_an_empty_title_search(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(
+            categoryKeywords=["존재하지않는유형"],
+            namedPlaces=[ExtractedPlace(name="계곡-v2", nameKo="계곡-v2")],
+        )
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask", json={"question": "계곡-v2 존재하지않는유형", "region": "all"}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    assert [spot["contentId"] for spot in res.json()["data"]["spots"]] == ["v2"]
