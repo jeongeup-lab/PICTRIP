@@ -19,11 +19,11 @@ from app.core.redis import redis_lifespan
 from app.core.version import API_VERSION
 from app.kto.client import KtoClient
 from app.modules.admin import router as admin_router
+from app.modules.agent import router as agent_router
+from app.modules.agent.llm import close_client as close_llm_client
 from app.modules.feed import router as feed_router
 from app.modules.images import router as images_router
 from app.modules.map import router as map_router
-from app.modules.plan import router as plan_router
-from app.modules.plan.llm import close_client as close_llm_client
 from app.modules.spots import router as spots_router
 from app.modules.system import router as system_router
 from app.modules.users import router as users_router
@@ -115,7 +115,7 @@ def create_app() -> FastAPI:
     app.include_router(feed_router, prefix=prefix)
     app.include_router(images_router, prefix=prefix)
     app.include_router(map_router, prefix=prefix)
-    app.include_router(plan_router, prefix=prefix)
+    app.include_router(agent_router, prefix=prefix)
     app.include_router(system_router, prefix=prefix)
 
     return app

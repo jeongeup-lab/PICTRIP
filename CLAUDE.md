@@ -46,9 +46,9 @@ uv run ruff check . && uv run pytest
 ## Stack
 
 - **Backend**: Python 3.12 · FastAPI modular monolith (`app/modules/`: users ·
-  spots · feed · images · map · system · admin · plan) · SQLAlchemy 2.0 async ·
-  PostgreSQL + pgvector · Redis · CLIP ViT-B/32 · Gemini Flash (plan 모듈 장소
-  추출 전용).
+  spots · feed · images · map · system · admin · agent) · SQLAlchemy 2.0 async ·
+  PostgreSQL + pgvector · Redis · CLIP ViT-B/32 · Gemini Flash (agent 모듈 의도
+  추출 전용 — 검색은 결정적 SQL/pgvector 툴).
 - **Mobile**: Expo SDK 56 · RN 0.85 · React 19.2 · TypeScript strict · Expo
   Router (typed routes) · Zustand · TanStack Query · axios · expo-secure-store.
 - **Web**: Cloudflare Pages static (legal · `.well-known` deep-link files ·

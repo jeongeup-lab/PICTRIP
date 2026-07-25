@@ -16,7 +16,7 @@ mobile(Expo) · web(CF Pages) · pipeline(ETL CLI, CT111) · deploy(IaC) ·
 
 ## 핵심 개념
 
-- **백엔드 모듈 7개** — `app/modules/{users,spots,feed,images,map,system,admin}`,
+- **백엔드 모듈 8개** — `app/modules/{users,spots,feed,images,map,system,admin,agent}`,
   모듈마다 `routes → services → repositories → models/schemas` 층. routes는
   HTTP I/O만(DB·비즈니스 로직 금지), 교차 모듈 읽기는 상대 `services.py` 경유.
   admin만 예외: read-only 집계 + `overseas_spots.is_hidden` 한정 쓰기.

@@ -1,0 +1,246 @@
+import { useCallback, useRef, useState } from "react";
+import { KeyboardAvoidingView, Platform, ScrollView, View, Text, StyleSheet } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
+import { useChannelCards } from "@/features/channels/queries";
+import type { ChannelKey } from "@/features/channels/api";
+import { ChannelRail } from "@/features/travel/components/ChannelRail";
+import { AskComposer } from "@/features/travel/components/AskComposer";
+import { ConditionSheet } from "@/features/travel/components/ConditionSheet";
+import { ConversationTurn } from "@/features/travel/components/ConversationTurn";
+import { TravelToast } from "@/features/travel/components/TravelToast";
+import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
+import { useAskAgentMutation } from "@/features/travel/queries";
+import { useConditions } from "@/features/travel/stores/conditions-store";
+import { useConversation, type Turn } from "@/features/travel/stores/conversation-store";
+import { useResults } from "@/features/travel/stores/results-store";
+import { channelCardsToSpots } from "@/features/travel/lib/channel-spots";
+import { conditionChipLabel, isNeutral } from "@/features/travel/lib/condition-labels";
+import { agentErrorMessage, PHOTO_PICK_FAILED } from "@/features/travel/lib/agent-errors";
+import { composeQuestion, IDLE_SUGGESTIONS, resultsTitle } from "@/features/travel/lib/question";
+import { pickTravelPhoto } from "@/features/travel/usecases/pick-travel-photo";
+import type { PhotoUpload, TravelSpot } from "@/features/travel/api";
+import { colors, spacing } from "@/constants/theme";
+
+const NEARBY_NOTICE = "위치를 켜면 근처를 찾아드려요";
+const TOAST_BOTTOM = 104;
+
+type TravelChannelKey = Extract<ChannelKey, "hot" | "hidden" | "around">;
+
+const SECTIONS: { key: TravelChannelKey; title: string }[] = [
+  { key: "hot", title: "인기 관광지" },
+  { key: "hidden", title: "숨은 관광지" },
+  { key: "around", title: "내 근처" },
+];
+
+export default function TravelScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  const nextId = useRef(0);
+  const [draft, setDraft] = useState("");
+  const [photo, setPhoto] = useState<PhotoUpload | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const conditions = useConditions((s) => s.conditions);
+  const applyConditions = useConditions((s) => s.apply);
+  const turns = useConversation((s) => s.turns);
+  const busy = useConversation((s) => s.busy);
+  const startTurn = useConversation((s) => s.start);
+  const retryTurn = useConversation((s) => s.retry);
+  const resolveTurn = useConversation((s) => s.resolve);
+  const failTurn = useConversation((s) => s.fail);
+  const finishPlayback = useConversation((s) => s.finishPlayback);
+  const openResults = useResults((s) => s.open);
+
+  const { coords, phase } = useNearbyCoords();
+  const ask = useAskAgentMutation();
+
+  const hot = useChannelCards("hot");
+  const hidden = useChannelCards("hidden");
+  const around = useChannelCards("around", coords ?? undefined);
+  const cardsFor = { hot, hidden, around };
+
+  const scrollToEnd = useCallback(() => {
+    requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
+  }, []);
+
+  const run = useCallback(
+    (id: string, question: string, attached: PhotoUpload | null) => {
+      ask.mutate(
+        { question, photo: attached, conditions, coords },
+        {
+          onSuccess: (answer) => resolveTurn(id, answer),
+          onError: (error) => failTurn(id, agentErrorMessage(error)),
+        },
+      );
+    },
+    [ask, conditions, coords, resolveTurn, failTurn],
+  );
+
+  const submit = useCallback(
+    (text: string, attached: PhotoUpload | null) => {
+      if (busy) return;
+      const question = composeQuestion(text, attached !== null);
+      if (!question) return;
+      nextId.current += 1;
+      const id = `turn-${nextId.current}`;
+      startTurn({ id, question, photo: attached });
+      setDraft("");
+      setPhoto(null);
+      scrollToEnd();
+      run(id, question, attached);
+    },
+    [busy, startTurn, scrollToEnd, run],
+  );
+
+  const onRetry = useCallback(
+    (turn: Turn) => {
+      if (busy) return;
+      retryTurn(turn.id);
+      run(turn.id, turn.question, turn.photo);
+    },
+    [busy, retryTurn, run],
+  );
+
+  const onAttach = useCallback(async () => {
+    try {
+      const picked = await pickTravelPhoto();
+      if (picked) setPhoto(picked);
+    } catch {
+      setToast(PHOTO_PICK_FAILED);
+    }
+  }, []);
+
+  const openSpotList = useCallback(
+    (title: string, spots: TravelSpot[]) => {
+      openResults(title, spots);
+      router.push("/travel/results");
+    },
+    [openResults],
+  );
+
+  const lastAnswered = [...turns].reverse().find((t) => t.status === "done" && t.answer);
+  const chips = lastAnswered?.answer?.suggestions ?? [...IDLE_SUGGESTIONS];
+
+  return (
+    <SafeAreaView style={styles.root} edges={["top"]}>
+      <View style={styles.bar}>
+        <View style={styles.wordmarkRow}>
+          <Text style={styles.wordmark}>PICTRIP</Text>
+          <View style={styles.wordmarkDot} />
+        </View>
+      </View>
+
+      <ScrollView
+        ref={scrollRef}
+        style={styles.scroll}
+        contentContainerStyle={styles.body}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.lede}>
+          <Text style={styles.headline}>오늘,{"\n"}어디로 갈까요</Text>
+        </View>
+
+        {SECTIONS.map(({ key, title }) => {
+          const query = cardsFor[key];
+          const spots = channelCardsToSpots(key, query.data?.cards ?? []);
+          const nearbyBlocked = key === "around" && phase !== "ready";
+          if (!nearbyBlocked && (query.isError || spots.length === 0)) return null;
+          return (
+            <ChannelRail
+              key={key}
+              title={title}
+              spots={spots}
+              notice={nearbyBlocked ? NEARBY_NOTICE : null}
+              onSeeAll={() => openSpotList(title, spots)}
+            />
+          );
+        })}
+
+        {turns.length > 0 ? (
+          <View style={styles.talk}>
+            {turns.map((turn) => (
+              <ConversationTurn
+                key={turn.id}
+                turn={turn}
+                onPlaybackEnd={finishPlayback}
+                onSuggest={(text) => submit(text, null)}
+                onOpenResults={(t) => openSpotList(resultsTitle(t.question), t.answer?.spots ?? [])}
+                onRetry={onRetry}
+                onGrow={scrollToEnd}
+              />
+            ))}
+          </View>
+        ) : null}
+      </ScrollView>
+
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <AskComposer
+          value={draft}
+          photo={photo}
+          conditionLabel={conditionChipLabel(conditions)}
+          conditionActive={!isNeutral(conditions)}
+          suggestions={chips}
+          disabled={busy}
+          onChange={setDraft}
+          onOpenConditions={() => setSheetOpen(true)}
+          onSuggest={(text) => submit(text, null)}
+          onAttach={() => void onAttach()}
+          onClearAttach={() => setPhoto(null)}
+          onSubmit={() => submit(draft, photo)}
+        />
+      </KeyboardAvoidingView>
+
+      <ConditionSheet
+        open={sheetOpen}
+        conditions={conditions}
+        onClose={() => setSheetOpen(false)}
+        onApply={(next) => {
+          applyConditions(next);
+          setSheetOpen(false);
+        }}
+      />
+
+      <TravelToast message={toast} bottom={TOAST_BOTTOM} onHide={() => setToast(null)} />
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.bg },
+  bar: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+  wordmarkRow: { flexDirection: "row", alignItems: "flex-end" },
+  wordmark: { fontSize: 20, fontWeight: "800", letterSpacing: -0.5, color: colors.ink },
+  wordmarkDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginLeft: 3,
+    marginBottom: 4,
+    backgroundColor: colors.accent,
+  },
+  scroll: { flex: 1 },
+  body: { paddingBottom: spacing.xxl },
+  lede: { paddingTop: spacing.xl, paddingHorizontal: spacing.lg, paddingBottom: 6 },
+  headline: {
+    fontSize: 25,
+    fontWeight: "800",
+    letterSpacing: -0.8,
+    lineHeight: 33.5,
+    color: colors.ink,
+  },
+  talk: {
+    marginTop: 30,
+    marginHorizontal: spacing.lg,
+    paddingTop: 22,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+  },
+});

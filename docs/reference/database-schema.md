@@ -24,7 +24,7 @@
 | `admin_users` | 수동 | 콘솔 자격증명 (bcrypt) |
 | `moods` · `spot_moods` · `regions` · `sigungus` · `lcls_systm_codes` | 시드/pipeline | 마스터 코드 |
 | `sync_runs` | **pipeline 소유** | backend는 raw SQL read-only. **backend Alembic 추가 금지** |
-| `curations` · `curation_spots` | — | 은퇴 자산. ORM 없음 — autogenerate `include_object` 제외로 보존 |
+| `curations` · `curation_spots` · `plans` | — | 은퇴 자산. ORM 없음 — autogenerate `include_object` 제외로 보존 |
 
 - 벡터 리터럴: `... <=> $1::halfvec(512)`.
 - `hnsw.ef_search=80` — `app/core/db.py` asyncpg `server_settings`.

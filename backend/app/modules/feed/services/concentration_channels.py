@@ -13,7 +13,7 @@ from app.modules.spots import services as spots_services
 logger = get_logger(__name__)
 
 _CARD_COUNT = 10
-_CACHE_VERSION = "v2"
+_CACHE_VERSION = "v3"
 _TTL = 3600
 
 
@@ -31,6 +31,7 @@ async def _query(session: AsyncSession, key: str) -> list[ChannelCardRow]:
                 region_label=r.region_label,
                 image_url=r.first_image_url,
                 rank=r.rank,
+                tag="붐빔",
                 cpyrht_div_cd=r.cpyrht_div_cd,
             )
             for r in rows
@@ -42,6 +43,7 @@ async def _query(session: AsyncSession, key: str) -> list[ChannelCardRow]:
             title=r.title,
             region_label=r.region_label,
             image_url=r.first_image_url,
+            tag=f"하위 {r.percentile}%" if r.percentile is not None else None,
             cpyrht_div_cd=r.cpyrht_div_cd,
         )
         for r in rows

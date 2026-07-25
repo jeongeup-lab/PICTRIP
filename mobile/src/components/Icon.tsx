@@ -35,7 +35,10 @@ export type IconName =
   | "calendar"
   | "swap"
   | "trash"
-  | "arrow-down";
+  | "arrow-down"
+  | "arrow-up"
+  | "plus"
+  | "chat";
 
 interface IconProps {
   name: IconName;
@@ -112,6 +115,9 @@ const PATHS: Record<IconName, IconSpec> = {
   swap: { d: "M4 7h13M14 3.5L17.5 7 14 10.5M20 17H7M10 13.5L6.5 17l3.5 3.5" },
   trash: { d: "M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13M10 11v6M14 11v6" },
   "arrow-down": { d: "M12 4v16M8 16l4 4 4-4" },
+  "arrow-up": { d: "M12 19V5M5 12l7-7 7 7" },
+  plus: { d: "M12 6v12M6 12h12" },
+  chat: { d: "M20 12a7.5 7.5 0 0 1-10.9 6.7L4 20l1.4-4.2A7.5 7.5 0 1 1 20 12z" },
 };
 
 export function Icon({ name, size = 22, color = colors.ink, strokeWidth = 1.9 }: IconProps) {
