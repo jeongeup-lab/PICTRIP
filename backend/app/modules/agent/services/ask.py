@@ -77,9 +77,7 @@ async def _ask_with_photo(
     steps: list[AskStep] = []
     intent_task = asyncio.create_task(intent_service.extract_intent(question)) if question else None
     try:
-        rows = await photo_service.match_photo(
-            session, image_bytes=image_bytes, image_mime=image_mime
-        )
+        vector = await photo_service.embed_photo(image_bytes=image_bytes, image_mime=image_mime)
     except BaseException:
         if intent_task is not None:
             intent_task.cancel()
@@ -91,20 +89,22 @@ async def _ask_with_photo(
             steps.append(AskStep(tool="intent", label="덧붙인 말에서 조건 추출", badge="Gemini"))
         except AppError as exc:
             logger.warning("agent.photo.intent_skipped", code=exc.code)
+
+    prefixes = await retrieve.resolve_region_prefixes(
+        session, region=filters.region, hints=intent.regionHints
+    )
+    rows = await photo_service.match_vector(session, vector, region_prefixes=prefixes)
     steps.append(
-        AskStep(tool="photo_match", label="사진을 CLIP으로 임베딩해 벡터 비교", badge="pgvector")
+        AskStep(
+            tool="photo_match",
+            label=_photo_label(prefixes),
+            badge="pgvector",
+        )
     )
 
     similarity = {row.content_id: photo_service.similarity(row) for row in rows}
     briefs = await repositories.load_candidates_by_ids(session, [row.content_id for row in rows])
     ordered = [briefs[row.content_id] for row in rows if row.content_id in briefs]
-
-    prefixes = await retrieve.resolve_region_prefixes(
-        session, region=filters.region, hints=intent.regionHints
-    )
-    if prefixes:
-        ordered = _apply_prefixes(ordered, prefixes)
-        steps.append(AskStep(tool="region_filter", label="지역 조건 확인", badge=_count(ordered)))
 
     near = intent.nearMe and lat is not None and lng is not None
     if near and lat is not None and lng is not None:
@@ -131,6 +131,12 @@ async def _ask_with_photo(
         totalCount=len(ordered),
         suggestions=NEAR_SUGGESTIONS,
     )
+
+
+def _photo_label(prefixes: list[str]) -> str:
+    if prefixes:
+        return f"{prefixes[0]} 안에서 사진과 닮은 곳 비교"
+    return "사진을 CLIP으로 임베딩해 벡터 비교"
 
 
 def _photo_card(
@@ -272,12 +278,6 @@ def _search_label(keywords: list[str], prefixes: list[str], filters: AskFilters)
     else:
         head = retrieve.REGION_LABELS[filters.region]
     return f"{head} 관광지 조회"
-
-
-def _apply_prefixes(rows: list[CandidateRow], prefixes: list[str]) -> list[CandidateRow]:
-    if not prefixes:
-        return rows
-    return [row for row in rows if row.addr1 and row.addr1.startswith(tuple(prefixes))]
 
 
 def _merge(pinned: list[CandidateRow], pool: list[CandidateRow]) -> list[CandidateRow]:

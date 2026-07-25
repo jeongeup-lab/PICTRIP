@@ -99,12 +99,16 @@ async def search_candidates(
 async def search_by_title(
     session: AsyncSession, keywords: list[str], *, region_prefixes: list[str]
 ) -> list[CandidateRow]:
+    hints: list[str | None] = list(region_prefixes) if region_prefixes else [None]
     content_ids: list[str] = []
     for keyword in keywords[:TITLE_KEYWORD_LIMIT]:
-        rows = await search_spots_by_title(session, keyword, limit=TITLE_MATCH_LIMIT)
-        for row in rows:
-            if row.content_id not in content_ids:
-                content_ids.append(row.content_id)
+        for hint in hints:
+            rows = await search_spots_by_title(
+                session, keyword, region_hint=hint, limit=TITLE_MATCH_LIMIT
+            )
+            for row in rows:
+                if row.content_id not in content_ids:
+                    content_ids.append(row.content_id)
     briefs = await repositories.load_candidates_by_ids(session, content_ids)
     found = [briefs[cid] for cid in content_ids if cid in briefs]
     if not region_prefixes:

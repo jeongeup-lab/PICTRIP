@@ -23,7 +23,7 @@ class VectorMatchRow:
     distance: float
 
 
-_VECTOR_MATCH_SQL = f"""
+_VECTOR_MATCH_SQL = """
 SELECT spots.content_id,
        spots.title,
        c.lcls_systm3_nm AS category,
@@ -38,8 +38,10 @@ JOIN spots ON spots.content_id = se.content_id
           AND spots.show_flag = 1
           AND spots.first_image_url IS NOT NULL
           AND spots.first_image_url <> ''
-          AND ({attraction_category_sql()})
+          AND ({attraction})
 LEFT JOIN lcls_systm_codes c ON c.lcls_systm3_cd = spots.lcls_systm3
+WHERE TRUE
+  {region_clause}
 ORDER BY se.embedding <=> CAST(:vec AS halfvec(512))
 LIMIT :lim
 """
@@ -50,11 +52,21 @@ def _vector_literal(vector: list[float]) -> str:
 
 
 async def match_spots_by_vector(
-    session: AsyncSession, vector: list[float], *, limit: int
+    session: AsyncSession,
+    vector: list[float],
+    *,
+    limit: int,
+    region_prefixes: list[str] | None = None,
 ) -> list[VectorMatchRow]:
-    result = await session.execute(
-        text(_VECTOR_MATCH_SQL), {"vec": _vector_literal(vector), "lim": limit}
+    params: dict[str, object] = {"vec": _vector_literal(vector), "lim": limit}
+    region_clause = ""
+    if region_prefixes:
+        region_clause = _REGION_CLAUSE
+        params["region_patterns"] = [f"{prefix}%" for prefix in region_prefixes]
+    sql = _VECTOR_MATCH_SQL.format(
+        attraction=attraction_category_sql(), region_clause=region_clause
     )
+    result = await session.execute(text(sql), params)
     return [
         VectorMatchRow(
             content_id=row.content_id,

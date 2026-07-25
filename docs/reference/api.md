@@ -84,11 +84,10 @@
 | tool | 구현 | 하는 일 |
 |---|---|---|
 | `intent` | `agent/services/intent.py` | Gemini Flash 자유문 → 구조화 의도 |
-| `photo_match` | `agent/services/photo.py` | CLIP 임베딩 → pgvector 유사도 |
+| `photo_match` | `agent/services/photo.py` | CLIP 임베딩 → pgvector 유사도 (지역 조건은 SQL에 포함) |
 | `resolve_place` | `agent/services/resolve.py` | 장소명 → KTO 스팟 (질문이 특정 장소를 지목할 때) |
 | `category_search` | `agent/repositories.py` + `lcls_systm_codes` | 카테고리 키워드 → lcls 코드 → 스팟 조회 |
-| `title_search` | `spots/services/search.py` | 키워드가 lcls 코드에 하나도 안 걸릴 때의 폴백 (스팟 이름 trigram) |
-| `region_filter` | `agent/services/ask.py` | 사진 결과에 지역 조건 적용 |
+| `title_search` | `spots/services/search.py` | 키워드가 lcls 코드에 하나도 안 걸릴 때의 폴백 (스팟 이름 trigram, 지역별로 각각 조회) |
 | `concentration` | `agent/services/retrieve.py` | 집중률 백분위 하위/상위 30%로 추림. 후보가 적어 아무도 30% 안에 못 들면 가장 한적한/붐비는 쪽 4곳을 남긴다 (선호를 버리고 전체로 되돌리지 않는다) |
 | `nearby` | `agent/repositories.py` | 현재 위치 기준 거리순 (SQL `ORDER BY`) |
 
@@ -110,11 +109,12 @@
 추천하지 않는다.
 
 **사진 질의도 덧붙인 말을 읽는다.** 사진 + 텍스트면 CLIP 임베딩과 Gemini 의도
-추출을 **동시에** 돌리고(지연은 둘 중 큰 쪽), 지역·근처 조건을 CLIP 결과에
-적용한다. 의도 추출이 실패해도 사진 결과는 그대로 내려간다(best-effort).
+추출을 **동시에** 돌리고(지연은 둘 중 큰 쪽), 그 다음 지역 조건을 **벡터 SQL 안에**
+넣어 검색한다 — 전역 상위 12개를 뽑고 나서 지역으로 거르면 13위 밖의 그 지역
+후보를 아예 못 본다. 의도 추출이 실패해도 사진 결과는 그대로 내려간다(best-effort).
 
-**정렬은 SQL에서 끝낸다.** 후보 400개를 임의 순서로 자른 뒤 파이썬에서 정렬하면
-진짜 가까운/한적한 곳이 잘려나간다. 거리·집중률 정렬은 `ORDER BY`로 내려가고
+**정렬도 필터도 LIMIT보다 먼저다.** 후보 400개를 임의 순서로 자른 뒤 파이썬에서
+정렬하거나 거르면 진짜 가까운/한적한/그 지역의 곳이 잘려나간다. 거리·집중률 정렬은 `ORDER BY`로 내려가고
 `LIMIT`은 그 뒤에 붙는다. 혼잡도 백분위도 `cume_dist()` 윈도로 **필터를 만족하는
 전체 집합** 기준으로 계산한다 — 잘린 400개 안의 상대 순위가 아니다.
 
