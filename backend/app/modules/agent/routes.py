@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 from pydantic import ValidationError
 from starlette.datastructures import UploadFile
+from starlette.formparsers import MultiPartParser
 
 from app.core.db import DbSession
 from app.kto.client import KtoDep
@@ -15,6 +16,11 @@ from app.modules.agent.services.photo import MAX_IMAGE_BYTES
 from app.web.envelope import ok
 from app.web.errors import ImageInvalid, ValidationFailed
 from app.web.ratelimit import rate_limit
+
+FORM_OVERHEAD_BYTES = 64 * 1024
+MAX_BODY_BYTES = MAX_IMAGE_BYTES + FORM_OVERHEAD_BYTES
+
+MultiPartParser.spool_max_size = MAX_BODY_BYTES
 
 router = APIRouter(tags=["AGT · travel agent"])
 
@@ -39,7 +45,19 @@ async def agent_ask(request: Request, session: DbSession, kto: KtoDep) -> dict[s
     return ok(result)
 
 
+async def _buffer_capped(request: Request) -> None:
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > MAX_BODY_BYTES:
+            raise ImageInvalid()
+        chunks.append(chunk)
+    request._body = b"".join(chunks)
+
+
 async def _read_payload(request: Request) -> tuple[AskRequest, bytes | None, str | None]:
+    await _buffer_capped(request)
     content_type = request.headers.get("content-type", "")
     if content_type.startswith("multipart/"):
         form = await request.form()
