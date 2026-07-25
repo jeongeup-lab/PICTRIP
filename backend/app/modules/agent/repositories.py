@@ -223,6 +223,9 @@ LEFT JOIN regions r ON r.ldong_regn_cd = spots.ldong_regn_cd
 LEFT JOIN sigungus g ON g.ldong_signgu_cd = spots.ldong_signgu_cd
 LEFT JOIN spot_concentration sc ON sc.content_id = spots.content_id
 WHERE spots.content_id = ANY(CAST(:ids AS text[]))
+  AND spots.show_flag = 1
+  AND spots.first_image_url IS NOT NULL
+  AND spots.first_image_url <> ''
 """
 
 

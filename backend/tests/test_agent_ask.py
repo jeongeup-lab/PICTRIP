@@ -13,6 +13,7 @@ from app.core.db import get_db
 from app.core.redis import get_redis
 from app.kto.client import get_kto
 from app.main import app
+from app.modules.agent import repositories
 from app.modules.agent.errors import AgentIntentUnavailable
 from app.modules.agent.repositories import CandidateRow, VectorMatchRow
 from app.modules.agent.routes import MAX_BODY_BYTES
@@ -557,3 +558,49 @@ async def test_named_place_survives_an_empty_title_search(
 
     assert res.status_code == 200
     assert [spot["contentId"] for spot in res.json()["data"]["spots"]] == ["v2"]
+
+
+@pytest.mark.integration
+async def test_empty_photo_upload_is_rejected_instead_of_falling_back_to_text(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        raise AssertionError("text path must not run for an empty photo")
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            files={"photo": ("a.jpg", b"", "image/jpeg")},
+            data={"question": "계곡", "region": "all"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "IMAGE_INVALID"
+
+
+@pytest.mark.integration
+async def test_id_lookup_skips_hidden_and_imageless_spots(db_session, seeded) -> None:
+    await db_session.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, addr1, first_image_url, "
+            "show_flag, lcls_systm1, ldong_regn_cd) "
+            "VALUES ('hidden1', 12, '숨김', '부산광역시 사하구 2', 'http://kto/i.jpg', 0, "
+            "'NA', '26')"
+        )
+    )
+    await db_session.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, addr1, first_image_url, "
+            "show_flag, lcls_systm1, ldong_regn_cd) "
+            "VALUES ('noimg1', 12, '사진없음', '부산광역시 사하구 3', '', 1, 'NA', '26')"
+        )
+    )
+    await db_session.flush()
+
+    found = await repositories.load_candidates_by_ids(db_session, ["v1", "hidden1", "noimg1"])
+
+    assert set(found) == {"v1"}

@@ -47,7 +47,7 @@ async def ask(
     image_mime: str | None,
 ) -> AskResponse:
     cleaned = (question or "").strip()
-    if image_bytes:
+    if image_bytes is not None:
         return await _ask_with_photo(
             session,
             question=cleaned,
