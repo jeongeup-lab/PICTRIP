@@ -6,9 +6,11 @@ from app.modules.agent import repositories
 from app.modules.agent.repositories import CandidateOrder, CandidateRow
 from app.modules.agent.schemas import AgentSpotCard, CrowdPreference, Region, Who
 from app.modules.agent.services.geo import haversine_km
-from app.modules.spots.services import map_region_tokens_to_sido
+from app.modules.spots.services import map_region_tokens_to_sido, search_spots_by_title
 
 CANDIDATE_LIMIT = 400
+TITLE_KEYWORD_LIMIT = 3
+TITLE_MATCH_LIMIT = 20
 RESULT_LIMIT = 4
 QUIET_KEEP_RATIO = 0.3
 POPULAR_KEEP_RATIO = 0.3
@@ -92,6 +94,27 @@ async def search_candidates(
         lat=lat,
         lng=lng,
     )
+
+
+async def search_by_title(
+    session: AsyncSession, keywords: list[str], *, region_prefixes: list[str]
+) -> list[CandidateRow]:
+    content_ids: list[str] = []
+    for keyword in keywords[:TITLE_KEYWORD_LIMIT]:
+        rows = await search_spots_by_title(session, keyword, limit=TITLE_MATCH_LIMIT)
+        for row in rows:
+            if row.content_id not in content_ids:
+                content_ids.append(row.content_id)
+    briefs = await repositories.load_candidates_by_ids(session, content_ids)
+    found = [briefs[cid] for cid in content_ids if cid in briefs]
+    if not region_prefixes:
+        return found
+    return [row for row in found if row.addr1 and row.addr1.startswith(tuple(region_prefixes))]
+
+
+def sort_by_distance(rows: list[CandidateRow], *, lat: float, lng: float) -> list[CandidateRow]:
+    locatable = [row for row in rows if row.lat is not None and row.lng is not None]
+    return sorted(locatable, key=lambda row: distance_km(row, lat=lat, lng=lng) or 0.0)
 
 
 def candidate_order(*, preference: CrowdPreference, near: bool) -> CandidateOrder:

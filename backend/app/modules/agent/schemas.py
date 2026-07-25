@@ -17,6 +17,8 @@ ToolName = Literal[
     "photo_match",
     "resolve_place",
     "category_search",
+    "title_search",
+    "region_filter",
     "concentration",
     "nearby",
 ]

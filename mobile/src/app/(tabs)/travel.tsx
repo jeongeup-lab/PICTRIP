@@ -65,9 +65,9 @@ export default function TravelScreen() {
   }, []);
 
   const run = useCallback(
-    (id: string, question: string, attached: PhotoUpload | null) => {
+    (id: string, request: string, attached: PhotoUpload | null) => {
       ask.mutate(
-        { question, photo: attached, conditions, coords },
+        { question: request, photo: attached, conditions, coords },
         {
           onSuccess: (answer) => resolveTurn(id, answer),
           onError: (error) => failTurn(id, agentErrorMessage(error)),
@@ -82,13 +82,14 @@ export default function TravelScreen() {
       if (busy) return;
       const question = composeQuestion(text, attached !== null);
       if (!question) return;
+      const request = text.trim();
       nextId.current += 1;
       const id = `turn-${nextId.current}`;
-      startTurn({ id, question, photo: attached });
+      startTurn({ id, question, request, photo: attached });
       setDraft("");
       setPhoto(null);
       scrollToEnd();
-      run(id, question, attached);
+      run(id, request, attached);
     },
     [busy, startTurn, scrollToEnd, run],
   );
@@ -97,7 +98,7 @@ export default function TravelScreen() {
     (turn: Turn) => {
       if (busy) return;
       retryTurn(turn.id);
-      run(turn.id, turn.question, turn.photo);
+      run(turn.id, turn.request, turn.photo);
     },
     [busy, retryTurn, run],
   );

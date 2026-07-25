@@ -46,7 +46,7 @@
 
 | 필드 | 타입 | 비고 |
 |---|---|---|
-| `question` | string | 사진이 없으면 필수 |
+| `question` | string | 사진이 없으면 필수. 사진에 덧붙이면 지역·근처 조건으로 함께 적용된다 |
 | `photo` | file | multipart 전용. 임베딩 후 즉시 폐기, 저장하지 않는다 |
 | `region` | `all`\|`capital`\|`gangwon`\|`chungcheong`\|`jeolla`\|`gyeongsang`\|`jeju` | 기본 `all` |
 | `when` | `any`\|`today`\|`weekend`\|`next_week` | 기본 `any` |
@@ -84,8 +84,19 @@
 | `photo_match` | `agent/services/photo.py` | CLIP 임베딩 → pgvector 유사도 |
 | `resolve_place` | `agent/services/resolve.py` | 장소명 → KTO 스팟 (질문이 특정 장소를 지목할 때) |
 | `category_search` | `agent/repositories.py` + `lcls_systm_codes` | 카테고리 키워드 → lcls 코드 → 스팟 조회 |
+| `title_search` | `spots/services/search.py` | 키워드가 lcls 코드에 하나도 안 걸릴 때의 폴백 (스팟 이름 trigram) |
+| `region_filter` | `agent/services/ask.py` | 사진 결과에 지역 조건 적용 |
 | `concentration` | `agent/services/retrieve.py` | 집중률 백분위 하위/상위 30%로 추림 |
 | `nearby` | `agent/repositories.py` | 현재 위치 기준 거리순 (SQL `ORDER BY`) |
+
+**키워드가 코드에 안 걸리면 넓히지 않고 좁힌다.** LLM이 뽑은 카테고리 키워드가
+`lcls` 코드로 하나도 매핑되지 않으면 조건 없는 전국 검색이 아니라 `title_search`
+폴백으로 가고, 그것도 비면 `AGENT_NO_RESULTS`다. 유형을 물었는데 아무 관광지나
+추천하지 않는다.
+
+**사진 질의도 덧붙인 말을 읽는다.** 사진 + 텍스트면 CLIP 임베딩과 Gemini 의도
+추출을 **동시에** 돌리고(지연은 둘 중 큰 쪽), 지역·근처 조건을 CLIP 결과에
+적용한다. 의도 추출이 실패해도 사진 결과는 그대로 내려간다(best-effort).
 
 **정렬은 SQL에서 끝낸다.** 후보 400개를 임의 순서로 자른 뒤 파이썬에서 정렬하면
 진짜 가까운/한적한 곳이 잘려나간다. 거리·집중률 정렬은 `ORDER BY`로 내려가고
