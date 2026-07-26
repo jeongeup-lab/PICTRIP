@@ -7,7 +7,10 @@ from typing import Literal
 from sqlalchemy import text
 
 from app.core.db import AsyncSession
-from app.modules.spots.services import attraction_category_sql
+from app.modules.spots.services import travel_category_sql
+
+INDOOR_L2 = ("VE06", "VE07")
+INDOOR_L3 = ("VE020400", "VE120300")
 
 
 @dataclass(frozen=True)
@@ -63,9 +66,7 @@ async def match_spots_by_vector(
     if region_prefixes:
         region_clause = _REGION_CLAUSE
         params["region_patterns"] = [f"{prefix}%" for prefix in region_prefixes]
-    sql = _VECTOR_MATCH_SQL.format(
-        attraction=attraction_category_sql(), region_clause=region_clause
-    )
+    sql = _VECTOR_MATCH_SQL.format(attraction=travel_category_sql(), region_clause=region_clause)
     result = await session.execute(text(sql), params)
     return [
         VectorMatchRow(
@@ -141,6 +142,7 @@ WITH scored AS (
       AND ({attraction})
       {code_clause}
       {region_clause}
+      {indoor_clause}
       {locatable_clause}
 )
 SELECT * FROM scored
@@ -153,6 +155,10 @@ LIMIT :lim
 _CODE_CLAUSE = "AND spots.lcls_systm3 = ANY(CAST(:codes AS text[]))"
 _REGION_CLAUSE = "AND spots.addr1 LIKE ANY(CAST(:region_patterns AS text[]))"
 _LOCATABLE_CLAUSE = "AND spots.mapx IS NOT NULL AND spots.mapy IS NOT NULL"
+_INDOOR_CLAUSE = (
+    "AND (spots.lcls_systm2 = ANY(CAST(:indoor_l2 AS text[])) "
+    "OR spots.lcls_systm3 = ANY(CAST(:indoor_l3 AS text[])))"
+)
 _CEILING_CLAUSE = "AND percentile <= :ceiling"
 _FLOOR_CLAUSE = "AND percentile >= :floor"
 _PERCENTILE_EXPR = (
@@ -182,6 +188,7 @@ async def find_candidates(
     percentile_floor: int | None = None,
     lat: float | None = None,
     lng: float | None = None,
+    indoor_only: bool = False,
 ) -> list[CandidateRow]:
     params: dict[str, object] = {"lim": limit}
     percentile_clause = ""
@@ -199,6 +206,11 @@ async def find_candidates(
     if region_prefixes:
         region_clause = _REGION_CLAUSE
         params["region_patterns"] = [f"{prefix}%" for prefix in region_prefixes]
+    indoor_clause = ""
+    if indoor_only:
+        indoor_clause = _INDOOR_CLAUSE
+        params["indoor_l2"] = list(INDOOR_L2)
+        params["indoor_l3"] = list(INDOOR_L3)
     if order == "distance":
         if lat is None or lng is None:
             raise ValueError("distance order requires lat/lng")
@@ -206,9 +218,10 @@ async def find_candidates(
         params["lng"] = lng
         params["lng_scale"] = math.cos(math.radians(lat))
     sql = _CANDIDATE_SQL.format(
-        attraction=attraction_category_sql(),
+        attraction=travel_category_sql(),
         code_clause=code_clause,
         region_clause=region_clause,
+        indoor_clause=indoor_clause,
         locatable_clause=_LOCATABLE_CLAUSE if order == "distance" else "",
         concentration_join="JOIN" if rated_only else "LEFT JOIN",
         percentile=_PERCENTILE_EXPR if rated_only else "NULL",

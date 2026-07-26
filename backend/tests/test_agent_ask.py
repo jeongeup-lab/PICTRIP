@@ -187,6 +187,44 @@ async def _seed(session: AsyncSession) -> None:
             "VALUES ('j1', 30.00, DATE '2026-07-01', 'n-j1')"
         )
     )
+    await session.execute(
+        text(
+            "INSERT INTO lcls_systm_codes "
+            "(lcls_systm3_cd, lcls_systm2_cd, lcls_systm1_cd, lcls_systm3_nm, "
+            "lcls_systm2_nm, lcls_systm1_nm) "
+            "VALUES ('VE070100', 'VE07', 'VE', '박물관', '전시시설', '문화관광') "
+            "ON CONFLICT DO NOTHING"
+        )
+    )
+    await session.execute(
+        text(
+            "INSERT INTO lcls_systm_codes "
+            "(lcls_systm3_cd, lcls_systm2_cd, lcls_systm1_cd, lcls_systm3_nm, "
+            "lcls_systm2_nm, lcls_systm1_nm) "
+            "VALUES ('EX070100', 'EX07', 'EX', '기타체험관광', '기타체험', '체험관광') "
+            "ON CONFLICT DO NOTHING"
+        )
+    )
+    await session.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, addr1, "
+            "first_image_url, show_flag, mapx, mapy, lcls_systm1, lcls_systm2, "
+            "lcls_systm3, ldong_regn_cd, ldong_signgu_cd) "
+            "VALUES ('m1', 14, '부산박물관', '부산광역시 사하구 2', "
+            "'http://kto/i.jpg', 1, :lng, :lat, 'VE', 'VE07', 'VE070100', '26', '26380')"
+        ),
+        {"lng": LNG, "lat": LAT},
+    )
+    await session.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, addr1, "
+            "first_image_url, show_flag, mapx, mapy, lcls_systm1, lcls_systm2, "
+            "lcls_systm3, ldong_regn_cd, ldong_signgu_cd) "
+            "VALUES ('e1', 12, '갯벌체험마을', '부산광역시 사하구 3', "
+            "'http://kto/i.jpg', 1, :lng, :lat, 'EX', 'EX07', 'EX070100', '26', '26380')"
+        ),
+        {"lng": LNG, "lat": LAT},
+    )
     await session.flush()
 
 
@@ -803,3 +841,25 @@ def test_answer_reports_a_zero_kilometre_distance() -> None:
     )
 
     assert "0.0km" in "".join(s.text for s in segments)
+
+
+@pytest.mark.integration
+async def test_travel_predicate_surfaces_museums_that_the_map_predicate_drops(
+    db_session, seeded
+) -> None:
+    rows = await repositories.find_candidates(
+        db_session, codes=["VE070100"], region_prefixes=None, limit=50
+    )
+
+    assert [row.content_id for row in rows] == ["m1"]
+
+
+@pytest.mark.integration
+async def test_indoor_only_excludes_outdoor_experience_tourism(db_session, seeded) -> None:
+    rows = await repositories.find_candidates(
+        db_session, codes=None, region_prefixes=None, limit=50, indoor_only=True
+    )
+
+    ids = {row.content_id for row in rows}
+    assert "m1" in ids
+    assert "e1" not in ids

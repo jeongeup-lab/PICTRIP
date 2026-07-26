@@ -3,6 +3,8 @@ from __future__ import annotations
 from app.core.db import AsyncSession
 from app.kto.display import t1_display_url
 from app.modules.agent import repositories
+from app.modules.agent.repositories import INDOOR_L2 as INDOOR_L2
+from app.modules.agent.repositories import INDOOR_L3 as INDOOR_L3
 from app.modules.agent.repositories import CandidateOrder, CandidateRow
 from app.modules.agent.schemas import AgentSpotCard, CrowdPreference, Region, Who
 from app.modules.agent.services.geo import haversine_km
@@ -45,8 +47,6 @@ WHO_KEYWORDS: dict[Who, tuple[str, ...]] = {
     "pets": ("공원", "산책로"),
 }
 
-INDOOR_KEYWORDS = ("박물관", "미술관", "전시관", "아쿠아리움", "공연장", "체험관")
-
 
 async def resolve_category_codes(session: AsyncSession, keywords: list[str]) -> list[str]:
     codes: list[str] = []
@@ -83,6 +83,7 @@ async def search_candidates(
     lat: float | None,
     lng: float | None,
     near: bool,
+    indoor_only: bool = False,
 ) -> list[CandidateRow]:
     quiet = preference == "quiet"
 
@@ -98,6 +99,7 @@ async def search_candidates(
             percentile_floor=floor,
             lat=lat,
             lng=lng,
+            indoor_only=indoor_only,
         )
 
     if preference == "any":
