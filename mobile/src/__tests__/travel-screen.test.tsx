@@ -23,6 +23,9 @@ jest.mock("@/features/spots/queries", () => ({ prefetchSpot: jest.fn() }));
 const { useChannelCards } = jest.requireMock("@/features/channels/queries") as {
   useChannelCards: jest.Mock;
 };
+const { pickTravelPhoto } = jest.requireMock("@/features/travel/usecases/pick-travel-photo") as {
+  pickTravelPhoto: jest.Mock;
+};
 const askAgentMock = askAgent as jest.Mock;
 const useNearbyCoordsMock = useNearbyCoords as jest.Mock;
 
@@ -164,6 +167,23 @@ describe("TravelScreen starter chips", () => {
     expect(input.patch).toBeUndefined();
     expect(input.intent).toBeUndefined();
     expect(input.coords).toEqual(COORDS);
+  });
+});
+
+describe("TravelScreen photo start card", () => {
+  it("carries the text already typed in the composer along with the photo", async () => {
+    const photo = { uri: "file:///a.jpg", name: "a.jpg", type: "image/jpeg" };
+    pickTravelPhoto.mockResolvedValueOnce(photo);
+    const tree = await mount();
+    const input = tree.root.findByProps({ testID: "travel-input" });
+    await act(async () => input.props.onChangeText("제주 바다 같은 곳"));
+
+    await press(tree, "travel-photo-start");
+
+    expect(askAgentMock).toHaveBeenCalledTimes(1);
+    const sent = askAgentMock.mock.calls[0][0];
+    expect(sent.question).toBe("제주 바다 같은 곳");
+    expect(sent.photo).toEqual(photo);
   });
 });
 
