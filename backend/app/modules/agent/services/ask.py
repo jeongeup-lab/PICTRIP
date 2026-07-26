@@ -21,14 +21,12 @@ from app.modules.agent.services import photo as photo_service
 from app.modules.agent.services import refine as refine_service
 from app.modules.agent.services import resolve as resolve_service
 from app.modules.agent.services import retrieve
+from app.modules.agent.services import suggest as suggest_service
 from app.web.errors import AppError, ValidationFailed
 
 logger = get_logger(__name__)
 
 INDOOR_RETRY_LABEL = "실내로만 다시 조회"
-
-BASE_SUGGESTIONS = ["더 한적한 곳", "실내 위주", "더 가까운 곳"]
-NEAR_SUGGESTIONS = ["더 비슷하게", "더 가까운 곳", "실내 위주"]
 
 
 async def ask(
@@ -136,7 +134,11 @@ async def _ask_with_photo(
         spots=spots,
         totalCount=len(spots),
         intent=intent,
-        suggestions=NEAR_SUGGESTIONS,
+        suggestions=suggest_service.derive(
+            intent,
+            has_coords=lat is not None and lng is not None,
+            result_count=len(spots),
+        ),
     )
 
 
@@ -275,7 +277,11 @@ async def _ask_with_question(
         spots=spots,
         totalCount=len(spots),
         intent=intent,
-        suggestions=BASE_SUGGESTIONS,
+        suggestions=suggest_service.derive(
+            intent,
+            has_coords=lat is not None and lng is not None,
+            result_count=len(spots),
+        ),
     )
 
 

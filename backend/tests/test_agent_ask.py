@@ -34,6 +34,7 @@ from app.modules.agent.services import photo as photo_service
 from app.modules.agent.services import refine as refine_service
 from app.modules.agent.services import resolve as resolve_service
 from app.modules.agent.services import retrieve
+from app.modules.agent.services import suggest as suggest_service
 
 LAT, LNG = 35.15, 129.05
 _VEC = "[" + ",".join(["0.1"] * 512) + "]"
@@ -1094,6 +1095,12 @@ async def test_refine_request_skips_the_llm_and_keeps_prior_axes(
     assert data["intent"]["regionHints"] == ["부산"]
     assert [step["tool"] for step in data["steps"]] == ["category_search", "concentration"]
     assert [spot["contentId"] for spot in data["spots"]] == ["v1", "v2", "v3"]
+    assert [chip["label"] for chip in data["suggestions"]] == [
+        "조건 하나 풀기",
+        "유명한 곳으로",
+        "실내만",
+    ]
+    assert data["suggestions"][0]["patch"]["drop"] == "crowd"
 
 
 @pytest.mark.integration
@@ -1159,6 +1166,12 @@ async def test_photo_refine_reads_the_multipart_intent_and_skips_the_llm(
     assert [step["tool"] for step in data["steps"]] == ["photo_match"]
     assert [spot["contentId"] for spot in data["spots"]] == ["j1"]
     assert data["intent"]["regionHints"] == ["제주"]
+    assert [chip["label"] for chip in data["suggestions"]] == [
+        "조건 하나 풀기",
+        "사람 적은 곳만",
+        "실내만",
+    ]
+    assert data["suggestions"][0]["patch"]["drop"] == "region"
 
 
 @pytest.mark.integration
@@ -1281,3 +1294,85 @@ async def test_legacy_condition_fields_are_ignored_not_rejected(
     data = res.json()["data"]
     assert [spot["contentId"] for spot in data["spots"]] == ["j1", "v1", "v2", "v3"]
     assert "이번 주말" not in "".join(seg["text"] for seg in data["answer"])
+
+
+def test_suggestions_offer_only_axes_that_are_not_already_on() -> None:
+    chips = suggest_service.derive(
+        QueryIntent(crowdPreference="quiet", indoorOnly=True),
+        has_coords=False,
+        result_count=20,
+    )
+
+    assert [c.label for c in chips] == ["유명한 곳으로"]
+    assert chips[0].patch == RefinePatch(crowdPreference="popular")
+
+
+def test_suggestions_offer_distance_only_when_coords_are_present() -> None:
+    without = suggest_service.derive(QueryIntent(), has_coords=False, result_count=20)
+    with_coords = suggest_service.derive(QueryIntent(), has_coords=True, result_count=20)
+
+    assert "가까운 순으로" not in [c.label for c in without]
+    assert "가까운 순으로" in [c.label for c in with_coords]
+    assert [c.label for c in without] == ["사람 적은 곳만", "실내만"]
+    assert [c.patch for c in with_coords] == [
+        RefinePatch(crowdPreference="quiet"),
+        RefinePatch(indoorOnly=True),
+        RefinePatch(nearMe=True),
+    ]
+
+
+def test_suggestions_drop_the_distance_axis_once_near_me_is_on() -> None:
+    chips = suggest_service.derive(QueryIntent(nearMe=True), has_coords=True, result_count=20)
+
+    assert [c.label for c in chips] == ["사람 적은 곳만", "실내만"]
+
+
+def test_thin_results_lead_with_a_release_chip_on_the_narrowest_axis() -> None:
+    chips = suggest_service.derive(
+        QueryIntent(crowdPreference="quiet", regionHints=["제주"]),
+        has_coords=False,
+        result_count=2,
+    )
+
+    assert chips[0].label == "조건 하나 풀기"
+    assert chips[0].patch.drop == "crowd"
+    assert [c.label for c in chips] == ["조건 하나 풀기", "유명한 곳으로", "실내만"]
+
+
+def test_release_chip_falls_to_the_region_axis_when_no_narrower_axis_is_on() -> None:
+    chips = suggest_service.derive(
+        QueryIntent(regionHints=["제주"]), has_coords=False, result_count=2
+    )
+
+    assert chips[0].patch.drop == "region"
+
+
+def test_ample_results_get_no_release_chip() -> None:
+    chips = suggest_service.derive(
+        QueryIntent(crowdPreference="quiet", regionHints=["제주"]),
+        has_coords=False,
+        result_count=20,
+    )
+
+    assert "조건 하나 풀기" not in [c.label for c in chips]
+
+
+def test_thin_results_with_no_engaged_axis_get_no_release_chip() -> None:
+    chips = suggest_service.derive(QueryIntent(), has_coords=False, result_count=0)
+
+    assert [c.label for c in chips] == ["사람 적은 곳만", "실내만"]
+
+
+def test_festival_turns_get_no_follow_up_chips() -> None:
+    chips = suggest_service.derive(QueryIntent(festivalOnly=True), has_coords=True, result_count=10)
+
+    assert chips == []
+
+
+def test_suggestions_are_capped_at_three() -> None:
+    chips = suggest_service.derive(
+        QueryIntent(regionHints=["제주"]), has_coords=True, result_count=2
+    )
+
+    assert len(chips) == 3
+    assert [c.label for c in chips] == ["조건 하나 풀기", "사람 적은 곳만", "실내만"]
