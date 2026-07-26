@@ -139,21 +139,12 @@ describe("HomeScreen", () => {
     expect(refetch).toHaveBeenCalled();
   });
 
-  it("renders footer legal links that route to terms, privacy and data-sources", async () => {
+  it("renders no legal footer under the feed", async () => {
     setFeed();
     const r = await mount();
-    await act(async () => {
-      r.root.findByProps({ testID: "footer-terms" }).props.onPress();
-    });
-    expect(router.push).toHaveBeenCalledWith("/legal/terms");
-    await act(async () => {
-      r.root.findByProps({ testID: "footer-privacy" }).props.onPress();
-    });
-    expect(router.push).toHaveBeenCalledWith("/legal/privacy");
-    await act(async () => {
-      r.root.findByProps({ testID: "footer-data-source" }).props.onPress();
-    });
-    expect(router.push).toHaveBeenCalledWith("/legal/data-sources");
+    expect(hosts(r, "footer-terms").length).toBe(0);
+    expect(hosts(r, "footer-privacy").length).toBe(0);
+    expect(hosts(r, "footer-data-source").length).toBe(0);
   });
 
   it("fetches the next page when the list end is reached", async () => {

@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.spots.models import Spot, SpotConcentration, SpotDetail
@@ -19,7 +19,6 @@ class ConcentrationCardRow:
     region_label: str
     rank: int
     cpyrht_div_cd: str | None = None
-    percentile: int | None = None
 
 
 async def load_hot_spots(session: AsyncSession, *, limit: int = 10) -> list[ConcentrationCardRow]:
@@ -62,9 +61,6 @@ async def _load(
             Spot.title,
             Spot.first_image_url,
             Spot.cpyrht_div_cd,
-            func.cume_dist()
-            .over(order_by=SpotConcentration.concentration_rate.asc())
-            .label("cume_dist"),
         )
         .join(SpotConcentration, SpotConcentration.content_id == Spot.content_id)
         .where(
@@ -91,7 +87,6 @@ async def _load(
             region_label=_region_label(meta.get(r.content_id, (None, None))),
             rank=idx,
             cpyrht_div_cd=r.cpyrht_div_cd,
-            percentile=max(1, round(float(r.cume_dist) * 100)),
         )
         for idx, r in enumerate(rows, start=1)
     ]

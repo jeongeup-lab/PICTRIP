@@ -1,10 +1,5 @@
 import type { ChannelCard } from "@/features/channels/api";
-import {
-  channelCardTag,
-  channelCardsToSpots,
-  HIDDEN_TAG,
-  HOT_TAG,
-} from "@/features/travel/lib/channel-spots";
+import { channelCardTag, channelCardsToSpots } from "@/features/travel/lib/channel-spots";
 
 const card = (over: Partial<ChannelCard> = {}): ChannelCard => ({
   contentId: "126508",
@@ -25,13 +20,14 @@ describe("channelCardTag", () => {
     expect(channelCardTag("around", card({ dist: 4200 }))).toBe("4.2km");
   });
 
-  it("falls back to the crowding label when hot sends no tag", () => {
-    expect(channelCardTag("hot", card())).toBe(HOT_TAG);
-    expect(channelCardTag("hidden", card())).toBe(HIDDEN_TAG);
+  it("badges hot and hidden with the rank the server sorted them by", () => {
+    expect(channelCardTag("hot", card({ rank: 1 }))).toBe("1위");
+    expect(channelCardTag("hidden", card({ rank: 3 }))).toBe("3위");
   });
 
-  it("prefers a server-sent tag over the fallback", () => {
-    expect(channelCardTag("hidden", card({ tag: "하위 8%" }))).toBe("하위 8%");
+  it("shows no badge rather than a made-up crowding label when the rank is missing", () => {
+    expect(channelCardTag("hot", card())).toBeNull();
+    expect(channelCardTag("hidden", card())).toBeNull();
   });
 
   it("has no tag for around without a distance", () => {
