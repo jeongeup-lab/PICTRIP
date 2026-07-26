@@ -155,11 +155,11 @@ export default function TravelScreen() {
     if (busy) return;
     try {
       const picked = await pickTravelPhoto();
-      if (picked) submit("", picked);
+      if (picked) submit(draft, picked);
     } catch {
       setToast(PHOTO_PICK_FAILED);
     }
-  }, [busy, submit]);
+  }, [busy, draft, submit]);
 
   const openSpotList = useCallback(
     (title: string, spots: TravelSpot[]) => {
