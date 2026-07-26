@@ -25,7 +25,7 @@
 | GET | `/overseas/{id}/matches` | 해외→국내 매칭 3곳 | — |
 | GET | `/home/channels` | 채널 메타 (가용성 포함) | — |
 | GET | `/home/channels/{key}` | 채널 카드 (`around`는 lat/lng 필요) | — |
-| POST | `/agent/ask` | 여행 탭 질의 — 자유문·사진·조건 → 단계+답변+스팟 (아래) | — |
+| POST | `/agent/ask` | 여행 탭 질의 — 자유문·사진·intent → 단계+답변+스팟 (아래) | — |
 | GET | `/map/nearby` | 내 주변 (bbox+카테고리, ≤30) | — |
 | GET | `/map/region` | 좌표→행정구역 라벨 (fail-open null) | — |
 | GET | `/map/regions-tree` | 시도·시군구 트리 (centroid 포함, 24h 캐시) | — |
@@ -38,33 +38,38 @@
 
 ## `POST /agent/ask`
 
-여행 탭의 유일한 질의 표면. 자유문·사진·정형 조건을 한 요청으로 받아 한 번에
+여행 탭의 유일한 질의 표면. 자유문·사진·직전 턴의 의도를 한 요청으로 받아 한 번에
 응답한다(스트리밍 없음 — [ADR 0009](../adr/0009-travel-tab-conversational-agent.md)).
 사진이 붙으면 `multipart/form-data`, 아니면 JSON. rate-limit 20/분/IP.
 
-**요청**
+**요청** — `question` · `photo` · `intent` **셋 중 하나 이상**이 있어야 한다
+(없으면 `VALIDATION_FAILED`).
 
 | 필드 | 타입 | 비고 |
 |---|---|---|
-| `question` | string | 사진이 없으면 필수. 사진에 덧붙이면 지역·근처 조건으로 함께 적용된다 |
+| `question` | string | 자유문. 사진에 덧붙이면 지역·근처 조건으로 함께 적용된다 |
 | `photo` | file | multipart 전용. 임베딩 후 즉시 폐기, **디스크에 닿지 않는다**(아래) |
-| `region` | `all`\|`capital`\|`gangwon`\|`chungcheong`\|`jeolla`\|`gyeongsang`\|`jeju` | 기본 `all` |
-| `when` | `any`\|`today`\|`weekend`\|`next_week` | 기본 `any` |
-| `who` | `any`\|`solo`\|`duo`\|`kids`\|`pets` | 기본 `any` |
+| `intent` | `QueryIntent` | 직전 응답의 `intent`를 되돌려 보내는 refine 경로. **있으면 Gemini를 호출하지 않는다** |
+| `patch` | `RefinePatch` | `intent` 위에 덮어쓸 축. `{crowdPreference?, indoorOnly?, nearMe?, drop?}` |
 | `lat` / `lng` | float | 거리 정렬·`내 근처` 의도에만 사용 |
 
-정형 조건 3종은 LLM을 거치지 않는다. Gemini Flash는 `question` → 구조화 의도
-(카테고리 키워드 · 지역 힌트 · 지목된 장소 · 혼잡도 선호 · 실내 여부 · 근처 여부)
-추출에만 쓴다. 의도에 `outOfScope`가 서면("파리 가볼 만한 곳") 검색을 돌리지 않고
-`AGENT_OUT_OF_SCOPE`로 끊는다 — 빈 의도로 전국 검색이 돌아 엉뚱한 국내 스팟을
-추천하는 일이 없도록. 단 사진 질의는 예외로, 해외 사진 → 국내 매칭이 제품의 본래
-동작이라 그대로 진행한다. 세 조건이 실제로 하는 일은 다르다:
+multipart에서 `intent`/`patch`는 **JSON 문자열 필드**로 온다 (파싱 실패 시
+`VALIDATION_FAILED`). 정형 조건 시트(`region`/`when`/`who`)는 폐기됐다 —
+extra-ignore라 구 앱이 보내도 422가 아니라 무시된다
+([ADR 0010](../adr/0010-travel-tab-drops-condition-sheet.md)).
 
-| 조건 | 효과 |
-|---|---|
-| `region` | `spots.addr1` 접두사 하드 필터 (`capital` = 서울·경기·인천 …). **질문에 지역이 나오면 그쪽이 이긴다** — `제주 계곡`이면 시트가 `전국`이어도 제주로 좁힌다 (`regions` 테이블로 시도 매핑) |
-| `who` | 카테고리 키워드를 보탠다 (`kids` → 테마파크·동물원·체험, `pets` → 공원·산책로) |
-| `when` | **필터하지 않는다** — `spot_concentration`은 일일 스냅숏이라 미래 예측이 없다. 답변 문구에만 실린다 |
+`QueryIntent` = `{categoryKeywords[], regionHints[], namedPlaces[], moodHints[],
+crowdPreference, festivalOnly, indoorOnly, nearMe, outOfScope}`. 배열은 전부
+길이 상한이 있다(키워드·지역 힌트 20, 지목 장소 10, mood 7).
+`moodHints`는 `sea`·`mountain`·`lake`·`island`·`hanok`·`night`·`street` —
+`spot_moods`에 모수가 0이 아닌 7종만 열거한다.
+`drop` 축은 `crowd`·`indoor`·`near`·`region`·`category`이고, 해당 축의 intent
+필드를 기본값으로 되돌린다(`category`는 `categoryKeywords`+`moodHints` 둘 다).
+
+Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `outOfScope`가
+서면("파리 가볼 만한 곳") 검색을 돌리지 않고 `AGENT_OUT_OF_SCOPE`로 끊는다 —
+빈 의도로 전국 검색이 돌아 엉뚱한 국내 스팟을 추천하는 일이 없도록. 단 사진
+질의는 예외로, 해외 사진 → 국내 매칭이 제품의 본래 동작이라 그대로 진행한다.
 
 **응답 `data`**
 
@@ -72,9 +77,10 @@
 |---|---|---|
 | `steps[]` | `{tool, label, badge}` | 서버가 **실제로 실행한** 툴 순서. `badge`는 그 단계 후 잔여 건수(`128곳`) 또는 근거 표시(`Gemini` · `pgvector`) |
 | `answer[]` | `{text, emphasis}` | 문장 조각. `emphasis=true`는 `accentText` 800으로 렌더 (HTML을 보내지 않는다) |
-| `spots[]` | `{contentId, title, regionLabel, imageUrl, tag, lat, lng}` | 상위 4곳. `tag`는 카드 좌상단 배지(`하위 8%` · `4.2km` · `유사도 86%`) |
+| `spots[]` | `{contentId, title, regionLabel, imageUrl, tag, lat, lng}` | 상위 20곳(대화 레일은 앞 4장만 그린다). `tag`는 카드 좌상단 배지(`하위 8%` · `4.2km` · `유사도 86%`) |
 | `totalCount` | int | `전체 N곳 보기`의 N |
-| `suggestions[]` | string | 후속 제안 칩 3개 |
+| `intent` | `QueryIntent` | 서버가 **실제로 적용한** 의도. 다음 턴이 그대로 되돌려 보낸다 |
+| `suggestions[]` | `{label, patch}` | 후속 제안 칩 최대 3개. `label`은 상태 전환 문구(`사람 적은 곳만`), `patch`는 그 칩이 바꿀 축 |
 
 `imageUrl`은 서명된 `img.pictrip.org` 프록시 URL — 클라이언트는 변형 없이 그대로
 쓴다(`cpyrhtDivCd=Type3` 무변형, [ADR 0005](../adr/0005-kto-image-policy.md)).
@@ -87,9 +93,19 @@
 | `photo_match` | `agent/services/photo.py` | CLIP 임베딩 → pgvector 유사도 (지역 조건은 SQL에 포함) |
 | `resolve_place` | `agent/services/resolve.py` | 장소명 → KTO 스팟 (질문이 특정 장소를 지목할 때) |
 | `category_search` | `agent/repositories.py` + `lcls_systm_codes` | 카테고리 키워드 → lcls 코드 → 스팟 조회 |
+| `mood_search` | `agent/repositories.py` + `spot_moods` | `moodHints` → mood id → `EXISTS` 서브쿼리. 카테고리 코드와 **AND** |
+| `festival` | `feed/services/kto_channels.py` | `festivalOnly`면 다른 축을 건너뛰고 `searchFestival2` 오늘 진행분 풀만 본다 |
 | `title_search` | `spots/services/search.py` | 키워드가 lcls 코드에 하나도 안 걸릴 때의 폴백 (스팟 이름 trigram, 지역별로 각각 조회) |
-| `concentration` | `agent/services/retrieve.py` | 집중률 백분위 하위/상위 30%로 추림. 후보가 적어 아무도 30% 안에 못 들면 가장 한적한/붐비는 쪽 4곳을 남긴다 (선호를 버리고 전체로 되돌리지 않는다) |
+| `concentration` | `agent/services/retrieve.py` | 집중률 백분위 하위/상위 30%로 추림. 후보가 적어 아무도 30% 안에 못 들면 가장 한적한/붐비는 쪽 20곳을 남긴다 (선호를 버리고 전체로 되돌리지 않는다) |
 | `nearby` | `agent/repositories.py` | 현재 위치 기준 거리순 (SQL `ORDER BY`) |
+
+조회 모수는 지도 탭과 다르다. 에이전트는 `travel_category_sql()`을 쓰고
+(`spots/services/nearby.py`) 제외 집합이 `VE08`~`VE11`이라 VE06 공연시설·VE07
+전시시설이 들어온다. 지도 "주변 관광지"의 `attraction_category_sql()`은
+`VE06`~`VE11`을 전부 뺀 채로 남아 있다. `indoorOnly`는 카테고리 코드를 대체하지
+않고 **코드 절로 AND** 한다 — 중분류 `VE06`·`VE07` 또는 소분류
+`VE020400`(수족관)·`VE120300`(기타문화시설). 이름 ILIKE 매칭은 쓰지 않는다
+([ADR 0010](../adr/0010-travel-tab-drops-condition-sheet.md)).
 
 **업로드 사진은 디스크에 닿지 않는다.** Starlette의 multipart 파서는 파일 파트를
 `SpooledTemporaryFile(max_size=1MB)`에 담아 1MB를 넘으면 임시 파일로 롤오버한다 —
@@ -118,8 +134,26 @@
 `LIMIT`은 그 뒤에 붙는다. 혼잡도 백분위도 `cume_dist()` 윈도로 **필터를 만족하는
 전체 집합** 기준으로 계산한다 — 잘린 400개 안의 상대 순위가 아니다.
 
+**후속 칩은 문장이 아니라 intent를 되돌려 보낸다.** 응답의 `intent`에 `patch`를
+얹어 다시 보내면 서버가 `apply_patch` 후 곧장 조회한다 — Gemini 왕복이 없다.
+`suggestions`는 **이미 켜진 축을 빼고** 만들어 "눌렀는데 그대로"를 없앤다:
+`crowdPreference=any`면 `사람 적은 곳만`, `quiet`면 `유명한 곳으로`,
+`indoorOnly=false`면 `실내만`, 좌표가 있고 `nearMe=false`면 `가까운 순으로`.
+결과가 5곳 미만이면 `조건 하나 풀기`를 맨 앞에 끼운다. `drop` 대상은 서버가
+`crowd` > `indoor` > `category` > `near` > `region` 고정 우선순위로 고른다 —
+사용자가 명시한 지역을 임의로 넓히는 것이 가장 큰 배신이라 지역이 마지막이다.
+축제 턴은 혼잡도·실내·카테고리 축이 축제 풀에 걸리지 않으므로 칩을 아예
+내려보내지 않는다.
+
+**축제는 지역이 안 맞으면 전국으로 폴백하되 말한다.** `festivalOnly` 경로는
+`load_festival_pool`(limit 60, Redis `festival:pool:v1`, TTL 1h)을 읽고
+`regionHints` 원문 토큰을 카드 지역 라벨(주소 앞 2토큰)에 부분 문자열로 맞춘다.
+`regions` 테이블로 시도를 매핑하지 않는다 — 축제 주소는 `전남광주통합특별시`,
+`spots.addr1`은 `전라남도`라 두 소스의 어휘가 다르다. 0건이면 전국 풀을 쓰되
+답변 문장에 `제주에는 오늘 열리는 축제가 없어 전국에서 골랐어요`를 덧붙인다.
+
 카드 태그 우선순위는 거리(`4.2km`) → 혼잡도 백분위(`하위 8%`) → 혼잡 라벨
-(`붐빔`·`보통`·`한산`), 사진 질의는 `유사도 86%`.
+(`붐빔`·`보통`·`한산`), 사진 질의는 `유사도 86%`, 축제는 `D-3`.
 
 ## 에러 코드
 
