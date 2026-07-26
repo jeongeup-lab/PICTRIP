@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, get_args
 
 from pydantic import BaseModel, Field
 
@@ -9,6 +9,11 @@ ResolveStatus = Literal["matched", "ambiguous", "naver_only", "unmatched"]
 CrowdPreference = Literal["quiet", "any", "popular"]
 Mood = Literal["sea", "mountain", "lake", "island", "hanok", "night", "street"]
 DropAxis = Literal["crowd", "indoor", "near", "region", "category"]
+
+MAX_KEYWORDS = 20
+MAX_REGION_HINTS = 20
+MAX_NAMED_PLACES = 10
+MAX_MOOD_HINTS = len(get_args(Mood))
 
 ToolName = Literal[
     "intent",
@@ -51,11 +56,11 @@ class ResolvedPlace(BaseModel):
 
 
 class QueryIntent(BaseModel):
-    categoryKeywords: list[str] = Field(default_factory=list)
-    regionHints: list[str] = Field(default_factory=list)
-    namedPlaces: list[ExtractedPlace] = Field(default_factory=list)
+    categoryKeywords: list[str] = Field(default_factory=list, max_length=MAX_KEYWORDS)
+    regionHints: list[str] = Field(default_factory=list, max_length=MAX_REGION_HINTS)
+    namedPlaces: list[ExtractedPlace] = Field(default_factory=list, max_length=MAX_NAMED_PLACES)
     crowdPreference: CrowdPreference = "any"
-    moodHints: list[Mood] = Field(default_factory=list)
+    moodHints: list[Mood] = Field(default_factory=list, max_length=MAX_MOOD_HINTS)
     festivalOnly: bool = False
     indoorOnly: bool = False
     nearMe: bool = False

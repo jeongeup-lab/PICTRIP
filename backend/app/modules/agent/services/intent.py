@@ -7,7 +7,15 @@ from pydantic import ValidationError
 from app.core.logging import get_logger
 from app.modules.agent import llm
 from app.modules.agent.errors import AgentIntentUnavailable
-from app.modules.agent.schemas import CrowdPreference, ExtractedPlace, Mood, QueryIntent
+from app.modules.agent.schemas import (
+    MAX_KEYWORDS,
+    MAX_NAMED_PLACES,
+    MAX_REGION_HINTS,
+    CrowdPreference,
+    ExtractedPlace,
+    Mood,
+    QueryIntent,
+)
 
 logger = get_logger(__name__)
 
@@ -92,9 +100,9 @@ async def extract_intent(question: str) -> QueryIntent:
     if not isinstance(data, dict):
         raise AgentIntentUnavailable()
     intent = QueryIntent(
-        categoryKeywords=_strings(data.get("categoryKeywords")),
-        regionHints=_strings(data.get("regionHints")),
-        namedPlaces=_places(data.get("namedPlaces")),
+        categoryKeywords=_strings(data.get("categoryKeywords"))[:MAX_KEYWORDS],
+        regionHints=_strings(data.get("regionHints"))[:MAX_REGION_HINTS],
+        namedPlaces=_places(data.get("namedPlaces"))[:MAX_NAMED_PLACES],
         crowdPreference=_crowd(data.get("crowdPreference")),
         moodHints=_moods(data.get("moodHints")),
         festivalOnly=bool(data.get("festivalOnly")),

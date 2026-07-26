@@ -7,6 +7,7 @@ from collections.abc import Awaitable, Callable
 import pytest
 import pytest_asyncio
 from fakeredis.aioredis import FakeRedis
+from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import formparsers
@@ -15,15 +16,23 @@ from app.core.db import get_db
 from app.core.redis import get_redis
 from app.kto.client import get_kto
 from app.main import app
-from app.modules.agent import repositories
+from app.modules.agent import llm, repositories
 from app.modules.agent.errors import AgentIntentUnavailable
 from app.modules.agent.repositories import CandidateRow, VectorMatchRow
 from app.modules.agent.routes import MAX_BODY_BYTES
-from app.modules.agent.schemas import ExtractedPlace, QueryIntent, RefinePatch
+from app.modules.agent.schemas import (
+    MAX_KEYWORDS,
+    MAX_NAMED_PLACES,
+    MAX_REGION_HINTS,
+    ExtractedPlace,
+    QueryIntent,
+    RefinePatch,
+)
 from app.modules.agent.services import ask as ask_service
 from app.modules.agent.services import intent as intent_service
 from app.modules.agent.services import photo as photo_service
 from app.modules.agent.services import refine as refine_service
+from app.modules.agent.services import resolve as resolve_service
 from app.modules.agent.services import retrieve
 
 LAT, LNG = 35.15, 129.05
@@ -1166,6 +1175,89 @@ async def test_multipart_intent_that_is_not_json_is_rejected(db_session, client)
 
     assert res.status_code == 422
     assert res.json()["error"]["code"] == "VALIDATION_FAILED"
+
+
+def test_intent_list_caps_accept_a_full_extraction_and_reject_more() -> None:
+    assert len(QueryIntent(categoryKeywords=["k"] * MAX_KEYWORDS).categoryKeywords) == MAX_KEYWORDS
+    assert len(QueryIntent(regionHints=["r"] * MAX_REGION_HINTS).regionHints) == MAX_REGION_HINTS
+
+    with pytest.raises(ValidationError):
+        QueryIntent(categoryKeywords=["k"] * (MAX_KEYWORDS + 1))
+    with pytest.raises(ValidationError):
+        QueryIntent(regionHints=["r"] * (MAX_REGION_HINTS + 1))
+    with pytest.raises(ValidationError):
+        QueryIntent(namedPlaces=[ExtractedPlace(name="p")] * (MAX_NAMED_PLACES + 1))
+    with pytest.raises(ValidationError):
+        QueryIntent(moodHints=["sea"] * 8)
+
+
+@pytest.mark.integration
+async def test_over_long_category_keywords_are_rejected_before_any_search(
+    db_session, client, monkeypatch
+) -> None:
+    calls: list[str] = []
+
+    async def boom_codes(session, keywords):
+        raise AssertionError("an over-cap intent must not reach the category search")
+
+    monkeypatch.setattr(intent_service, "extract_intent", _forbidden_intent(calls))
+    monkeypatch.setattr(retrieve, "resolve_category_codes", boom_codes)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={"intent": {"categoryKeywords": ["계곡"] * (MAX_KEYWORDS + 1)}},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "VALIDATION_FAILED"
+    assert calls == []
+
+
+@pytest.mark.integration
+async def test_over_long_named_places_are_rejected_before_the_naver_fanout(
+    db_session, client, monkeypatch
+) -> None:
+    async def boom_resolve(session, kto, places):
+        raise AssertionError("an over-cap intent must not reach the place resolver")
+
+    monkeypatch.setattr(resolve_service, "resolve_places", boom_resolve)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={
+                "intent": {"namedPlaces": [{"name": f"p{i}"} for i in range(MAX_NAMED_PLACES + 1)]}
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "VALIDATION_FAILED"
+
+
+async def test_extract_intent_truncates_a_chatty_llm_instead_of_failing(monkeypatch) -> None:
+    class FakeClient:
+        async def generate_json(self, **kwargs):
+            return {
+                "categoryKeywords": [f"k{i}" for i in range(MAX_KEYWORDS + 5)],
+                "regionHints": [f"r{i}" for i in range(MAX_REGION_HINTS + 5)],
+                "namedPlaces": [
+                    {"name": f"p{i}", "placeType": "attraction"}
+                    for i in range(MAX_NAMED_PLACES + 5)
+                ],
+            }
+
+    monkeypatch.setattr(llm, "get_client", FakeClient)
+
+    parsed = await intent_service.extract_intent("아무 질문")
+
+    assert len(parsed.categoryKeywords) == MAX_KEYWORDS
+    assert len(parsed.regionHints) == MAX_REGION_HINTS
+    assert len(parsed.namedPlaces) == MAX_NAMED_PLACES
 
 
 @pytest.mark.integration
