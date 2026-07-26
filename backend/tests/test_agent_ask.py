@@ -863,3 +863,70 @@ async def test_indoor_only_excludes_outdoor_experience_tourism(db_session, seede
     ids = {row.content_id for row in rows}
     assert "m1" in ids
     assert "e1" not in ids
+
+
+@pytest.mark.integration
+async def test_indoor_with_an_outdoor_category_falls_back_to_indoor_only(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"], indoorOnly=True)
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "실내 계곡", "region": "all"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert [step["tool"] for step in data["steps"]] == [
+        "intent",
+        "category_search",
+        "category_search",
+    ]
+    assert data["steps"][1]["badge"] == "0곳"
+    assert data["steps"][2]["label"] == ask_service.INDOOR_RETRY_LABEL
+    assert [spot["contentId"] for spot in data["spots"]] == ["m1"]
+
+
+@pytest.mark.integration
+async def test_indoor_with_an_indoor_category_narrows_without_falling_back(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    await db_session.execute(
+        text(
+            "INSERT INTO lcls_systm_codes "
+            "(lcls_systm3_cd, lcls_systm2_cd, lcls_systm1_cd, lcls_systm3_nm, "
+            "lcls_systm2_nm, lcls_systm1_nm) "
+            "VALUES ('VE060100', 'VE06', 'VE', '공연장', '공연시설', '문화관광') "
+            "ON CONFLICT DO NOTHING"
+        )
+    )
+    await db_session.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, addr1, "
+            "first_image_url, show_flag, mapx, mapy, lcls_systm1, lcls_systm2, "
+            "lcls_systm3, ldong_regn_cd, ldong_signgu_cd) "
+            "VALUES ('p1', 14, '부산공연장', '부산광역시 사하구 4', "
+            "'http://kto/i.jpg', 1, :lng, :lat, 'VE', 'VE06', 'VE060100', '26', '26380')"
+        ),
+        {"lng": LNG, "lat": LAT},
+    )
+    await db_session.flush()
+
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["박물관"], indoorOnly=True)
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "실내 박물관", "region": "all"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert [step["tool"] for step in data["steps"]] == ["intent", "category_search"]
+    assert [spot["contentId"] for spot in data["spots"]] == ["m1"]
