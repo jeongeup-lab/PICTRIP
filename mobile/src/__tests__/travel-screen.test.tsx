@@ -57,6 +57,42 @@ const answeredTurn: Turn = {
   patch: null,
 };
 
+const NEWER_INTENT: QueryIntent = {
+  categoryKeywords: ["박물관"],
+  regionHints: ["부산"],
+  crowdPreference: "any",
+  indoorOnly: false,
+  nearMe: false,
+};
+
+const newerAnsweredTurn: Turn = {
+  id: "seed-2",
+  question: "부산 박물관",
+  request: "부산 박물관",
+  photo: null,
+  status: "done",
+  answer: {
+    ...ANSWER,
+    intent: NEWER_INTENT,
+    suggestions: [{ label: "사람 적은 곳만", patch: { crowdPreference: "quiet" } }],
+  },
+  errorMessage: null,
+  intent: null,
+  patch: null,
+};
+
+const failedRefineTurn: Turn = {
+  id: "seed-3",
+  question: "실내만",
+  request: "",
+  photo: null,
+  status: "failed",
+  answer: null,
+  errorMessage: "답을 만들지 못했어요.",
+  intent: INTENT,
+  patch: { indoorOnly: true },
+};
+
 let mounted: renderer.ReactTestRenderer | null = null;
 let client: QueryClient;
 
@@ -167,5 +203,62 @@ describe("TravelScreen refine chips", () => {
     expect(turns[1].question).toBe("실내만");
     expect(turns[1].intent).toEqual(INTENT);
     expect(turns[1].patch).toEqual({ indoorOnly: true });
+  });
+});
+
+describe("TravelScreen refine chips in scrollback", () => {
+  beforeEach(() => {
+    useConversation.setState({ turns: [answeredTurn, newerAnsweredTurn], busy: false });
+  });
+
+  it("refines the turn the chip sits under, not whatever answered last", async () => {
+    const tree = await mount();
+    await press(tree, "answer-suggestion-실내만");
+
+    expect(askAgentMock).toHaveBeenCalledTimes(1);
+    const input = askAgentMock.mock.calls[0][0];
+    expect(input.intent).toEqual(INTENT);
+    expect(input.intent).not.toEqual(NEWER_INTENT);
+    expect(input.patch).toEqual({ indoorOnly: true });
+  });
+
+  it("still refines the newest answer from the composer rail, which owns no turn", async () => {
+    const tree = await mount();
+    await press(tree, "travel-chip-사람 적은 곳만");
+
+    expect(askAgentMock).toHaveBeenCalledTimes(1);
+    const input = askAgentMock.mock.calls[0][0];
+    expect(input.intent).toEqual(NEWER_INTENT);
+    expect(input.patch).toEqual({ crowdPreference: "quiet" });
+  });
+});
+
+describe("TravelScreen retry", () => {
+  it("resends intent and patch when a failed refine turn is retried", async () => {
+    useConversation.setState({ turns: [answeredTurn, failedRefineTurn], busy: false });
+    const tree = await mount();
+    await press(tree, "turn-retry-seed-3");
+
+    expect(askAgentMock).toHaveBeenCalledTimes(1);
+    const input = askAgentMock.mock.calls[0][0];
+    expect(input.intent).toEqual(INTENT);
+    expect(input.patch).toEqual({ indoorOnly: true });
+    expect(input.question).toBeFalsy();
+    expect(useConversation.getState().turns).toHaveLength(2);
+  });
+
+  it("resends the original text when a failed plain question turn is retried", async () => {
+    useConversation.setState({
+      turns: [{ ...answeredTurn, status: "failed", answer: null, errorMessage: "실패" }],
+      busy: false,
+    });
+    const tree = await mount();
+    await press(tree, "turn-retry-seed-1");
+
+    expect(askAgentMock).toHaveBeenCalledTimes(1);
+    const input = askAgentMock.mock.calls[0][0];
+    expect(input.question).toBe("여름에 시원한 계곡");
+    expect(input.intent).toBeFalsy();
+    expect(input.patch).toBeFalsy();
   });
 });

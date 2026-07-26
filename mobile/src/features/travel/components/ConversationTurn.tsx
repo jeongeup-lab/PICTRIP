@@ -19,7 +19,7 @@ const PENDING_STEP = { tool: "pending", label: "여행지를 찾는 중", badge:
 interface Props {
   turn: Turn;
   onPlaybackEnd: (id: string) => void;
-  onSuggest: (chip: Chip) => void;
+  onSuggest: (chip: Chip, source: Turn) => void;
   onOpenResults: (turn: Turn) => void;
   onRetry: (turn: Turn) => void;
   onGrow: () => void;
@@ -114,7 +114,7 @@ export function ConversationTurn({
           <AnswerBlock
             answer={answer.answer}
             chips={refineChips(answer.suggestions)}
-            onSuggest={onSuggest}
+            onSuggest={(chip) => onSuggest(chip, turn)}
           />
         ) : null}
       </View>
