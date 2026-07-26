@@ -14,6 +14,7 @@ from app.modules.spots.models import LclsSystmCode, Spot, SpotDetail
 _MAX_NUM_OF_ROWS = 50
 _EARTH_RADIUS_M = 6_371_000.0
 _VE_EXCLUDE = ("VE06", "VE07", "VE08", "VE09", "VE10", "VE11")
+_TRAVEL_VE_EXCLUDE = ("VE08", "VE09", "VE10", "VE11")
 _LODGING_CONTENT_TYPE = 32
 
 
@@ -88,6 +89,26 @@ def all_categories_sql() -> str:
 
 def attraction_category_sql() -> str:
     return _predicate_sql(category_predicate(NearbyCategory.attraction))
+
+
+def travel_category_predicate() -> ColumnElement[bool]:
+    return and_(
+        Spot.content_type_id != _LODGING_CONTENT_TYPE,
+        or_(
+            Spot.lcls_systm1.in_(("HS", "NA", "EX")),
+            and_(
+                Spot.lcls_systm1 == "VE",
+                or_(
+                    Spot.lcls_systm2.is_(None),
+                    Spot.lcls_systm2.notin_(_TRAVEL_VE_EXCLUDE),
+                ),
+            ),
+        ),
+    )
+
+
+def travel_category_sql() -> str:
+    return _predicate_sql(travel_category_predicate())
 
 
 def derive_category(l1: str | None, l2: str | None, l3: str | None) -> str | None:
