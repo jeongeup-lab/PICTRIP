@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, get_args
 
 from pydantic import ValidationError
 
@@ -66,10 +66,7 @@ _RESPONSE_SCHEMA: dict[str, Any] = {
         "crowdPreference": {"type": "STRING", "enum": ["quiet", "any", "popular"]},
         "moodHints": {
             "type": "ARRAY",
-            "items": {
-                "type": "STRING",
-                "enum": ["sea", "mountain", "lake", "island", "hanok", "night", "street"],
-            },
+            "items": {"type": "STRING", "enum": list(get_args(Mood))},
         },
         "festivalOnly": {"type": "BOOLEAN"},
         "indoorOnly": {"type": "BOOLEAN"},
@@ -88,7 +85,7 @@ _RESPONSE_SCHEMA: dict[str, Any] = {
     ],
 }
 
-_MOOD_CODES = ("sea", "mountain", "lake", "island", "hanok", "night", "street")
+_MOOD_CODES: tuple[Mood, ...] = get_args(Mood)
 
 
 async def extract_intent(question: str) -> QueryIntent:

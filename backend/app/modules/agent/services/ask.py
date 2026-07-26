@@ -16,6 +16,7 @@ from app.modules.agent.schemas import (
     AnswerSegment,
     AskResponse,
     AskStep,
+    DropAxis,
     QueryIntent,
     RefinePatch,
 )
@@ -31,6 +32,8 @@ from app.web.errors import AppError, ValidationFailed
 logger = get_logger(__name__)
 
 INDOOR_RETRY_LABEL = "실내로만 다시 조회"
+PHOTO_AXES: frozenset[DropAxis] = frozenset({"near", "region"})
+TITLE_AXES: frozenset[DropAxis] = frozenset({"category", "near", "region"})
 
 
 async def ask(
@@ -143,6 +146,7 @@ async def _ask_with_photo(
             intent,
             has_coords=lat is not None and lng is not None,
             result_count=len(spots),
+            axes=PHOTO_AXES,
         ),
     )
 
@@ -208,11 +212,13 @@ async def _ask_with_question(
     codes = await retrieve.resolve_category_codes(session, keywords)
     mood_ids = await repositories.find_mood_ids(session, list(intent.moodHints))
     prefixes = await retrieve.resolve_region_prefixes(session, hints=intent.regionHints)
+    axes = suggest_service.ALL_AXES
     if _named_place_is_the_only_constraint(intent, keywords=keywords, prefixes=prefixes, near=near):
         if not pinned:
             raise AgentNoResults()
         candidates = []
-    elif keywords and not codes:
+    elif keywords and not codes and not mood_ids and not intent.indoorOnly:
+        axes = TITLE_AXES
         candidates = await retrieve.search_by_title(session, keywords, region_prefixes=prefixes)
         steps.append(
             AskStep(
@@ -259,7 +265,7 @@ async def _ask_with_question(
             )
 
     pool = candidates
-    if intent.crowdPreference != "any":
+    if intent.crowdPreference != "any" and retrieve.has_crowd_signal(pool):
         pool = retrieve.filter_by_crowd(pool, intent.crowdPreference)
         steps.append(AskStep(tool="concentration", label="혼잡도로 추림", badge=_count(pool)))
 
@@ -290,6 +296,7 @@ async def _ask_with_question(
             intent,
             has_coords=lat is not None and lng is not None,
             result_count=len(spots),
+            axes=axes,
         ),
     )
 
@@ -309,9 +316,6 @@ async def _ask_festivals(
     scoped = _match_region(pool, intent.regionHints)
     fell_back = bool(intent.regionHints) and not scoped
     cards = scoped or pool
-    if not cards:
-        raise AgentNoResults()
-    steps.append(AskStep(tool="festival", label="오늘 열리는 축제 조회", badge=f"{len(cards)}곳"))
     spots = [
         AgentSpotCard(
             contentId=card.content_id or "",
@@ -323,6 +327,9 @@ async def _ask_festivals(
         for card in cards[: retrieve.RESULT_LIMIT]
         if card.content_id
     ]
+    if not spots:
+        raise AgentNoResults()
+    steps.append(AskStep(tool="festival", label="오늘 열리는 축제 조회", badge=f"{len(spots)}곳"))
     answer = [
         AnswerSegment(text="오늘 열리는 축제로 "),
         AnswerSegment(text=f"{len(spots)}곳", emphasis=True),
@@ -364,6 +371,8 @@ def _named_place_is_the_only_constraint(
         and not keywords
         and not prefixes
         and not near
+        and not intent.moodHints
+        and not intent.indoorOnly
         and intent.crowdPreference == "any"
     )
 

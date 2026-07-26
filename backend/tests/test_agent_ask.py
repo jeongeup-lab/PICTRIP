@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 from collections.abc import Awaitable, Callable
+from typing import get_args
 
 import pytest
 import pytest_asyncio
@@ -25,6 +26,7 @@ from app.modules.agent.schemas import (
     MAX_NAMED_PLACES,
     MAX_REGION_HINTS,
     ExtractedPlace,
+    Mood,
     QueryIntent,
     RefinePatch,
 )
@@ -470,6 +472,51 @@ async def test_photo_query_applies_the_region_hint_inside_the_vector_query(
 
 
 @pytest.mark.integration
+async def test_photo_turn_hides_chips_whose_axis_the_photo_search_never_applies(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    await db_session.execute(
+        text("INSERT INTO spot_embeddings (content_id, embedding) VALUES (:c, :v)"),
+        {"c": "v1", "v": _VEC},
+    )
+    await db_session.flush()
+
+    async def fake_embed(*, image_bytes, image_mime):
+        return [0.1] * 512
+
+    monkeypatch.setattr(photo_service, "embed_photo", fake_embed)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            files={"photo": ("a.jpg", b"x", "image/jpeg")},
+            data={
+                "intent": json.dumps(
+                    {"crowdPreference": "quiet", "categoryKeywords": ["계곡"]},
+                )
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["spots"]
+    assert data["suggestions"] == []
+
+
+def test_photo_chips_cover_only_the_axes_the_photo_path_applies() -> None:
+    chips = suggest_service.derive(
+        QueryIntent(crowdPreference="quiet", categoryKeywords=["계곡"]),
+        has_coords=True,
+        result_count=2,
+        axes=ask_service.PHOTO_AXES,
+    )
+
+    assert [c.label for c in chips] == ["가까운 순으로"]
+
+
+@pytest.mark.integration
 async def test_unmatched_category_keyword_falls_back_to_title_search(
     db_session, client, seeded, monkeypatch
 ) -> None:
@@ -505,6 +552,121 @@ async def test_unmatched_keyword_with_no_title_hit_does_not_widen_to_everything(
 
     assert res.status_code == 422
     assert res.json()["error"]["code"] == "AGENT_NO_RESULTS"
+
+
+@pytest.mark.integration
+async def test_title_fallback_does_not_claim_a_crowd_filter_it_never_ran(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        intent_service,
+        "extract_intent",
+        _fake_intent(QueryIntent(categoryKeywords=["계곡-v2"], crowdPreference="quiet")),
+    )
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "조용한 계곡-v2"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert [step["tool"] for step in data["steps"]] == ["intent", "title_search"]
+    assert "혼잡도로 추림" not in [step["label"] for step in data["steps"]]
+
+
+@pytest.mark.integration
+async def test_unresolved_keyword_with_a_mood_keeps_the_mood_axis(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        intent_service,
+        "extract_intent",
+        _fake_intent(QueryIntent(categoryKeywords=["바닷가"], moodHints=["night"])),
+    )
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "야경 좋은 바닷가"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert [spot["contentId"] for spot in data["spots"]] == ["v1"]
+    assert "mood_search" in [step["tool"] for step in data["steps"]]
+    assert "title_search" not in [step["tool"] for step in data["steps"]]
+
+
+@pytest.mark.integration
+async def test_unresolved_keyword_with_indoor_keeps_the_indoor_axis(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        intent_service,
+        "extract_intent",
+        _fake_intent(QueryIntent(categoryKeywords=["비 오는 날"], indoorOnly=True)),
+    )
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "비 오는 날 갈 곳"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert [spot["contentId"] for spot in data["spots"]] == ["m1"]
+    assert "title_search" not in [step["tool"] for step in data["steps"]]
+
+
+@pytest.mark.integration
+async def test_named_place_with_a_mood_still_runs_the_mood_search(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        intent_service,
+        "extract_intent",
+        _fake_intent(
+            QueryIntent(
+                namedPlaces=[ExtractedPlace(name="계곡-v2", nameKo="계곡-v2")],
+                moodHints=["night"],
+            )
+        ),
+    )
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "계곡-v2 같은 야경"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert [spot["contentId"] for spot in data["spots"]] == ["v2", "v1"]
+    assert "mood_search" in [step["tool"] for step in data["steps"]]
+
+
+@pytest.mark.integration
+async def test_named_place_with_indoor_only_still_runs_the_indoor_search(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        intent_service,
+        "extract_intent",
+        _fake_intent(
+            QueryIntent(
+                namedPlaces=[ExtractedPlace(name="계곡-v2", nameKo="계곡-v2")],
+                indoorOnly=True,
+            )
+        ),
+    )
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "계곡-v2 말고 실내"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert [spot["contentId"] for spot in data["spots"]] == ["v2", "m1"]
 
 
 @pytest.mark.integration
@@ -1016,6 +1178,13 @@ def test_intent_response_schema_matches_the_parsed_fields() -> None:
     assert schema["properties"]["moodHints"]["items"]["enum"] == list(intent_service._MOOD_CODES)
 
 
+def test_every_mood_literal_reaches_the_intent_untouched() -> None:
+    codes = list(get_args(Mood))
+
+    assert intent_service._moods(codes) == codes
+    assert QueryIntent(moodHints=codes).moodHints == codes
+
+
 def test_apply_patch_sets_only_the_named_axes() -> None:
     base = QueryIntent(categoryKeywords=["계곡"], regionHints=["제주"])
 
@@ -1167,11 +1336,7 @@ async def test_photo_refine_reads_the_multipart_intent_and_skips_the_llm(
     assert [step["tool"] for step in data["steps"]] == ["photo_match"]
     assert [spot["contentId"] for spot in data["spots"]] == ["j1"]
     assert data["intent"]["regionHints"] == ["제주"]
-    assert [chip["label"] for chip in data["suggestions"]] == [
-        "조건 하나 풀기",
-        "사람 적은 곳만",
-        "실내만",
-    ]
+    assert [chip["label"] for chip in data["suggestions"]] == ["조건 하나 풀기"]
     assert data["suggestions"][0]["patch"]["drop"] == "region"
 
 
@@ -1528,3 +1693,36 @@ async def test_festival_image_url_goes_through_the_copyright_display_helper(
 
     body = res.json()["data"]
     assert body["spots"][0]["imageUrl"] == "https://tong.visitkorea.or.kr/f.jpg"
+
+
+@pytest.mark.integration
+async def test_festival_step_badge_counts_only_the_cards_that_ship(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        ask_service.feed_services,
+        "load_festival_pool",
+        _festival_pool(
+            [
+                _festival_card(
+                    f"f{i}", title=f"축제{i}", region_label="경상북도 봉화군", dday="D-7"
+                )
+                for i in range(3)
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        intent_service, "extract_intent", _fake_intent(QueryIntent(festivalOnly=True))
+    )
+    monkeypatch.setattr(retrieve, "RESULT_LIMIT", 2)
+    _override_with_kto(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "축제"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    body = res.json()["data"]
+    festival = next(step for step in body["steps"] if step["tool"] == "festival")
+    assert festival["badge"] == "2곳"
+    assert body["totalCount"] == len(body["spots"]) == 2
