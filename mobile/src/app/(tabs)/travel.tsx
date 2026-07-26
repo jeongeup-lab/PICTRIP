@@ -15,9 +15,10 @@ import { useConversation, type Turn } from "@/features/travel/stores/conversatio
 import { useResults } from "@/features/travel/stores/results-store";
 import { channelCardsToSpots } from "@/features/travel/lib/channel-spots";
 import { agentErrorMessage, PHOTO_PICK_FAILED } from "@/features/travel/lib/agent-errors";
-import { composeQuestion, IDLE_SUGGESTIONS, resultsTitle } from "@/features/travel/lib/question";
+import { composeQuestion, resultsTitle } from "@/features/travel/lib/question";
+import { composerChips, type Chip } from "@/features/travel/lib/chips";
 import { pickTravelPhoto } from "@/features/travel/usecases/pick-travel-photo";
-import type { PhotoUpload, TravelSpot } from "@/features/travel/api";
+import type { AskInput, PhotoUpload, TravelSpot } from "@/features/travel/api";
 import { colors, spacing } from "@/constants/theme";
 
 const NEARBY_NOTICE = "위치를 켜면 근처를 찾아드려요";
@@ -59,10 +60,12 @@ export default function TravelScreen() {
     requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
   }, []);
 
+  const lastAnswered = [...turns].reverse().find((t) => t.status === "done" && t.answer);
+
   const run = useCallback(
-    (id: string, request: string, attached: PhotoUpload | null) => {
+    (id: string, input: Omit<AskInput, "coords">) => {
       ask.mutate(
-        { question: request, photo: attached, coords },
+        { ...input, coords },
         {
           onSuccess: (answer) => resolveTurn(id, answer),
           onError: (error) => failTurn(id, agentErrorMessage(error)),
@@ -84,16 +87,47 @@ export default function TravelScreen() {
       setDraft("");
       setPhoto(null);
       scrollToEnd();
-      run(id, request, attached);
+      run(id, { question: request, photo: attached });
     },
     [busy, startTurn, scrollToEnd, run],
+  );
+
+  const submitChip = useCallback(
+    (chip: Chip) => {
+      if (busy) return;
+      if (chip.kind === "question") {
+        submit(chip.question, null);
+        return;
+      }
+      const intent = lastAnswered?.answer?.intent ?? null;
+      if (!intent) return;
+      nextId.current += 1;
+      const id = `turn-${nextId.current}`;
+      const attached = lastAnswered?.photo ?? null;
+      startTurn({
+        id,
+        question: chip.label,
+        request: "",
+        photo: attached,
+        intent,
+        patch: chip.patch,
+      });
+      scrollToEnd();
+      run(id, { photo: attached, intent, patch: chip.patch });
+    },
+    [busy, submit, lastAnswered, startTurn, scrollToEnd, run],
   );
 
   const onRetry = useCallback(
     (turn: Turn) => {
       if (busy) return;
       retryTurn(turn.id);
-      run(turn.id, turn.request, turn.photo);
+      run(turn.id, {
+        question: turn.request,
+        photo: turn.photo,
+        intent: turn.intent,
+        patch: turn.patch,
+      });
     },
     [busy, retryTurn, run],
   );
@@ -125,8 +159,7 @@ export default function TravelScreen() {
     [openResults],
   );
 
-  const lastAnswered = [...turns].reverse().find((t) => t.status === "done" && t.answer);
-  const chips = lastAnswered?.answer?.suggestions.map((s) => s.label) ?? [...IDLE_SUGGESTIONS];
+  const chips = composerChips(lastAnswered?.answer?.suggestions, coords !== null);
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -173,7 +206,7 @@ export default function TravelScreen() {
                 key={turn.id}
                 turn={turn}
                 onPlaybackEnd={finishPlayback}
-                onSuggest={(text) => submit(text, null)}
+                onSuggest={submitChip}
                 onOpenResults={(t) => openSpotList(resultsTitle(t.question), t.answer?.spots ?? [])}
                 onRetry={onRetry}
                 onGrow={scrollToEnd}
@@ -187,10 +220,10 @@ export default function TravelScreen() {
         <AskComposer
           value={draft}
           photo={photo}
-          suggestions={chips}
+          chips={chips}
           disabled={busy}
           onChange={setDraft}
-          onSuggest={(text) => submit(text, null)}
+          onSuggest={submitChip}
           onAttach={() => void onAttach()}
           onClearAttach={() => setPhoto(null)}
           onSubmit={() => submit(draft, photo)}

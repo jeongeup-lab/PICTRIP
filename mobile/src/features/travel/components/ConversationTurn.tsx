@@ -7,6 +7,7 @@ import { StepList } from "@/features/travel/components/StepList";
 import { AnswerBlock } from "@/features/travel/components/AnswerBlock";
 import { playbackTicks, stepProgressAt } from "@/features/travel/lib/step-playback";
 import { RETRY_SUGGESTION } from "@/features/travel/lib/question";
+import { refineChips, type Chip } from "@/features/travel/lib/chips";
 import type { Turn } from "@/features/travel/stores/conversation-store";
 import { colors, spacing } from "@/constants/theme";
 
@@ -18,7 +19,7 @@ const PENDING_STEP = { tool: "pending", label: "여행지를 찾는 중", badge:
 interface Props {
   turn: Turn;
   onPlaybackEnd: (id: string) => void;
-  onSuggest: (text: string) => void;
+  onSuggest: (chip: Chip) => void;
   onOpenResults: (turn: Turn) => void;
   onRetry: (turn: Turn) => void;
   onGrow: () => void;
@@ -112,7 +113,7 @@ export function ConversationTurn({
         {revealed && answer ? (
           <AnswerBlock
             answer={answer.answer}
-            suggestions={answer.suggestions.map((s) => s.label)}
+            chips={refineChips(answer.suggestions)}
             onSuggest={onSuggest}
           />
         ) : null}

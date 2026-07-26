@@ -50,6 +50,30 @@ describe("conversation store", () => {
     expect(useConversation.getState().turns[0].photo).toEqual(photo);
   });
 
+  it("keeps intent and patch on the turn so a retry resends the refine, not the label", () => {
+    const intent = { categoryKeywords: ["계곡"], regionHints: [], crowdPreference: "any" as const };
+    const patch = { indoorOnly: true };
+    useConversation.getState().start({
+      id: "t1",
+      question: "실내만",
+      request: "",
+      photo: null,
+      intent,
+      patch,
+    });
+    const turn = useConversation.getState().turns[0];
+    expect(turn.intent).toEqual(intent);
+    expect(turn.patch).toEqual({ indoorOnly: true });
+    expect(turn.request).toBe("");
+  });
+
+  it("leaves intent and patch null for a plain typed question", () => {
+    useConversation.getState().start({ id: "t1", question: "계곡", request: "계곡", photo: null });
+    const turn = useConversation.getState().turns[0];
+    expect(turn.intent).toBeNull();
+    expect(turn.patch).toBeNull();
+  });
+
   it("appends turns in ask order", () => {
     useConversation
       .getState()
