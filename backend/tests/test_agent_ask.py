@@ -225,6 +225,13 @@ async def _seed(session: AsyncSession) -> None:
         ),
         {"lng": LNG, "lat": LAT},
     )
+    await session.execute(
+        text(
+            "INSERT INTO spot_moods (content_id, mood_id, confidence, source) "
+            "SELECT 'v1', id, 1.0, 'code' FROM moods WHERE code = 'night' "
+            "ON CONFLICT DO NOTHING"
+        )
+    )
     await session.flush()
 
 
@@ -930,3 +937,24 @@ async def test_indoor_with_an_indoor_category_narrows_without_falling_back(
     data = res.json()["data"]
     assert [step["tool"] for step in data["steps"]] == ["intent", "category_search"]
     assert [spot["contentId"] for spot in data["spots"]] == ["m1"]
+
+
+@pytest.mark.integration
+async def test_mood_codes_resolve_to_ids(db_session, seeded) -> None:
+    night = await repositories.find_mood_ids(db_session, ["night"])
+
+    assert len(night) == 1
+    assert await repositories.find_mood_ids(db_session, ["island", "night"]) != night
+    assert await repositories.find_mood_ids(db_session, []) == []
+    assert await repositories.find_mood_ids(db_session, ["nope"]) == []
+
+
+@pytest.mark.integration
+async def test_mood_filter_narrows_candidates(db_session, seeded) -> None:
+    night = await repositories.find_mood_ids(db_session, ["night"])
+
+    rows = await repositories.find_candidates(
+        db_session, codes=None, region_prefixes=None, limit=50, mood_ids=night
+    )
+
+    assert [row.content_id for row in rows] == ["v1"]

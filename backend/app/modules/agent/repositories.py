@@ -102,6 +102,16 @@ async def find_category_codes(session: AsyncSession, keyword: str, *, limit: int
     return [row.lcls_systm3_cd for row in result]
 
 
+_MOOD_ID_SQL = "SELECT id FROM moods WHERE code = ANY(CAST(:codes AS text[])) ORDER BY id"
+
+
+async def find_mood_ids(session: AsyncSession, codes: list[str]) -> list[int]:
+    if not codes:
+        return []
+    result = await session.execute(text(_MOOD_ID_SQL), {"codes": codes})
+    return [int(row.id) for row in result]
+
+
 @dataclass(frozen=True)
 class CandidateRow:
     content_id: str
@@ -143,6 +153,7 @@ WITH scored AS (
       {code_clause}
       {region_clause}
       {indoor_clause}
+      {mood_clause}
       {locatable_clause}
 )
 SELECT * FROM scored
@@ -158,6 +169,11 @@ _LOCATABLE_CLAUSE = "AND spots.mapx IS NOT NULL AND spots.mapy IS NOT NULL"
 _INDOOR_CLAUSE = (
     "AND (spots.lcls_systm2 = ANY(CAST(:indoor_l2 AS text[])) "
     "OR spots.lcls_systm3 = ANY(CAST(:indoor_l3 AS text[])))"
+)
+_MOOD_CLAUSE = (
+    "AND EXISTS (SELECT 1 FROM spot_moods sm "
+    "WHERE sm.content_id = spots.content_id "
+    "AND sm.mood_id = ANY(CAST(:mood_ids AS int[])))"
 )
 _CEILING_CLAUSE = "AND percentile <= :ceiling"
 _FLOOR_CLAUSE = "AND percentile >= :floor"
@@ -189,6 +205,7 @@ async def find_candidates(
     lat: float | None = None,
     lng: float | None = None,
     indoor_only: bool = False,
+    mood_ids: list[int] | None = None,
 ) -> list[CandidateRow]:
     params: dict[str, object] = {"lim": limit}
     percentile_clause = ""
@@ -211,6 +228,10 @@ async def find_candidates(
         indoor_clause = _INDOOR_CLAUSE
         params["indoor_l2"] = list(INDOOR_L2)
         params["indoor_l3"] = list(INDOOR_L3)
+    mood_clause = ""
+    if mood_ids:
+        mood_clause = _MOOD_CLAUSE
+        params["mood_ids"] = mood_ids
     if order == "distance":
         if lat is None or lng is None:
             raise ValueError("distance order requires lat/lng")
@@ -222,6 +243,7 @@ async def find_candidates(
         code_clause=code_clause,
         region_clause=region_clause,
         indoor_clause=indoor_clause,
+        mood_clause=mood_clause,
         locatable_clause=_LOCATABLE_CLAUSE if order == "distance" else "",
         concentration_join="JOIN" if rated_only else "LEFT JOIN",
         percentile=_PERCENTILE_EXPR if rated_only else "NULL",

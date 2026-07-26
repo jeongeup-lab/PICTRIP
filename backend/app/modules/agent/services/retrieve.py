@@ -84,6 +84,7 @@ async def search_candidates(
     lng: float | None,
     near: bool,
     indoor_only: bool = False,
+    mood_ids: list[int] | None = None,
 ) -> list[CandidateRow]:
     quiet = preference == "quiet"
 
@@ -100,6 +101,7 @@ async def search_candidates(
             lat=lat,
             lng=lng,
             indoor_only=indoor_only,
+            mood_ids=mood_ids,
         )
 
     if preference == "any":
