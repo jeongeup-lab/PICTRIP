@@ -8,10 +8,6 @@ PlaceType = Literal["attraction", "restaurant", "cafe", "hotel", "region"]
 ResolveStatus = Literal["matched", "ambiguous", "naver_only", "unmatched"]
 CrowdPreference = Literal["quiet", "any", "popular"]
 
-Region = Literal["all", "capital", "gangwon", "chungcheong", "jeolla", "gyeongsang", "jeju"]
-When = Literal["any", "today", "weekend", "next_week"]
-Who = Literal["any", "solo", "duo", "kids", "pets"]
-
 ToolName = Literal[
     "intent",
     "photo_match",
@@ -60,23 +56,10 @@ class QueryIntent(BaseModel):
     outOfScope: bool = False
 
 
-class AskFilters(BaseModel):
-    region: Region = "all"
-    when: When = "any"
-    who: Who = "any"
-
-
 class AskRequest(BaseModel):
     question: str | None = None
-    region: Region = "all"
-    when: When = "any"
-    who: Who = "any"
     lat: float | None = Field(None, ge=-90.0, le=90.0)
     lng: float | None = Field(None, ge=-180.0, le=180.0)
-
-    @property
-    def filters(self) -> AskFilters:
-        return AskFilters(region=self.region, when=self.when, who=self.who)
 
 
 class AskStep(BaseModel):

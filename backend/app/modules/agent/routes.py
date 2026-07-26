@@ -27,7 +27,7 @@ router = APIRouter(tags=["AGT · travel agent"])
 
 @router.post(
     "/agent/ask",
-    summary="여행 탭 질의 — 자유문·사진·조건 → 단계 + 답변 + 스팟",
+    summary="여행 탭 질의 — 자유문·사진 → 단계 + 답변 + 스팟",
     dependencies=[Depends(rate_limit(bucket="agent_ask", limit=20, window_seconds=60))],
 )
 async def agent_ask(request: Request, session: DbSession, kto: KtoDep) -> dict[str, Any]:
@@ -36,7 +36,6 @@ async def agent_ask(request: Request, session: DbSession, kto: KtoDep) -> dict[s
         session,
         kto,
         question=payload.question,
-        filters=payload.filters,
         lat=payload.lat,
         lng=payload.lng,
         image_bytes=image_bytes,
