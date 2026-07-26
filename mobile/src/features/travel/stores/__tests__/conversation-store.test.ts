@@ -6,7 +6,8 @@ const answer: AgentAnswer = {
   answer: [{ text: "4곳 찾았어요", emphasis: false }],
   spots: [],
   totalCount: 4,
-  suggestions: ["더 가까운 곳"],
+  intent: { categoryKeywords: ["계곡"], regionHints: [] },
+  suggestions: [{ label: "더 가까운 곳", patch: { nearMe: true } }],
 };
 
 beforeEach(() => useConversation.getState().clear());

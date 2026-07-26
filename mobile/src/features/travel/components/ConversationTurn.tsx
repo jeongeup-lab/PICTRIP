@@ -112,7 +112,7 @@ export function ConversationTurn({
         {revealed && answer ? (
           <AnswerBlock
             answer={answer.answer}
-            suggestions={answer.suggestions}
+            suggestions={answer.suggestions.map((s) => s.label)}
             onSuggest={onSuggest}
           />
         ) : null}

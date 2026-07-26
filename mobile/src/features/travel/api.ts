@@ -1,23 +1,39 @@
 import { api } from "@/lib/api-client";
 
-export type RegionFilter =
-  | "all"
-  | "capital"
-  | "gangwon"
-  | "chungcheong"
-  | "jeolla"
-  | "gyeongsang"
-  | "jeju";
-export type WhenFilter = "any" | "today" | "weekend" | "next_week";
-export type WhoFilter = "any" | "solo" | "duo" | "kids" | "pets";
+export type CrowdPreference = "quiet" | "any" | "popular";
+export type Mood = "sea" | "mountain" | "lake" | "island" | "hanok" | "night" | "street";
+export type DropAxis = "crowd" | "indoor" | "near" | "region" | "category";
 
-export interface Conditions {
-  region: RegionFilter;
-  when: WhenFilter;
-  who: WhoFilter;
+export interface ExtractedPlace {
+  name: string;
+  nameKo?: string | null;
+  placeType?: string;
+  regionHint?: string | null;
 }
 
-export const DEFAULT_CONDITIONS: Conditions = { region: "all", when: "any", who: "any" };
+export interface QueryIntent {
+  categoryKeywords: string[];
+  regionHints: string[];
+  namedPlaces?: ExtractedPlace[];
+  moodHints?: Mood[];
+  crowdPreference?: CrowdPreference;
+  indoorOnly?: boolean;
+  nearMe?: boolean;
+  festivalOnly?: boolean;
+  outOfScope?: boolean;
+}
+
+export interface RefinePatch {
+  crowdPreference?: CrowdPreference;
+  indoorOnly?: boolean;
+  nearMe?: boolean;
+  drop?: DropAxis;
+}
+
+export interface Suggestion {
+  label: string;
+  patch: RefinePatch;
+}
 
 export interface AgentStep {
   tool: string;
@@ -45,7 +61,8 @@ export interface AgentAnswer {
   answer: AnswerPart[];
   spots: TravelSpot[];
   totalCount: number;
-  suggestions: string[];
+  intent: QueryIntent;
+  suggestions: Suggestion[];
 }
 
 export interface PhotoUpload {
@@ -60,9 +77,10 @@ export interface Coords {
 }
 
 export interface AskInput {
-  question: string;
+  question?: string;
   photo?: PhotoUpload | null;
-  conditions: Conditions;
+  intent?: QueryIntent | null;
+  patch?: RefinePatch | null;
   coords?: Coords | null;
 }
 
@@ -72,9 +90,8 @@ function askForm(input: AskInput, photo: PhotoUpload): FormData {
   const form = new FormData();
   form.append("photo", photo as unknown as Blob);
   if (input.question) form.append("question", input.question);
-  form.append("region", input.conditions.region);
-  form.append("when", input.conditions.when);
-  form.append("who", input.conditions.who);
+  if (input.intent) form.append("intent", JSON.stringify(input.intent));
+  if (input.patch) form.append("patch", JSON.stringify(input.patch));
   if (input.coords) {
     form.append("lat", String(input.coords.lat));
     form.append("lng", String(input.coords.lng));
@@ -82,13 +99,11 @@ function askForm(input: AskInput, photo: PhotoUpload): FormData {
   return form;
 }
 
-function askBody(input: AskInput): Record<string, string | number> {
-  const body: Record<string, string | number> = {
-    question: input.question,
-    region: input.conditions.region,
-    when: input.conditions.when,
-    who: input.conditions.who,
-  };
+function askBody(input: AskInput): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  if (input.question) body.question = input.question;
+  if (input.intent) body.intent = input.intent;
+  if (input.patch) body.patch = input.patch;
   if (input.coords) {
     body.lat = input.coords.lat;
     body.lng = input.coords.lng;
