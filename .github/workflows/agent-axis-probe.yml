@@ -230,11 +230,75 @@ jobs:
                   await kto.aclose()
 
 
+          async def probe_excluded(session) -> None:
+              visible = (
+                  "spots.show_flag = 1 "
+                  "AND spots.first_image_url IS NOT NULL AND spots.first_image_url <> ''"
+              )
+              attraction = attraction_category_sql()
+
+              head("7. 중분류 전체 — attraction 술어가 무엇을 잘라내는가")
+              rows = await session.execute(
+                  text(
+                      "SELECT c.lcls_systm1_cd, c.lcls_systm1_nm,"
+                      "       c.lcls_systm2_cd, c.lcls_systm2_nm,"
+                      "       count(*) AS n,"
+                      f"      count(*) FILTER (WHERE {attraction}) AS kept"
+                      "  FROM spots"
+                      "  JOIN lcls_systm_codes c ON c.lcls_systm3_cd = spots.lcls_systm3"
+                      f" WHERE {visible}"
+                      " GROUP BY 1, 2, 3, 4 ORDER BY 1, 3"
+                  )
+              )
+              for l1cd, l1nm, l2cd, l2nm, n, kept in rows:
+                  mark = "  keep " if kept == n else "  DROP " if kept == 0 else "  part "
+                  print(f"{mark}{l1cd}/{l2cd}  {l1nm} > {l2nm:<18} 전체 {n:>6}  attraction {kept:>6}")
+
+              head("8. 실내 후보 코드가 실제로 어디에 있나")
+              rows = await session.execute(
+                  text(
+                      "SELECT c.lcls_systm1_cd, c.lcls_systm2_cd, c.lcls_systm3_cd,"
+                      "       c.lcls_systm1_nm, c.lcls_systm2_nm, c.lcls_systm3_nm,"
+                      "       count(spots.content_id) AS n,"
+                      f"      count(spots.content_id) FILTER (WHERE {attraction}) AS kept"
+                      "  FROM lcls_systm_codes c"
+                      f" LEFT JOIN spots ON spots.lcls_systm3 = c.lcls_systm3_cd AND {visible}"
+                      " WHERE c.lcls_systm3_nm ILIKE ANY(ARRAY["
+                      "   '%박물관%', '%미술관%', '%전시%', '%공연%', '%수족관%',"
+                      "   '%아쿠아%', '%도서관%', '%영화%', '%시장%', '%쇼핑%',"
+                      "   '%문화시설%', '%기념관%', '%과학관%'])"
+                      " GROUP BY 1, 2, 3, 4, 5, 6 ORDER BY 7 DESC LIMIT 40"
+                  )
+              )
+              for l1cd, l2cd, l3cd, l1nm, l2nm, l3nm, n, kept in rows:
+                  print(f"  {l1cd}/{l2cd}/{l3cd}  {l1nm} > {l2nm} > {l3nm:<16} 전체 {n:>5}  attraction {kept:>5}")
+
+              head("9. mood 별 커버리지 (attraction 모수 안에서)")
+              rows = await session.execute(
+                  text(
+                      "SELECT m.code, m.name,"
+                      "       count(*) AS n,"
+                      "       count(sc.content_id) AS rated,"
+                      "       count(*) FILTER (WHERE spots.addr1 LIKE '제주%') AS jeju,"
+                      "       round(avg(sm.confidence)::numeric, 2) AS conf"
+                      "  FROM spot_moods sm"
+                      "  JOIN moods m ON m.id = sm.mood_id"
+                      "  JOIN spots ON spots.content_id = sm.content_id"
+                      "  LEFT JOIN spot_concentration sc ON sc.content_id = spots.content_id"
+                      f" WHERE {ELIGIBLE}"
+                      " GROUP BY 1, 2 ORDER BY 3 DESC"
+                  )
+              )
+              for code, name, n, rated, jeju, conf in rows:
+                  print(f"  {code:<10} {name:<10} spots {n:>5}  rated {rated:>5}  제주 {jeju:>4}  conf {conf}")
+
+
           async def main() -> None:
               async with async_session_factory() as session:
                   await probe_coverage(session)
                   await probe_categories(session)
                   await probe_moods(session)
+                  await probe_excluded(session)
               await probe_festivals()
               print("\n--- probe done (read-only) ---")
 
