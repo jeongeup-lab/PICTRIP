@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+from collections.abc import Awaitable, Callable
 
 import pytest
 import pytest_asyncio
@@ -935,6 +936,71 @@ async def test_mood_filter_narrows_candidates(db_session, seeded) -> None:
     )
 
     assert [row.content_id for row in rows] == ["v1"]
+
+
+def test_intent_parses_mood_hints_and_drops_unknown_codes() -> None:
+    parsed = intent_service._moods(["night", "sea", "market", 7, "night"])
+
+    assert parsed == ["night", "sea"]
+
+
+def _fake_intent(intent: QueryIntent) -> Callable[[str], Awaitable[QueryIntent]]:
+    async def run(question: str) -> QueryIntent:
+        return intent
+
+    return run
+
+
+@pytest.mark.integration
+async def test_mood_hint_filters_the_candidate_pool(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        intent_service,
+        "extract_intent",
+        _fake_intent(QueryIntent(moodHints=["night"])),
+    )
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "야경 좋은 곳"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert [spot["contentId"] for spot in data["spots"]] == ["v1"]
+    assert any(step["tool"] == "mood_search" for step in data["steps"])
+
+
+@pytest.mark.integration
+async def test_unknown_mood_codes_leave_the_pool_unfiltered(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        intent_service,
+        "extract_intent",
+        _fake_intent(QueryIntent(categoryKeywords=["계곡"])),
+    )
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "계곡"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert [step["tool"] for step in data["steps"]] == ["intent", "category_search"]
+
+
+def test_intent_response_schema_matches_the_parsed_fields() -> None:
+    schema = intent_service._RESPONSE_SCHEMA
+    required = set(schema["required"])
+
+    assert {"moodHints", "festivalOnly"} <= set(schema["properties"])
+    assert {"moodHints", "festivalOnly"} <= required
+    assert required <= set(QueryIntent.model_fields)
+    assert set(schema["properties"]) <= set(QueryIntent.model_fields)
+    assert schema["properties"]["moodHints"]["items"]["enum"] == list(intent_service._MOOD_CODES)
 
 
 @pytest.mark.integration

@@ -170,6 +170,7 @@ async def _ask_with_question(
     near = intent.nearMe and lat is not None and lng is not None
     keywords = _keywords(intent)
     codes = await retrieve.resolve_category_codes(session, keywords)
+    mood_ids = await repositories.find_mood_ids(session, list(intent.moodHints))
     prefixes = await retrieve.resolve_region_prefixes(session, hints=intent.regionHints)
     if _named_place_is_the_only_constraint(intent, keywords=keywords, prefixes=prefixes, near=near):
         if not pinned:
@@ -196,6 +197,7 @@ async def _ask_with_question(
                 lng=lng,
                 near=near,
                 indoor_only=intent.indoorOnly,
+                mood_ids=mood_ids,
             )
 
         candidates = await search(codes)
@@ -214,6 +216,10 @@ async def _ask_with_question(
                     label=INDOOR_RETRY_LABEL,
                     badge=_count(candidates),
                 )
+            )
+        if mood_ids:
+            steps.append(
+                AskStep(tool="mood_search", label="분위기로 추림", badge=_count(candidates))
             )
 
     pool = candidates
