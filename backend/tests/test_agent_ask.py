@@ -955,3 +955,6 @@ async def test_legacy_condition_fields_are_ignored_not_rejected(
         app.dependency_overrides.clear()
 
     assert res.status_code == 200
+    data = res.json()["data"]
+    assert [spot["contentId"] for spot in data["spots"]] == ["j1", "v1", "v2", "v3"]
+    assert "이번 주말" not in "".join(seg["text"] for seg in data["answer"])
