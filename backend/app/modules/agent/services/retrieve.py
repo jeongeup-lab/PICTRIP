@@ -117,6 +117,10 @@ def candidate_order(*, preference: CrowdPreference, near: bool) -> CandidateOrde
     return "id"
 
 
+def has_crowd_signal(rows: list[CandidateRow]) -> bool:
+    return any(row.percentile is not None for row in rows)
+
+
 def filter_by_crowd(rows: list[CandidateRow], preference: CrowdPreference) -> list[CandidateRow]:
     if preference == "any":
         return rows
