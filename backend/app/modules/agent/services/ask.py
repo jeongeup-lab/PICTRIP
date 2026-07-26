@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import asyncio
 
+from redis.asyncio import Redis
+
 from app.core.db import AsyncSession
 from app.core.logging import get_logger
 from app.kto.client import KtoClient
+from app.kto.display import t1_display_url
 from app.modules.agent import repositories
 from app.modules.agent.errors import AgentNoResults, AgentOutOfScope
 from app.modules.agent.repositories import CandidateRow
@@ -22,6 +25,7 @@ from app.modules.agent.services import refine as refine_service
 from app.modules.agent.services import resolve as resolve_service
 from app.modules.agent.services import retrieve
 from app.modules.agent.services import suggest as suggest_service
+from app.modules.feed import services as feed_services
 from app.web.errors import AppError, ValidationFailed
 
 logger = get_logger(__name__)
@@ -31,6 +35,7 @@ INDOOR_RETRY_LABEL = "실내로만 다시 조회"
 
 async def ask(
     session: AsyncSession,
+    redis: Redis,
     kto: KtoClient | None,
     *,
     question: str | None,
@@ -56,7 +61,7 @@ async def ask(
     if not cleaned and intent is None:
         raise ValidationFailed("question, photo or intent is required")
     return await _ask_with_question(
-        session, kto, question=cleaned, lat=lat, lng=lng, intent=intent, patch=patch
+        session, redis, kto, question=cleaned, lat=lat, lng=lng, intent=intent, patch=patch
     )
 
 
@@ -165,6 +170,7 @@ def _photo_card(
 
 async def _ask_with_question(
     session: AsyncSession,
+    redis: Redis,
     kto: KtoClient | None,
     *,
     question: str,
@@ -181,6 +187,9 @@ async def _ask_with_question(
         if intent.outOfScope:
             raise AgentOutOfScope()
         steps.append(AskStep(tool="intent", label="질문에서 지역·조건 추출", badge="Gemini"))
+
+    if intent.festivalOnly:
+        return await _ask_festivals(redis, kto, intent=intent, steps=steps, lat=lat, lng=lng)
 
     pinned: list[CandidateRow] = []
     if intent.namedPlaces:
@@ -283,6 +292,68 @@ async def _ask_with_question(
             result_count=len(spots),
         ),
     )
+
+
+async def _ask_festivals(
+    redis: Redis,
+    kto: KtoClient | None,
+    *,
+    intent: QueryIntent,
+    steps: list[AskStep],
+    lat: float | None,
+    lng: float | None,
+) -> AskResponse:
+    if kto is None:
+        raise AgentNoResults()
+    pool = await feed_services.load_festival_pool(redis, kto)
+    scoped = _match_region(pool, intent.regionHints)
+    fell_back = bool(intent.regionHints) and not scoped
+    cards = scoped or pool
+    if not cards:
+        raise AgentNoResults()
+    steps.append(AskStep(tool="festival", label="오늘 열리는 축제 조회", badge=f"{len(cards)}곳"))
+    spots = [
+        AgentSpotCard(
+            contentId=card.content_id or "",
+            title=card.title,
+            regionLabel=card.region_label,
+            imageUrl=t1_display_url(card.image_url, card.cpyrht_div_cd),
+            tag=card.dday,
+        )
+        for card in cards[: retrieve.RESULT_LIMIT]
+        if card.content_id
+    ]
+    answer = [
+        AnswerSegment(text="오늘 열리는 축제로 "),
+        AnswerSegment(text=f"{len(spots)}곳", emphasis=True),
+        AnswerSegment(text=" 찾았어요."),
+    ]
+    if fell_back:
+        answer.append(
+            AnswerSegment(
+                text=f" {intent.regionHints[0]}에는 오늘 열리는 축제가 없어 전국에서 골랐어요."
+            )
+        )
+    return AskResponse(
+        steps=steps,
+        answer=answer,
+        spots=spots,
+        totalCount=len(spots),
+        intent=intent,
+        suggestions=suggest_service.derive(
+            intent,
+            has_coords=lat is not None and lng is not None,
+            result_count=len(spots),
+        ),
+    )
+
+
+def _match_region(
+    cards: list[feed_services.ChannelCardRow], hints: list[str]
+) -> list[feed_services.ChannelCardRow]:
+    if not hints:
+        return []
+    return [card for card in cards if any(hint in card.region_label for hint in hints)]
 
 
 def _named_place_is_the_only_constraint(

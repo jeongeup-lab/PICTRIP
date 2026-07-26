@@ -60,7 +60,9 @@ def _https(url: Any) -> str | None:
     return text
 
 
-async def fetch_festa_cards(kto: KtoClient, *, today: date | None = None) -> list[ChannelCardRow]:
+async def fetch_festa_cards(
+    kto: KtoClient, *, today: date | None = None, limit: int = _CARD_COUNT
+) -> list[ChannelCardRow]:
     today = today or _today()
     window_start = (today - timedelta(days=_FESTA_WINDOW_DAYS)).strftime("%Y%m%d")
     items: list[dict[str, Any]] = []
@@ -101,7 +103,7 @@ async def fetch_festa_cards(kto: KtoClient, *, today: date | None = None) -> lis
             )
         )
     cards.sort(key=lambda c: int((c.dday or "D-999")[2:]))
-    return cards[:_CARD_COUNT]
+    return cards[:limit]
 
 
 async def fetch_pets_cards(kto: KtoClient, *, today: date | None = None) -> list[ChannelCardRow]:
@@ -223,3 +225,38 @@ async def load_kto_channel_cached(redis: Redis, kto: KtoClient, key: str) -> lis
                 _spawn_refresh(redis, kto, key)
             return cards
     return await _fetch_and_store(redis, kto, key)
+
+
+_FESTIVAL_POOL_LIMIT = 60
+_FESTIVAL_POOL_KEY = "festival:pool:v1"
+_FESTIVAL_POOL_TTL = 3600
+
+
+async def load_festival_pool(redis: Redis, kto: KtoClient) -> list[ChannelCardRow]:
+    try:
+        cached = await redis.get(_FESTIVAL_POOL_KEY)
+    except Exception as exc:
+        logger.warning("feed.festival.cache_get_failed", error=str(exc))
+        cached = None
+    if cached:
+        try:
+            payload = json.loads(cached)
+            rows = [ChannelCardRow(**row) for row in payload["cards"]]
+        except (ValueError, TypeError, KeyError) as exc:
+            logger.warning("feed.festival.cache_corrupt", error=str(exc))
+        else:
+            if payload.get("date") == _today().isoformat():
+                return rows
+    cards = await fetch_festa_cards(kto, limit=_FESTIVAL_POOL_LIMIT)
+    try:
+        await redis.set(
+            _FESTIVAL_POOL_KEY,
+            json.dumps(
+                {"date": _today().isoformat(), "cards": [asdict(c) for c in cards]},
+                ensure_ascii=False,
+            ),
+            ex=_FESTIVAL_POOL_TTL,
+        )
+    except Exception as exc:
+        logger.warning("feed.festival.cache_set_failed", error=str(exc))
+    return cards

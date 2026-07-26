@@ -9,6 +9,7 @@ from starlette.datastructures import UploadFile
 from starlette.formparsers import MultiPartParser
 
 from app.core.db import DbSession
+from app.core.redis import RedisDep
 from app.kto.client import KtoDep
 from app.modules.agent.schemas import AskRequest
 from app.modules.agent.services import ask as ask_service
@@ -30,10 +31,13 @@ router = APIRouter(tags=["AGT · travel agent"])
     summary="여행 탭 질의 — 자유문·사진 → 단계 + 답변 + 스팟",
     dependencies=[Depends(rate_limit(bucket="agent_ask", limit=20, window_seconds=60))],
 )
-async def agent_ask(request: Request, session: DbSession, kto: KtoDep) -> dict[str, Any]:
+async def agent_ask(
+    request: Request, session: DbSession, redis: RedisDep, kto: KtoDep
+) -> dict[str, Any]:
     payload, image_bytes, image_mime = await _read_payload(request)
     result = await ask_service.ask(
         session,
+        redis,
         kto,
         question=payload.question,
         lat=payload.lat,
