@@ -337,3 +337,59 @@ async def test_warm_all_channels_is_fail_soft_per_channel(redis_client_fake) -> 
     assert result["snap"] is True
     assert await redis_client_fake.get(_cache_key("festa")) is None
     assert await redis_client_fake.get(_cache_key("snap")) is not None
+
+
+FESTIVAL_POOL_ITEMS = [
+    {
+        "contentid": str(i),
+        "title": f"축제{i}",
+        "addr1": "제주특별자치도 서귀포시 1" if i == 0 else "서울특별시 종로구 1",
+        "firstimage": "https://kto/i.jpg",
+        "eventstartdate": "20260701",
+        "eventenddate": "20260810",
+    }
+    for i in range(30)
+]
+
+
+class _PagedKto:
+    def __init__(self, items: list[dict]) -> None:
+        self.items = items
+
+    async def call(self, service: object, operation: object, **params: object) -> list[dict]:
+        return self.items if params["pageNo"] == 1 else []
+
+
+async def test_festival_pool_returns_more_than_the_channel_and_caches_separately(
+    redis_client_fake, monkeypatch
+) -> None:
+    from app.modules.feed.services import kto_channels
+
+    monkeypatch.setattr(kto_channels, "_today", lambda: TODAY)
+
+    pool = await kto_channels.load_festival_pool(redis_client_fake, _PagedKto(FESTIVAL_POOL_ITEMS))
+
+    assert len(pool) == 30
+    assert await redis_client_fake.get("festival:pool:v1") is not None
+
+
+async def test_festival_pool_second_call_is_served_from_cache(
+    redis_client_fake, monkeypatch
+) -> None:
+    from app.modules.feed.services import kto_channels
+
+    monkeypatch.setattr(kto_channels, "_today", lambda: TODAY)
+    kto = AsyncMock(spec=KtoClient)
+    kto.call = AsyncMock(return_value=FESTIVAL_POOL_ITEMS)
+
+    first = await kto_channels.load_festival_pool(redis_client_fake, kto)
+    second = await kto_channels.load_festival_pool(redis_client_fake, kto)
+
+    assert first == second
+    assert kto.call.await_count == 1
+
+
+async def test_festa_channel_still_caps_at_ten_cards() -> None:
+    cards = await fetch_festa_cards(_PagedKto(FESTIVAL_POOL_ITEMS), today=TODAY)
+
+    assert len(cards) == 10
