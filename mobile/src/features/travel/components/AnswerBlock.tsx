@@ -1,14 +1,15 @@
 import { Pressable, View, Text, StyleSheet } from "react-native";
 import type { AnswerPart } from "@/features/travel/api";
+import type { Chip } from "@/features/travel/lib/chips";
 import { colors } from "@/constants/theme";
 
 interface Props {
   answer: AnswerPart[];
-  suggestions: string[];
-  onSuggest: (text: string) => void;
+  chips: Chip[];
+  onSuggest: (chip: Chip) => void;
 }
 
-export function AnswerBlock({ answer, suggestions, onSuggest }: Props) {
+export function AnswerBlock({ answer, chips, onSuggest }: Props) {
   return (
     <View style={styles.root}>
       <Text style={styles.say}>
@@ -19,16 +20,16 @@ export function AnswerBlock({ answer, suggestions, onSuggest }: Props) {
         ))}
       </Text>
 
-      {suggestions.length > 0 ? (
+      {chips.length > 0 ? (
         <View style={styles.chips}>
-          {suggestions.map((text) => (
+          {chips.map((chip) => (
             <Pressable
-              key={text}
-              testID={`answer-suggestion-${text}`}
+              key={chip.label}
+              testID={`answer-suggestion-${chip.label}`}
               style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
-              onPress={() => onSuggest(text)}
+              onPress={() => onSuggest(chip)}
             >
-              <Text style={styles.chipText}>{text}</Text>
+              <Text style={styles.chipText}>{chip.label}</Text>
             </Pressable>
           ))}
         </View>

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { AgentAnswer, PhotoUpload } from "@/features/travel/api";
+import type { AgentAnswer, PhotoUpload, QueryIntent, RefinePatch } from "@/features/travel/api";
 
 export type TurnStatus = "pending" | "playing" | "done" | "failed";
 
@@ -8,6 +8,8 @@ export interface Turn {
   question: string;
   request: string;
   photo: PhotoUpload | null;
+  intent: QueryIntent | null;
+  patch: RefinePatch | null;
   status: TurnStatus;
   answer: AgentAnswer | null;
   errorMessage: string | null;
@@ -21,6 +23,8 @@ interface ConversationState {
     question: string;
     request: string;
     photo: PhotoUpload | null;
+    intent?: QueryIntent | null;
+    patch?: RefinePatch | null;
   }) => void;
   retry: (id: string) => void;
   resolve: (id: string, answer: AgentAnswer) => void;
@@ -36,12 +40,22 @@ function patch(turns: Turn[], id: string, next: Partial<Turn>): Turn[] {
 export const useConversation = create<ConversationState>((set) => ({
   turns: [],
   busy: false,
-  start: ({ id, question, request, photo }) =>
+  start: ({ id, question, request, photo, intent = null, patch = null }) =>
     set((s) => ({
       busy: true,
       turns: [
         ...s.turns,
-        { id, question, request, photo, status: "pending", answer: null, errorMessage: null },
+        {
+          id,
+          question,
+          request,
+          photo,
+          intent,
+          patch,
+          status: "pending",
+          answer: null,
+          errorMessage: null,
+        },
       ],
     })),
   retry: (id) =>

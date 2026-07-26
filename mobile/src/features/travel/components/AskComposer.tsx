@@ -2,6 +2,7 @@ import { ScrollView, Pressable, View, Text, TextInput, StyleSheet } from "react-
 import { Image } from "expo-image";
 import { Icon } from "@/components/Icon";
 import type { PhotoUpload } from "@/features/travel/api";
+import type { Chip } from "@/features/travel/lib/chips";
 import { colors, spacing } from "@/constants/theme";
 
 export const ATTACH_NOTICE = "서버에 저장하지 않고 비교 후 폐기해요";
@@ -9,10 +10,10 @@ export const ATTACH_NOTICE = "서버에 저장하지 않고 비교 후 폐기해
 interface Props {
   value: string;
   photo: PhotoUpload | null;
-  suggestions: string[];
+  chips: Chip[];
   disabled: boolean;
   onChange: (text: string) => void;
-  onSuggest: (text: string) => void;
+  onSuggest: (chip: Chip) => void;
   onAttach: () => void;
   onClearAttach: () => void;
   onSubmit: () => void;
@@ -21,7 +22,7 @@ interface Props {
 export function AskComposer({
   value,
   photo,
-  suggestions,
+  chips,
   disabled,
   onChange,
   onSuggest,
@@ -52,14 +53,14 @@ export function AskComposer({
         contentContainerStyle={styles.chips}
         keyboardShouldPersistTaps="handled"
       >
-        {suggestions.map((text) => (
+        {chips.map((chip) => (
           <Pressable
-            key={text}
-            testID={`travel-chip-${text}`}
+            key={chip.label}
+            testID={`travel-chip-${chip.label}`}
             style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
-            onPress={() => onSuggest(text)}
+            onPress={() => onSuggest(chip)}
           >
-            <Text style={styles.chipText}>{text}</Text>
+            <Text style={styles.chipText}>{chip.label}</Text>
           </Pressable>
         ))}
       </ScrollView>
