@@ -53,7 +53,11 @@ const turn = (over: Partial<Turn> = {}): Turn => ({
 
 const noop = () => undefined;
 
-function mount(t: Turn, onPlaybackEnd = noop, onSuggest: (chip: Chip) => void = noop) {
+function mount(
+  t: Turn,
+  onPlaybackEnd = noop,
+  onSuggest: (chip: Chip, source: Turn) => void = noop,
+) {
   let tree: renderer.ReactTestRenderer;
   act(() => {
     tree = renderer.create(
@@ -138,19 +142,19 @@ describe("ConversationTurn playback", () => {
     expect(spinners(tree)).toBe(0);
   });
 
-  it("hands the follow-up chip up as a patch, not as its label text", () => {
+  it("hands the follow-up chip up as a patch alongside its own turn, not as label text", () => {
     const onSuggest = jest.fn();
-    const tree = mount(turn({ status: "done" }), noop, onSuggest);
+    const own = turn({ status: "done" });
+    const tree = mount(own, noop, onSuggest);
     const chip = tree.root
       .findAllByProps({ testID: "answer-suggestion-실내만" })
       .find((node) => typeof node.props.onPress === "function");
 
     act(() => chip!.props.onPress());
 
-    expect(onSuggest).toHaveBeenCalledWith({
-      kind: "refine",
-      label: "실내만",
-      patch: { indoorOnly: true },
-    });
+    expect(onSuggest).toHaveBeenCalledWith(
+      { kind: "refine", label: "실내만", patch: { indoorOnly: true } },
+      own,
+    );
   });
 });

@@ -92,18 +92,18 @@ export default function TravelScreen() {
     [busy, startTurn, scrollToEnd, run],
   );
 
-  const submitChip = useCallback(
-    (chip: Chip) => {
+  const refineFrom = useCallback(
+    (source: Turn | undefined, chip: Chip) => {
       if (busy) return;
       if (chip.kind === "question") {
         submit(chip.question, null);
         return;
       }
-      const intent = lastAnswered?.answer?.intent ?? null;
+      const intent = source?.answer?.intent ?? null;
       if (!intent) return;
       nextId.current += 1;
       const id = `turn-${nextId.current}`;
-      const attached = lastAnswered?.photo ?? null;
+      const attached = source?.photo ?? null;
       startTurn({
         id,
         question: chip.label,
@@ -115,7 +115,17 @@ export default function TravelScreen() {
       scrollToEnd();
       run(id, { photo: attached, intent, patch: chip.patch });
     },
-    [busy, submit, lastAnswered, startTurn, scrollToEnd, run],
+    [busy, submit, startTurn, scrollToEnd, run],
+  );
+
+  const submitDockChip = useCallback(
+    (chip: Chip) => refineFrom(lastAnswered, chip),
+    [refineFrom, lastAnswered],
+  );
+
+  const submitTurnChip = useCallback(
+    (chip: Chip, source: Turn) => refineFrom(source, chip),
+    [refineFrom],
   );
 
   const onRetry = useCallback(
@@ -206,7 +216,7 @@ export default function TravelScreen() {
                 key={turn.id}
                 turn={turn}
                 onPlaybackEnd={finishPlayback}
-                onSuggest={submitChip}
+                onSuggest={submitTurnChip}
                 onOpenResults={(t) => openSpotList(resultsTitle(t.question), t.answer?.spots ?? [])}
                 onRetry={onRetry}
                 onGrow={scrollToEnd}
@@ -223,7 +233,7 @@ export default function TravelScreen() {
           chips={chips}
           disabled={busy}
           onChange={setDraft}
-          onSuggest={submitChip}
+          onSuggest={submitDockChip}
           onAttach={() => void onAttach()}
           onClearAttach={() => setPhoto(null)}
           onSubmit={() => submit(draft, photo)}
