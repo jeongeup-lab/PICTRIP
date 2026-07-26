@@ -1,8 +1,16 @@
 import type { InternalAxiosRequestConfig } from "axios";
 import { api } from "@/lib/api-client";
-import { askAgent, DEFAULT_CONDITIONS } from "@/features/travel/api";
+import { askAgent, type QueryIntent, type RefinePatch } from "@/features/travel/api";
 
 const photo = { uri: "file:///a.jpg", name: "a.jpg", type: "image/jpeg" };
+
+const intent: QueryIntent = {
+  categoryKeywords: ["계곡"],
+  regionHints: ["부산"],
+  moodHints: ["sea"],
+  crowdPreference: "quiet",
+};
+const patch: RefinePatch = { crowdPreference: "quiet" };
 
 let seen: InternalAxiosRequestConfig | null = null;
 const originalAdapter = api.defaults.adapter;
@@ -21,7 +29,14 @@ beforeEach(() => {
     seen = config;
     return Promise.resolve({
       data: {
-        data: { steps: [], answer: [], spots: [], totalCount: 0, suggestions: [] },
+        data: {
+          steps: [],
+          answer: [],
+          spots: [],
+          totalCount: 0,
+          intent: { categoryKeywords: [], regionHints: [] },
+          suggestions: [],
+        },
         error: null,
         meta: {},
       },
@@ -39,51 +54,69 @@ afterEach(() => {
 
 describe("askAgent", () => {
   it("declares multipart so the native layer can attach its own boundary", async () => {
-    await askAgent({ question: "계곡", photo, conditions: DEFAULT_CONDITIONS });
+    await askAgent({ question: "계곡", photo });
     expect(contentType(seen)).toBe("multipart/form-data");
     expect(contentType(seen)).not.toBe("application/json");
   });
 
   it("sends the picked file under the photo part the backend reads", async () => {
-    await askAgent({ question: "계곡", photo, conditions: DEFAULT_CONDITIONS });
+    await askAgent({ question: "계곡", photo });
     const form = seen!.data as FormData;
     expect(form).toBeInstanceOf(FormData);
     expect(form.has("photo")).toBe(true);
     expect(form.get("question")).toBe("계곡");
   });
 
-  it("carries the structured conditions on the multipart request too", async () => {
-    await askAgent({
-      question: "계곡",
-      photo,
-      conditions: { region: "capital", when: "weekend", who: "pets" },
-      coords: { lat: 37.5, lng: 127.0 },
-    });
+  it("refine 요청은 intent와 patch를 함께 보낸다", async () => {
+    await askAgent({ intent, patch });
+    expect(jsonBody(seen)).toEqual({ intent, patch });
+  });
+
+  it("echoes the served intent back whole so refine keeps every axis", async () => {
+    await askAgent({ intent, patch });
+    expect((jsonBody(seen) as { intent: QueryIntent }).intent).toEqual(intent);
+  });
+
+  it("사진 refine은 intent와 patch를 JSON 문자열로 폼에 담는다", async () => {
+    await askAgent({ photo, intent, patch: { nearMe: true } });
     const form = seen!.data as FormData;
-    expect(form.get("region")).toBe("capital");
-    expect(form.get("when")).toBe("weekend");
-    expect(form.get("who")).toBe("pets");
+    expect(form.get("intent")).toBe(JSON.stringify(intent));
+    expect(form.get("patch")).toBe(JSON.stringify({ nearMe: true }));
+  });
+
+  it("carries coords on the multipart request too", async () => {
+    await askAgent({ question: "계곡", photo, coords: { lat: 37.5, lng: 127.0 } });
+    const form = seen!.data as FormData;
     expect(form.get("lat")).toBe("37.5");
+    expect(form.get("lng")).toBe("127");
   });
 
   it("keeps a json body when no photo is attached", async () => {
-    await askAgent({ question: "계곡", conditions: DEFAULT_CONDITIONS });
+    await askAgent({ question: "계곡" });
     expect(contentType(seen)).toBe("application/json");
-    expect(jsonBody(seen)).toEqual({
-      question: "계곡",
-      region: "all",
-      when: "any",
-      who: "any",
-    });
+    expect(jsonBody(seen)).toEqual({ question: "계곡" });
+  });
+
+  it("omits intent and patch when the turn is a fresh question", async () => {
+    await askAgent({ question: "계곡" });
+    expect(jsonBody(seen)).not.toHaveProperty("intent");
+    expect(jsonBody(seen)).not.toHaveProperty("patch");
+  });
+
+  it("omits intent and patch from the form when the photo turn is fresh", async () => {
+    await askAgent({ question: "계곡", photo });
+    const form = seen!.data as FormData;
+    expect(form.has("intent")).toBe(false);
+    expect(form.has("patch")).toBe(false);
   });
 
   it("omits coords entirely when location is unavailable", async () => {
-    await askAgent({ question: "계곡", conditions: DEFAULT_CONDITIONS, coords: null });
+    await askAgent({ question: "계곡", coords: null });
     expect(jsonBody(seen)).not.toHaveProperty("lat");
   });
 
   it("outlives the 15s instance default while Gemini and pgvector run", async () => {
-    await askAgent({ question: "계곡", conditions: DEFAULT_CONDITIONS });
+    await askAgent({ question: "계곡" });
     expect(seen!.timeout).toBe(60_000);
   });
 });

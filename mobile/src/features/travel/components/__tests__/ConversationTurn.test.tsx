@@ -33,7 +33,8 @@ const answer = {
     },
   ],
   totalCount: 12,
-  suggestions: ["더 가까운 곳"],
+  intent: { categoryKeywords: ["계곡"], regionHints: [] },
+  suggestions: [{ label: "더 가까운 곳", patch: { nearMe: true } }],
 };
 
 const turn = (over: Partial<Turn> = {}): Turn => ({

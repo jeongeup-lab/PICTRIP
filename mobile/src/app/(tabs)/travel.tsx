@@ -6,16 +6,13 @@ import { useChannelCards } from "@/features/channels/queries";
 import type { ChannelKey } from "@/features/channels/api";
 import { ChannelRail } from "@/features/travel/components/ChannelRail";
 import { AskComposer } from "@/features/travel/components/AskComposer";
-import { ConditionSheet } from "@/features/travel/components/ConditionSheet";
 import { ConversationTurn } from "@/features/travel/components/ConversationTurn";
 import { TravelToast } from "@/features/travel/components/TravelToast";
 import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
 import { useAskAgentMutation } from "@/features/travel/queries";
-import { useConditions } from "@/features/travel/stores/conditions-store";
 import { useConversation, type Turn } from "@/features/travel/stores/conversation-store";
 import { useResults } from "@/features/travel/stores/results-store";
 import { channelCardsToSpots } from "@/features/travel/lib/channel-spots";
-import { conditionChipLabel, isNeutral } from "@/features/travel/lib/condition-labels";
 import { agentErrorMessage, PHOTO_PICK_FAILED } from "@/features/travel/lib/agent-errors";
 import { composeQuestion, IDLE_SUGGESTIONS, resultsTitle } from "@/features/travel/lib/question";
 import { pickTravelPhoto } from "@/features/travel/usecases/pick-travel-photo";
@@ -38,11 +35,8 @@ export default function TravelScreen() {
   const nextId = useRef(0);
   const [draft, setDraft] = useState("");
   const [photo, setPhoto] = useState<PhotoUpload | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  const conditions = useConditions((s) => s.conditions);
-  const applyConditions = useConditions((s) => s.apply);
   const turns = useConversation((s) => s.turns);
   const busy = useConversation((s) => s.busy);
   const startTurn = useConversation((s) => s.start);
@@ -67,14 +61,14 @@ export default function TravelScreen() {
   const run = useCallback(
     (id: string, request: string, attached: PhotoUpload | null) => {
       ask.mutate(
-        { question: request, photo: attached, conditions, coords },
+        { question: request, photo: attached, coords },
         {
           onSuccess: (answer) => resolveTurn(id, answer),
           onError: (error) => failTurn(id, agentErrorMessage(error)),
         },
       );
     },
-    [ask, conditions, coords, resolveTurn, failTurn],
+    [ask, coords, resolveTurn, failTurn],
   );
 
   const submit = useCallback(
@@ -121,7 +115,7 @@ export default function TravelScreen() {
   );
 
   const lastAnswered = [...turns].reverse().find((t) => t.status === "done" && t.answer);
-  const chips = lastAnswered?.answer?.suggestions ?? [...IDLE_SUGGESTIONS];
+  const chips = lastAnswered?.answer?.suggestions.map((s) => s.label) ?? [...IDLE_SUGGESTIONS];
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -180,28 +174,15 @@ export default function TravelScreen() {
         <AskComposer
           value={draft}
           photo={photo}
-          conditionLabel={conditionChipLabel(conditions)}
-          conditionActive={!isNeutral(conditions)}
           suggestions={chips}
           disabled={busy}
           onChange={setDraft}
-          onOpenConditions={() => setSheetOpen(true)}
           onSuggest={(text) => submit(text, null)}
           onAttach={() => void onAttach()}
           onClearAttach={() => setPhoto(null)}
           onSubmit={() => submit(draft, photo)}
         />
       </KeyboardAvoidingView>
-
-      <ConditionSheet
-        open={sheetOpen}
-        conditions={conditions}
-        onClose={() => setSheetOpen(false)}
-        onApply={(next) => {
-          applyConditions(next);
-          setSheetOpen(false);
-        }}
-      />
 
       <TravelToast message={toast} bottom={TOAST_BOTTOM} onHide={() => setToast(null)} />
     </SafeAreaView>

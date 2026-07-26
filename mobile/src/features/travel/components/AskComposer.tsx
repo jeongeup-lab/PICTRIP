@@ -9,12 +9,9 @@ export const ATTACH_NOTICE = "서버에 저장하지 않고 비교 후 폐기해
 interface Props {
   value: string;
   photo: PhotoUpload | null;
-  conditionLabel: string;
-  conditionActive: boolean;
   suggestions: string[];
   disabled: boolean;
   onChange: (text: string) => void;
-  onOpenConditions: () => void;
   onSuggest: (text: string) => void;
   onAttach: () => void;
   onClearAttach: () => void;
@@ -24,12 +21,9 @@ interface Props {
 export function AskComposer({
   value,
   photo,
-  conditionLabel,
-  conditionActive,
   suggestions,
   disabled,
   onChange,
-  onOpenConditions,
   onSuggest,
   onAttach,
   onClearAttach,
@@ -58,26 +52,6 @@ export function AskComposer({
         contentContainerStyle={styles.chips}
         keyboardShouldPersistTaps="handled"
       >
-        <Pressable
-          testID="travel-condition-chip"
-          style={({ pressed }) => [
-            styles.chip,
-            conditionActive && styles.chipOn,
-            pressed && !conditionActive && styles.chipPressed,
-          ]}
-          onPress={onOpenConditions}
-        >
-          <Text style={[styles.chipText, conditionActive && styles.chipTextOn]}>
-            {conditionLabel}
-          </Text>
-          <Icon
-            name="chevron-right"
-            size={13}
-            color={conditionActive ? colors.onImage : colors.sec}
-            strokeWidth={2}
-          />
-        </Pressable>
-
         {suggestions.map((text) => (
           <Pressable
             key={text}
@@ -162,9 +136,7 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   chipPressed: { backgroundColor: colors.fill },
-  chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
   chipText: { fontSize: 13.5, fontWeight: "700", color: colors.sec },
-  chipTextOn: { color: colors.onImage },
   composer: {
     flexDirection: "row",
     alignItems: "center",
