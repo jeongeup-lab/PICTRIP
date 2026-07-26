@@ -42,9 +42,18 @@ def test_travel_predicate_keeps_exhibition_and_performance_venues() -> None:
     travel = travel_category_sql()
     nearby = attraction_category_sql()
 
-    assert "'VE06'" in nearby
-    assert "'VE07'" in nearby
+    assert "NOT IN ('VE06', 'VE07', 'VE08', 'VE09', 'VE10', 'VE11')" in nearby
+    assert "NOT IN ('VE08', 'VE09', 'VE10', 'VE11')" in travel
     assert "'VE06'" not in travel
     assert "'VE07'" not in travel
-    assert "'VE08', 'VE09', 'VE10', 'VE11'" in travel
     assert "spots.content_type_id != 32" in travel
+
+
+def test_travel_predicate_keeps_non_ve_and_uncoded_ve_branches() -> None:
+    from app.modules.spots.services import travel_category_sql
+
+    travel = travel_category_sql()
+
+    assert "spots.lcls_systm1 IN ('HS', 'NA', 'EX')" in travel
+    assert "spots.lcls_systm1 = 'VE'" in travel
+    assert "spots.lcls_systm2 IS NULL" in travel
