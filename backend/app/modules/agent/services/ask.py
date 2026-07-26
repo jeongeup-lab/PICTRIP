@@ -31,6 +31,8 @@ WHEN_LABELS = {
     "next_week": "다음 주",
 }
 
+INDOOR_RETRY_LABEL = "실내로만 다시 조회"
+
 BASE_SUGGESTIONS = ["더 한적한 곳", "실내 위주", "더 가까운 곳"]
 NEAR_SUGGESTIONS = ["더 비슷하게", "더 가까운 곳", "실내 위주"]
 
@@ -201,16 +203,20 @@ async def _ask_with_question(
             )
         )
     else:
-        candidates = await retrieve.search_candidates(
-            session,
-            codes=codes,
-            region_prefixes=prefixes,
-            preference=intent.crowdPreference,
-            lat=lat,
-            lng=lng,
-            near=near,
-            indoor_only=intent.indoorOnly,
-        )
+
+        async def search(within_codes: list[str]) -> list[CandidateRow]:
+            return await retrieve.search_candidates(
+                session,
+                codes=within_codes,
+                region_prefixes=prefixes,
+                preference=intent.crowdPreference,
+                lat=lat,
+                lng=lng,
+                near=near,
+                indoor_only=intent.indoorOnly,
+            )
+
+        candidates = await search(codes)
         steps.append(
             AskStep(
                 tool="category_search",
@@ -218,6 +224,15 @@ async def _ask_with_question(
                 badge=_count(candidates),
             )
         )
+        if not candidates and intent.indoorOnly and codes:
+            candidates = await search([])
+            steps.append(
+                AskStep(
+                    tool="category_search",
+                    label=INDOOR_RETRY_LABEL,
+                    badge=_count(candidates),
+                )
+            )
 
     pool = candidates
     if intent.crowdPreference != "any":
