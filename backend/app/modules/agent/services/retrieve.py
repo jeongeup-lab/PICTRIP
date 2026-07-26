@@ -11,7 +11,7 @@ from app.modules.spots.services import map_region_tokens_to_sido, search_spots_b
 CANDIDATE_LIMIT = 400
 TITLE_KEYWORD_LIMIT = 3
 TITLE_MATCH_LIMIT = 20
-RESULT_LIMIT = 4
+RESULT_LIMIT = 20
 QUIET_KEEP_RATIO = 0.3
 POPULAR_KEEP_RATIO = 0.3
 BUSY_RATE = 70.0

@@ -278,6 +278,73 @@ async def test_question_region_hint_narrows_the_search_without_a_sheet_filter(
     assert data["totalCount"] == 1
 
 
+async def _seed_wide(session: AsyncSession) -> None:
+    for i in range(5):
+        cid = f"w{i}"
+        await session.execute(
+            text(
+                "INSERT INTO spots (content_id, content_type_id, title, addr1, "
+                "first_image_url, show_flag, mapx, mapy, lcls_systm1, lcls_systm3, "
+                "ldong_regn_cd, ldong_signgu_cd) "
+                "VALUES (:cid, 12, :t, '부산광역시 사하구 1', 'http://kto/i.jpg', 1, "
+                ":lng, :lat, 'NA', 'NA010100', '26', '26380')"
+            ),
+            {"cid": cid, "t": f"계곡-{cid}", "lng": LNG, "lat": LAT + 0.1 + i * 0.01},
+        )
+    await session.flush()
+
+
+@pytest_asyncio.fixture
+async def seeded_wide(db_session: AsyncSession) -> None:
+    await _seed(db_session)
+    await _seed_wide(db_session)
+
+
+@pytest.mark.integration
+async def test_total_count_matches_the_spot_list_the_user_can_open(
+    db_session, client, seeded_wide, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask", json={"question": "부산 계곡", "region": "gyeongsang"}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert len(data["spots"]) == 8
+    assert data["totalCount"] == len(data["spots"])
+
+
+@pytest.mark.integration
+async def test_result_list_is_capped_and_total_count_follows_the_cap(
+    db_session, client, seeded_wide, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    monkeypatch.setattr(retrieve, "RESULT_LIMIT", 3)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask", json={"question": "부산 계곡", "region": "gyeongsang"}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert len(data["spots"]) == 3
+    assert data["totalCount"] == 3
+
+
 @pytest.mark.integration
 async def test_near_me_orders_candidates_by_distance_in_sql(
     db_session, client, seeded, monkeypatch

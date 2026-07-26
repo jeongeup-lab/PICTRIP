@@ -137,7 +137,7 @@ export function ConversationTurn({
               hitSlop={8}
               onPress={() => onOpenResults(turn)}
             >
-              <Text style={styles.linkText}>전체 {answer.totalCount}곳 보기</Text>
+              <Text style={styles.linkText}>전체 {answer.spots.length}곳 보기</Text>
               <Icon name="chevron-right" size={15} color={colors.ink} strokeWidth={2} />
             </Pressable>
             <Pressable

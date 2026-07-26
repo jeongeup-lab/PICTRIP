@@ -108,9 +108,15 @@ describe("ConversationTurn playback", () => {
 
     act(() => jest.advanceTimersByTime(playbackDurationMs(3)));
     expect(texts(tree)).toContain("하위 30%");
-    expect(texts(tree)).toContain("전체 12곳 보기");
+    expect(texts(tree)).toContain("전체 1곳 보기");
     expect(onPlaybackEnd).toHaveBeenCalledWith("t1");
     expect(spinners(tree)).toBe(0);
+  });
+
+  it("counts the link by the spots it opens, not by a server total", () => {
+    const tree = mount(turn({ status: "done" }));
+    expect(answer.totalCount).not.toBe(answer.spots.length);
+    expect(texts(tree)).toContain(`전체 ${answer.spots.length}곳 보기`);
   });
 
   it("shows a failed turn as an error line with a retry chip, no steps", () => {

@@ -1,13 +1,5 @@
 import { useCallback, useState } from "react";
-import {
-  FlatList,
-  View,
-  Text,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  type ViewToken,
-} from "react-native";
+import { FlatList, View, Text, RefreshControl, StyleSheet, type ViewToken } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { ChannelTiles } from "@/features/channels/components/ChannelTiles";
@@ -26,42 +18,6 @@ function Header() {
   return (
     <View style={styles.headerBlock}>
       <ChannelTiles onOpen={(key) => router.push(`/channels?start=${key}`)} />
-    </View>
-  );
-}
-
-function Footer() {
-  return (
-    <View style={styles.footer}>
-      <View style={styles.footerLinks}>
-        <Pressable
-          testID="footer-terms"
-          accessibilityRole="link"
-          hitSlop={8}
-          onPress={() => router.push("/legal/terms")}
-        >
-          <Text style={styles.footerLink}>이용약관</Text>
-        </Pressable>
-        <View style={styles.footerSep} />
-        <Pressable
-          testID="footer-privacy"
-          accessibilityRole="link"
-          hitSlop={8}
-          onPress={() => router.push("/legal/privacy")}
-        >
-          <Text style={styles.footerLinkStrong}>개인정보처리방침</Text>
-        </Pressable>
-        <View style={styles.footerSep} />
-        <Pressable
-          testID="footer-data-source"
-          accessibilityRole="link"
-          hitSlop={8}
-          onPress={() => router.push("/legal/data-sources")}
-        >
-          <Text style={styles.footerLink}>데이터 출처</Text>
-        </Pressable>
-      </View>
-      <Text style={styles.footerNote}>ⓒ PicTrip</Text>
     </View>
   );
 }
@@ -134,7 +90,6 @@ export default function HomeScreen() {
             </View>
           )}
           ListHeaderComponent={Header}
-          ListFooterComponent={Footer}
           showsVerticalScrollIndicator={false}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={VIEWABILITY}
@@ -184,17 +139,4 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
   errorText: { fontSize: 15, color: colors.sec },
-  footer: {
-    backgroundColor: colors.inset,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
-  },
-  footerLinks: { flexDirection: "row", alignItems: "center", gap: 12 },
-  footerLink: { fontSize: 12, fontWeight: "600", color: colors.sec },
-  footerLinkStrong: { fontSize: 12, fontWeight: "700", color: colors.ink },
-  footerSep: { width: 1, height: 10, backgroundColor: colors.line },
-  footerNote: { fontSize: 11.5, lineHeight: 17, color: colors.ter },
 });

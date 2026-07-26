@@ -75,22 +75,24 @@ async def test_hit_serves_from_cache_without_db(db_session, seeded) -> None:
     assert [c.content_id for c in cards] == ["h90", "h10"]
 
 
-async def test_hidden_cards_carry_a_concentration_percentile_tag(db_session, seeded) -> None:
+async def test_hidden_cards_carry_a_quiet_rank_and_no_tag(db_session, seeded) -> None:
     redis = FakeRedis(decode_responses=True)
 
     cards = await load_concentration_channel_cached(db_session, redis, "hidden")
 
     assert [c.content_id for c in cards] == ["h10", "h90"]
-    assert cards[0].tag == "하위 50%"
-    assert cards[1].tag == "하위 100%"
+    assert [c.rank for c in cards] == [1, 2]
+    assert all(c.tag is None for c in cards)
 
 
-async def test_hot_cards_carry_a_busy_tag(db_session, seeded) -> None:
+async def test_hot_cards_carry_a_crowding_rank_and_no_tag(db_session, seeded) -> None:
     redis = FakeRedis(decode_responses=True)
 
     cards = await load_concentration_channel_cached(db_session, redis, "hot")
 
-    assert {c.tag for c in cards} == {"붐빔"}
+    assert [c.content_id for c in cards] == ["h90", "h10"]
+    assert [c.rank for c in cards] == [1, 2]
+    assert all(c.tag is None for c in cards)
 
 
 async def test_empty_result_is_not_cached(db_session) -> None:

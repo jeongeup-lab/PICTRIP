@@ -13,7 +13,7 @@ from app.modules.spots import services as spots_services
 logger = get_logger(__name__)
 
 _CARD_COUNT = 10
-_CACHE_VERSION = "v3"
+_CACHE_VERSION = "v4"
 _TTL = 3600
 
 
@@ -22,28 +22,15 @@ def _cache_key(key: str) -> str:
 
 
 async def _query(session: AsyncSession, key: str) -> list[ChannelCardRow]:
-    if key == "hot":
-        rows = await spots_services.load_hot_spots(session, limit=_CARD_COUNT)
-        return [
-            ChannelCardRow(
-                content_id=r.content_id,
-                title=r.title,
-                region_label=r.region_label,
-                image_url=r.first_image_url,
-                rank=r.rank,
-                tag="붐빔",
-                cpyrht_div_cd=r.cpyrht_div_cd,
-            )
-            for r in rows
-        ]
-    rows = await spots_services.load_hidden_spots(session, limit=_CARD_COUNT)
+    load = spots_services.load_hot_spots if key == "hot" else spots_services.load_hidden_spots
+    rows = await load(session, limit=_CARD_COUNT)
     return [
         ChannelCardRow(
             content_id=r.content_id,
             title=r.title,
             region_label=r.region_label,
             image_url=r.first_image_url,
-            tag=f"하위 {r.percentile}%" if r.percentile is not None else None,
+            rank=r.rank,
             cpyrht_div_cd=r.cpyrht_div_cd,
         )
         for r in rows

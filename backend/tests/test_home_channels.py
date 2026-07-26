@@ -144,7 +144,7 @@ async def test_hot_returns_ranked_cards(db_session, client, seeded_concentration
     assert cards[0]["regionLabel"] == "부산광역시 사하구"
 
 
-async def test_hidden_returns_cards_without_rank_exposure(
+async def test_hidden_returns_cards_ranked_from_the_quietest(
     db_session, client, seeded_concentration
 ) -> None:
     _override(db_session)
@@ -155,7 +155,8 @@ async def test_hidden_returns_cards_without_rank_exposure(
     assert res.status_code == 200
     cards = res.json()["data"]["cards"]
     assert len(cards) >= 1
-    assert all(c["rank"] is None for c in cards)
+    assert [c["rank"] for c in cards] == list(range(1, len(cards) + 1))
+    assert all(c["tag"] is None for c in cards)
 
 
 async def test_kto_channel_returns_kto_cards(db_session, client) -> None:

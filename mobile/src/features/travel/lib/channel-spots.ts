@@ -2,13 +2,9 @@ import type { ChannelCard, ChannelKey } from "@/features/channels/api";
 import type { TravelSpot } from "@/features/travel/api";
 import { formatDistance } from "@/lib/distance";
 
-export const HOT_TAG = "붐빔";
-export const HIDDEN_TAG = "한산";
-
 export function channelCardTag(key: ChannelKey, card: ChannelCard): string | null {
   if (key === "around") return card.dist !== null ? formatDistance(card.dist) : card.tag;
-  if (key === "hot") return card.tag ?? HOT_TAG;
-  if (key === "hidden") return card.tag ?? HIDDEN_TAG;
+  if (key === "hot" || key === "hidden") return card.rank !== null ? `${card.rank}위` : null;
   return card.tag;
 }
 

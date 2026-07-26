@@ -128,7 +128,7 @@ async def _ask_with_photo(
         steps=steps,
         answer=answer,
         spots=spots,
-        totalCount=len(ordered),
+        totalCount=len(spots),
         suggestions=NEAR_SUGGESTIONS,
     )
 
@@ -244,7 +244,7 @@ async def _ask_with_question(
         steps=steps,
         answer=_answer(top, intent=intent, filters=filters, near=near, lat=lat, lng=lng),
         spots=spots,
-        totalCount=len(merged),
+        totalCount=len(spots),
         suggestions=BASE_SUGGESTIONS,
     )
 
