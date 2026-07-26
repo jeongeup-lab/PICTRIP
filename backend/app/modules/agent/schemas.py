@@ -114,4 +114,4 @@ class AskResponse(BaseModel):
     spots: list[AgentSpotCard]
     totalCount: int
     intent: QueryIntent
-    suggestions: list[str]
+    suggestions: list[Suggestion]
