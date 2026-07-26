@@ -40,6 +40,8 @@ async def agent_ask(request: Request, session: DbSession, kto: KtoDep) -> dict[s
         lng=payload.lng,
         image_bytes=image_bytes,
         image_mime=image_mime,
+        intent=payload.intent,
+        patch=payload.patch,
     )
     return ok(result)
 
@@ -66,11 +68,18 @@ async def _read_payload(request: Request) -> tuple[AskRequest, bytes | None, str
         if isinstance(upload, UploadFile):
             image_bytes = await _read_capped(upload)
             image_mime = upload.content_type
-        fields = {
+        fields: dict[str, Any] = {
             key: value
             for key, value in form.multi_items()
             if key != "photo" and isinstance(value, str) and value != ""
         }
+        for key in ("intent", "patch"):
+            raw = fields.get(key)
+            if isinstance(raw, str):
+                try:
+                    fields[key] = json.loads(raw)
+                except json.JSONDecodeError as exc:
+                    raise ValidationFailed(f"invalid {key} json") from exc
         return _parse(fields), image_bytes, image_mime
     try:
         body = await request.json()

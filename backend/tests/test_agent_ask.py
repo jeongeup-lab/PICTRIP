@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 from collections.abc import Awaitable, Callable
 
@@ -18,10 +19,11 @@ from app.modules.agent import repositories
 from app.modules.agent.errors import AgentIntentUnavailable
 from app.modules.agent.repositories import CandidateRow, VectorMatchRow
 from app.modules.agent.routes import MAX_BODY_BYTES
-from app.modules.agent.schemas import ExtractedPlace, QueryIntent
+from app.modules.agent.schemas import ExtractedPlace, QueryIntent, RefinePatch
 from app.modules.agent.services import ask as ask_service
 from app.modules.agent.services import intent as intent_service
 from app.modules.agent.services import photo as photo_service
+from app.modules.agent.services import refine as refine_service
 from app.modules.agent.services import retrieve
 
 LAT, LNG = 35.15, 129.05
@@ -1001,6 +1003,169 @@ def test_intent_response_schema_matches_the_parsed_fields() -> None:
     assert required <= set(QueryIntent.model_fields)
     assert set(schema["properties"]) <= set(QueryIntent.model_fields)
     assert schema["properties"]["moodHints"]["items"]["enum"] == list(intent_service._MOOD_CODES)
+
+
+def test_apply_patch_sets_only_the_named_axes() -> None:
+    base = QueryIntent(categoryKeywords=["계곡"], regionHints=["제주"])
+
+    result = refine_service.apply_patch(base, RefinePatch(crowdPreference="quiet"))
+
+    assert result.crowdPreference == "quiet"
+    assert result.categoryKeywords == ["계곡"]
+    assert result.regionHints == ["제주"]
+
+
+def test_apply_patch_drop_clears_the_named_axis() -> None:
+    base = QueryIntent(
+        categoryKeywords=["계곡"],
+        moodHints=["sea"],
+        regionHints=["제주"],
+        crowdPreference="quiet",
+        indoorOnly=True,
+        nearMe=True,
+    )
+
+    assert refine_service.apply_patch(base, RefinePatch(drop="crowd")).crowdPreference == "any"
+    assert refine_service.apply_patch(base, RefinePatch(drop="region")).regionHints == []
+    assert refine_service.apply_patch(base, RefinePatch(drop="indoor")).indoorOnly is False
+    assert refine_service.apply_patch(base, RefinePatch(drop="near")).nearMe is False
+
+    dropped = refine_service.apply_patch(base, RefinePatch(drop="category"))
+    assert dropped.categoryKeywords == []
+    assert dropped.moodHints == []
+
+
+def test_apply_patch_with_no_patch_returns_the_intent_unchanged() -> None:
+    base = QueryIntent(categoryKeywords=["계곡"])
+
+    assert refine_service.apply_patch(base, None) == base
+
+
+def test_apply_patch_never_writes_none_over_a_non_optional_axis() -> None:
+    base = QueryIntent(crowdPreference="quiet", indoorOnly=True, nearMe=True)
+
+    result = refine_service.apply_patch(base, RefinePatch())
+
+    assert result.crowdPreference == "quiet"
+    assert result.indoorOnly is True
+    assert result.nearMe is True
+
+
+def _forbidden_intent(calls: list[str]) -> Callable[[str], Awaitable[QueryIntent]]:
+    async def run(question: str) -> QueryIntent:
+        calls.append(question)
+        raise AssertionError("LLM must not be called on a refine request")
+
+    return run
+
+
+@pytest.mark.integration
+async def test_refine_request_skips_the_llm_and_keeps_prior_axes(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(intent_service, "extract_intent", _forbidden_intent(calls))
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={
+                "intent": {"categoryKeywords": ["계곡"], "regionHints": ["부산"]},
+                "patch": {"crowdPreference": "quiet"},
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    assert calls == []
+    data = res.json()["data"]
+    assert data["intent"]["crowdPreference"] == "quiet"
+    assert data["intent"]["categoryKeywords"] == ["계곡"]
+    assert data["intent"]["regionHints"] == ["부산"]
+    assert [step["tool"] for step in data["steps"]] == ["category_search", "concentration"]
+    assert [spot["contentId"] for spot in data["spots"]] == ["v1", "v2", "v3"]
+
+
+@pytest.mark.integration
+async def test_intent_wins_over_a_question_instead_of_re_extracting(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(intent_service, "extract_intent", _forbidden_intent(calls))
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={
+                "question": "더 한적한 곳",
+                "intent": {"categoryKeywords": ["계곡"], "regionHints": ["제주"]},
+                "patch": {"crowdPreference": "quiet"},
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    assert calls == []
+    data = res.json()["data"]
+    assert data["intent"]["regionHints"] == ["제주"]
+    assert [spot["contentId"] for spot in data["spots"]] == ["j1"]
+
+
+@pytest.mark.integration
+async def test_photo_refine_reads_the_multipart_intent_and_skips_the_llm(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    for cid in ("v1", "j1"):
+        await db_session.execute(
+            text("INSERT INTO spot_embeddings (content_id, embedding) VALUES (:c, :v)"),
+            {"c": cid, "v": _VEC},
+        )
+    await db_session.flush()
+
+    calls: list[str] = []
+
+    async def fake_embed(*, image_bytes, image_mime):
+        return [0.1] * 512
+
+    monkeypatch.setattr(intent_service, "extract_intent", _forbidden_intent(calls))
+    monkeypatch.setattr(photo_service, "embed_photo", fake_embed)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            files={"photo": ("a.jpg", b"x", "image/jpeg")},
+            data={
+                "question": "이런 분위기",
+                "intent": json.dumps({"regionHints": ["제주"]}),
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    assert calls == []
+    data = res.json()["data"]
+    assert [step["tool"] for step in data["steps"]] == ["photo_match"]
+    assert [spot["contentId"] for spot in data["spots"]] == ["j1"]
+    assert data["intent"]["regionHints"] == ["제주"]
+
+
+@pytest.mark.integration
+async def test_multipart_intent_that_is_not_json_is_rejected(db_session, client) -> None:
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            files={"photo": ("a.jpg", b"x", "image/jpeg")},
+            data={"intent": "not-json"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "VALIDATION_FAILED"
 
 
 @pytest.mark.integration
