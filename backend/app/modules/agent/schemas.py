@@ -8,6 +8,7 @@ PlaceType = Literal["attraction", "restaurant", "cafe", "hotel", "region"]
 ResolveStatus = Literal["matched", "ambiguous", "naver_only", "unmatched"]
 CrowdPreference = Literal["quiet", "any", "popular"]
 Mood = Literal["sea", "mountain", "lake", "island", "hanok", "night", "street"]
+DropAxis = Literal["crowd", "indoor", "near", "region", "category"]
 
 ToolName = Literal[
     "intent",
@@ -61,10 +62,24 @@ class QueryIntent(BaseModel):
     outOfScope: bool = False
 
 
+class RefinePatch(BaseModel):
+    crowdPreference: CrowdPreference | None = None
+    indoorOnly: bool | None = None
+    nearMe: bool | None = None
+    drop: DropAxis | None = None
+
+
+class Suggestion(BaseModel):
+    label: str
+    patch: RefinePatch
+
+
 class AskRequest(BaseModel):
     question: str | None = None
     lat: float | None = Field(None, ge=-90.0, le=90.0)
     lng: float | None = Field(None, ge=-180.0, le=180.0)
+    intent: QueryIntent | None = None
+    patch: RefinePatch | None = None
 
 
 class AskStep(BaseModel):
@@ -93,4 +108,5 @@ class AskResponse(BaseModel):
     answer: list[AnswerSegment]
     spots: list[AgentSpotCard]
     totalCount: int
+    intent: QueryIntent
     suggestions: list[str]

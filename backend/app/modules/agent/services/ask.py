@@ -14,9 +14,11 @@ from app.modules.agent.schemas import (
     AskResponse,
     AskStep,
     QueryIntent,
+    RefinePatch,
 )
 from app.modules.agent.services import intent as intent_service
 from app.modules.agent.services import photo as photo_service
+from app.modules.agent.services import refine as refine_service
 from app.modules.agent.services import resolve as resolve_service
 from app.modules.agent.services import retrieve
 from app.web.errors import AppError, ValidationFailed
@@ -38,6 +40,8 @@ async def ask(
     lng: float | None,
     image_bytes: bytes | None,
     image_mime: str | None,
+    intent: QueryIntent | None = None,
+    patch: RefinePatch | None = None,
 ) -> AskResponse:
     cleaned = (question or "").strip()
     if image_bytes is not None:
@@ -48,10 +52,14 @@ async def ask(
             image_mime=image_mime,
             lat=lat,
             lng=lng,
+            intent=intent,
+            patch=patch,
         )
-    if not cleaned:
-        raise ValidationFailed("question or photo is required")
-    return await _ask_with_question(session, kto, question=cleaned, lat=lat, lng=lng)
+    if not cleaned and intent is None:
+        raise ValidationFailed("question, photo or intent is required")
+    return await _ask_with_question(
+        session, kto, question=cleaned, lat=lat, lng=lng, intent=intent, patch=patch
+    )
 
 
 async def _ask_with_photo(
@@ -62,22 +70,33 @@ async def _ask_with_photo(
     image_mime: str | None,
     lat: float | None,
     lng: float | None,
+    intent: QueryIntent | None,
+    patch: RefinePatch | None,
 ) -> AskResponse:
     steps: list[AskStep] = []
-    intent_task = asyncio.create_task(intent_service.extract_intent(question)) if question else None
+    intent_task = (
+        asyncio.create_task(intent_service.extract_intent(question))
+        if question and intent is None
+        else None
+    )
     try:
         vector = await photo_service.embed_photo(image_bytes=image_bytes, image_mime=image_mime)
     except BaseException:
         if intent_task is not None:
             intent_task.cancel()
         raise
-    intent = QueryIntent()
-    if intent_task is not None:
-        try:
-            intent = await intent_task
-            steps.append(AskStep(tool="intent", label="덧붙인 말에서 조건 추출", badge="Gemini"))
-        except AppError as exc:
-            logger.warning("agent.photo.intent_skipped", code=exc.code)
+    if intent is not None:
+        intent = refine_service.apply_patch(intent, patch)
+    else:
+        intent = QueryIntent()
+        if intent_task is not None:
+            try:
+                intent = await intent_task
+                steps.append(
+                    AskStep(tool="intent", label="덧붙인 말에서 조건 추출", badge="Gemini")
+                )
+            except AppError as exc:
+                logger.warning("agent.photo.intent_skipped", code=exc.code)
 
     prefixes = await retrieve.resolve_region_prefixes(session, hints=intent.regionHints)
     rows = await photo_service.match_vector(session, vector, region_prefixes=prefixes)
@@ -116,6 +135,7 @@ async def _ask_with_photo(
         answer=answer,
         spots=spots,
         totalCount=len(spots),
+        intent=intent,
         suggestions=NEAR_SUGGESTIONS,
     )
 
@@ -148,12 +168,17 @@ async def _ask_with_question(
     question: str,
     lat: float | None,
     lng: float | None,
+    intent: QueryIntent | None,
+    patch: RefinePatch | None,
 ) -> AskResponse:
     steps: list[AskStep] = []
-    intent = await intent_service.extract_intent(question)
-    if intent.outOfScope:
-        raise AgentOutOfScope()
-    steps.append(AskStep(tool="intent", label="질문에서 지역·조건 추출", badge="Gemini"))
+    if intent is not None:
+        intent = refine_service.apply_patch(intent, patch)
+    else:
+        intent = await intent_service.extract_intent(question)
+        if intent.outOfScope:
+            raise AgentOutOfScope()
+        steps.append(AskStep(tool="intent", label="질문에서 지역·조건 추출", badge="Gemini"))
 
     pinned: list[CandidateRow] = []
     if intent.namedPlaces:
@@ -249,6 +274,7 @@ async def _ask_with_question(
         answer=_answer(top, intent=intent, near=near, lat=lat, lng=lng),
         spots=spots,
         totalCount=len(spots),
+        intent=intent,
         suggestions=BASE_SUGGESTIONS,
     )
 
