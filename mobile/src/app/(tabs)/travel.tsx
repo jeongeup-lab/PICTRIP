@@ -6,6 +6,7 @@ import { useChannelCards } from "@/features/channels/queries";
 import type { ChannelKey } from "@/features/channels/api";
 import { ChannelRail } from "@/features/travel/components/ChannelRail";
 import { AskComposer } from "@/features/travel/components/AskComposer";
+import { PhotoStartCard } from "@/features/travel/components/PhotoStartCard";
 import { ConversationTurn } from "@/features/travel/components/ConversationTurn";
 import { TravelToast } from "@/features/travel/components/TravelToast";
 import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
@@ -106,6 +107,16 @@ export default function TravelScreen() {
     }
   }, []);
 
+  const onPhotoStart = useCallback(async () => {
+    if (busy) return;
+    try {
+      const picked = await pickTravelPhoto();
+      if (picked) submit("", picked);
+    } catch {
+      setToast(PHOTO_PICK_FAILED);
+    }
+  }, [busy, submit]);
+
   const openSpotList = useCallback(
     (title: string, spots: TravelSpot[]) => {
       openResults(title, spots);
@@ -136,6 +147,8 @@ export default function TravelScreen() {
         <View style={styles.lede}>
           <Text style={styles.headline}>오늘,{"\n"}어디로 갈까요</Text>
         </View>
+
+        <PhotoStartCard onPress={() => void onPhotoStart()} />
 
         {SECTIONS.map(({ key, title }) => {
           const query = cardsFor[key];
