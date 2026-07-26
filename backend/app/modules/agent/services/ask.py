@@ -209,11 +209,12 @@ async def _ask_with_question(
             lat=lat,
             lng=lng,
             near=near,
+            indoor_only=intent.indoorOnly,
         )
         steps.append(
             AskStep(
                 tool="category_search",
-                label=_search_label(keywords, prefixes, filters),
+                label=_search_label(keywords, prefixes, filters, indoor=intent.indoorOnly),
                 badge=_count(candidates),
             )
         )
@@ -263,15 +264,18 @@ def _named_place_is_the_only_constraint(
 
 def _keywords(intent: QueryIntent, filters: AskFilters) -> list[str]:
     keywords = list(intent.categoryKeywords)
-    extra = retrieve.INDOOR_KEYWORDS if intent.indoorOnly else ()
-    for keyword in (*extra, *retrieve.WHO_KEYWORDS[filters.who]):
+    for keyword in retrieve.WHO_KEYWORDS[filters.who]:
         if keyword not in keywords:
             keywords.append(keyword)
     return keywords
 
 
-def _search_label(keywords: list[str], prefixes: list[str], filters: AskFilters) -> str:
-    if keywords:
+def _search_label(
+    keywords: list[str], prefixes: list[str], filters: AskFilters, *, indoor: bool
+) -> str:
+    if indoor:
+        head = "실내"
+    elif keywords:
         head = " · ".join(keywords[:2])
     elif prefixes:
         head = prefixes[0]
