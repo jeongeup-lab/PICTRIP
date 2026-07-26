@@ -34,3 +34,17 @@ def test_enum_values():
         "leisure",
         "shopping",
     }
+
+
+def test_travel_predicate_keeps_exhibition_and_performance_venues() -> None:
+    from app.modules.spots.services import attraction_category_sql, travel_category_sql
+
+    travel = travel_category_sql()
+    nearby = attraction_category_sql()
+
+    assert "'VE06'" in nearby
+    assert "'VE07'" in nearby
+    assert "'VE06'" not in travel
+    assert "'VE07'" not in travel
+    assert "'VE08', 'VE09', 'VE10', 'VE11'" in travel
+    assert "spots.content_type_id != 32" in travel

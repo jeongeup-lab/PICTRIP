@@ -26,6 +26,7 @@ from app.modules.spots.services.nearby import (
     derive_category,
     find_nearby_spots,
     find_nearby_spots_bbox,
+    travel_category_sql,
 )
 from app.modules.spots.services.rows import (
     SpotCardRow,
@@ -69,5 +70,6 @@ __all__ = [
     "map_region_tokens_to_sido",
     "save_spot",
     "search_spots_by_title",
+    "travel_category_sql",
     "unsave_spot",
 ]
