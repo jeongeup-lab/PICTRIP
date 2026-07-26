@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from app.core.logging import get_logger
 from app.modules.agent import llm
 from app.modules.agent.errors import AgentIntentUnavailable
-from app.modules.agent.schemas import CrowdPreference, ExtractedPlace, QueryIntent
+from app.modules.agent.schemas import CrowdPreference, ExtractedPlace, Mood, QueryIntent
 
 logger = get_logger(__name__)
 
@@ -26,6 +26,9 @@ _SYSTEM_PROMPT = """\
 - crowdPreference: 한적함을 원하면 "quiet", 유명한 곳을 원하면 "popular", 언급이 없으면 "any".
 - indoorOnly: 비·더위·추위를 피하거나 실내를 명시하면 true, 아니면 false.
 - nearMe: "근처", "가까운", "여기서" 처럼 현재 위치 기준을 요구하면 true, 아니면 false.
+- moodHints: 분위기를 지목하면 아래 코드 중에서만 고른다 — sea(바다), mountain(산·숲),
+  lake(호수), island(섬), hanok(한옥·고궁), night(야경), street(도시 골목). 없으면 빈 배열.
+- festivalOnly: 축제·행사·페스티벌을 찾는 질문이면 true, 아니면 false.
 - outOfScope: 대한민국 밖의 여행지를 묻는 질문이면 true (예: "파리 가볼 만한 곳"). 국내 질문이면 false.
 - outOfScope가 true면 나머지 배열은 모두 비운다.
 - 추측으로 조건을 만들어내지 않는다. 질문에 없으면 비운다.
@@ -53,6 +56,14 @@ _RESPONSE_SCHEMA: dict[str, Any] = {
             },
         },
         "crowdPreference": {"type": "STRING", "enum": ["quiet", "any", "popular"]},
+        "moodHints": {
+            "type": "ARRAY",
+            "items": {
+                "type": "STRING",
+                "enum": ["sea", "mountain", "lake", "island", "hanok", "night", "street"],
+            },
+        },
+        "festivalOnly": {"type": "BOOLEAN"},
         "indoorOnly": {"type": "BOOLEAN"},
         "nearMe": {"type": "BOOLEAN"},
         "outOfScope": {"type": "BOOLEAN"},
@@ -61,11 +72,15 @@ _RESPONSE_SCHEMA: dict[str, Any] = {
         "categoryKeywords",
         "regionHints",
         "crowdPreference",
+        "moodHints",
+        "festivalOnly",
         "indoorOnly",
         "nearMe",
         "outOfScope",
     ],
 }
+
+_MOOD_CODES = ("sea", "mountain", "lake", "island", "hanok", "night", "street")
 
 
 async def extract_intent(question: str) -> QueryIntent:
@@ -81,6 +96,8 @@ async def extract_intent(question: str) -> QueryIntent:
         regionHints=_strings(data.get("regionHints")),
         namedPlaces=_places(data.get("namedPlaces")),
         crowdPreference=_crowd(data.get("crowdPreference")),
+        moodHints=_moods(data.get("moodHints")),
+        festivalOnly=bool(data.get("festivalOnly")),
         indoorOnly=bool(data.get("indoorOnly")),
         nearMe=bool(data.get("nearMe")),
         outOfScope=bool(data.get("outOfScope")),
@@ -91,6 +108,7 @@ async def extract_intent(question: str) -> QueryIntent:
         regions=len(intent.regionHints),
         named=len(intent.namedPlaces),
         crowd=intent.crowdPreference,
+        moods=len(intent.moodHints),
         out_of_scope=intent.outOfScope,
     )
     return intent
@@ -116,6 +134,16 @@ def _places(raw: Any) -> list[ExtractedPlace]:
         except ValidationError:
             continue
     return places
+
+
+def _moods(raw: Any) -> list[Mood]:
+    if not isinstance(raw, list):
+        return []
+    picked: list[Mood] = []
+    for item in raw:
+        if item in _MOOD_CODES and item not in picked:
+            picked.append(item)
+    return picked
 
 
 def _crowd(raw: Any) -> CrowdPreference:
