@@ -11,7 +11,6 @@ from app.modules.agent.repositories import CandidateRow
 from app.modules.agent.schemas import (
     AgentSpotCard,
     AnswerSegment,
-    AskFilters,
     AskResponse,
     AskStep,
     QueryIntent,
@@ -24,13 +23,6 @@ from app.web.errors import AppError, ValidationFailed
 
 logger = get_logger(__name__)
 
-WHEN_LABELS = {
-    "any": None,
-    "today": "오늘",
-    "weekend": "이번 주말",
-    "next_week": "다음 주",
-}
-
 INDOOR_RETRY_LABEL = "실내로만 다시 조회"
 
 BASE_SUGGESTIONS = ["더 한적한 곳", "실내 위주", "더 가까운 곳"]
@@ -42,7 +34,6 @@ async def ask(
     kto: KtoClient | None,
     *,
     question: str | None,
-    filters: AskFilters,
     lat: float | None,
     lng: float | None,
     image_bytes: bytes | None,
@@ -55,15 +46,12 @@ async def ask(
             question=cleaned,
             image_bytes=image_bytes,
             image_mime=image_mime,
-            filters=filters,
             lat=lat,
             lng=lng,
         )
     if not cleaned:
         raise ValidationFailed("question or photo is required")
-    return await _ask_with_question(
-        session, kto, question=cleaned, filters=filters, lat=lat, lng=lng
-    )
+    return await _ask_with_question(session, kto, question=cleaned, lat=lat, lng=lng)
 
 
 async def _ask_with_photo(
@@ -72,7 +60,6 @@ async def _ask_with_photo(
     question: str,
     image_bytes: bytes,
     image_mime: str | None,
-    filters: AskFilters,
     lat: float | None,
     lng: float | None,
 ) -> AskResponse:
@@ -92,9 +79,7 @@ async def _ask_with_photo(
         except AppError as exc:
             logger.warning("agent.photo.intent_skipped", code=exc.code)
 
-    prefixes = await retrieve.resolve_region_prefixes(
-        session, region=filters.region, hints=intent.regionHints
-    )
+    prefixes = await retrieve.resolve_region_prefixes(session, hints=intent.regionHints)
     rows = await photo_service.match_vector(session, vector, region_prefixes=prefixes)
     steps.append(
         AskStep(
@@ -161,7 +146,6 @@ async def _ask_with_question(
     kto: KtoClient | None,
     *,
     question: str,
-    filters: AskFilters,
     lat: float | None,
     lng: float | None,
 ) -> AskResponse:
@@ -184,11 +168,9 @@ async def _ask_with_question(
         steps.append(AskStep(tool="resolve_place", label="질문 속 장소 확인", badge=_count(pinned)))
 
     near = intent.nearMe and lat is not None and lng is not None
-    keywords = _keywords(intent, filters)
+    keywords = _keywords(intent)
     codes = await retrieve.resolve_category_codes(session, keywords)
-    prefixes = await retrieve.resolve_region_prefixes(
-        session, region=filters.region, hints=intent.regionHints
-    )
+    prefixes = await retrieve.resolve_region_prefixes(session, hints=intent.regionHints)
     if _named_place_is_the_only_constraint(intent, keywords=keywords, prefixes=prefixes, near=near):
         if not pinned:
             raise AgentNoResults()
@@ -220,7 +202,7 @@ async def _ask_with_question(
         steps.append(
             AskStep(
                 tool="category_search",
-                label=_search_label(keywords, prefixes, filters, indoor=intent.indoorOnly),
+                label=_search_label(keywords, prefixes, indoor=intent.indoorOnly),
                 badge=_count(candidates),
             )
         )
@@ -258,7 +240,7 @@ async def _ask_with_question(
     )
     return AskResponse(
         steps=steps,
-        answer=_answer(top, intent=intent, filters=filters, near=near, lat=lat, lng=lng),
+        answer=_answer(top, intent=intent, near=near, lat=lat, lng=lng),
         spots=spots,
         totalCount=len(spots),
         suggestions=BASE_SUGGESTIONS,
@@ -277,17 +259,11 @@ def _named_place_is_the_only_constraint(
     )
 
 
-def _keywords(intent: QueryIntent, filters: AskFilters) -> list[str]:
-    keywords = list(intent.categoryKeywords)
-    for keyword in retrieve.WHO_KEYWORDS[filters.who]:
-        if keyword not in keywords:
-            keywords.append(keyword)
-    return keywords
+def _keywords(intent: QueryIntent) -> list[str]:
+    return list(intent.categoryKeywords)
 
 
-def _search_label(
-    keywords: list[str], prefixes: list[str], filters: AskFilters, *, indoor: bool
-) -> str:
+def _search_label(keywords: list[str], prefixes: list[str], *, indoor: bool) -> str:
     if indoor:
         head = "실내"
     elif keywords:
@@ -295,7 +271,7 @@ def _search_label(
     elif prefixes:
         head = prefixes[0]
     else:
-        head = retrieve.REGION_LABELS[filters.region]
+        head = "전국"
     return f"{head} 관광지 조회"
 
 
@@ -325,7 +301,6 @@ def _answer(
     top: list[CandidateRow],
     *,
     intent: QueryIntent,
-    filters: AskFilters,
     near: bool,
     lat: float | None,
     lng: float | None,
@@ -333,10 +308,6 @@ def _answer(
     segments = [AnswerSegment(text="조건에 맞는 곳으로 ")]
     segments.append(AnswerSegment(text=f"{len(top)}곳", emphasis=True))
     segments.append(AnswerSegment(text=" 추렸어요"))
-
-    when_label = WHEN_LABELS[filters.when]
-    if when_label:
-        segments.append(AnswerSegment(text=f" ({when_label} 기준)"))
 
     if intent.crowdPreference == "quiet":
         pcts = [row.percentile for row in top if row.percentile is not None]

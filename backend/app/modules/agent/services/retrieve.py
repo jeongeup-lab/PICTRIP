@@ -6,7 +6,7 @@ from app.modules.agent import repositories
 from app.modules.agent.repositories import INDOOR_L2 as INDOOR_L2
 from app.modules.agent.repositories import INDOOR_L3 as INDOOR_L3
 from app.modules.agent.repositories import CandidateOrder, CandidateRow
-from app.modules.agent.schemas import AgentSpotCard, CrowdPreference, Region, Who
+from app.modules.agent.schemas import AgentSpotCard, CrowdPreference
 from app.modules.agent.services.geo import haversine_km
 from app.modules.spots.services import map_region_tokens_to_sido, search_spots_by_title
 
@@ -19,34 +19,6 @@ POPULAR_KEEP_RATIO = 0.3
 BUSY_RATE = 70.0
 CALM_RATE = 30.0
 
-REGION_PREFIXES: dict[Region, tuple[str, ...]] = {
-    "all": (),
-    "capital": ("서울", "경기", "인천"),
-    "gangwon": ("강원",),
-    "chungcheong": ("충청", "충북", "충남", "대전", "세종"),
-    "jeolla": ("전라", "전북", "전남", "광주"),
-    "gyeongsang": ("경상", "경북", "경남", "대구", "울산", "부산"),
-    "jeju": ("제주",),
-}
-
-REGION_LABELS: dict[Region, str] = {
-    "all": "전국",
-    "capital": "수도권",
-    "gangwon": "강원",
-    "chungcheong": "충청",
-    "jeolla": "전라",
-    "gyeongsang": "경상",
-    "jeju": "제주",
-}
-
-WHO_KEYWORDS: dict[Who, tuple[str, ...]] = {
-    "any": (),
-    "solo": (),
-    "duo": (),
-    "kids": ("테마파크", "동물원", "체험"),
-    "pets": ("공원", "산책로"),
-}
-
 
 async def resolve_category_codes(session: AsyncSession, keywords: list[str]) -> list[str]:
     codes: list[str] = []
@@ -57,15 +29,12 @@ async def resolve_category_codes(session: AsyncSession, keywords: list[str]) -> 
     return codes
 
 
-async def resolve_region_prefixes(
-    session: AsyncSession, *, region: Region, hints: list[str]
-) -> list[str]:
-    if hints:
-        tokens = {token for hint in hints for token in _hint_tokens(hint)}
-        mapping = await map_region_tokens_to_sido(session, tokens)
-        if mapping:
-            return sorted(set(mapping.values()))
-    return list(REGION_PREFIXES[region])
+async def resolve_region_prefixes(session: AsyncSession, *, hints: list[str]) -> list[str]:
+    if not hints:
+        return []
+    tokens = {token for hint in hints for token in _hint_tokens(hint)}
+    mapping = await map_region_tokens_to_sido(session, tokens)
+    return sorted(set(mapping.values())) if mapping else []
 
 
 def _hint_tokens(hint: str) -> list[str]:

@@ -17,7 +17,7 @@ from app.modules.agent import repositories
 from app.modules.agent.errors import AgentIntentUnavailable
 from app.modules.agent.repositories import CandidateRow, VectorMatchRow
 from app.modules.agent.routes import MAX_BODY_BYTES
-from app.modules.agent.schemas import AskFilters, ExtractedPlace, QueryIntent
+from app.modules.agent.schemas import ExtractedPlace, QueryIntent
 from app.modules.agent.services import ask as ask_service
 from app.modules.agent.services import intent as intent_service
 from app.modules.agent.services import photo as photo_service
@@ -86,13 +86,6 @@ def test_crowd_label_buckets_by_rate() -> None:
     assert retrieve.crowd_label(_row("d", rate=None)) is None
 
 
-def test_every_region_option_has_prefixes_except_all() -> None:
-    assert retrieve.REGION_PREFIXES["all"] == ()
-    for key, prefixes in retrieve.REGION_PREFIXES.items():
-        if key != "all":
-            assert prefixes, key
-
-
 def test_card_tag_prefers_distance_then_percentile() -> None:
     pool = _pool()
     quiet = QueryIntent(crowdPreference="quiet")
@@ -108,14 +101,13 @@ def test_answer_emphasises_the_result_count() -> None:
     segments = ask_service._answer(
         _pool()[:4],
         intent=QueryIntent(),
-        filters=AskFilters(when="weekend"),
         near=False,
         lat=None,
         lng=None,
     )
 
     assert [s.text for s in segments if s.emphasis] == ["4곳"]
-    assert "이번 주말" in "".join(s.text for s in segments)
+    assert "이번 주말" not in "".join(s.text for s in segments)
 
 
 def _override(db_session: AsyncSession) -> None:
@@ -245,14 +237,14 @@ async def test_ask_runs_the_pipeline_and_reports_real_steps(
     db_session, client, seeded, monkeypatch
 ) -> None:
     async def fake_intent(question: str) -> QueryIntent:
-        return QueryIntent(categoryKeywords=["계곡"], crowdPreference="quiet")
+        return QueryIntent(categoryKeywords=["계곡"], regionHints=["부산"], crowdPreference="quiet")
 
     monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
     _override(db_session)
     try:
         res = await client.post(
             "/v1/agent/ask",
-            json={"question": "여름에 시원하고 사람 적은 계곡", "region": "gyeongsang"},
+            json={"question": "여름에 시원하고 사람 적은 부산 계곡"},
         )
     finally:
         app.dependency_overrides.clear()
@@ -275,7 +267,7 @@ async def test_ask_runs_the_pipeline_and_reports_real_steps(
 async def test_ask_rejects_a_request_without_question_or_photo(db_session, client) -> None:
     _override(db_session)
     try:
-        res = await client.post("/v1/agent/ask", json={"region": "all"})
+        res = await client.post("/v1/agent/ask", json={})
     finally:
         app.dependency_overrides.clear()
 
@@ -288,14 +280,12 @@ async def test_ask_reports_no_results_when_nothing_matches(
     db_session, client, seeded, monkeypatch
 ) -> None:
     async def fake_intent(question: str) -> QueryIntent:
-        return QueryIntent(categoryKeywords=["계곡"])
+        return QueryIntent(categoryKeywords=["박물관"], regionHints=["제주"])
 
     monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
     _override(db_session)
     try:
-        res = await client.post(
-            "/v1/agent/ask", json={"question": "강원 계곡", "region": "gangwon"}
-        )
+        res = await client.post("/v1/agent/ask", json={"question": "제주 박물관"})
     finally:
         app.dependency_overrides.clear()
 
@@ -304,7 +294,7 @@ async def test_ask_reports_no_results_when_nothing_matches(
 
 
 @pytest.mark.integration
-async def test_question_region_hint_narrows_the_search_without_a_sheet_filter(
+async def test_question_region_hint_narrows_the_search(
     db_session, client, seeded, monkeypatch
 ) -> None:
     async def fake_intent(question: str) -> QueryIntent:
@@ -313,7 +303,7 @@ async def test_question_region_hint_narrows_the_search_without_a_sheet_filter(
     monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
     _override(db_session)
     try:
-        res = await client.post("/v1/agent/ask", json={"question": "제주 계곡", "region": "all"})
+        res = await client.post("/v1/agent/ask", json={"question": "제주 계곡"})
     finally:
         app.dependency_overrides.clear()
 
@@ -350,14 +340,12 @@ async def test_total_count_matches_the_spot_list_the_user_can_open(
     db_session, client, seeded_wide, monkeypatch
 ) -> None:
     async def fake_intent(question: str) -> QueryIntent:
-        return QueryIntent(categoryKeywords=["계곡"])
+        return QueryIntent(categoryKeywords=["계곡"], regionHints=["부산"])
 
     monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
     _override(db_session)
     try:
-        res = await client.post(
-            "/v1/agent/ask", json={"question": "부산 계곡", "region": "gyeongsang"}
-        )
+        res = await client.post("/v1/agent/ask", json={"question": "부산 계곡"})
     finally:
         app.dependency_overrides.clear()
 
@@ -378,9 +366,7 @@ async def test_result_list_is_capped_and_total_count_follows_the_cap(
     monkeypatch.setattr(retrieve, "RESULT_LIMIT", 3)
     _override(db_session)
     try:
-        res = await client.post(
-            "/v1/agent/ask", json={"question": "부산 계곡", "region": "gyeongsang"}
-        )
+        res = await client.post("/v1/agent/ask", json={"question": "부산 계곡"})
     finally:
         app.dependency_overrides.clear()
 
@@ -395,14 +381,14 @@ async def test_near_me_orders_candidates_by_distance_in_sql(
     db_session, client, seeded, monkeypatch
 ) -> None:
     async def fake_intent(question: str) -> QueryIntent:
-        return QueryIntent(categoryKeywords=["계곡"], nearMe=True)
+        return QueryIntent(categoryKeywords=["계곡"], regionHints=["부산"], nearMe=True)
 
     monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
     _override(db_session)
     try:
         res = await client.post(
             "/v1/agent/ask",
-            json={"question": "근처 계곡", "region": "gyeongsang", "lat": LAT, "lng": LNG},
+            json={"question": "부산 근처 계곡", "lat": LAT, "lng": LNG},
         )
     finally:
         app.dependency_overrides.clear()
@@ -424,7 +410,7 @@ async def test_quiet_percentile_comes_from_sql_not_the_truncated_pool(
     monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
     _override(db_session)
     try:
-        res = await client.post("/v1/agent/ask", json={"question": "한적한 계곡", "region": "all"})
+        res = await client.post("/v1/agent/ask", json={"question": "한적한 계곡"})
     finally:
         app.dependency_overrides.clear()
 
@@ -458,7 +444,7 @@ async def test_photo_query_applies_the_region_hint_inside_the_vector_query(
         res = await client.post(
             "/v1/agent/ask",
             files={"photo": ("a.jpg", b"x", "image/jpeg")},
-            data={"question": "제주에서 이런 분위기", "region": "all"},
+            data={"question": "제주에서 이런 분위기"},
         )
     finally:
         app.dependency_overrides.clear()
@@ -479,7 +465,7 @@ async def test_unmatched_category_keyword_falls_back_to_title_search(
     monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
     _override(db_session)
     try:
-        res = await client.post("/v1/agent/ask", json={"question": "계곡-v2", "region": "all"})
+        res = await client.post("/v1/agent/ask", json={"question": "계곡-v2"})
     finally:
         app.dependency_overrides.clear()
 
@@ -499,9 +485,7 @@ async def test_unmatched_keyword_with_no_title_hit_does_not_widen_to_everything(
     monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
     _override(db_session)
     try:
-        res = await client.post(
-            "/v1/agent/ask", json={"question": "존재하지않는유형", "region": "all"}
-        )
+        res = await client.post("/v1/agent/ask", json={"question": "존재하지않는유형"})
     finally:
         app.dependency_overrides.clear()
 
@@ -542,7 +526,7 @@ async def test_photo_query_survives_intent_extraction_failure(
         res = await client.post(
             "/v1/agent/ask",
             files={"photo": ("a.jpg", b"x", "image/jpeg")},
-            data={"question": "이 사진 같은 분위기의 여행지", "region": "all"},
+            data={"question": "이 사진 같은 분위기의 여행지"},
         )
     finally:
         app.dependency_overrides.clear()
@@ -597,7 +581,6 @@ async def test_photo_upload_never_rolls_over_to_disk(
         res = await client.post(
             "/v1/agent/ask",
             files={"photo": ("a.jpg", b"x" * (4 * 1024 * 1024), "image/jpeg")},
-            data={"region": "all"},
         )
     finally:
         app.dependency_overrides.clear()
@@ -613,7 +596,6 @@ async def test_oversized_body_is_rejected_before_parsing(db_session, client) -> 
         res = await client.post(
             "/v1/agent/ask",
             files={"photo": ("a.jpg", b"x" * (MAX_BODY_BYTES + 1), "image/jpeg")},
-            data={"region": "all"},
         )
     finally:
         app.dependency_overrides.clear()
@@ -656,9 +638,7 @@ async def test_named_place_survives_an_empty_title_search(
     monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
     _override(db_session)
     try:
-        res = await client.post(
-            "/v1/agent/ask", json={"question": "계곡-v2 존재하지않는유형", "region": "all"}
-        )
+        res = await client.post("/v1/agent/ask", json={"question": "계곡-v2 존재하지않는유형"})
     finally:
         app.dependency_overrides.clear()
 
@@ -679,7 +659,7 @@ async def test_empty_photo_upload_is_rejected_instead_of_falling_back_to_text(
         res = await client.post(
             "/v1/agent/ask",
             files={"photo": ("a.jpg", b"", "image/jpeg")},
-            data={"question": "계곡", "region": "all"},
+            data={"question": "계곡"},
         )
     finally:
         app.dependency_overrides.clear()
@@ -722,9 +702,7 @@ async def test_overseas_question_is_rejected_instead_of_recommending_random_dome
     monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
     _override(db_session)
     try:
-        res = await client.post(
-            "/v1/agent/ask", json={"question": "파리 여행지 추천", "region": "all"}
-        )
+        res = await client.post("/v1/agent/ask", json={"question": "파리 여행지 추천"})
     finally:
         app.dependency_overrides.clear()
 
@@ -742,7 +720,7 @@ async def test_vague_domestic_question_still_returns_spots(
     monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
     _override(db_session)
     try:
-        res = await client.post("/v1/agent/ask", json={"question": "어디 갈까", "region": "all"})
+        res = await client.post("/v1/agent/ask", json={"question": "어디 갈까"})
     finally:
         app.dependency_overrides.clear()
 
@@ -760,7 +738,7 @@ async def test_place_only_question_returns_the_place_without_a_nationwide_search
     monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
     _override(db_session)
     try:
-        res = await client.post("/v1/agent/ask", json={"question": "계곡-v2", "region": "all"})
+        res = await client.post("/v1/agent/ask", json={"question": "계곡-v2"})
     finally:
         app.dependency_overrides.clear()
 
@@ -781,7 +759,7 @@ async def test_place_only_question_fails_loudly_when_the_place_is_unresolvable(
     monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
     _override(db_session)
     try:
-        res = await client.post("/v1/agent/ask", json={"question": "없는장소이름", "region": "all"})
+        res = await client.post("/v1/agent/ask", json={"question": "없는장소이름"})
     finally:
         app.dependency_overrides.clear()
 
@@ -826,7 +804,7 @@ async def test_near_with_quiet_still_filters_by_percentile_in_sql(
     try:
         res = await client.post(
             "/v1/agent/ask",
-            json={"question": "근처 한적한 계곡", "region": "all", "lat": LAT, "lng": LNG},
+            json={"question": "근처 한적한 계곡", "lat": LAT, "lng": LNG},
         )
     finally:
         app.dependency_overrides.clear()
@@ -841,7 +819,6 @@ def test_answer_reports_a_zero_kilometre_distance() -> None:
     segments = ask_service._answer(
         [here],
         intent=QueryIntent(nearMe=True),
-        filters=AskFilters(),
         near=True,
         lat=LAT,
         lng=LNG,
@@ -882,7 +859,7 @@ async def test_indoor_with_an_outdoor_category_falls_back_to_indoor_only(
     monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
     _override(db_session)
     try:
-        res = await client.post("/v1/agent/ask", json={"question": "실내 계곡", "region": "all"})
+        res = await client.post("/v1/agent/ask", json={"question": "실내 계곡"})
     finally:
         app.dependency_overrides.clear()
 
@@ -929,7 +906,7 @@ async def test_indoor_with_an_indoor_category_narrows_without_falling_back(
     monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
     _override(db_session)
     try:
-        res = await client.post("/v1/agent/ask", json={"question": "실내 박물관", "region": "all"})
+        res = await client.post("/v1/agent/ask", json={"question": "실내 박물관"})
     finally:
         app.dependency_overrides.clear()
 
@@ -958,3 +935,23 @@ async def test_mood_filter_narrows_candidates(db_session, seeded) -> None:
     )
 
     assert [row.content_id for row in rows] == ["v1"]
+
+
+@pytest.mark.integration
+async def test_legacy_condition_fields_are_ignored_not_rejected(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={"question": "계곡", "region": "jeju", "when": "weekend", "who": "pets"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
