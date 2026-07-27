@@ -250,7 +250,7 @@ async def _ask_with_question(
         await retrieve.resolve_region_prefixes(session, hints=intent.regionHints)
         or pre_ota_region_prefixes
     )
-    place_only = _named_place_is_the_only_constraint(
+    place_only = refine_service.named_place_is_the_only_constraint(
         intent, keywords=keywords, prefixes=prefixes, near=near
     )
     title_only = bool(keywords) and not codes and not mood_ids and not intent.indoorOnly
@@ -467,20 +467,6 @@ def _covers(tokens: list[str], region_label: str) -> bool:
 def _token_hits(token: str, address: list[str]) -> bool:
     forms = (token, *SIDO_ALIASES.get(token, ()))
     return any(part.startswith(form) for part in address for form in forms)
-
-
-def _named_place_is_the_only_constraint(
-    intent: QueryIntent, *, keywords: list[str], prefixes: list[str], near: bool
-) -> bool:
-    return bool(
-        intent.namedPlaces
-        and not keywords
-        and not prefixes
-        and not near
-        and not intent.moodHints
-        and not intent.indoorOnly
-        and intent.crowdPreference == "any"
-    )
 
 
 def _keywords(intent: QueryIntent) -> list[str]:

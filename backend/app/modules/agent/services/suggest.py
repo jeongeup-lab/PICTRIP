@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import get_args
 
 from app.modules.agent.schemas import DropAxis, QueryIntent, RefinePatch, Suggestion
+from app.modules.agent.services import refine as refine_service
 
 MAX_SUGGESTIONS = 3
 THIN_RESULT_COUNT = 5
@@ -33,9 +34,21 @@ def derive(
         chips.append(Suggestion(label="실내만", patch=RefinePatch(indoorOnly=True)))
     if "near" in axes and has_coords and not intent.nearMe:
         chips.append(Suggestion(label="가까운 순으로", patch=RefinePatch(nearMe=True)))
-    if result_count < THIN_RESULT_COUNT and (axis := _narrowest_axis(intent, axes)) is not None:
-        chips.insert(0, Suggestion(label="조건 하나 풀기", patch=RefinePatch(drop=axis)))
+    releasable = _releasable_axis(intent, axes, has_coords=has_coords)
+    if result_count < THIN_RESULT_COUNT and releasable is not None:
+        chips.insert(0, Suggestion(label="조건 하나 풀기", patch=RefinePatch(drop=releasable)))
     return chips[:MAX_SUGGESTIONS]
+
+
+def _releasable_axis(
+    intent: QueryIntent, axes: frozenset[DropAxis], *, has_coords: bool
+) -> DropAxis | None:
+    axis = _narrowest_axis(intent, axes)
+    if axis is None or refine_service.drop_leaves_named_place_only(
+        intent, axis, has_coords=has_coords
+    ):
+        return None
+    return axis
 
 
 def _narrowest_axis(intent: QueryIntent, axes: frozenset[DropAxis]) -> DropAxis | None:

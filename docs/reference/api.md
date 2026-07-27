@@ -176,6 +176,18 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 `drop` 대상은 서버가 `crowd` > `indoor` > `category` > `near` > `region` 고정
 우선순위로 고른다 — 사용자가 명시한 지역을 임의로 넓히는 것이 가장 큰 배신이라
 지역이 마지막이다.
+
+**완화 칩은 풀고 나서 장소명만 남으면 내려보내지 않는다.** `경복궁 같은 한옥`은
+`namedPlaces=[경복궁]` + `moodHints=[hanok]`로 잡히고, 얇은 결과에서 고른 축은
+`category`다. 그 축을 풀면 `categoryKeywords`·`moodHints`가 함께 비어 다음 턴이
+`named_place_is_the_only_constraint`에 걸린다 — 후보 조회를 통째로 건너뛰고
+고정된 장소 1곳만 돌아와 **넓히라고 누른 칩이 결과를 더 줄인다**. 그래서
+`suggest._releasable_axis`는 `refine.drop_leaves_named_place_only`로 그 축을
+실제로 `apply_patch` 해보고, 결과가 장소명만 남는 의도면 칩을 뺀다. `_DROP_FIELDS`
+매핑을 복제하지 않고 그대로 적용해 보는 방식이라 축이 무엇을 지우는지 바뀌어도
+따라간다. 반대로 **아무 조건도 안 남는 경우는 막지 않는다** — 장소명이 없으면
+빈 의도는 전국 무필터 조회가 되어 풀이 실제로 넓어진다.
+
 축제 턴은 혼잡도·실내·카테고리 축이 축제 풀에 걸리지 않으므로 칩을 아예
 내려보내지 않는다.
 
