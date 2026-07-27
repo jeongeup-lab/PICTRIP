@@ -6,7 +6,7 @@ from app.modules.agent import repositories
 from app.modules.agent.repositories import INDOOR_L2 as INDOOR_L2
 from app.modules.agent.repositories import INDOOR_L3 as INDOOR_L3
 from app.modules.agent.repositories import CandidateOrder, CandidateRow
-from app.modules.agent.schemas import AgentSpotCard, CrowdPreference
+from app.modules.agent.schemas import MAX_HINT_TOKENS, AgentSpotCard, CrowdPreference
 from app.modules.agent.services.geo import haversine_km
 from app.modules.spots.services import map_region_tokens_to_sido, search_spots_by_title
 
@@ -39,7 +39,7 @@ async def resolve_region_prefixes(session: AsyncSession, *, hints: list[str]) ->
 
 def _hint_tokens(hint: str) -> list[str]:
     cleaned = hint.strip()
-    tokens = cleaned.split()
+    tokens = cleaned.split()[:MAX_HINT_TOKENS]
     return [cleaned, *tokens] if len(tokens) > 1 else tokens
 
 

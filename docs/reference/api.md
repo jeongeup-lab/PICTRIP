@@ -60,7 +60,9 @@ extra-ignore라 구 앱이 보내도 422가 아니라 무시된다
 
 `QueryIntent` = `{categoryKeywords[], regionHints[], namedPlaces[], moodHints[],
 crowdPreference, festivalOnly, indoorOnly, nearMe, outOfScope}`. 배열은 전부
-길이 상한이 있다(키워드·지역 힌트 20, 지목 장소 10, mood 7).
+길이 상한이 있다(키워드·지역 힌트 20, 지목 장소 10, mood 7). 문자열 하나도
+80자 상한이고, 넘으면 `VALIDATION_FAILED`(422)다 — 지역 힌트 한 개가 공백으로
+쪼개져 만드는 토큰은 최대 4개, `regions` 조회는 토큰 100개에서 끊는다.
 `moodHints`는 `sea`·`mountain`·`lake`·`island`·`hanok`·`night`·`street` —
 `spot_moods`에 모수가 0이 아닌 7종만 열거한다.
 `drop` 축은 `crowd`·`indoor`·`near`·`region`·`category`이고, 해당 축의 intent
@@ -166,7 +168,7 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 집합 안에서만 고른다.
 
 **축제는 지역이 안 맞으면 전국으로 폴백하되 말한다.** `festivalOnly` 경로는
-`load_festival_pool`(limit 60, Redis `festival:pool:v1`, TTL 1h)을 읽고
+`load_festival_pool`(오늘 진행 중인 축제 전량, Redis `festival:pool:v2`, TTL 1h)을 읽고
 `regionHints` 원문 힌트 문자열을 카드 지역 라벨(주소 앞 2토큰)에 부분 문자열로
 맞춘다(`_hint_tokens()` 분해는 SQL 경로 전용이라 여기서는 쓰지 않는다).
 `regions` 테이블로 시도를 매핑하지 않는다 — 축제 주소는 `전남광주통합특별시`,
