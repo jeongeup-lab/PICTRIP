@@ -624,7 +624,7 @@ async def test_unresolved_keyword_with_indoor_keeps_the_indoor_axis(
 
 
 @pytest.mark.integration
-async def test_named_place_with_a_mood_still_runs_the_mood_search(
+async def test_named_place_without_the_mood_is_dropped_from_the_mood_search(
     db_session, client, seeded, monkeypatch
 ) -> None:
     monkeypatch.setattr(
@@ -645,7 +645,7 @@ async def test_named_place_with_a_mood_still_runs_the_mood_search(
 
     assert res.status_code == 200
     data = res.json()["data"]
-    assert [spot["contentId"] for spot in data["spots"]] == ["v2", "v1"]
+    assert [spot["contentId"] for spot in data["spots"]] == ["v1"]
     assert "mood_search" in [step["tool"] for step in data["steps"]]
 
 
@@ -671,7 +671,84 @@ async def test_named_place_with_indoor_only_still_runs_the_indoor_search(
 
     assert res.status_code == 200
     data = res.json()["data"]
-    assert [spot["contentId"] for spot in data["spots"]] == ["v2", "m1"]
+    assert [spot["contentId"] for spot in data["spots"]] == ["m1"]
+
+
+@pytest.mark.integration
+async def test_indoor_patch_drops_a_pinned_place_that_is_not_indoor(
+    db_session, client, seeded
+) -> None:
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={
+                "intent": {"namedPlaces": [{"name": "계곡-v2", "nameKo": "계곡-v2"}]},
+                "patch": {"indoorOnly": True},
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["intent"]["indoorOnly"] is True
+    assert "v2" not in [spot["contentId"] for spot in data["spots"]]
+    assert data["steps"][0] == {
+        "tool": "resolve_place",
+        "label": "질문 속 장소 확인",
+        "badge": "0곳",
+    }
+
+
+@pytest.mark.integration
+async def test_indoor_patch_keeps_a_pinned_place_that_is_indoor(db_session, client, seeded) -> None:
+    await db_session.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, addr1, "
+            "first_image_url, show_flag, mapx, mapy, lcls_systm1, lcls_systm2, "
+            "lcls_systm3, ldong_regn_cd, ldong_signgu_cd) "
+            "VALUES ('a1', 14, '가덕도박물관', '부산광역시 사하구 5', "
+            "'http://kto/i.jpg', 1, :lng, :lat, 'VE', 'VE07', 'VE070100', '26', '26380')"
+        ),
+        {"lng": LNG, "lat": LAT},
+    )
+    await db_session.flush()
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={
+                "intent": {"namedPlaces": [{"name": "부산박물관", "nameKo": "부산박물관"}]},
+                "patch": {"indoorOnly": True},
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert [spot["contentId"] for spot in data["spots"]] == ["m1", "a1"]
+
+
+@pytest.mark.integration
+async def test_quiet_patch_drops_a_pinned_place_that_is_crowded(db_session, client, seeded) -> None:
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={
+                "intent": {"namedPlaces": [{"name": "계곡-v3", "nameKo": "계곡-v3"}]},
+                "patch": {"crowdPreference": "quiet"},
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["intent"]["crowdPreference"] == "quiet"
+    assert "v3" not in [spot["contentId"] for spot in data["spots"]]
 
 
 @pytest.mark.integration
@@ -1696,7 +1773,7 @@ async def test_extract_intent_truncates_a_chatty_llm_instead_of_failing(monkeypa
 
 
 @pytest.mark.integration
-async def test_legacy_condition_fields_are_ignored_not_rejected(
+async def test_legacy_region_still_filters_while_when_and_who_stay_ignored(
     db_session, client, seeded, monkeypatch
 ) -> None:
     async def fake_intent(question: str) -> QueryIntent:
@@ -1714,8 +1791,86 @@ async def test_legacy_condition_fields_are_ignored_not_rejected(
 
     assert res.status_code == 200
     data = res.json()["data"]
-    assert [spot["contentId"] for spot in data["spots"]] == ["j1", "v1", "v2", "v3"]
+    assert [spot["contentId"] for spot in data["spots"]] == ["j1"]
     assert "이번 주말" not in "".join(seg["text"] for seg in data["answer"])
+
+
+@pytest.mark.integration
+async def test_legacy_region_yields_to_a_region_the_question_names(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"], regionHints=["부산"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={"question": "부산 계곡", "region": "jeju"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    assert [spot["contentId"] for spot in res.json()["data"]["spots"]] == ["v1", "v2", "v3"]
+
+
+@pytest.mark.integration
+async def test_legacy_region_narrows_a_photo_query_too(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    seen: list[list[str]] = []
+
+    async def fake_embed(*, image_bytes, image_mime):
+        return [0.1] * 512
+
+    async def fake_match(session, vector, *, region_prefixes):
+        seen.append(region_prefixes)
+        return [
+            VectorMatchRow(
+                content_id="j1",
+                title="제주계곡",
+                category=None,
+                addr1=None,
+                lat=None,
+                lng=None,
+                image_url=None,
+                cpyrht_div_cd=None,
+                distance=0.2,
+            )
+        ]
+
+    monkeypatch.setattr(photo_service, "embed_photo", fake_embed)
+    monkeypatch.setattr(photo_service, "match_vector", fake_match)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            files={"photo": ("a.jpg", b"x" * 32, "image/jpeg")},
+            data={"region": "jeju", "when": "weekend", "who": "pets"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    assert seen == [["제주"]]
+
+
+@pytest.mark.integration
+async def test_legacy_region_all_stays_nationwide(db_session, client, seeded, monkeypatch) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "계곡", "region": "all"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    assert [spot["contentId"] for spot in res.json()["data"]["spots"]] == ["j1", "v1", "v2", "v3"]
 
 
 def test_suggestions_offer_only_axes_that_are_not_already_on() -> None:

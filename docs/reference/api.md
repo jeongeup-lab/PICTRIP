@@ -52,11 +52,20 @@
 | `intent` | `QueryIntent` | 직전 응답의 `intent`를 되돌려 보내는 refine 경로. **있으면 Gemini를 호출하지 않는다** |
 | `patch` | `RefinePatch` | `intent` 위에 덮어쓸 축. `{crowdPreference?, indoorOnly?, nearMe?, drop?}` |
 | `lat` / `lng` | float | 거리 정렬·`내 근처` 의도에만 사용 |
+| `region` | string | 폐기된 조건 시트의 잔재. OTA 전 구 앱만 보내고, 지역 조건으로만 옮겨 태운다(아래) |
 
 multipart에서 `intent`/`patch`는 **JSON 문자열 필드**로 온다 (파싱 실패 시
-`VALIDATION_FAILED`). 정형 조건 시트(`region`/`when`/`who`)는 폐기됐다 —
-extra-ignore라 구 앱이 보내도 422가 아니라 무시된다
+`VALIDATION_FAILED`). 정형 조건 시트(`region`/`when`/`who`)는 폐기됐다
 ([ADR 0010](../adr/0010-travel-tab-drops-condition-sheet.md)).
+
+**구 앱 `region` 호환 셈(OTA 롤아웃까지만).** 백엔드는 dev 머지 즉시 배포되고
+모바일 OTA는 뒤따라 도착한다. 그 사이 구 앱은 조건 시트의 `region`을 계속 보내는데,
+그냥 무시하면 `제주`를 골라둔 사용자가 200 + 전국 결과를 받는다. 그래서 `region`만
+`schemas.PRE_OTA_REGION_PREFIXES`로 addr1 접두사(`jeju` → `제주`,
+`capital` → `서울`·`경기`·`인천`)로 옮겨 조회에 싣는다. 질문에서 뽑은
+`regionHints`가 있으면 그쪽이 이긴다. 알 수 없는 값과 `all`은 전국이고, 422를
+내지 않는다. `when`/`who`는 폐기 전에도 조회를 바꾸지 않았으므로(문장 장식과
+빈 키워드 튜플) 계속 무시한다. **OTA가 다 깔리면 `PRE_OTA_*` 심볼째 지운다.**
 
 `QueryIntent` = `{categoryKeywords[], regionHints[], namedPlaces[], moodHints[],
 crowdPreference, festivalOnly, indoorOnly, nearMe, outOfScope}`. 배열은 전부
@@ -125,6 +134,15 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 `경복궁 같은 한옥`처럼 축이 하나라도 더 붙으면 그 축으로 검색을 돌려 지목한 곳
 뒤에 붙인다. 해석에 실패하면 `AGENT_NO_RESULTS` — 물어본 장소와 무관한 전국
 스팟을 붙이지 않는다.
+
+**앞에 꽂는 장소도 같은 필터를 통과해야 한다.** 지목한 장소는 결과 맨 앞에
+붙지만 풀이 통과한 절대 축(`indoorOnly` · `moodHints` · `any`가 아닌
+`crowdPreference`)을 그대로 검사해서 떨어지면 뺀다 — `실내만` 칩을 누른 응답이
+야외 궁궐로 시작하면 응답이 자기가 한 일을 잘못 말하는 것이다(`resolve_place`
+배지도 살아남은 수를 센다). `nearMe`는 필터가 아니라 정렬이라 장소를 빼지 않는다.
+실내·mood 여부는 `load_candidates_by_ids`가 같은 한 번의 조회에서 함께 읽고,
+혼잡도는 `retrieve.passes_filters`가 `한산`/`붐빔` 경계(`CALM_RATE`/`BUSY_RATE`)로
+판정한다.
 
 **키워드가 코드에 안 걸리면 넓히지 않고 좁힌다.** LLM이 뽑은 카테고리 키워드가
 `lcls` 코드로 하나도 매핑되지 않으면 조건 없는 전국 검색이 아니라 `title_search`

@@ -46,6 +46,7 @@ async def agent_ask(
         image_mime=image_mime,
         intent=payload.intent,
         patch=payload.patch,
+        pre_ota_region_prefixes=payload.pre_ota_region_prefixes,
     )
     return ok(result)
 

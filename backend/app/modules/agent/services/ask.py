@@ -67,6 +67,7 @@ async def ask(
     image_mime: str | None,
     intent: QueryIntent | None = None,
     patch: RefinePatch | None = None,
+    pre_ota_region_prefixes: list[str] | None = None,
 ) -> AskResponse:
     cleaned = (question or "").strip()
     if image_bytes is not None:
@@ -79,11 +80,20 @@ async def ask(
             lng=lng,
             intent=intent,
             patch=patch,
+            pre_ota_region_prefixes=pre_ota_region_prefixes or [],
         )
     if not cleaned and intent is None:
         raise ValidationFailed("question, photo or intent is required")
     return await _ask_with_question(
-        session, redis, kto, question=cleaned, lat=lat, lng=lng, intent=intent, patch=patch
+        session,
+        redis,
+        kto,
+        question=cleaned,
+        lat=lat,
+        lng=lng,
+        intent=intent,
+        patch=patch,
+        pre_ota_region_prefixes=pre_ota_region_prefixes or [],
     )
 
 
@@ -97,6 +107,7 @@ async def _ask_with_photo(
     lng: float | None,
     intent: QueryIntent | None,
     patch: RefinePatch | None,
+    pre_ota_region_prefixes: list[str],
 ) -> AskResponse:
     steps: list[AskStep] = []
     intent_task = (
@@ -123,7 +134,10 @@ async def _ask_with_photo(
             except AppError as exc:
                 logger.warning("agent.photo.intent_skipped", code=exc.code)
 
-    prefixes = await retrieve.resolve_region_prefixes(session, hints=intent.regionHints)
+    prefixes = (
+        await retrieve.resolve_region_prefixes(session, hints=intent.regionHints)
+        or pre_ota_region_prefixes
+    )
     rows = await photo_service.match_vector(session, vector, region_prefixes=prefixes)
     steps.append(
         AskStep(
@@ -201,6 +215,7 @@ async def _ask_with_question(
     lng: float | None,
     intent: QueryIntent | None,
     patch: RefinePatch | None,
+    pre_ota_region_prefixes: list[str],
 ) -> AskResponse:
     steps: list[AskStep] = []
     if intent is not None:
@@ -226,19 +241,39 @@ async def _ask_with_question(
         ]
         briefs = await repositories.load_candidates_by_ids(session, content_ids)
         pinned = [briefs[cid] for cid in content_ids if cid in briefs]
-        steps.append(AskStep(tool="resolve_place", label="질문 속 장소 확인", badge=_count(pinned)))
 
     near = intent.nearMe and lat is not None and lng is not None
     keywords = _keywords(intent)
     codes = await retrieve.resolve_category_codes(session, keywords)
     mood_ids = await repositories.find_mood_ids(session, list(intent.moodHints))
-    prefixes = await retrieve.resolve_region_prefixes(session, hints=intent.regionHints)
+    prefixes = (
+        await retrieve.resolve_region_prefixes(session, hints=intent.regionHints)
+        or pre_ota_region_prefixes
+    )
+    place_only = _named_place_is_the_only_constraint(
+        intent, keywords=keywords, prefixes=prefixes, near=near
+    )
+    title_only = bool(keywords) and not codes and not mood_ids and not intent.indoorOnly
+    if not place_only and not title_only:
+        pinned = [
+            row
+            for row in pinned
+            if retrieve.passes_filters(
+                row,
+                indoor_only=intent.indoorOnly,
+                mood_ids=mood_ids,
+                preference=intent.crowdPreference,
+            )
+        ]
+    if intent.namedPlaces:
+        steps.append(AskStep(tool="resolve_place", label="질문 속 장소 확인", badge=_count(pinned)))
+
     axes = suggest_service.ALL_AXES
-    if _named_place_is_the_only_constraint(intent, keywords=keywords, prefixes=prefixes, near=near):
+    if place_only:
         if not pinned:
             raise AgentNoResults()
         candidates = []
-    elif keywords and not codes and not mood_ids and not intent.indoorOnly:
+    elif title_only:
         axes = TITLE_AXES
         candidates = await retrieve.search_by_title(session, keywords, region_prefixes=prefixes)
         steps.append(

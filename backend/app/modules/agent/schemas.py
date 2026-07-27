@@ -83,12 +83,28 @@ class Suggestion(BaseModel):
     patch: RefinePatch
 
 
+PRE_OTA_REGION_PREFIXES: dict[str, tuple[str, ...]] = {
+    "all": (),
+    "capital": ("서울", "경기", "인천"),
+    "gangwon": ("강원",),
+    "chungcheong": ("충청", "충북", "충남", "대전", "세종"),
+    "jeolla": ("전라", "전북", "전남", "광주"),
+    "gyeongsang": ("경상", "경북", "경남", "대구", "울산", "부산"),
+    "jeju": ("제주",),
+}
+
+
 class AskRequest(BaseModel):
     question: str | None = None
     lat: float | None = Field(None, ge=-90.0, le=90.0)
     lng: float | None = Field(None, ge=-180.0, le=180.0)
     intent: QueryIntent | None = None
     patch: RefinePatch | None = None
+    region: str | None = None
+
+    @property
+    def pre_ota_region_prefixes(self) -> list[str]:
+        return list(PRE_OTA_REGION_PREFIXES.get(self.region or "all", ()))
 
 
 class AskStep(BaseModel):
