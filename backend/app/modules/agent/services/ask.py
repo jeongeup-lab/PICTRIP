@@ -12,6 +12,7 @@ from app.modules.agent import repositories
 from app.modules.agent.errors import AgentNoResults, AgentOutOfScope
 from app.modules.agent.repositories import CandidateRow
 from app.modules.agent.schemas import (
+    MAX_HINT_TOKENS,
     AgentSpotCard,
     AnswerSegment,
     AskResponse,
@@ -27,6 +28,7 @@ from app.modules.agent.services import resolve as resolve_service
 from app.modules.agent.services import retrieve
 from app.modules.agent.services import suggest as suggest_service
 from app.modules.feed import services as feed_services
+from app.modules.spots.services import load_active_spot_cards_by_ids
 from app.web.errors import AppError, ValidationFailed
 
 logger = get_logger(__name__)
@@ -34,6 +36,23 @@ logger = get_logger(__name__)
 INDOOR_RETRY_LABEL = "실내로만 다시 조회"
 PHOTO_AXES: frozenset[DropAxis] = frozenset({"near", "region"})
 TITLE_AXES: frozenset[DropAxis] = frozenset({"category", "near", "region"})
+MIN_HINT_TOKEN_CHARS = 2
+SIDO_ALIASES: dict[str, tuple[str, ...]] = {
+    "강원도": ("강원",),
+    "경남": ("경상남도",),
+    "경북": ("경상북도",),
+    "경상남도": ("경남",),
+    "경상북도": ("경북",),
+    "전남": ("전라남도",),
+    "전라남도": ("전남",),
+    "전라북도": ("전북",),
+    "전북": ("전라북도",),
+    "제주도": ("제주",),
+    "충남": ("충청남도",),
+    "충북": ("충청북도",),
+    "충청남도": ("충남",),
+    "충청북도": ("충북",),
+}
 
 
 async def ask(
@@ -193,7 +212,9 @@ async def _ask_with_question(
         raise AgentOutOfScope()
 
     if intent.festivalOnly:
-        return await _ask_festivals(redis, kto, intent=intent, steps=steps, lat=lat, lng=lng)
+        return await _ask_festivals(
+            session, redis, kto, intent=intent, steps=steps, lat=lat, lng=lng
+        )
 
     pinned: list[CandidateRow] = []
     if intent.namedPlaces:
@@ -305,6 +326,7 @@ async def _ask_with_question(
 
 
 async def _ask_festivals(
+    session: AsyncSession,
     redis: Redis,
     kto: KtoClient | None,
     *,
@@ -316,9 +338,17 @@ async def _ask_festivals(
     if kto is None:
         raise AgentNoResults()
     pool = await feed_services.load_festival_pool(redis, kto)
-    scoped = _match_region(pool, intent.regionHints)
-    fell_back = bool(intent.regionHints) and not scoped
-    cards = scoped or pool
+    openable = await _openable_ids(session, pool)
+    nationwide = _keep(pool, openable)
+    fallback: str | None = None
+    if intent.regionHints:
+        scoped = _match_region(pool, intent.regionHints)
+        cards = _keep(scoped, openable)
+        if not cards:
+            cards = nationwide
+            fallback = _fallback_sentence(intent.regionHints[0], region_has_festivals=bool(scoped))
+    else:
+        cards = nationwide
     spots = [
         AgentSpotCard(
             contentId=card.content_id or "",
@@ -338,15 +368,11 @@ async def _ask_festivals(
         AnswerSegment(text=f"{len(spots)}곳", emphasis=True),
         AnswerSegment(text=" 찾았어요."),
     ]
-    if fell_back:
-        answer.append(
-            AnswerSegment(
-                text=f" {intent.regionHints[0]}에는 오늘 열리는 축제가 없어 전국에서 골랐어요."
-            )
-        )
+    if fallback is not None:
+        answer.append(AnswerSegment(text=fallback))
     applied = QueryIntent(
         festivalOnly=True,
-        regionHints=[] if fell_back else list(intent.regionHints),
+        regionHints=[] if fallback is not None else list(intent.regionHints),
     )
     return AskResponse(
         steps=steps,
@@ -362,12 +388,50 @@ async def _ask_festivals(
     )
 
 
+async def _openable_ids(
+    session: AsyncSession, cards: list[feed_services.ChannelCardRow]
+) -> set[str]:
+    content_ids = [card.content_id for card in cards if card.content_id]
+    if not content_ids:
+        return set()
+    return set(await load_active_spot_cards_by_ids(session, content_ids))
+
+
+def _keep(
+    cards: list[feed_services.ChannelCardRow], openable: set[str]
+) -> list[feed_services.ChannelCardRow]:
+    return [card for card in cards if card.content_id in openable]
+
+
+def _fallback_sentence(hint: str, *, region_has_festivals: bool) -> str:
+    if region_has_festivals:
+        return f" {hint} 축제는 아직 상세 정보가 없어 전국에서 골랐어요."
+    return f" {hint}에는 오늘 열리는 축제가 없어 전국에서 골랐어요."
+
+
 def _match_region(
     cards: list[feed_services.ChannelCardRow], hints: list[str]
 ) -> list[feed_services.ChannelCardRow]:
-    if not hints:
+    hint_tokens = [tokens for hint in hints if (tokens := _region_tokens(hint))]
+    if not hint_tokens:
         return []
-    return [card for card in cards if any(hint in card.region_label for hint in hints)]
+    return [
+        card for card in cards if any(_covers(tokens, card.region_label) for tokens in hint_tokens)
+    ]
+
+
+def _region_tokens(hint: str) -> list[str]:
+    return [token for token in hint.split()[:MAX_HINT_TOKENS] if len(token) >= MIN_HINT_TOKEN_CHARS]
+
+
+def _covers(tokens: list[str], region_label: str) -> bool:
+    address = region_label.split()
+    return all(_token_hits(token, address) for token in tokens)
+
+
+def _token_hits(token: str, address: list[str]) -> bool:
+    forms = (token, *SIDO_ALIASES.get(token, ()))
+    return any(part.startswith(form) for part in address for form in forms)
 
 
 def _named_place_is_the_only_constraint(

@@ -96,7 +96,7 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 | `resolve_place` | `agent/services/resolve.py` | 장소명 → KTO 스팟 (질문이 특정 장소를 지목할 때) |
 | `category_search` | `agent/repositories.py` + `lcls_systm_codes` | 카테고리 키워드 → lcls 코드 → 스팟 조회 |
 | `mood_search` | `agent/repositories.py` + `spot_moods` | `moodHints` → mood id → `EXISTS` 서브쿼리. 카테고리 코드와 **AND** |
-| `festival` | `feed/services/kto_channels.py` | `festivalOnly`면 다른 축을 건너뛰고 `searchFestival2` 오늘 진행분 풀만 본다 |
+| `festival` | `feed/services/kto_channels.py` | `festivalOnly`면 다른 축을 건너뛰고 `searchFestival2` 오늘 진행분 풀만 본다 (로컬 `spots` 가시 행과 교집합) |
 | `title_search` | `spots/services/search.py` | 키워드가 lcls 코드에 하나도 안 걸릴 때의 폴백 (스팟 이름 trigram, 지역별로 각각 조회) |
 | `concentration` | `agent/services/retrieve.py` | 집중률 백분위 하위/상위 30%로 추림. 후보가 적어 아무도 30% 안에 못 들면 가장 한적한/붐비는 쪽 20곳을 남긴다 (선호를 버리고 전체로 되돌리지 않는다) |
 | `nearby` | `agent/repositories.py` | 현재 위치 기준 거리순 (SQL `ORDER BY`) |
@@ -167,13 +167,27 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 낸다(집중률 백분위가 없는 경로라 혼잡도 축이 걸리지 않는다). `drop` 후보도 같은
 집합 안에서만 고른다.
 
-**축제는 지역이 안 맞으면 전국으로 폴백하되 말한다.** `festivalOnly` 경로는
+**축제 지역 매칭은 토큰 접두 + 시도 별칭이다.** `festivalOnly` 경로는
 `load_festival_pool`(오늘 진행 중인 축제 전량, Redis `festival:pool:v2`, TTL 1h)을 읽고
-`regionHints` 원문 힌트 문자열을 카드 지역 라벨(주소 앞 2토큰)에 부분 문자열로
-맞춘다(`_hint_tokens()` 분해는 SQL 경로 전용이라 여기서는 쓰지 않는다).
+`regionHints`를 공백으로 쪼갠 뒤(최대 `MAX_HINT_TOKENS`=4개, 2자 미만 토큰은 버림)
+**모든 힌트 토큰이** 카드 지역 라벨(주소 앞 2토큰) 중 하나의 **접두**여야 그 카드를
+지역 매치로 본다. `제주 서귀포` → `제주특별자치도 서귀포시`가 이 규칙으로 붙는다.
 `regions` 테이블로 시도를 매핑하지 않는다 — 축제 주소는 `전남광주통합특별시`,
-`spots.addr1`은 `전라남도`라 두 소스의 어휘가 다르다. 0건이면 전국 풀을 쓰되
-답변 문장에 `제주에는 오늘 열리는 축제가 없어 전국에서 골랐어요`를 덧붙인다.
+`spots.addr1`은 `전라남도`라 두 소스의 어휘가 다르다. 접두로 안 붙는 시도 장·단형만
+`SIDO_ALIASES`(`전라남도`↔`전남`, `경상북도`↔`경북`, `충청남도`↔`충남`, `제주도`→`제주` 등
+14개)로 보완한다. 부분 문자열 매칭은 쓰지 않는다 — `광주`가
+`전남광주통합특별시`에 걸리는 오탐이 생긴다(그런 힌트는 전국 폴백으로 간다).
+
+**축제 카드는 `spots`에 보이는 것만 내려간다.** `searchFestival2`는 실시간이고
+`spots`는 일일 ETL이라, 마지막 동기화 뒤 새로 뜬 축제는 `contentId`가 로컬에 없다.
+그대로 내려보내면 상세(`GET /spots/{id}`)와 저장(`POST /me/saved`)이 둘 다 404다.
+그래서 풀을 `load_active_spot_cards_by_ids`(= `show_flag=1`, 상세·저장과 같은 술어)로
+교집합한 뒤 자른다. 갓 등록된 축제는 다음 동기화까지 안 보인다.
+
+지역 매치가 0건이면 전국 풀을 쓰되 이유를 구분해 말한다 — 그 지역에 오늘 축제가
+아예 없으면 `제주에는 오늘 열리는 축제가 없어 전국에서 골랐어요`, 있는데 아직
+`spots`에 없어 못 여는 경우면 `제주 축제는 아직 상세 정보가 없어 전국에서 골랐어요`.
+교집합 후 전국도 0건이면 `AGENT_NO_RESULTS`다.
 
 카드 태그 우선순위는 거리(`4.2km`) → 혼잡도 백분위(`하위 8%`) → 혼잡 라벨
 (`붐빔`·`보통`·`한산`), 사진 질의는 `유사도 86%`, 축제는 `D-3`.
