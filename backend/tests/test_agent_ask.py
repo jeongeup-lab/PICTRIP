@@ -1497,6 +1497,28 @@ async def test_photo_refine_reads_the_multipart_intent_and_skips_the_llm(
 
 @pytest.mark.integration
 async def test_suggestions_stay_plain_labels_of_the_refinements(
+    db_session, client, seeded_wide, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"], regionHints=["부산"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "부산 계곡"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["refinements"]
+    assert all(chip["patch"]["drop"] is None for chip in data["refinements"])
+    assert all(isinstance(label, str) for label in data["suggestions"])
+    assert data["suggestions"] == [chip["label"] for chip in data["refinements"]]
+
+
+@pytest.mark.integration
+async def test_release_chip_stays_out_of_the_legacy_suggestions(
     db_session, client, seeded, monkeypatch
 ) -> None:
     monkeypatch.setattr(intent_service, "extract_intent", _forbidden_intent([]))
@@ -1514,9 +1536,13 @@ async def test_suggestions_stay_plain_labels_of_the_refinements(
 
     assert res.status_code == 200
     data = res.json()["data"]
-    assert data["refinements"]
-    assert all(isinstance(label, str) for label in data["suggestions"])
-    assert data["suggestions"] == [chip["label"] for chip in data["refinements"]]
+    released = [chip for chip in data["refinements"] if chip["patch"]["drop"] is not None]
+    assert len(released) == 1
+    assert data["suggestions"] == [
+        chip["label"] for chip in data["refinements"] if chip["patch"]["drop"] is None
+    ]
+    assert released[0]["label"] not in data["suggestions"]
+    assert len(data["suggestions"]) == len(data["refinements"]) - 1
 
 
 @pytest.mark.integration
@@ -1549,7 +1575,10 @@ async def test_photo_suggestions_stay_plain_labels_of_the_refinements(
     data = res.json()["data"]
     assert data["refinements"]
     assert all(isinstance(label, str) for label in data["suggestions"])
-    assert data["suggestions"] == [chip["label"] for chip in data["refinements"]]
+    assert data["suggestions"] == [
+        chip["label"] for chip in data["refinements"] if chip["patch"]["drop"] is None
+    ]
+    assert [chip["label"] for chip in data["refinements"] if chip["patch"]["drop"] is not None]
 
 
 @pytest.mark.integration
