@@ -139,4 +139,6 @@ class AskResponse(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def suggestions(self) -> list[str]:
-        return [refinement.label for refinement in self.refinements]
+        return [
+            refinement.label for refinement in self.refinements if refinement.patch.drop is None
+        ]

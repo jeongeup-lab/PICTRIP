@@ -92,7 +92,7 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 | `totalCount` | int | `전체 N곳 보기`의 N |
 | `intent` | `QueryIntent` | 서버가 **실제로 적용한** 의도. 다음 턴이 그대로 되돌려 보낸다 |
 | `refinements[]` | `{label, patch}` | 후속 제안 칩 최대 3개. `label`은 상태 전환 문구(`사람 적은 곳만`), `patch`는 그 칩이 바꿀 축 |
-| `suggestions[]` | `string[]` | `refinements[].label`을 **같은 순서**로 담은 라벨 목록. OTA 이전 구버전 앱과의 하위호환 전용이고 새 클라이언트는 `refinements`를 읽는다 |
+| `suggestions[]` | `string[]` | `patch.drop`이 없는 `refinements[]`의 `label`만 **같은 순서**로 담은 목록. OTA 이전 구버전 앱과의 하위호환 전용이고 새 클라이언트는 `refinements`를 읽는다 |
 
 `imageUrl`은 서명된 `img.pictrip.org` 프록시 URL — 클라이언트는 변형 없이 그대로
 쓴다(`cpyrhtDivCd=Type3` 무변형, [ADR 0005](../adr/0005-kto-image-policy.md)).
@@ -182,8 +182,19 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 **`suggestions`는 라벨만 담은 하위호환 필드다.** 백엔드는 dev 머지 즉시
 배포되지만 앱은 OTA를 받아야 갱신된다. 그 시차 동안 구버전 앱이 문자열로
 그리는 `suggestions`의 타입을 바꾸면 답변 블록이 그대로 깨지므로, 구조화 칩은
-`refinements`로 **추가**하고 `suggestions`는 `refinements[].label`을 그대로
-유지한다. 구버전 앱은 라벨을 자유문 질문으로 되쏘는 기존 동작을 이어간다.
+`refinements`로 **추가**하고 `suggestions`는 라벨만 그대로 유지한다. 구버전
+앱은 라벨을 자유문 질문으로 되쏘는 기존 동작을 이어간다.
+
+**`suggestions`는 완화 칩만 뺀다.** `사람 적은 곳만`·`실내만`은 자유문으로
+되쏴도 Gemini가 혼잡도·실내 의도를 다시 뽑아내 직전 턴의 문맥만 잃는다.
+`조건 하나 풀기`는 풀 축이 `patch.drop`에만 있어 자유문으로는 빈 의도가 되고,
+구버전 앱이 보고 있던 지역·카테고리·사진 문맥을 통째로 버린 전국 결과가
+돌아온다 — 결과가 이미 적을 때만 뜨는 칩이 상황을 더 나쁘게 만든다. 그래서
+레거시 투영은 `patch.drop`이 있는 칩을 **구조로** 걸러낸다(라벨 문자열 비교가
+아니다 — 문구가 바뀌면 조용히 썩는다). `refinements`는 손대지 않는다.
+남는 불변식: `suggestions`는 `patch.drop`이 없는 `refinements` 항목의 라벨을
+**그 상대 순서 그대로** 담는다. 완화 칩은 항상 맨 앞 한 장뿐이라 길이만 하나
+줄고 나머지 순서는 유지된다.
 
 **칩은 그 경로가 실제로 적용하는 축만 낸다.** `derive(axes=...)`가 경로별
 축 집합을 받는다. 사진 경로는 `near`·`region`뿐이라(벡터 SQL의 지역 절 + 거리
