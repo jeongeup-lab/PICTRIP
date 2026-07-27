@@ -370,7 +370,32 @@ async def test_festival_pool_returns_more_than_the_channel_and_caches_separately
     pool = await kto_channels.load_festival_pool(redis_client_fake, _PagedKto(FESTIVAL_POOL_ITEMS))
 
     assert len(pool) == 30
-    assert await redis_client_fake.get("festival:pool:v1") is not None
+    assert await redis_client_fake.get("festival:pool:v2") is not None
+
+
+def _running_festival_item(index: int) -> dict:
+    return {
+        "contentid": str(index),
+        "title": f"축제{index}",
+        "addr1": "제주특별자치도 서귀포시 1" if index == 79 else "서울특별시 종로구 1",
+        "firstimage": "https://kto/i.jpg",
+        "eventstartdate": (TODAY - timedelta(days=1)).strftime("%Y%m%d"),
+        "eventenddate": (TODAY + timedelta(days=index)).strftime("%Y%m%d"),
+    }
+
+
+async def test_festival_pool_keeps_every_running_festival_not_just_the_first_sixty(
+    redis_client_fake, monkeypatch
+) -> None:
+    from app.modules.feed.services import kto_channels
+
+    monkeypatch.setattr(kto_channels, "_today", lambda: TODAY)
+    items = [_running_festival_item(i) for i in range(80)]
+
+    pool = await kto_channels.load_festival_pool(redis_client_fake, _PagedKto(items))
+
+    assert len(pool) == 80
+    assert any("제주" in card.region_label for card in pool)
 
 
 async def test_festival_pool_second_call_is_served_from_cache(

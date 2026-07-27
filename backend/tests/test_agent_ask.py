@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 from collections.abc import Awaitable, Callable
+from datetime import date, timedelta
 from typing import get_args
 
 import pytest
@@ -22,9 +23,11 @@ from app.modules.agent.errors import AgentIntentUnavailable
 from app.modules.agent.repositories import CandidateRow, VectorMatchRow
 from app.modules.agent.routes import MAX_BODY_BYTES
 from app.modules.agent.schemas import (
+    MAX_HINT_TOKENS,
     MAX_KEYWORDS,
     MAX_NAMED_PLACES,
     MAX_REGION_HINTS,
+    MAX_TEXT_CHARS,
     ExtractedPlace,
     Mood,
     QueryIntent,
@@ -37,7 +40,9 @@ from app.modules.agent.services import refine as refine_service
 from app.modules.agent.services import resolve as resolve_service
 from app.modules.agent.services import retrieve
 from app.modules.agent.services import suggest as suggest_service
+from app.modules.feed.services import kto_channels
 from app.modules.feed.services.channels import ChannelCardRow
+from app.modules.spots.services import MAX_REGION_TOKENS, map_region_tokens_to_sido
 
 LAT, LNG = 35.15, 129.05
 _VEC = "[" + ",".join(["0.1"] * 512) + "]"
@@ -1443,6 +1448,116 @@ def test_intent_list_caps_accept_a_full_extraction_and_reject_more() -> None:
         QueryIntent(moodHints=["sea"] * 8)
 
 
+def test_intent_string_caps_accept_a_long_place_name_and_reject_longer() -> None:
+    longest = "가" * MAX_TEXT_CHARS
+    over = "가" * (MAX_TEXT_CHARS + 1)
+
+    assert QueryIntent(regionHints=[longest]).regionHints == [longest]
+    assert ExtractedPlace(name=longest, regionHint=longest, tip=longest).name == longest
+
+    with pytest.raises(ValidationError):
+        QueryIntent(regionHints=[over])
+    with pytest.raises(ValidationError):
+        QueryIntent(categoryKeywords=[over])
+    with pytest.raises(ValidationError):
+        ExtractedPlace(name=over)
+    with pytest.raises(ValidationError):
+        ExtractedPlace(name="속초해수욕장", regionHint=over)
+    with pytest.raises(ValidationError):
+        ExtractedPlace(name="속초해수욕장", nameKo=over)
+
+
+class _CountingResult:
+    def all(self) -> list[object]:
+        return []
+
+
+class _CountingSession:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def execute(self, statement: object, params: object = None) -> _CountingResult:
+        self.calls += 1
+        return _CountingResult()
+
+
+async def test_one_region_hint_cannot_fan_out_into_a_query_per_word() -> None:
+    session = _CountingSession()
+
+    await retrieve.resolve_region_prefixes(session, hints=[" ".join(f"제{i}" for i in range(40))])
+
+    assert session.calls <= MAX_HINT_TOKENS + 1
+
+
+async def test_a_full_region_hint_list_stays_within_the_region_token_budget() -> None:
+    session = _CountingSession()
+    hints = [" ".join(f"제{i}{j}" for j in range(40)) for i in range(MAX_REGION_HINTS)]
+
+    await retrieve.resolve_region_prefixes(session, hints=hints)
+
+    assert session.calls <= MAX_REGION_TOKENS
+
+
+def test_a_place_region_hint_cannot_fan_out_into_a_token_per_word() -> None:
+    tokens = resolve_service._hint_tokens(" ".join(f"제{i}" for i in range(40)))
+
+    assert len(tokens) <= MAX_HINT_TOKENS + 1
+
+
+async def test_region_token_lookup_caps_its_own_db_round_trips() -> None:
+    session = _CountingSession()
+
+    await map_region_tokens_to_sido(session, {f"토큰{i}" for i in range(MAX_REGION_TOKENS * 5)})
+
+    assert session.calls == MAX_REGION_TOKENS
+
+
+@pytest.mark.integration
+async def test_over_long_region_hints_are_rejected_before_any_region_lookup(
+    db_session, client, monkeypatch
+) -> None:
+    calls: list[str] = []
+
+    async def boom_prefixes(session, *, hints):
+        raise AssertionError("an over-cap intent must not reach the region lookup")
+
+    monkeypatch.setattr(intent_service, "extract_intent", _forbidden_intent(calls))
+    monkeypatch.setattr(retrieve, "resolve_region_prefixes", boom_prefixes)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={"intent": {"regionHints": ["제주 " * 100]}},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "VALIDATION_FAILED"
+    assert calls == []
+
+
+@pytest.mark.integration
+async def test_over_long_named_place_name_is_rejected_before_the_naver_fanout(
+    db_session, client, monkeypatch
+) -> None:
+    async def boom_resolve(session, kto, places):
+        raise AssertionError("an over-cap intent must not reach the place resolver")
+
+    monkeypatch.setattr(resolve_service, "resolve_places", boom_resolve)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={"intent": {"namedPlaces": [{"name": "가" * (MAX_TEXT_CHARS + 1)}]}},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "VALIDATION_FAILED"
+
+
 @pytest.mark.integration
 async def test_over_long_category_keywords_are_rejected_before_any_search(
     db_session, client, monkeypatch
@@ -1495,10 +1610,18 @@ async def test_extract_intent_truncates_a_chatty_llm_instead_of_failing(monkeypa
     class FakeClient:
         async def generate_json(self, **kwargs):
             return {
-                "categoryKeywords": [f"k{i}" for i in range(MAX_KEYWORDS + 5)],
-                "regionHints": [f"r{i}" for i in range(MAX_REGION_HINTS + 5)],
+                "categoryKeywords": [
+                    f"k{i}" + "설" * MAX_TEXT_CHARS for i in range(MAX_KEYWORDS + 5)
+                ],
+                "regionHints": [
+                    f"r{i}" + "설" * MAX_TEXT_CHARS for i in range(MAX_REGION_HINTS + 5)
+                ],
                 "namedPlaces": [
-                    {"name": f"p{i}", "placeType": "attraction"}
+                    {
+                        "name": f"p{i}" + "설" * MAX_TEXT_CHARS,
+                        "regionHint": "설" * MAX_TEXT_CHARS * 2,
+                        "placeType": "attraction",
+                    }
                     for i in range(MAX_NAMED_PLACES + 5)
                 ],
             }
@@ -1510,6 +1633,9 @@ async def test_extract_intent_truncates_a_chatty_llm_instead_of_failing(monkeypa
     assert len(parsed.categoryKeywords) == MAX_KEYWORDS
     assert len(parsed.regionHints) == MAX_REGION_HINTS
     assert len(parsed.namedPlaces) == MAX_NAMED_PLACES
+    assert max(len(k) for k in parsed.categoryKeywords) == MAX_TEXT_CHARS
+    assert max(len(r) for r in parsed.regionHints) == MAX_TEXT_CHARS
+    assert all(len(p.name) == MAX_TEXT_CHARS for p in parsed.namedPlaces)
 
 
 @pytest.mark.integration
@@ -1740,6 +1866,54 @@ async def test_festival_region_miss_falls_back_nationwide_and_says_so(
     sentence = "".join(part["text"] for part in body["answer"])
     assert [s["contentId"] for s in body["spots"]] == ["f1"]
     assert "제주에는 오늘 열리는 축제가 없어 전국에서 골랐어요" in sentence
+
+
+_FESTIVAL_TODAY = date(2026, 7, 12)
+
+
+class _PagedFestivalKto:
+    def __init__(self, items: list[dict]) -> None:
+        self.items = items
+
+    async def call(self, *args: object, **params: object) -> list[dict]:
+        return self.items if params.get("pageNo") == 1 else []
+
+
+def _running_festival_item(index: int) -> dict:
+    return {
+        "contentid": f"f{index}",
+        "title": f"축제{index}",
+        "addr1": "제주특별자치도 서귀포시 1" if index == 79 else "서울특별시 종로구 1",
+        "firstimage": "https://kto/f.jpg",
+        "eventstartdate": (_FESTIVAL_TODAY - timedelta(days=1)).strftime("%Y%m%d"),
+        "eventenddate": (_FESTIVAL_TODAY + timedelta(days=index)).strftime("%Y%m%d"),
+    }
+
+
+@pytest.mark.integration
+async def test_festival_in_region_beyond_the_channel_slice_is_still_found(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    monkeypatch.setattr(kto_channels, "_today", lambda: _FESTIVAL_TODAY)
+    monkeypatch.setattr(
+        intent_service,
+        "extract_intent",
+        _fake_intent(QueryIntent(festivalOnly=True, regionHints=["제주"])),
+    )
+    _override(db_session)
+    app.dependency_overrides[get_kto] = lambda: _PagedFestivalKto(
+        [_running_festival_item(i) for i in range(80)]
+    )
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "제주 축제"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    body = res.json()["data"]
+    sentence = "".join(part["text"] for part in body["answer"])
+    assert [s["contentId"] for s in body["spots"]] == ["f79"]
+    assert "전국에서 골랐어요" not in sentence
 
 
 @pytest.mark.integration

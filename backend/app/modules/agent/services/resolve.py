@@ -14,6 +14,7 @@ from app.kto.client import KtoClient, KtoService
 from app.kto.display import t1_display_url
 from app.modules.agent import naver
 from app.modules.agent.schemas import (
+    MAX_HINT_TOKENS,
     ExtractedPlace,
     ResolvedPlace,
     ResolvedSpot,
@@ -129,7 +130,7 @@ def _hint_tokens(region_hint: str | None) -> list[str]:
     if not region_hint:
         return []
     cleaned = region_hint.strip()
-    tokens = cleaned.split()
+    tokens = cleaned.split()[:MAX_HINT_TOKENS]
     return [cleaned, *tokens] if len(tokens) > 1 else tokens
 
 

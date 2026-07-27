@@ -49,6 +49,8 @@ _REGION_CLAUSE = "AND s.addr1 ILIKE '%' || :region || '%'"
 
 _WORD_SIMILARITY_THRESHOLD_SQL = "SET LOCAL pg_trgm.word_similarity_threshold = 0.4"
 
+MAX_REGION_TOKENS = 100
+
 _REGION_TOKEN_SQL = """
     SELECT DISTINCT r.ldong_regn_nm
     FROM regions r
@@ -98,7 +100,7 @@ async def search_spots_by_title(
 
 async def map_region_tokens_to_sido(session: AsyncSession, tokens: set[str]) -> dict[str, str]:
     mapping: dict[str, str] = {}
-    for token in tokens:
+    for token in sorted(tokens)[:MAX_REGION_TOKENS]:
         cleaned = token.strip()
         if len(cleaned) < 2:
             continue

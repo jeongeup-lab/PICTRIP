@@ -61,7 +61,7 @@ def _https(url: Any) -> str | None:
 
 
 async def fetch_festa_cards(
-    kto: KtoClient, *, today: date | None = None, limit: int = _CARD_COUNT
+    kto: KtoClient, *, today: date | None = None, limit: int | None = _CARD_COUNT
 ) -> list[ChannelCardRow]:
     today = today or _today()
     window_start = (today - timedelta(days=_FESTA_WINDOW_DAYS)).strftime("%Y%m%d")
@@ -103,7 +103,7 @@ async def fetch_festa_cards(
             )
         )
     cards.sort(key=lambda c: int((c.dday or "D-999")[2:]))
-    return cards[:limit]
+    return cards if limit is None else cards[:limit]
 
 
 async def fetch_pets_cards(kto: KtoClient, *, today: date | None = None) -> list[ChannelCardRow]:
@@ -227,8 +227,7 @@ async def load_kto_channel_cached(redis: Redis, kto: KtoClient, key: str) -> lis
     return await _fetch_and_store(redis, kto, key)
 
 
-_FESTIVAL_POOL_LIMIT = 60
-_FESTIVAL_POOL_KEY = "festival:pool:v1"
+_FESTIVAL_POOL_KEY = "festival:pool:v2"
 _FESTIVAL_POOL_TTL = 3600
 
 
@@ -247,7 +246,7 @@ async def load_festival_pool(redis: Redis, kto: KtoClient) -> list[ChannelCardRo
         else:
             if payload.get("date") == _today().isoformat():
                 return rows
-    cards = await fetch_festa_cards(kto, limit=_FESTIVAL_POOL_LIMIT)
+    cards = await fetch_festa_cards(kto, limit=None)
     try:
         await redis.set(
             _FESTIVAL_POOL_KEY,

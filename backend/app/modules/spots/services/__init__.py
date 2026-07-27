@@ -35,12 +35,14 @@ from app.modules.spots.services.rows import (
 )
 from app.modules.spots.services.saved import list_saved_spots, save_spot, unsave_spot
 from app.modules.spots.services.search import (
+    MAX_REGION_TOKENS,
     SpotSearchRow,
     map_region_tokens_to_sido,
     search_spots_by_title,
 )
 
 __all__ = [
+    "MAX_REGION_TOKENS",
     "ConcentrationCardRow",
     "NearbyCategory",
     "NearbySpotRow",

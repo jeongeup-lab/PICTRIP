@@ -11,6 +11,7 @@ from app.modules.agent.schemas import (
     MAX_KEYWORDS,
     MAX_NAMED_PLACES,
     MAX_REGION_HINTS,
+    MAX_TEXT_CHARS,
     CrowdPreference,
     ExtractedPlace,
     Mood,
@@ -124,7 +125,11 @@ def _strings(raw: Any) -> list[str]:
         return []
     seen: list[str] = []
     for item in raw:
-        if isinstance(item, str) and (cleaned := item.strip()) and cleaned not in seen:
+        if (
+            isinstance(item, str)
+            and (cleaned := item.strip()[:MAX_TEXT_CHARS])
+            and cleaned not in seen
+        ):
             seen.append(cleaned)
     return seen
 
@@ -135,10 +140,19 @@ def _places(raw: Any) -> list[ExtractedPlace]:
     places: list[ExtractedPlace] = []
     for item in raw:
         try:
-            places.append(ExtractedPlace.model_validate(item))
+            places.append(ExtractedPlace.model_validate(_clipped(item)))
         except ValidationError:
             continue
     return places
+
+
+def _clipped(item: Any) -> Any:
+    if not isinstance(item, dict):
+        return item
+    return {
+        key: value[:MAX_TEXT_CHARS] if isinstance(value, str) else value
+        for key, value in item.items()
+    }
 
 
 def _moods(raw: Any) -> list[Mood]:

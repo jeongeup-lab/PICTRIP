@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Literal, get_args
+from typing import Annotated, Literal, get_args
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 PlaceType = Literal["attraction", "restaurant", "cafe", "hotel", "region"]
 ResolveStatus = Literal["matched", "ambiguous", "naver_only", "unmatched"]
@@ -14,6 +14,10 @@ MAX_KEYWORDS = 20
 MAX_REGION_HINTS = 20
 MAX_NAMED_PLACES = 10
 MAX_MOOD_HINTS = len(get_args(Mood))
+MAX_TEXT_CHARS = 80
+MAX_HINT_TOKENS = 4
+
+IntentText = Annotated[str, StringConstraints(max_length=MAX_TEXT_CHARS)]
 
 ToolName = Literal[
     "intent",
@@ -29,11 +33,11 @@ ToolName = Literal[
 
 
 class ExtractedPlace(BaseModel):
-    name: str
-    nameKo: str | None = None
+    name: IntentText
+    nameKo: IntentText | None = None
     placeType: PlaceType = "attraction"
-    regionHint: str | None = None
-    tip: str | None = None
+    regionHint: IntentText | None = None
+    tip: IntentText | None = None
     orderHint: int | None = None
 
 
@@ -56,8 +60,8 @@ class ResolvedPlace(BaseModel):
 
 
 class QueryIntent(BaseModel):
-    categoryKeywords: list[str] = Field(default_factory=list, max_length=MAX_KEYWORDS)
-    regionHints: list[str] = Field(default_factory=list, max_length=MAX_REGION_HINTS)
+    categoryKeywords: list[IntentText] = Field(default_factory=list, max_length=MAX_KEYWORDS)
+    regionHints: list[IntentText] = Field(default_factory=list, max_length=MAX_REGION_HINTS)
     namedPlaces: list[ExtractedPlace] = Field(default_factory=list, max_length=MAX_NAMED_PLACES)
     crowdPreference: CrowdPreference = "any"
     moodHints: list[Mood] = Field(default_factory=list, max_length=MAX_MOOD_HINTS)

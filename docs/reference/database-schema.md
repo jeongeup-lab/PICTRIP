@@ -42,7 +42,7 @@ AOF everysec + RDB · `noeviction` 256mb. 전부 재계산 가능한 캐시.
 | `rlte:{contentId}` | 1h | 연관 관광지 (Redis 전용 — 테이블 없음) |
 | `match:{revision}:{overseasId}` | 6h | 매칭 결과 — `matching:revision` incr로 전체 무효화 |
 | `channel:{key}:{version}` | KTO 채널 3d / 집중률 1h | 홈 채널 카드 |
-| `festival:pool:v1` | 1h | agent 축제 축 풀 (`searchFestival2` 오늘 진행분 ≤60) |
+| `festival:pool:v2` | 1h | agent 축제 축 풀 (`searchFestival2` 오늘 진행분 전량, ≤500) |
 | `region:{lat:.3f}:{lng:.3f}` | 1d | Kakao 역지오코딩 (null 캐시 포함) |
 | `regions:tree` | 24h | 시도·시군구 트리 |
 | `admin:embed:running` | 4h | 재임베딩 잡 분산 락 (SET NX) |
