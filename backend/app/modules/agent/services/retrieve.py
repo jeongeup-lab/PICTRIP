@@ -144,6 +144,26 @@ def filter_by_crowd(rows: list[CandidateRow], preference: CrowdPreference) -> li
     return extreme[:RESULT_LIMIT]
 
 
+def passes_filters(
+    row: CandidateRow,
+    *,
+    indoor_only: bool,
+    mood_ids: list[int],
+    preference: CrowdPreference,
+) -> bool:
+    if indoor_only and not row.indoor:
+        return False
+    if mood_ids and not set(mood_ids) & set(row.mood_ids):
+        return False
+    if preference == "any":
+        return True
+    if row.concentration_rate is None:
+        return False
+    if preference == "quiet":
+        return row.concentration_rate <= CALM_RATE
+    return row.concentration_rate >= BUSY_RATE
+
+
 def distance_km(row: CandidateRow, *, lat: float, lng: float) -> float | None:
     if row.lat is None or row.lng is None:
         return None

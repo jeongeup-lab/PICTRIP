@@ -125,6 +125,8 @@ class CandidateRow:
     cpyrht_div_cd: str | None
     concentration_rate: float | None
     percentile: int | None = None
+    indoor: bool = False
+    mood_ids: tuple[int, ...] = ()
 
 
 CandidateOrder = Literal["id", "rate_asc", "rate_desc", "distance"]
@@ -281,7 +283,12 @@ SELECT spots.content_id,
        spots.mapx AS lng,
        spots.first_image_url AS image_url,
        spots.cpyrht_div_cd,
-       sc.concentration_rate
+       sc.concentration_rate,
+       COALESCE(spots.lcls_systm2 = ANY(CAST(:indoor_l2 AS text[]))
+                OR spots.lcls_systm3 = ANY(CAST(:indoor_l3 AS text[])), FALSE) AS indoor,
+       ARRAY(
+           SELECT sm.mood_id FROM spot_moods sm WHERE sm.content_id = spots.content_id
+       ) AS mood_ids
 FROM spots
 LEFT JOIN regions r ON r.ldong_regn_cd = spots.ldong_regn_cd
 LEFT JOIN sigungus g ON g.ldong_signgu_cd = spots.ldong_signgu_cd
@@ -298,7 +305,10 @@ async def load_candidates_by_ids(
 ) -> dict[str, CandidateRow]:
     if not content_ids:
         return {}
-    result = await session.execute(text(_TITLE_CANDIDATE_SQL), {"ids": content_ids})
+    result = await session.execute(
+        text(_TITLE_CANDIDATE_SQL),
+        {"ids": content_ids, "indoor_l2": list(INDOOR_L2), "indoor_l3": list(INDOOR_L3)},
+    )
     return {
         row.content_id: CandidateRow(
             content_id=row.content_id,
@@ -313,6 +323,8 @@ async def load_candidates_by_ids(
             concentration_rate=(
                 float(row.concentration_rate) if row.concentration_rate is not None else None
             ),
+            indoor=bool(row.indoor),
+            mood_ids=tuple(int(mood_id) for mood_id in row.mood_ids),
         )
         for row in result
     }
