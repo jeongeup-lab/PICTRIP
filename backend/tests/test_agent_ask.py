@@ -1772,9 +1772,29 @@ def _festival_pool(cards: list[ChannelCardRow]) -> Callable[..., Awaitable[list[
     return load
 
 
+async def _seed_festival_spots(session: AsyncSession, content_ids: list[str]) -> None:
+    for cid in content_ids:
+        await session.execute(
+            text(
+                "INSERT INTO spots (content_id, content_type_id, title, addr1, "
+                "first_image_url, show_flag) "
+                "VALUES (:cid, 15, :t, '경상북도 봉화군 1', 'http://kto/f.jpg', 1) "
+                "ON CONFLICT DO NOTHING"
+            ),
+            {"cid": cid, "t": f"축제-{cid}"},
+        )
+    await session.flush()
+
+
+@pytest_asyncio.fixture
+async def seeded_festivals(db_session: AsyncSession) -> None:
+    await _seed(db_session)
+    await _seed_festival_spots(db_session, [f"f{i}" for i in range(80)])
+
+
 @pytest.mark.integration
 async def test_festival_intent_returns_festival_cards_with_dday_tags(
-    db_session, client, seeded, monkeypatch
+    db_session, client, seeded_festivals, monkeypatch
 ) -> None:
     monkeypatch.setattr(
         ask_service.feed_services,
@@ -1802,7 +1822,7 @@ async def test_festival_intent_returns_festival_cards_with_dday_tags(
 
 @pytest.mark.integration
 async def test_festival_region_hint_matches_raw_kto_address_vocabulary(
-    db_session, client, seeded, monkeypatch
+    db_session, client, seeded_festivals, monkeypatch
 ) -> None:
     monkeypatch.setattr(
         ask_service.feed_services,
@@ -1841,7 +1861,7 @@ async def test_festival_region_hint_matches_raw_kto_address_vocabulary(
 
 @pytest.mark.integration
 async def test_festival_region_miss_falls_back_nationwide_and_says_so(
-    db_session, client, seeded, monkeypatch
+    db_session, client, seeded_festivals, monkeypatch
 ) -> None:
     monkeypatch.setattr(
         ask_service.feed_services,
@@ -1892,7 +1912,7 @@ def _running_festival_item(index: int) -> dict:
 
 @pytest.mark.integration
 async def test_festival_in_region_beyond_the_channel_slice_is_still_found(
-    db_session, client, seeded, monkeypatch
+    db_session, client, seeded_festivals, monkeypatch
 ) -> None:
     monkeypatch.setattr(kto_channels, "_today", lambda: _FESTIVAL_TODAY)
     monkeypatch.setattr(
@@ -1918,7 +1938,7 @@ async def test_festival_in_region_beyond_the_channel_slice_is_still_found(
 
 @pytest.mark.integration
 async def test_festival_turn_echoes_only_the_axes_its_search_applied(
-    db_session, client, seeded, monkeypatch
+    db_session, client, seeded_festivals, monkeypatch
 ) -> None:
     monkeypatch.setattr(
         ask_service.feed_services,
@@ -1964,7 +1984,7 @@ async def test_festival_turn_echoes_only_the_axes_its_search_applied(
 
 @pytest.mark.integration
 async def test_festival_nationwide_fallback_stops_echoing_the_region_it_ignored(
-    db_session, client, seeded, monkeypatch
+    db_session, client, seeded_festivals, monkeypatch
 ) -> None:
     monkeypatch.setattr(
         ask_service.feed_services,
@@ -1992,7 +2012,7 @@ async def test_festival_nationwide_fallback_stops_echoing_the_region_it_ignored(
 
 @pytest.mark.integration
 async def test_festival_image_url_goes_through_the_copyright_display_helper(
-    db_session, client, seeded, monkeypatch
+    db_session, client, seeded_festivals, monkeypatch
 ) -> None:
     card = ChannelCardRow(
         content_id="f1",
@@ -2018,7 +2038,7 @@ async def test_festival_image_url_goes_through_the_copyright_display_helper(
 
 @pytest.mark.integration
 async def test_festival_step_badge_counts_only_the_cards_that_ship(
-    db_session, client, seeded, monkeypatch
+    db_session, client, seeded_festivals, monkeypatch
 ) -> None:
     monkeypatch.setattr(
         ask_service.feed_services,
@@ -2047,3 +2067,219 @@ async def test_festival_step_badge_counts_only_the_cards_that_ship(
     festival = next(step for step in body["steps"] if step["tool"] == "festival")
     assert festival["badge"] == "2곳"
     assert body["totalCount"] == len(body["spots"]) == 2
+
+
+@pytest.mark.integration
+async def test_festival_card_without_a_local_spot_row_is_dropped(
+    db_session, client, seeded_festivals, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        ask_service.feed_services,
+        "load_festival_pool",
+        _festival_pool(
+            [
+                _festival_card(
+                    "unsynced", title="갓생긴축제", region_label="경상북도 봉화군", dday="D-1"
+                ),
+                _festival_card(
+                    "f1", title="봉화은어축제", region_label="경상북도 봉화군", dday="D-7"
+                ),
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        intent_service, "extract_intent", _fake_intent(QueryIntent(festivalOnly=True))
+    )
+    _override_with_kto(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "축제"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    body = res.json()["data"]
+    assert [s["contentId"] for s in body["spots"]] == ["f1"]
+    festival = next(step for step in body["steps"] if step["tool"] == "festival")
+    assert festival["badge"] == "1곳"
+
+
+@pytest.mark.integration
+async def test_festival_turn_with_nothing_openable_reports_no_results(
+    db_session, client, seeded_festivals, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        ask_service.feed_services,
+        "load_festival_pool",
+        _festival_pool(
+            [
+                _festival_card(
+                    "unsynced", title="갓생긴축제", region_label="경상북도 봉화군", dday="D-1"
+                )
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        intent_service, "extract_intent", _fake_intent(QueryIntent(festivalOnly=True))
+    )
+    _override_with_kto(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "축제"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "AGENT_NO_RESULTS"
+
+
+@pytest.mark.integration
+async def test_festival_in_region_that_is_not_synced_yet_does_not_claim_the_region_is_empty(
+    db_session, client, seeded_festivals, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        ask_service.feed_services,
+        "load_festival_pool",
+        _festival_pool(
+            [
+                _festival_card(
+                    "unsynced",
+                    title="서귀포신규축제",
+                    region_label="제주특별자치도 서귀포시",
+                    dday="D-1",
+                ),
+                _festival_card(
+                    "f1", title="봉화은어축제", region_label="경상북도 봉화군", dday="D-7"
+                ),
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        intent_service,
+        "extract_intent",
+        _fake_intent(QueryIntent(festivalOnly=True, regionHints=["제주"])),
+    )
+    _override_with_kto(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "제주 축제"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    body = res.json()["data"]
+    assert [s["contentId"] for s in body["spots"]] == ["f1"]
+    sentence = "".join(part["text"] for part in body["answer"])
+    assert "제주 축제는 아직 상세 정보가 없어 전국에서 골랐어요" in sentence
+    assert "제주에는 오늘 열리는 축제가 없어" not in sentence
+
+
+@pytest.mark.integration
+async def test_festival_multi_token_region_hint_matches_the_long_form_address(
+    db_session, client, seeded_festivals, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        ask_service.feed_services,
+        "load_festival_pool",
+        _festival_pool(
+            [
+                _festival_card(
+                    "f1",
+                    title="서귀포유채꽃축제",
+                    region_label="제주특별자치도 서귀포시",
+                    dday="D-3",
+                ),
+                _festival_card(
+                    "f2", title="봉화은어축제", region_label="경상북도 봉화군", dday="D-7"
+                ),
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        intent_service,
+        "extract_intent",
+        _fake_intent(QueryIntent(festivalOnly=True, regionHints=["제주 서귀포"])),
+    )
+    _override_with_kto(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "제주 서귀포 축제"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    body = res.json()["data"]
+    assert [s["contentId"] for s in body["spots"]] == ["f1"]
+    sentence = "".join(part["text"] for part in body["answer"])
+    assert "전국에서 골랐어요" not in sentence
+
+
+@pytest.mark.integration
+async def test_festival_sido_alias_hint_matches_the_merged_address_vocabulary(
+    db_session, client, seeded_festivals, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        ask_service.feed_services,
+        "load_festival_pool",
+        _festival_pool(
+            [
+                _festival_card(
+                    "f1",
+                    title="여수밤바다불꽃축제",
+                    region_label="전남광주통합특별시 여수시",
+                    dday="D-3",
+                ),
+                _festival_card(
+                    "f2", title="봉화은어축제", region_label="경상북도 봉화군", dday="D-7"
+                ),
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        intent_service,
+        "extract_intent",
+        _fake_intent(QueryIntent(festivalOnly=True, regionHints=["전라남도"])),
+    )
+    _override_with_kto(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "전라남도 축제"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    body = res.json()["data"]
+    assert [s["contentId"] for s in body["spots"]] == ["f1"]
+    sentence = "".join(part["text"] for part in body["answer"])
+    assert "전국에서 골랐어요" not in sentence
+
+
+@pytest.mark.integration
+async def test_festival_hint_buried_mid_token_still_falls_back_nationwide(
+    db_session, client, seeded_festivals, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        ask_service.feed_services,
+        "load_festival_pool",
+        _festival_pool(
+            [
+                _festival_card(
+                    "f1",
+                    title="여수밤바다불꽃축제",
+                    region_label="전남광주통합특별시 여수시",
+                    dday="D-3",
+                )
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        intent_service,
+        "extract_intent",
+        _fake_intent(QueryIntent(festivalOnly=True, regionHints=["광주"])),
+    )
+    _override_with_kto(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "광주 축제"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    body = res.json()["data"]
+    assert [s["contentId"] for s in body["spots"]] == ["f1"]
+    sentence = "".join(part["text"] for part in body["answer"])
+    assert "광주에는 오늘 열리는 축제가 없어 전국에서 골랐어요" in sentence
