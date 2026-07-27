@@ -1343,12 +1343,12 @@ async def test_refine_request_skips_the_llm_and_keeps_prior_axes(
     assert data["intent"]["regionHints"] == ["부산"]
     assert [step["tool"] for step in data["steps"]] == ["category_search", "concentration"]
     assert [spot["contentId"] for spot in data["spots"]] == ["v1", "v2", "v3"]
-    assert [chip["label"] for chip in data["suggestions"]] == [
+    assert [chip["label"] for chip in data["refinements"]] == [
         "조건 하나 풀기",
         "유명한 곳으로",
         "실내만",
     ]
-    assert data["suggestions"][0]["patch"]["drop"] == "crowd"
+    assert data["refinements"][0]["patch"]["drop"] == "crowd"
 
 
 @pytest.mark.integration
@@ -1414,8 +1414,65 @@ async def test_photo_refine_reads_the_multipart_intent_and_skips_the_llm(
     assert [step["tool"] for step in data["steps"]] == ["photo_match"]
     assert [spot["contentId"] for spot in data["spots"]] == ["j1"]
     assert data["intent"]["regionHints"] == ["제주"]
-    assert [chip["label"] for chip in data["suggestions"]] == ["조건 하나 풀기"]
-    assert data["suggestions"][0]["patch"]["drop"] == "region"
+    assert [chip["label"] for chip in data["refinements"]] == ["조건 하나 풀기"]
+    assert data["refinements"][0]["patch"]["drop"] == "region"
+
+
+@pytest.mark.integration
+async def test_suggestions_stay_plain_labels_of_the_refinements(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    monkeypatch.setattr(intent_service, "extract_intent", _forbidden_intent([]))
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={
+                "intent": {"categoryKeywords": ["계곡"], "regionHints": ["부산"]},
+                "patch": {"crowdPreference": "quiet"},
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["refinements"]
+    assert all(isinstance(label, str) for label in data["suggestions"])
+    assert data["suggestions"] == [chip["label"] for chip in data["refinements"]]
+
+
+@pytest.mark.integration
+async def test_photo_suggestions_stay_plain_labels_of_the_refinements(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    for cid in ("v1", "j1"):
+        await db_session.execute(
+            text("INSERT INTO spot_embeddings (content_id, embedding) VALUES (:c, :v)"),
+            {"c": cid, "v": _VEC},
+        )
+    await db_session.flush()
+
+    async def fake_embed(*, image_bytes, image_mime):
+        return [0.1] * 512
+
+    monkeypatch.setattr(intent_service, "extract_intent", _forbidden_intent([]))
+    monkeypatch.setattr(photo_service, "embed_photo", fake_embed)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            files={"photo": ("a.jpg", b"x", "image/jpeg")},
+            data={"intent": json.dumps({"regionHints": ["제주"]})},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["refinements"]
+    assert all(isinstance(label, str) for label in data["suggestions"])
+    assert data["suggestions"] == [chip["label"] for chip in data["refinements"]]
 
 
 @pytest.mark.integration

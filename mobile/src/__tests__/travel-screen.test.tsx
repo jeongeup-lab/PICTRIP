@@ -45,7 +45,8 @@ const ANSWER: AgentAnswer = {
   spots: [],
   totalCount: 4,
   intent: INTENT,
-  suggestions: [{ label: "실내만", patch: { indoorOnly: true } }],
+  suggestions: ["실내만"],
+  refinements: [{ label: "실내만", patch: { indoorOnly: true } }],
 };
 
 const answeredTurn: Turn = {
@@ -77,11 +78,34 @@ const newerAnsweredTurn: Turn = {
   answer: {
     ...ANSWER,
     intent: NEWER_INTENT,
-    suggestions: [{ label: "사람 적은 곳만", patch: { crowdPreference: "quiet" } }],
+    suggestions: ["사람 적은 곳만"],
+    refinements: [{ label: "사람 적은 곳만", patch: { crowdPreference: "quiet" } }],
   },
   errorMessage: null,
   intent: null,
   patch: null,
+};
+
+const legacyAnsweredTurn: Turn = {
+  id: "seed-4",
+  question: "여름에 시원한 계곡",
+  request: "여름에 시원한 계곡",
+  photo: null,
+  status: "done",
+  answer: { ...ANSWER, suggestions: ["실내만"], refinements: undefined },
+  errorMessage: null,
+  intent: null,
+  patch: null,
+};
+
+const relabeledTurn: Turn = {
+  ...answeredTurn,
+  id: "seed-5",
+  answer: {
+    ...ANSWER,
+    suggestions: ["사람 적은 곳만"],
+    refinements: [{ label: "실내만", patch: { indoorOnly: true } }],
+  },
 };
 
 const failedRefineTurn: Turn = {
@@ -250,6 +274,27 @@ describe("TravelScreen refine chips in scrollback", () => {
     const input = askAgentMock.mock.calls[0][0];
     expect(input.intent).toEqual(NEWER_INTENT);
     expect(input.patch).toEqual({ crowdPreference: "quiet" });
+  });
+});
+
+describe("TravelScreen chip source", () => {
+  it("builds chips from refinements, not from the compatibility labels", async () => {
+    useConversation.setState({ turns: [relabeledTurn], busy: false });
+    const tree = await mount();
+
+    expect(pressable(tree, "answer-suggestion-실내만")).toBeDefined();
+    expect(pressable(tree, "answer-suggestion-사람 적은 곳만")).toBeUndefined();
+    expect(pressable(tree, "travel-chip-실내만")).toBeDefined();
+    expect(pressable(tree, "travel-chip-사람 적은 곳만")).toBeUndefined();
+  });
+
+  it("falls back to starter chips when the answer carries no refinements", async () => {
+    useConversation.setState({ turns: [legacyAnsweredTurn], busy: false });
+    const tree = await mount();
+
+    expect(tree.root.findAllByProps({ testID: "turn-seed-4" }).length).toBeGreaterThan(0);
+    expect(pressable(tree, "answer-suggestion-실내만")).toBeUndefined();
+    expect(pressable(tree, "travel-chip-지금 열리는 축제")).toBeDefined();
   });
 });
 

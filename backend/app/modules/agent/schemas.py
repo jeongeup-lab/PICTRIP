@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, get_args
 
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints, computed_field
 
 PlaceType = Literal["attraction", "restaurant", "cafe", "hotel", "region"]
 ResolveStatus = Literal["matched", "ambiguous", "naver_only", "unmatched"]
@@ -118,4 +118,9 @@ class AskResponse(BaseModel):
     spots: list[AgentSpotCard]
     totalCount: int
     intent: QueryIntent
-    suggestions: list[Suggestion]
+    refinements: list[Suggestion]
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def suggestions(self) -> list[str]:
+        return [refinement.label for refinement in self.refinements]

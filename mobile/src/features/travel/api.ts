@@ -62,7 +62,8 @@ export interface AgentAnswer {
   spots: TravelSpot[];
   totalCount: number;
   intent: QueryIntent;
-  suggestions: Suggestion[];
+  suggestions: string[];
+  refinements?: Suggestion[];
 }
 
 export interface PhotoUpload {

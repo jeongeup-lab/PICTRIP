@@ -82,7 +82,8 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 | `spots[]` | `{contentId, title, regionLabel, imageUrl, tag, lat, lng}` | 상위 20곳(대화 레일은 앞 4장만 그린다). `tag`는 카드 좌상단 배지(`하위 8%` · `4.2km` · `유사도 86%`) |
 | `totalCount` | int | `전체 N곳 보기`의 N |
 | `intent` | `QueryIntent` | 서버가 **실제로 적용한** 의도. 다음 턴이 그대로 되돌려 보낸다 |
-| `suggestions[]` | `{label, patch}` | 후속 제안 칩 최대 3개. `label`은 상태 전환 문구(`사람 적은 곳만`), `patch`는 그 칩이 바꿀 축 |
+| `refinements[]` | `{label, patch}` | 후속 제안 칩 최대 3개. `label`은 상태 전환 문구(`사람 적은 곳만`), `patch`는 그 칩이 바꿀 축 |
+| `suggestions[]` | `string[]` | `refinements[].label`을 **같은 순서**로 담은 라벨 목록. OTA 이전 구버전 앱과의 하위호환 전용이고 새 클라이언트는 `refinements`를 읽는다 |
 
 `imageUrl`은 서명된 `img.pictrip.org` 프록시 URL — 클라이언트는 변형 없이 그대로
 쓴다(`cpyrhtDivCd=Type3` 무변형, [ADR 0005](../adr/0005-kto-image-policy.md)).
@@ -149,7 +150,7 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 
 **후속 칩은 문장이 아니라 intent를 되돌려 보낸다.** 응답의 `intent`에 `patch`를
 얹어 다시 보내면 서버가 `apply_patch` 후 곧장 조회한다 — Gemini 왕복이 없다.
-`suggestions`는 **이미 켜진 축을 빼고** 만들어 "눌렀는데 그대로"를 없앤다:
+`refinements`는 **이미 켜진 축을 빼고** 만들어 "눌렀는데 그대로"를 없앤다:
 `crowdPreference=any`면 `사람 적은 곳만`, `quiet`면 `유명한 곳으로`,
 `indoorOnly=false`면 `실내만`, 좌표가 있고 `nearMe=false`면 `가까운 순으로`.
 결과가 5곳 미만이고 **켜진 축이 하나라도 있으면** `조건 하나 풀기`를 맨 앞에
@@ -159,6 +160,12 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 지역이 마지막이다.
 축제 턴은 혼잡도·실내·카테고리 축이 축제 풀에 걸리지 않으므로 칩을 아예
 내려보내지 않는다.
+
+**`suggestions`는 라벨만 담은 하위호환 필드다.** 백엔드는 dev 머지 즉시
+배포되지만 앱은 OTA를 받아야 갱신된다. 그 시차 동안 구버전 앱이 문자열로
+그리는 `suggestions`의 타입을 바꾸면 답변 블록이 그대로 깨지므로, 구조화 칩은
+`refinements`로 **추가**하고 `suggestions`는 `refinements[].label`을 그대로
+유지한다. 구버전 앱은 라벨을 자유문 질문으로 되쏘는 기존 동작을 이어간다.
 
 **칩은 그 경로가 실제로 적용하는 축만 낸다.** `derive(axes=...)`가 경로별
 축 집합을 받는다. 사진 경로는 `near`·`region`뿐이라(벡터 SQL의 지역 절 + 거리
