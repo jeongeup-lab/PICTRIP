@@ -21,14 +21,14 @@ export function idleChips(hasCoords: boolean): Chip[] {
   return hasCoords ? [NEARBY_CHIP, ...BASE_CHIPS] : [...BASE_CHIPS];
 }
 
-export function refineChips(suggestions: Suggestion[] | null | undefined): Chip[] {
-  return (suggestions ?? []).map((s) => ({ kind: "refine", label: s.label, patch: s.patch }));
+export function refineChips(refinements: Suggestion[] | null | undefined): Chip[] {
+  return (refinements ?? []).map((s) => ({ kind: "refine", label: s.label, patch: s.patch }));
 }
 
 export function composerChips(
-  suggestions: Suggestion[] | null | undefined,
+  refinements: Suggestion[] | null | undefined,
   hasCoords: boolean,
 ): Chip[] {
-  const refine = refineChips(suggestions);
+  const refine = refineChips(refinements);
   return refine.length > 0 ? refine : idleChips(hasCoords);
 }

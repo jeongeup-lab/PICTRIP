@@ -169,7 +169,7 @@ export default function TravelScreen() {
     [openResults],
   );
 
-  const chips = composerChips(lastAnswered?.answer?.suggestions, coords !== null);
+  const chips = composerChips(lastAnswered?.answer?.refinements, coords !== null);
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>

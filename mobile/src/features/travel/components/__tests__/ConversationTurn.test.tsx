@@ -35,7 +35,8 @@ const answer = {
   ],
   totalCount: 12,
   intent: { categoryKeywords: ["계곡"], regionHints: [] },
-  suggestions: [{ label: "실내만", patch: { indoorOnly: true } }],
+  suggestions: ["실내만"],
+  refinements: [{ label: "실내만", patch: { indoorOnly: true } }],
 };
 
 const turn = (over: Partial<Turn> = {}): Turn => ({

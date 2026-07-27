@@ -7,7 +7,8 @@ const answer: AgentAnswer = {
   spots: [],
   totalCount: 4,
   intent: { categoryKeywords: ["계곡"], regionHints: [] },
-  suggestions: [{ label: "더 가까운 곳", patch: { nearMe: true } }],
+  suggestions: ["더 가까운 곳"],
+  refinements: [{ label: "더 가까운 곳", patch: { nearMe: true } }],
 };
 
 beforeEach(() => useConversation.getState().clear());

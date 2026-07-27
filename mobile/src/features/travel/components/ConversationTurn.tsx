@@ -113,7 +113,7 @@ export function ConversationTurn({
         {revealed && answer ? (
           <AnswerBlock
             answer={answer.answer}
-            chips={refineChips(answer.suggestions)}
+            chips={refineChips(answer.refinements)}
             onSuggest={(chip) => onSuggest(chip, turn)}
           />
         ) : null}

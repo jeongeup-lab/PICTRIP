@@ -161,7 +161,7 @@ async def _ask_with_photo(
         spots=spots,
         totalCount=len(spots),
         intent=intent,
-        suggestions=suggest_service.derive(
+        refinements=suggest_service.derive(
             intent,
             has_coords=lat is not None and lng is not None,
             result_count=len(spots),
@@ -316,7 +316,7 @@ async def _ask_with_question(
         spots=spots,
         totalCount=len(spots),
         intent=intent,
-        suggestions=suggest_service.derive(
+        refinements=suggest_service.derive(
             intent,
             has_coords=lat is not None and lng is not None,
             result_count=len(spots),
@@ -380,7 +380,7 @@ async def _ask_festivals(
         spots=spots,
         totalCount=len(spots),
         intent=applied,
-        suggestions=suggest_service.derive(
+        refinements=suggest_service.derive(
             applied,
             has_coords=lat is not None and lng is not None,
             result_count=len(spots),
