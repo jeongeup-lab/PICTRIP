@@ -1953,6 +1953,43 @@ def test_release_chip_falls_to_the_region_axis_when_no_narrower_axis_is_on() -> 
     assert chips[0].patch.drop == "region"
 
 
+def test_release_chip_is_withheld_when_dropping_leaves_only_the_named_place() -> None:
+    chips = suggest_service.derive(
+        QueryIntent(
+            namedPlaces=[ExtractedPlace(name="경복궁", nameKo="경복궁")],
+            moodHints=["hanok"],
+        ),
+        has_coords=False,
+        result_count=2,
+    )
+
+    assert "조건 하나 풀기" not in [c.label for c in chips]
+
+
+def test_release_chip_stays_when_the_named_place_keeps_another_axis() -> None:
+    chips = suggest_service.derive(
+        QueryIntent(
+            namedPlaces=[ExtractedPlace(name="경복궁", nameKo="경복궁")],
+            moodHints=["hanok"],
+            regionHints=["서울"],
+        ),
+        has_coords=False,
+        result_count=2,
+    )
+
+    assert chips[0].label == "조건 하나 풀기"
+    assert chips[0].patch.drop == "category"
+
+
+def test_release_chip_stays_for_a_thin_turn_without_named_places() -> None:
+    chips = suggest_service.derive(
+        QueryIntent(moodHints=["hanok"]), has_coords=False, result_count=2
+    )
+
+    assert chips[0].label == "조건 하나 풀기"
+    assert chips[0].patch.drop == "category"
+
+
 def test_ample_results_get_no_release_chip() -> None:
     chips = suggest_service.derive(
         QueryIntent(crowdPreference="quiet", regionHints=["제주"]),
