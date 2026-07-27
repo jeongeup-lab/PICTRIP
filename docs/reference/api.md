@@ -203,8 +203,19 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 낸다(집중률 백분위가 없는 경로라 혼잡도 축이 걸리지 않는다). `drop` 후보도 같은
 집합 안에서만 고른다.
 
+**축제 풀은 최근 1년 안에 시작해 오늘까지 진행 중인 축제 전량이다.**
+`load_festival_pool`은 `searchFestival2`를 `eventStartDate = 오늘-365일`로 조회하고
+`eventstartdate <= 오늘 <= eventenddate`인 카드만 남긴다. 홈 채널 `festa`는 건드리지
+않는다 — 90일 창·10장·`channel:festa:v4` 그대로다. `arrange`에 행사일 정렬이 없어
+(제목순·수정일순·생성일순뿐) 정렬로 상한을 걸면 **진행 중인 축제가 잘릴 수 있다**.
+그래서 자르지 않고 짧은 페이지가 올 때까지 길어낸다 — 300행 × 최대 20페이지, 4페이지씩
+병렬(최악 20요청 · 5왕복). 상한 6,000건에 닿으면 `feed.festival.pool_page_cap_reached`
+경고를 남긴다(조용한 절단 금지). 못 담는 것은 **시작일이 1년보다 오래된 상설 행사**,
+대표이미지 없는 행사, 그리고 상한을 넘긴 경우뿐이다. 캐시는 Redis `festival:pool:v2`,
+TTL 1h — 갱신 비용은 시간당 최대 20요청이다.
+
 **축제 지역 매칭은 토큰 접두 + 시도 별칭이다.** `festivalOnly` 경로는
-`load_festival_pool`(오늘 진행 중인 축제 전량, Redis `festival:pool:v2`, TTL 1h)을 읽고
+`load_festival_pool`(Redis `festival:pool:v2`, TTL 1h)을 읽고
 `regionHints`를 공백으로 쪼갠 뒤(최대 `MAX_HINT_TOKENS`=4개, 2자 미만 토큰은 버림)
 **모든 힌트 토큰이** 카드 지역 라벨(주소 앞 2토큰) 중 하나의 **접두**여야 그 카드를
 지역 매치로 본다. `제주 서귀포` → `제주특별자치도 서귀포시`가 이 규칙으로 붙는다.
