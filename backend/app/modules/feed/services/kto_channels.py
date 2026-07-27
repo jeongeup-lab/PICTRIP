@@ -22,6 +22,10 @@ _CARD_COUNT = 10
 _FESTA_WINDOW_DAYS = 90
 _FESTA_MAX_PAGES = 5
 _FESTA_PAGE_ROWS = 100
+_POOL_WINDOW_DAYS = 365
+_POOL_MAX_PAGES = 20
+_POOL_PAGE_ROWS = 300
+_POOL_WAVE = 4
 _PETS_TAG = "반려동물 동반 가능"
 _PETS_CONTENT_TYPE_ATTRACTION = 12
 
@@ -60,31 +64,58 @@ def _https(url: Any) -> str | None:
     return text
 
 
-async def fetch_festa_cards(
-    kto: KtoClient, *, today: date | None = None, limit: int | None = _CARD_COUNT
-) -> list[ChannelCardRow]:
-    today = today or _today()
-    window_start = (today - timedelta(days=_FESTA_WINDOW_DAYS)).strftime("%Y%m%d")
-    items: list[dict[str, Any]] = []
-    for page in range(1, _FESTA_MAX_PAGES + 1):
-        page_items = await kto.call(
+async def _fetch_festival_items(
+    kto: KtoClient,
+    *,
+    window_start: str,
+    page_rows: int,
+    max_pages: int,
+    wave: int,
+) -> list[dict[str, Any]]:
+    async def _page(page: int) -> list[dict[str, Any]]:
+        result: list[dict[str, Any]] = await kto.call(
             KtoService.KOR,
             "searchFestival2",
             eventStartDate=window_start,
-            numOfRows=_FESTA_PAGE_ROWS,
+            numOfRows=page_rows,
             pageNo=page,
             arrange="C",
         )
-        items.extend(page_items)
-        if len(page_items) < _FESTA_PAGE_ROWS:
+        return result
+
+    items: list[dict[str, Any]] = []
+    for first in range(1, max_pages + 1, wave):
+        pages = range(first, min(first + wave, max_pages + 1))
+        results = await asyncio.gather(*(_page(page) for page in pages))
+        exhausted = False
+        for page_items in results:
+            items.extend(page_items)
+            exhausted = exhausted or len(page_items) < page_rows
+        if exhausted:
             break
+    return items
+
+
+def _festival_cards(items: list[dict[str, Any]], *, today: date) -> list[ChannelCardRow]:
     cards: list[ChannelCardRow] = []
+    seen: set[str] = set()
     for it in items:
         start = _parse_ymd(it.get("eventstartdate"))
         end = _parse_ymd(it.get("eventenddate"))
         img = it.get("firstimage") or None
-        if not img or start is None or end is None or start > today or end < today:
+        content_id = str(it.get("contentid") or "")
+        if (
+            not img
+            or not content_id
+            or start is None
+            or end is None
+            or start > today
+            or end < today
+        ):
             continue
+        if content_id in seen:
+            continue
+        seen.add(content_id)
         days = max((end - today).days, 0)
         line = f"{end.month}월 {end.day}일까지"
         addr = _short_addr(it.get("addr1"))
@@ -92,7 +123,7 @@ async def fetch_festa_cards(
             line = f"{line} · {addr}"
         cards.append(
             ChannelCardRow(
-                content_id=str(it["contentid"]),
+                content_id=content_id,
                 title=it["title"],
                 region_label=addr,
                 image_url=img,
@@ -103,7 +134,35 @@ async def fetch_festa_cards(
             )
         )
     cards.sort(key=lambda c: int((c.dday or "D-999")[2:]))
-    return cards if limit is None else cards[:limit]
+    return cards
+
+
+async def fetch_festa_cards(kto: KtoClient, *, today: date | None = None) -> list[ChannelCardRow]:
+    today = today or _today()
+    items = await _fetch_festival_items(
+        kto,
+        window_start=(today - timedelta(days=_FESTA_WINDOW_DAYS)).strftime("%Y%m%d"),
+        page_rows=_FESTA_PAGE_ROWS,
+        max_pages=_FESTA_MAX_PAGES,
+        wave=1,
+    )
+    return _festival_cards(items, today=today)[:_CARD_COUNT]
+
+
+async def fetch_festival_pool_cards(
+    kto: KtoClient, *, today: date | None = None
+) -> list[ChannelCardRow]:
+    today = today or _today()
+    items = await _fetch_festival_items(
+        kto,
+        window_start=(today - timedelta(days=_POOL_WINDOW_DAYS)).strftime("%Y%m%d"),
+        page_rows=_POOL_PAGE_ROWS,
+        max_pages=_POOL_MAX_PAGES,
+        wave=_POOL_WAVE,
+    )
+    if len(items) >= _POOL_MAX_PAGES * _POOL_PAGE_ROWS:
+        logger.warning("feed.festival.pool_page_cap_reached", pages=_POOL_MAX_PAGES)
+    return _festival_cards(items, today=today)
 
 
 async def fetch_pets_cards(kto: KtoClient, *, today: date | None = None) -> list[ChannelCardRow]:
@@ -246,7 +305,7 @@ async def load_festival_pool(redis: Redis, kto: KtoClient) -> list[ChannelCardRo
         else:
             if payload.get("date") == _today().isoformat():
                 return rows
-    cards = await fetch_festa_cards(kto, limit=None)
+    cards = await fetch_festival_pool_cards(kto)
     try:
         await redis.set(
             _FESTIVAL_POOL_KEY,

@@ -408,13 +408,105 @@ async def test_festival_pool_second_call_is_served_from_cache(
     kto.call = AsyncMock(return_value=FESTIVAL_POOL_ITEMS)
 
     first = await kto_channels.load_festival_pool(redis_client_fake, kto)
+    after_first = kto.call.await_count
     second = await kto_channels.load_festival_pool(redis_client_fake, kto)
 
     assert first == second
-    assert kto.call.await_count == 1
+    assert kto.call.await_count == after_first
 
 
 async def test_festa_channel_still_caps_at_ten_cards() -> None:
     cards = await fetch_festa_cards(_PagedKto(FESTIVAL_POOL_ITEMS), today=TODAY)
 
     assert len(cards) == 10
+
+
+class _FestivalApi:
+    def __init__(self, items: list[dict]) -> None:
+        self.items = items
+        self.params: list[dict] = []
+
+    async def call(self, service: object, operation: object, **params: object) -> list[dict]:
+        self.params.append(params)
+        window = str(params["eventStartDate"])
+        rows = int(str(params["numOfRows"]))
+        page = int(str(params["pageNo"]))
+        matched = [it for it in self.items if str(it["eventstartdate"]) >= window]
+        offset = (page - 1) * rows
+        return matched[offset : offset + rows]
+
+
+def _festival(
+    content_id: str, *, started_days_ago: int, ends_in_days: int, addr: str = "서울특별시 종로구 1"
+) -> dict:
+    return {
+        "contentid": content_id,
+        "title": f"축제 {content_id}",
+        "addr1": addr,
+        "firstimage": "https://kto/i.jpg",
+        "eventstartdate": (TODAY - timedelta(days=started_days_ago)).strftime("%Y%m%d"),
+        "eventenddate": (TODAY + timedelta(days=ends_in_days)).strftime("%Y%m%d"),
+    }
+
+
+async def test_festival_pool_keeps_long_running_festival_started_before_channel_window(
+    redis_client_fake, monkeypatch
+) -> None:
+    from app.modules.feed.services import kto_channels
+
+    monkeypatch.setattr(kto_channels, "_today", lambda: TODAY)
+    api = _FestivalApi(
+        [
+            _festival("LONG", started_days_ago=200, ends_in_days=5),
+            _festival("SHORT", started_days_ago=2, ends_in_days=1),
+        ]
+    )
+
+    pool = await kto_channels.load_festival_pool(redis_client_fake, api)
+
+    assert {card.content_id for card in pool} == {"LONG", "SHORT"}
+    assert api.params[0]["eventStartDate"] == (TODAY - timedelta(days=365)).strftime("%Y%m%d")
+
+
+async def test_festival_pool_excludes_festival_that_already_ended(
+    redis_client_fake, monkeypatch
+) -> None:
+    from app.modules.feed.services import kto_channels
+
+    monkeypatch.setattr(kto_channels, "_today", lambda: TODAY)
+    api = _FestivalApi(
+        [
+            _festival("ENDED", started_days_ago=200, ends_in_days=-1),
+            _festival("RUNNING", started_days_ago=200, ends_in_days=2),
+        ]
+    )
+
+    pool = await kto_channels.load_festival_pool(redis_client_fake, api)
+
+    assert [card.content_id for card in pool] == ["RUNNING"]
+
+
+async def test_festival_pool_drains_past_the_channel_page_budget(
+    redis_client_fake, monkeypatch
+) -> None:
+    from app.modules.feed.services import kto_channels
+
+    monkeypatch.setattr(kto_channels, "_today", lambda: TODAY)
+    api = _FestivalApi(
+        [_festival(f"R{i}", started_days_ago=200, ends_in_days=1 + i % 30) for i in range(1600)]
+    )
+
+    pool = await kto_channels.load_festival_pool(redis_client_fake, api)
+
+    assert len(pool) == 1600
+
+
+async def test_festa_channel_keeps_its_ninety_day_window_and_page_size() -> None:
+    api = _FestivalApi([_festival("C1", started_days_ago=2, ends_in_days=3)])
+
+    cards = await fetch_festa_cards(api, today=TODAY)
+
+    assert [card.content_id for card in cards] == ["C1"]
+    assert api.params[0]["eventStartDate"] == "20260413"
+    assert api.params[0]["numOfRows"] == 100
+    assert len(api.params) == 1
