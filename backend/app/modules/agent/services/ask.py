@@ -188,9 +188,9 @@ async def _ask_with_question(
         intent = refine_service.apply_patch(intent, patch)
     else:
         intent = await intent_service.extract_intent(question)
-        if intent.outOfScope:
-            raise AgentOutOfScope()
         steps.append(AskStep(tool="intent", label="질문에서 지역·조건 추출", badge="Gemini"))
+    if intent.outOfScope:
+        raise AgentOutOfScope()
 
     if intent.festivalOnly:
         return await _ask_festivals(redis, kto, intent=intent, steps=steps, lat=lat, lng=lng)
@@ -228,17 +228,19 @@ async def _ask_with_question(
             )
         )
     else:
+        preference = intent.crowdPreference
+        indoor_only = intent.indoorOnly
 
         async def search(within_codes: list[str]) -> list[CandidateRow]:
             return await retrieve.search_candidates(
                 session,
                 codes=within_codes,
                 region_prefixes=prefixes,
-                preference=intent.crowdPreference,
+                preference=preference,
                 lat=lat,
                 lng=lng,
                 near=near,
-                indoor_only=intent.indoorOnly,
+                indoor_only=indoor_only,
                 mood_ids=mood_ids,
             )
 
@@ -246,12 +248,13 @@ async def _ask_with_question(
         steps.append(
             AskStep(
                 tool="category_search",
-                label=_search_label(keywords, prefixes, indoor=intent.indoorOnly),
+                label=_search_label(keywords, prefixes, indoor=indoor_only),
                 badge=_count(candidates),
             )
         )
-        if not candidates and intent.indoorOnly and codes:
+        if not candidates and indoor_only and codes:
             candidates = await search([])
+            intent = intent.model_copy(update={"categoryKeywords": []})
             steps.append(
                 AskStep(
                     tool="category_search",
@@ -341,14 +344,18 @@ async def _ask_festivals(
                 text=f" {intent.regionHints[0]}에는 오늘 열리는 축제가 없어 전국에서 골랐어요."
             )
         )
+    applied = QueryIntent(
+        festivalOnly=True,
+        regionHints=[] if fell_back else list(intent.regionHints),
+    )
     return AskResponse(
         steps=steps,
         answer=answer,
         spots=spots,
         totalCount=len(spots),
-        intent=intent,
+        intent=applied,
         suggestions=suggest_service.derive(
-            intent,
+            applied,
             has_coords=lat is not None and lng is not None,
             result_count=len(spots),
         ),

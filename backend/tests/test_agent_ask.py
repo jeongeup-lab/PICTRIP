@@ -887,6 +887,57 @@ async def test_overseas_question_is_rejected_instead_of_recommending_random_dome
 
 
 @pytest.mark.integration
+async def test_supplied_out_of_scope_intent_is_rejected_on_a_refine_turn(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(intent_service, "extract_intent", _forbidden_intent(calls))
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={
+                "intent": {"outOfScope": True, "regionHints": ["파리"]},
+                "patch": {"crowdPreference": "quiet"},
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "AGENT_OUT_OF_SCOPE"
+    assert calls == []
+
+
+@pytest.mark.integration
+async def test_photo_turn_stays_exempt_from_the_out_of_scope_guard(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    await db_session.execute(
+        text("INSERT INTO spot_embeddings (content_id, embedding) VALUES (:c, :v)"),
+        {"c": "v1", "v": _VEC},
+    )
+    await db_session.flush()
+
+    async def fake_embed(*, image_bytes, image_mime):
+        return [0.1] * 512
+
+    monkeypatch.setattr(photo_service, "embed_photo", fake_embed)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            files={"photo": ("a.jpg", b"x", "image/jpeg")},
+            data={"intent": json.dumps({"outOfScope": True})},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    assert [spot["contentId"] for spot in res.json()["data"]["spots"]] == ["v1"]
+
+
+@pytest.mark.integration
 async def test_vague_domestic_question_still_returns_spots(
     db_session, client, seeded, monkeypatch
 ) -> None:
@@ -1052,6 +1103,27 @@ async def test_indoor_with_an_outdoor_category_falls_back_to_indoor_only(
 
 
 @pytest.mark.integration
+async def test_indoor_fallback_echoes_an_intent_without_the_category_it_dropped(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"], indoorOnly=True)
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "실내 계곡"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert [spot["contentId"] for spot in data["spots"]] == ["m1"]
+    assert data["intent"]["categoryKeywords"] == []
+    assert data["intent"]["indoorOnly"] is True
+
+
+@pytest.mark.integration
 async def test_indoor_with_an_indoor_category_narrows_without_falling_back(
     db_session, client, seeded, monkeypatch
 ) -> None:
@@ -1090,6 +1162,7 @@ async def test_indoor_with_an_indoor_category_narrows_without_falling_back(
     data = res.json()["data"]
     assert [step["tool"] for step in data["steps"]] == ["intent", "category_search"]
     assert [spot["contentId"] for spot in data["spots"]] == ["m1"]
+    assert data["intent"]["categoryKeywords"] == ["박물관"]
 
 
 @pytest.mark.integration
@@ -1667,6 +1740,80 @@ async def test_festival_region_miss_falls_back_nationwide_and_says_so(
     sentence = "".join(part["text"] for part in body["answer"])
     assert [s["contentId"] for s in body["spots"]] == ["f1"]
     assert "제주에는 오늘 열리는 축제가 없어 전국에서 골랐어요" in sentence
+
+
+@pytest.mark.integration
+async def test_festival_turn_echoes_only_the_axes_its_search_applied(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        ask_service.feed_services,
+        "load_festival_pool",
+        _festival_pool(
+            [_festival_card("f1", title="봉화은어축제", region_label="경상북도 봉화군", dday="D-7")]
+        ),
+    )
+    monkeypatch.setattr(
+        intent_service,
+        "extract_intent",
+        _fake_intent(
+            QueryIntent(
+                festivalOnly=True,
+                regionHints=["봉화"],
+                categoryKeywords=["계곡"],
+                moodHints=["night"],
+                crowdPreference="quiet",
+                indoorOnly=True,
+                nearMe=True,
+            )
+        ),
+    )
+    _override_with_kto(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={"question": "봉화 축제", "lat": LAT, "lng": LNG},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    echoed = res.json()["data"]["intent"]
+    assert echoed["regionHints"] == ["봉화"]
+    assert echoed["festivalOnly"] is True
+    assert echoed["categoryKeywords"] == []
+    assert echoed["moodHints"] == []
+    assert echoed["crowdPreference"] == "any"
+    assert echoed["indoorOnly"] is False
+    assert echoed["nearMe"] is False
+
+
+@pytest.mark.integration
+async def test_festival_nationwide_fallback_stops_echoing_the_region_it_ignored(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        ask_service.feed_services,
+        "load_festival_pool",
+        _festival_pool(
+            [_festival_card("f1", title="봉화은어축제", region_label="경상북도 봉화군", dday="D-7")]
+        ),
+    )
+    monkeypatch.setattr(
+        intent_service,
+        "extract_intent",
+        _fake_intent(QueryIntent(festivalOnly=True, regionHints=["제주"])),
+    )
+    _override_with_kto(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "제주 축제"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert [s["contentId"] for s in data["spots"]] == ["f1"]
+    assert data["intent"]["regionHints"] == []
 
 
 @pytest.mark.integration
