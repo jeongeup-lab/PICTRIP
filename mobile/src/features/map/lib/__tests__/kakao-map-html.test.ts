@@ -25,7 +25,7 @@ describe("buildKakaoMapHtml", () => {
   it("renders the selected pin with an accent dot and a title label chip", () => {
     expect(html).toContain("el.className='sel'");
     expect(html).toContain('class="lab"');
-    expect(html).toContain('circle cx="12" cy="10.5" r="2.6" fill="#03C75A"');
+    expect(html).toContain('circle cx="12" cy="10.5" r="2.6" fill="#E60023"');
   });
   it("emits center_changed in the default (interactive) mode", () => {
     expect(buildKakaoMapHtml("TESTKEY123", true)).toContain("center_changed");
@@ -35,8 +35,8 @@ describe("buildKakaoMapHtml", () => {
     expect(locked).toContain("setDraggable(false)");
     expect(locked).not.toContain("center_changed");
   });
-  it("tints the generic pin dot with accent green only when accentDot is set", () => {
-    expect(buildKakaoMapHtml("TESTKEY123", false, true)).toContain('var DOT = "#03C75A"');
+  it("tints the generic pin dot with the accent color only when accentDot is set", () => {
+    expect(buildKakaoMapHtml("TESTKEY123", false, true)).toContain('var DOT = "#E60023"');
     expect(buildKakaoMapHtml("TESTKEY123", false)).toContain('var DOT = "#fff"');
   });
 });

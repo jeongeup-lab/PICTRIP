@@ -60,10 +60,7 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.bar}>
-        <View style={styles.wordmarkRow}>
-          <Text style={styles.wordmark}>PICTRIP</Text>
-          <View style={styles.wordmarkDot} />
-        </View>
+        <Text style={styles.wordmark}>PICTRIP</Text>
       </View>
 
       {isLoading ? (
@@ -117,16 +114,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
   },
-  wordmarkRow: { flexDirection: "row", alignItems: "flex-end" },
   wordmark: { fontSize: 20, fontWeight: "800", letterSpacing: -0.5, color: colors.ink },
-  wordmarkDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginLeft: 3,
-    marginBottom: 4,
-    backgroundColor: colors.accent,
-  },
   headerBlock: { paddingTop: spacing.md, paddingBottom: spacing.sm },
   cardBlock: { paddingBottom: spacing.xxl },
   loading: { padding: spacing.lg },
