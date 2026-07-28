@@ -23,13 +23,6 @@ import { colors, spacing } from "@/constants/theme";
 const NEARBY_NOTICE = "위치를 켜면 근처를 찾아드려요";
 const TOAST_BOTTOM = 104;
 
-const FILTER_TITLES: Record<BoardFilter, string> = {
-  all: "여행 보드",
-  hot: "인기 관광지",
-  hidden: "숨은 관광지",
-  around: "내 근처",
-};
-
 export default function TravelScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const nextId = useRef(0);
@@ -60,7 +53,10 @@ export default function TravelScreen() {
     phase === "ready" ? channelCardsToSpots("around", around.data?.cards ?? []) : [];
   const boardSpots =
     filter === "all"
-      ? mergeBoardSpots([hotSpots, hiddenSpots, aroundSpots])
+      ? mergeBoardSpots([hotSpots, hiddenSpots, aroundSpots]).map((spot) => ({
+          ...spot,
+          tag: null,
+        }))
       : { hot: hotSpots, hidden: hiddenSpots, around: aroundSpots }[filter];
   const boardNotice = filter === "around" && phase !== "ready" ? NEARBY_NOTICE : null;
 
@@ -131,11 +127,6 @@ export default function TravelScreen() {
     [refineFrom, lastAnswered],
   );
 
-  const submitTurnChip = useCallback(
-    (chip: Chip, source: Turn) => refineFrom(source, chip),
-    [refineFrom],
-  );
-
   const onRetry = useCallback(
     (turn: Turn) => {
       if (busy) return;
@@ -204,7 +195,6 @@ export default function TravelScreen() {
           notice={boardNotice}
           onFilter={setFilter}
           onPhotoStart={() => void onPhotoStart()}
-          onSeeAll={() => openSpotList(FILTER_TITLES[filter], boardSpots)}
         />
 
         {turns.length > 0 ? (
@@ -214,7 +204,6 @@ export default function TravelScreen() {
                 key={turn.id}
                 turn={turn}
                 onPlaybackEnd={finishPlayback}
-                onSuggest={submitTurnChip}
                 onOpenResults={(t) => openSpotList(resultsTitle(t.question), t.answer?.spots ?? [])}
                 onRetry={onRetry}
                 onGrow={scrollToEnd}

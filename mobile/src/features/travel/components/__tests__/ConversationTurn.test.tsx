@@ -3,7 +3,6 @@ import { Text } from "react-native";
 import { ConversationTurn } from "@/features/travel/components/ConversationTurn";
 import type { Turn } from "@/features/travel/stores/conversation-store";
 import { playbackDurationMs, STEP_INTERVAL_MS } from "@/features/travel/lib/step-playback";
-import type { Chip } from "@/features/travel/lib/chips";
 
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
 jest.mock("@/features/saved/hooks/use-save-optimistic", () => ({
@@ -54,18 +53,13 @@ const turn = (over: Partial<Turn> = {}): Turn => ({
 
 const noop = () => undefined;
 
-function mount(
-  t: Turn,
-  onPlaybackEnd = noop,
-  onSuggest: (chip: Chip, source: Turn) => void = noop,
-) {
+function mount(t: Turn, onPlaybackEnd = noop) {
   let tree: renderer.ReactTestRenderer;
   act(() => {
     tree = renderer.create(
       <ConversationTurn
         turn={t}
         onPlaybackEnd={onPlaybackEnd}
-        onSuggest={onSuggest}
         onOpenResults={noop}
         onRetry={noop}
         onGrow={noop}
@@ -143,19 +137,8 @@ describe("ConversationTurn playback", () => {
     expect(spinners(tree)).toBe(0);
   });
 
-  it("hands the follow-up chip up as a patch alongside its own turn, not as label text", () => {
-    const onSuggest = jest.fn();
-    const own = turn({ status: "done" });
-    const tree = mount(own, noop, onSuggest);
-    const chip = tree.root
-      .findAllByProps({ testID: "answer-suggestion-실내만" })
-      .find((node) => typeof node.props.onPress === "function");
-
-    act(() => chip!.props.onPress());
-
-    expect(onSuggest).toHaveBeenCalledWith(
-      { kind: "refine", label: "실내만", patch: { indoorOnly: true } },
-      own,
-    );
+  it("keeps follow-up chips out of the answer block", () => {
+    const tree = mount(turn({ status: "done" }));
+    expect(tree.root.findAllByProps({ testID: "answer-suggestion-실내만" })).toHaveLength(0);
   });
 });
