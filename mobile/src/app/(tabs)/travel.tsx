@@ -10,11 +10,10 @@ import { TravelToast } from "@/features/travel/components/TravelToast";
 import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
 import { useAskAgentMutation } from "@/features/travel/queries";
 import { useConversation, type Turn } from "@/features/travel/stores/conversation-store";
-import { useResults } from "@/features/travel/stores/results-store";
 import { channelCardsToSpots } from "@/features/travel/lib/channel-spots";
 import { mergeBoardSpots } from "@/features/travel/lib/board";
 import { agentErrorMessage, PHOTO_PICK_FAILED } from "@/features/travel/lib/agent-errors";
-import { composeQuestion, resultsTitle } from "@/features/travel/lib/question";
+import { composeQuestion, anchorQuestion } from "@/features/travel/lib/question";
 import { composerChips, type Chip } from "@/features/travel/lib/chips";
 import { pickTravelPhoto } from "@/features/travel/usecases/pick-travel-photo";
 import type { AskInput, PhotoUpload, TravelSpot } from "@/features/travel/api";
@@ -30,6 +29,7 @@ export default function TravelScreen() {
   const [photo, setPhoto] = useState<PhotoUpload | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [filter, setFilter] = useState<BoardFilter>("all");
+  const [anchorSpot, setAnchorSpot] = useState<TravelSpot | null>(null);
 
   const turns = useConversation((s) => s.turns);
   const busy = useConversation((s) => s.busy);
@@ -38,7 +38,6 @@ export default function TravelScreen() {
   const resolveTurn = useConversation((s) => s.resolve);
   const failTurn = useConversation((s) => s.fail);
   const finishPlayback = useConversation((s) => s.finishPlayback);
-  const openResults = useResults((s) => s.open);
 
   const { coords, phase } = useNearbyCoords();
   const ask = useAskAgentMutation();
@@ -90,6 +89,7 @@ export default function TravelScreen() {
       startTurn({ id, question, request, photo: attached });
       setDraft("");
       setPhoto(null);
+      setAnchorSpot(null);
       scrollToEnd();
       run(id, { question: request, photo: attached });
     },
@@ -101,6 +101,22 @@ export default function TravelScreen() {
       if (busy) return;
       if (chip.kind === "question") {
         submit(chip.question, null);
+        return;
+      }
+      if (chip.kind === "anchor") {
+        if (!anchorSpot) return;
+        nextId.current += 1;
+        const id = `turn-${nextId.current}`;
+        const anchor = { contentId: anchorSpot.contentId, action: chip.action };
+        startTurn({
+          id,
+          question: anchorQuestion(anchorSpot.title, chip.label),
+          request: "",
+          photo: null,
+          anchor,
+        });
+        scrollToEnd();
+        run(id, { anchor });
         return;
       }
       const intent = source?.answer?.intent ?? null;
@@ -119,12 +135,23 @@ export default function TravelScreen() {
       scrollToEnd();
       run(id, { photo: attached, intent, patch: chip.patch });
     },
-    [busy, submit, startTurn, scrollToEnd, run],
+    [busy, submit, anchorSpot, startTurn, scrollToEnd, run],
   );
 
   const submitDockChip = useCallback(
     (chip: Chip) => refineFrom(lastAnswered, chip),
     [refineFrom, lastAnswered],
+  );
+
+  const onSpotPress = useCallback(
+    (spot: TravelSpot) => {
+      if (anchorSpot?.contentId === spot.contentId) {
+        router.push(`/spots/${spot.contentId}`);
+        return;
+      }
+      setAnchorSpot(spot);
+    },
+    [anchorSpot],
   );
 
   const onRetry = useCallback(
@@ -136,6 +163,7 @@ export default function TravelScreen() {
         photo: turn.photo,
         intent: turn.intent,
         patch: turn.patch,
+        anchor: turn.anchor,
       });
     },
     [busy, retryTurn, run],
@@ -160,15 +188,11 @@ export default function TravelScreen() {
     }
   }, [busy, draft, submit]);
 
-  const openSpotList = useCallback(
-    (title: string, spots: TravelSpot[]) => {
-      openResults(title, spots);
-      router.push("/travel/results");
-    },
-    [openResults],
+  const chips = composerChips(
+    lastAnswered?.answer?.refinements,
+    coords !== null,
+    anchorSpot !== null,
   );
-
-  const chips = composerChips(lastAnswered?.answer?.refinements, coords !== null);
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -203,8 +227,9 @@ export default function TravelScreen() {
               <ConversationTurn
                 key={turn.id}
                 turn={turn}
+                anchorId={anchorSpot?.contentId ?? null}
+                onSpotPress={onSpotPress}
                 onPlaybackEnd={finishPlayback}
-                onOpenResults={(t) => openSpotList(resultsTitle(t.question), t.answer?.spots ?? [])}
                 onRetry={onRetry}
                 onGrow={scrollToEnd}
               />
@@ -219,6 +244,8 @@ export default function TravelScreen() {
           photo={photo}
           chips={chips}
           disabled={busy}
+          anchorTitle={anchorSpot?.title ?? null}
+          onClearAnchor={() => setAnchorSpot(null)}
           onChange={setDraft}
           onSuggest={submitDockChip}
           onAttach={() => void onAttach()}

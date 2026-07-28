@@ -1,8 +1,16 @@
-import type { RefinePatch, Suggestion } from "@/features/travel/api";
+import type { AnchorAction, RefinePatch, Suggestion } from "@/features/travel/api";
 
 export type Chip =
   | { kind: "question"; label: string; question: string }
-  | { kind: "refine"; label: string; patch: RefinePatch };
+  | { kind: "refine"; label: string; patch: RefinePatch }
+  | { kind: "anchor"; label: string; action: AnchorAction };
+
+export const ANCHOR_CHIPS: Chip[] = [
+  { kind: "anchor", label: "근처 맛집", action: "food" },
+  { kind: "anchor", label: "근처 카페", action: "cafe" },
+  { kind: "anchor", label: "주변 볼거리", action: "nearby" },
+  { kind: "anchor", label: "지금 붐벼?", action: "crowd" },
+];
 
 const NEARBY_CHIP: Chip = {
   kind: "question",
@@ -28,7 +36,9 @@ export function refineChips(refinements: Suggestion[] | null | undefined): Chip[
 export function composerChips(
   refinements: Suggestion[] | null | undefined,
   hasCoords: boolean,
+  anchored: boolean = false,
 ): Chip[] {
+  if (anchored) return ANCHOR_CHIPS;
   const refine = refineChips(refinements);
   return refine.length > 0 ? refine : idleChips(hasCoords);
 }

@@ -1,4 +1,4 @@
-import { composerChips, idleChips, refineChips } from "@/features/travel/lib/chips";
+import { ANCHOR_CHIPS, composerChips, idleChips, refineChips } from "@/features/travel/lib/chips";
 
 describe("idleChips", () => {
   it("좌표가 없으면 거리 칩을 내지 않는다", () => {
@@ -47,5 +47,12 @@ describe("composerChips", () => {
   it("제안이 비면 초기 칩으로 되돌아간다", () => {
     expect(composerChips([], false)).toEqual(idleChips(false));
     expect(composerChips(undefined, true)).toEqual(idleChips(true));
+  });
+
+  it("카드가 선택되면 제안 대신 앵커 칩을 쓴다", () => {
+    const chips = composerChips([{ label: "실내만", patch: { indoorOnly: true } }], true, true);
+
+    expect(chips).toEqual(ANCHOR_CHIPS);
+    expect(chips.every((c) => c.kind === "anchor")).toBe(true);
   });
 });

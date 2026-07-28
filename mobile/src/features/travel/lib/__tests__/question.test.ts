@@ -1,4 +1,8 @@
-import { composeQuestion, PHOTO_ONLY_QUESTION, resultsTitle } from "@/features/travel/lib/question";
+import {
+  anchorQuestion,
+  composeQuestion,
+  PHOTO_ONLY_QUESTION,
+} from "@/features/travel/lib/question";
 
 describe("composeQuestion", () => {
   it("trims the typed question", () => {
@@ -18,13 +22,8 @@ describe("composeQuestion", () => {
   });
 });
 
-describe("resultsTitle", () => {
-  it("passes short questions through", () => {
-    expect(resultsTitle("여름에 시원한 계곡")).toBe("여름에 시원한 계곡");
-  });
-
-  it("elides questions past 20 characters", () => {
-    const long = "가".repeat(30);
-    expect(resultsTitle(long)).toBe(`${"가".repeat(20)}…`);
+describe("anchorQuestion", () => {
+  it("prefixes the chip label with the anchored spot", () => {
+    expect(anchorQuestion("김녕미로공원", "근처 맛집")).toBe("김녕미로공원 근처 맛집");
   });
 });

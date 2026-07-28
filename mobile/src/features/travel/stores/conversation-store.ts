@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import type { AgentAnswer, PhotoUpload, QueryIntent, RefinePatch } from "@/features/travel/api";
+import type {
+  AgentAnswer,
+  AskAnchor,
+  PhotoUpload,
+  QueryIntent,
+  RefinePatch,
+} from "@/features/travel/api";
 
 export type TurnStatus = "pending" | "playing" | "done" | "failed";
 
@@ -10,6 +16,7 @@ export interface Turn {
   photo: PhotoUpload | null;
   intent: QueryIntent | null;
   patch: RefinePatch | null;
+  anchor: AskAnchor | null;
   status: TurnStatus;
   answer: AgentAnswer | null;
   errorMessage: string | null;
@@ -25,6 +32,7 @@ interface ConversationState {
     photo: PhotoUpload | null;
     intent?: QueryIntent | null;
     patch?: RefinePatch | null;
+    anchor?: AskAnchor | null;
   }) => void;
   retry: (id: string) => void;
   resolve: (id: string, answer: AgentAnswer) => void;
@@ -40,7 +48,7 @@ function patch(turns: Turn[], id: string, next: Partial<Turn>): Turn[] {
 export const useConversation = create<ConversationState>((set) => ({
   turns: [],
   busy: false,
-  start: ({ id, question, request, photo, intent = null, patch = null }) =>
+  start: ({ id, question, request, photo, intent = null, patch = null, anchor = null }) =>
     set((s) => ({
       busy: true,
       turns: [
@@ -52,6 +60,7 @@ export const useConversation = create<ConversationState>((set) => ({
           photo,
           intent,
           patch,
+          anchor,
           status: "pending",
           answer: null,
           errorMessage: null,

@@ -46,6 +46,7 @@ async def agent_ask(
         image_mime=image_mime,
         intent=payload.intent,
         patch=payload.patch,
+        anchor=payload.anchor,
         pre_ota_region_prefixes=payload.pre_ota_region_prefixes,
     )
     return ok(result)
@@ -78,7 +79,7 @@ async def _read_payload(request: Request) -> tuple[AskRequest, bytes | None, str
             for key, value in form.multi_items()
             if key != "photo" and isinstance(value, str) and value != ""
         }
-        for key in ("intent", "patch"):
+        for key in ("intent", "patch", "anchor"):
             raw = fields.get(key)
             if isinstance(raw, str):
                 try:

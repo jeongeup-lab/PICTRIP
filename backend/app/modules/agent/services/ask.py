@@ -15,6 +15,7 @@ from app.modules.agent.schemas import (
     MAX_HINT_TOKENS,
     AgentSpotCard,
     AnswerSegment,
+    AskAnchor,
     AskResponse,
     AskStep,
     DropAxis,
@@ -28,12 +29,24 @@ from app.modules.agent.services import resolve as resolve_service
 from app.modules.agent.services import retrieve
 from app.modules.agent.services import suggest as suggest_service
 from app.modules.feed import services as feed_services
-from app.modules.spots.services import load_active_spot_cards_by_ids
+from app.modules.spots.services import (
+    NearbyCategory,
+    NearbySpotRow,
+    find_nearby_spots,
+    load_active_spot_cards_by_ids,
+)
 from app.web.errors import AppError, ValidationFailed
 
 logger = get_logger(__name__)
 
 INDOOR_RETRY_LABEL = "실내로만 다시 조회"
+ANCHOR_RADIUS_M = 3000
+ANCHOR_CATEGORIES: dict[str, NearbyCategory] = {
+    "food": NearbyCategory.food,
+    "cafe": NearbyCategory.cafe,
+    "nearby": NearbyCategory.attraction,
+}
+ANCHOR_NOUNS: dict[str, str] = {"food": "맛집", "cafe": "카페", "nearby": "볼거리"}
 PHOTO_AXES: frozenset[DropAxis] = frozenset({"near", "region"})
 TITLE_AXES: frozenset[DropAxis] = frozenset({"category", "near", "region"})
 MIN_HINT_TOKEN_CHARS = 2
@@ -67,9 +80,14 @@ async def ask(
     image_mime: str | None,
     intent: QueryIntent | None = None,
     patch: RefinePatch | None = None,
+    anchor: AskAnchor | None = None,
     pre_ota_region_prefixes: list[str] | None = None,
 ) -> AskResponse:
     cleaned = (question or "").strip()
+    if anchor is not None:
+        if image_bytes is not None:
+            raise ValidationFailed("anchor cannot be combined with photo")
+        return await _ask_with_anchor(session, anchor)
     if image_bytes is not None:
         return await _ask_with_photo(
             session,
@@ -203,6 +221,102 @@ def _photo_card(
         if km is not None:
             return retrieve.to_card(row, tag=f"{km:.1f}km")
     return retrieve.to_card(row, tag=f"유사도 {round(similarity.get(row.content_id, 0.0) * 100)}%")
+
+
+async def _ask_with_anchor(session: AsyncSession, anchor: AskAnchor) -> AskResponse:
+    briefs = await repositories.load_candidates_by_ids(session, [anchor.contentId])
+    row = briefs.get(anchor.contentId)
+    if row is None:
+        raise AgentNoResults()
+    if anchor.action == "crowd":
+        return _anchor_crowd_response(row)
+    if row.lat is None or row.lng is None:
+        raise AgentNoResults()
+    noun = ANCHOR_NOUNS[anchor.action]
+    found = await find_nearby_spots(
+        session,
+        lat=row.lat,
+        lng=row.lng,
+        radius=ANCHOR_RADIUS_M,
+        category=ANCHOR_CATEGORIES[anchor.action],
+    )
+    kept = [near for near in found if near.content_id != row.content_id]
+    kept = kept[: retrieve.RESULT_LIMIT]
+    if not kept:
+        raise AgentNoResults()
+    spots = [_anchor_card(near) for near in kept]
+    steps = [AskStep(tool="nearby", label=f"{row.title} 주변 {noun} 조회", badge=f"{len(spots)}곳")]
+    answer = [
+        AnswerSegment(text=f"{row.title} 주변 {noun} "),
+        AnswerSegment(text=f"{len(spots)}곳", emphasis=True),
+        AnswerSegment(text=" 찾았어요."),
+    ]
+    nearest = kept[0].dist
+    if nearest is not None:
+        answer.append(AnswerSegment(text=" 가장 가까운 곳은 "))
+        answer.append(AnswerSegment(text=_meters_label(nearest), emphasis=True))
+        answer.append(AnswerSegment(text=" 거리예요."))
+    logger.info("agent.anchor.done", action=anchor.action, results=len(spots))
+    return AskResponse(
+        steps=steps,
+        answer=answer,
+        spots=spots,
+        totalCount=len(spots),
+        intent=QueryIntent(),
+        refinements=[],
+    )
+
+
+def _anchor_crowd_response(row: CandidateRow) -> AskResponse:
+    steps = [AskStep(tool="concentration", label=f"{row.title} 혼잡도 조회", badge="혼잡도")]
+    label = retrieve.crowd_label(row)
+    if label is None:
+        answer = [AnswerSegment(text=f"{row.title}의 혼잡도 정보가 아직 없어요.")]
+    else:
+        answer = [
+            AnswerSegment(text=f"{row.title}, 지금은 "),
+            AnswerSegment(text=label, emphasis=True),
+            AnswerSegment(text=" 상태예요."),
+        ]
+        if label == "한산" and row.percentile is not None:
+            answer.append(AnswerSegment(text=" 혼잡도 "))
+            answer.append(AnswerSegment(text=f"하위 {row.percentile}%", emphasis=True))
+            answer.append(AnswerSegment(text=" 수준이에요."))
+        elif label == "붐빔" and row.percentile is not None:
+            answer.append(AnswerSegment(text=" 혼잡도 "))
+            answer.append(AnswerSegment(text=f"상위 {100 - row.percentile}%", emphasis=True))
+            answer.append(AnswerSegment(text=" 수준이에요."))
+    logger.info("agent.anchor.done", action="crowd", results=0)
+    return AskResponse(
+        steps=steps,
+        answer=answer,
+        spots=[],
+        totalCount=0,
+        intent=QueryIntent(),
+        refinements=[],
+    )
+
+
+def _anchor_card(row: NearbySpotRow) -> AgentSpotCard:
+    return AgentSpotCard(
+        contentId=row.content_id,
+        title=row.title,
+        regionLabel=_addr_label(row.addr1),
+        imageUrl=t1_display_url(row.first_image_url, row.cpyrht_div_cd),
+        tag=_meters_label(row.dist) if row.dist is not None else None,
+        lat=row.mapy,
+        lng=row.mapx,
+    )
+
+
+def _addr_label(addr1: str | None) -> str:
+    if not addr1:
+        return ""
+    return " ".join(addr1.split()[:2])
+
+
+def _meters_label(meters: float) -> str:
+    return f"{meters / 1000:.1f}km"
 
 
 async def _ask_with_question(

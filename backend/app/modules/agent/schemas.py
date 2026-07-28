@@ -9,6 +9,7 @@ ResolveStatus = Literal["matched", "ambiguous", "naver_only", "unmatched"]
 CrowdPreference = Literal["quiet", "any", "popular"]
 Mood = Literal["sea", "mountain", "lake", "island", "hanok", "night", "street"]
 DropAxis = Literal["crowd", "indoor", "near", "region", "category"]
+AnchorAction = Literal["food", "cafe", "nearby", "crowd"]
 
 MAX_KEYWORDS = 20
 MAX_REGION_HINTS = 20
@@ -94,12 +95,18 @@ PRE_OTA_REGION_PREFIXES: dict[str, tuple[str, ...]] = {
 }
 
 
+class AskAnchor(BaseModel):
+    contentId: Annotated[str, StringConstraints(min_length=1, max_length=32)]
+    action: AnchorAction
+
+
 class AskRequest(BaseModel):
     question: str | None = None
     lat: float | None = Field(None, ge=-90.0, le=90.0)
     lng: float | None = Field(None, ge=-180.0, le=180.0)
     intent: QueryIntent | None = None
     patch: RefinePatch | None = None
+    anchor: AskAnchor | None = None
     region: str | None = None
 
     @property

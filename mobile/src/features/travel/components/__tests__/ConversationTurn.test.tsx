@@ -1,6 +1,7 @@
 import renderer, { act } from "react-test-renderer";
-import { Text } from "react-native";
+import { FlatList, Text } from "react-native";
 import { ConversationTurn } from "@/features/travel/components/ConversationTurn";
+import { SpotCard } from "@/features/travel/components/SpotCard";
 import type { Turn } from "@/features/travel/stores/conversation-store";
 import { playbackDurationMs, STEP_INTERVAL_MS } from "@/features/travel/lib/step-playback";
 
@@ -48,19 +49,21 @@ const turn = (over: Partial<Turn> = {}): Turn => ({
   errorMessage: null,
   intent: null,
   patch: null,
+  anchor: null,
   ...over,
 });
 
 const noop = () => undefined;
 
-function mount(t: Turn, onPlaybackEnd = noop) {
+function mount(t: Turn, onPlaybackEnd = noop, anchorId: string | null = null) {
   let tree: renderer.ReactTestRenderer;
   act(() => {
     tree = renderer.create(
       <ConversationTurn
         turn={t}
+        anchorId={anchorId}
+        onSpotPress={noop}
         onPlaybackEnd={onPlaybackEnd}
-        onOpenResults={noop}
         onRetry={noop}
         onGrow={noop}
       />,
@@ -111,15 +114,31 @@ describe("ConversationTurn playback", () => {
 
     act(() => jest.advanceTimersByTime(playbackDurationMs(3)));
     expect(texts(tree)).toContain("하위 30%");
-    expect(texts(tree)).toContain("전체 1곳 보기");
     expect(onPlaybackEnd).toHaveBeenCalledWith("t1");
     expect(spinners(tree)).toBe(0);
   });
 
-  it("counts the link by the spots it opens, not by a server total", () => {
-    const tree = mount(turn({ status: "done" }));
-    expect(answer.totalCount).not.toBe(answer.spots.length);
-    expect(texts(tree)).toContain(`전체 ${answer.spots.length}곳 보기`);
+  it("puts every result on the rail without a see-all link", () => {
+    const many = Array.from({ length: 20 }, (_, i) => ({
+      ...answer.spots[0],
+      contentId: `c${i}`,
+      title: `spot-${i}`,
+    }));
+    const tree = mount(turn({ status: "done", answer: { ...answer, spots: many } }));
+    const rail = tree.root.findByType(FlatList);
+    expect(rail.props.data).toHaveLength(20);
+    expect(texts(tree).join("")).not.toContain("전체");
+  });
+
+  it("marks the anchored card selected and dims the rest", () => {
+    const two = [answer.spots[0], { ...answer.spots[0], contentId: "126509", title: "다른계곡" }];
+    const tree = mount(turn({ status: "done", answer: { ...answer, spots: two } }), noop, "126508");
+    const cards = tree.root.findAllByType(SpotCard);
+    expect(cards).toHaveLength(2);
+    expect(cards[0].props.selected).toBe(true);
+    expect(cards[0].props.dimmed).toBe(false);
+    expect(cards[1].props.selected).toBe(false);
+    expect(cards[1].props.dimmed).toBe(true);
   });
 
   it("shows a failed turn as an error line with a retry chip, no steps", () => {
