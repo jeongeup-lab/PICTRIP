@@ -169,10 +169,18 @@ export default function TravelScreen() {
     [busy, retryTurn, run],
   );
 
+  const onChangeDraft = useCallback((text: string) => {
+    setDraft(text);
+    if (text.trim().length > 0) setAnchorSpot(null);
+  }, []);
+
   const onAttach = useCallback(async () => {
     try {
       const picked = await pickTravelPhoto();
-      if (picked) setPhoto(picked);
+      if (picked) {
+        setPhoto(picked);
+        setAnchorSpot(null);
+      }
     } catch {
       setToast(PHOTO_PICK_FAILED);
     }
@@ -246,7 +254,7 @@ export default function TravelScreen() {
           disabled={busy}
           anchorTitle={anchorSpot?.title ?? null}
           onClearAnchor={() => setAnchorSpot(null)}
-          onChange={setDraft}
+          onChange={onChangeDraft}
           onSuggest={submitDockChip}
           onAttach={() => void onAttach()}
           onClearAttach={() => setPhoto(null)}
