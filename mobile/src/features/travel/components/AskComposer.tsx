@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(3,199,90,0.28)",
+    borderColor: "rgba(230,0,35,0.24)",
     backgroundColor: colors.accentFill,
   },
   attachThumb: { width: 38, height: 38, borderRadius: 8 },

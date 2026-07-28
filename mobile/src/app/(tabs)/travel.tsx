@@ -3,10 +3,8 @@ import { KeyboardAvoidingView, Platform, ScrollView, View, Text, StyleSheet } fr
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useChannelCards } from "@/features/channels/queries";
-import type { ChannelKey } from "@/features/channels/api";
-import { ChannelRail } from "@/features/travel/components/ChannelRail";
 import { AskComposer } from "@/features/travel/components/AskComposer";
-import { PhotoStartCard } from "@/features/travel/components/PhotoStartCard";
+import { PinBoard, type BoardFilter } from "@/features/travel/components/PinBoard";
 import { ConversationTurn } from "@/features/travel/components/ConversationTurn";
 import { TravelToast } from "@/features/travel/components/TravelToast";
 import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
@@ -14,6 +12,7 @@ import { useAskAgentMutation } from "@/features/travel/queries";
 import { useConversation, type Turn } from "@/features/travel/stores/conversation-store";
 import { useResults } from "@/features/travel/stores/results-store";
 import { channelCardsToSpots } from "@/features/travel/lib/channel-spots";
+import { mergeBoardSpots } from "@/features/travel/lib/board";
 import { agentErrorMessage, PHOTO_PICK_FAILED } from "@/features/travel/lib/agent-errors";
 import { composeQuestion, resultsTitle } from "@/features/travel/lib/question";
 import { composerChips, type Chip } from "@/features/travel/lib/chips";
@@ -24,13 +23,12 @@ import { colors, spacing } from "@/constants/theme";
 const NEARBY_NOTICE = "위치를 켜면 근처를 찾아드려요";
 const TOAST_BOTTOM = 104;
 
-type TravelChannelKey = Extract<ChannelKey, "hot" | "hidden" | "around">;
-
-const SECTIONS: { key: TravelChannelKey; title: string }[] = [
-  { key: "hot", title: "인기 관광지" },
-  { key: "hidden", title: "숨은 관광지" },
-  { key: "around", title: "내 근처" },
-];
+const FILTER_TITLES: Record<BoardFilter, string> = {
+  all: "여행 보드",
+  hot: "인기 관광지",
+  hidden: "숨은 관광지",
+  around: "내 근처",
+};
 
 export default function TravelScreen() {
   const scrollRef = useRef<ScrollView>(null);
@@ -38,6 +36,7 @@ export default function TravelScreen() {
   const [draft, setDraft] = useState("");
   const [photo, setPhoto] = useState<PhotoUpload | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [filter, setFilter] = useState<BoardFilter>("all");
 
   const turns = useConversation((s) => s.turns);
   const busy = useConversation((s) => s.busy);
@@ -54,7 +53,16 @@ export default function TravelScreen() {
   const hot = useChannelCards("hot");
   const hidden = useChannelCards("hidden");
   const around = useChannelCards("around", coords ?? undefined);
-  const cardsFor = { hot, hidden, around };
+
+  const hotSpots = channelCardsToSpots("hot", hot.data?.cards ?? []);
+  const hiddenSpots = channelCardsToSpots("hidden", hidden.data?.cards ?? []);
+  const aroundSpots =
+    phase === "ready" ? channelCardsToSpots("around", around.data?.cards ?? []) : [];
+  const boardSpots =
+    filter === "all"
+      ? mergeBoardSpots([hotSpots, hiddenSpots, aroundSpots])
+      : { hot: hotSpots, hidden: hiddenSpots, around: aroundSpots }[filter];
+  const boardNotice = filter === "around" && phase !== "ready" ? NEARBY_NOTICE : null;
 
   const scrollToEnd = useCallback(() => {
     requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
@@ -174,10 +182,7 @@ export default function TravelScreen() {
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.bar}>
-        <View style={styles.wordmarkRow}>
-          <Text style={styles.wordmark}>PICTRIP</Text>
-          <View style={styles.wordmarkDot} />
-        </View>
+        <Text style={styles.wordmark}>PICTRIP</Text>
       </View>
 
       <ScrollView
@@ -188,26 +193,19 @@ export default function TravelScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.lede}>
+          <Text style={styles.eyebrow}>VISUAL BOARD</Text>
           <Text style={styles.headline}>오늘,{"\n"}어디로 갈까요</Text>
+          <Text style={styles.sub}>사진을 모으고 질문을 더하면 닮은 국내 여행지로 이어드려요</Text>
         </View>
 
-        <PhotoStartCard onPress={() => void onPhotoStart()} />
-
-        {SECTIONS.map(({ key, title }) => {
-          const query = cardsFor[key];
-          const spots = channelCardsToSpots(key, query.data?.cards ?? []);
-          const nearbyBlocked = key === "around" && phase !== "ready";
-          if (!nearbyBlocked && (query.isError || spots.length === 0)) return null;
-          return (
-            <ChannelRail
-              key={key}
-              title={title}
-              spots={spots}
-              notice={nearbyBlocked ? NEARBY_NOTICE : null}
-              onSeeAll={() => openSpotList(title, spots)}
-            />
-          );
-        })}
+        <PinBoard
+          filter={filter}
+          spots={boardSpots}
+          notice={boardNotice}
+          onFilter={setFilter}
+          onPhotoStart={() => void onPhotoStart()}
+          onSeeAll={() => openSpotList(FILTER_TITLES[filter], boardSpots)}
+        />
 
         {turns.length > 0 ? (
           <View style={styles.talk}>
@@ -254,26 +252,25 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
   },
-  wordmarkRow: { flexDirection: "row", alignItems: "flex-end" },
   wordmark: { fontSize: 20, fontWeight: "800", letterSpacing: -0.5, color: colors.ink },
-  wordmarkDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginLeft: 3,
-    marginBottom: 4,
-    backgroundColor: colors.accent,
-  },
   scroll: { flex: 1 },
   body: { paddingBottom: spacing.xxl },
   lede: { paddingTop: spacing.xl, paddingHorizontal: spacing.lg, paddingBottom: 6 },
+  eyebrow: {
+    fontSize: 10.5,
+    fontWeight: "900",
+    letterSpacing: 1.3,
+    color: colors.accentText,
+  },
   headline: {
+    marginTop: 7,
     fontSize: 25,
     fontWeight: "800",
     letterSpacing: -0.8,
     lineHeight: 33.5,
     color: colors.ink,
   },
+  sub: { marginTop: 8, fontSize: 13, lineHeight: 19, color: colors.sec },
   talk: {
     marginTop: 30,
     marginHorizontal: spacing.lg,

@@ -2,7 +2,7 @@ import { SEOUL_CITY_HALL } from "@/constants/map";
 
 export function buildKakaoMapHtml(jsKey: string, interactive = true, accentDot = false): string {
   const { lat, lng } = SEOUL_CITY_HALL;
-  const dotColor = accentDot ? "#03C75A" : "#fff";
+  const dotColor = accentDot ? "#E60023" : "#fff";
   const gestures = interactive
     ? `kakao.maps.event.addListener(map,'idle',function(){
          var c=map.getCenter(), b=map.getBounds(), sw=b.getSouthWest(), ne=b.getNorthEast();
@@ -52,7 +52,7 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true, accentDot =
     var el = document.createElement('div');
     if(sel){
       el.className='sel';
-      el.innerHTML = '<svg class="tear" viewBox="0 0 24 24" fill="#171719"><path d="M12 22s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11z"></path><circle cx="12" cy="10.5" r="2.6" fill="#03C75A"></circle></svg><span class="lab">'+esc(s.title)+'</span>';
+      el.innerHTML = '<svg class="tear" viewBox="0 0 24 24" fill="#171719"><path d="M12 22s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11z"></path><circle cx="12" cy="10.5" r="2.6" fill="#E60023"></circle></svg><span class="lab">'+esc(s.title)+'</span>';
     } else {
       el.className='pin';
       el.innerHTML = '<span class="g">'+glyphSvg(s.categoryGroup)+'</span>';
