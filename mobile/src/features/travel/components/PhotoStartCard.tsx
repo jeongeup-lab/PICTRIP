@@ -34,6 +34,7 @@ const styles = StyleSheet.create({
   pin: {
     alignItems: "center",
     justifyContent: "center",
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
     borderRadius: 16,
     borderWidth: 1.5,
