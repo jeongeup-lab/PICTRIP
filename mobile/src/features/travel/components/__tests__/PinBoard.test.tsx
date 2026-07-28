@@ -1,4 +1,5 @@
 import renderer, { act } from "react-test-renderer";
+import { StyleSheet } from "react-native";
 import { PinBoard } from "@/features/travel/components/PinBoard";
 import type { TravelSpot } from "@/features/travel/api";
 
@@ -48,6 +49,12 @@ describe("PinBoard", () => {
   it("keeps the photo-start pin as the first cell alongside every spot pin", () => {
     const tree = mount();
     expect(pressable(tree, "travel-photo-start")).toBeDefined();
+    const styleProp = pressable(tree, "travel-photo-start")!.props.style;
+    const photoStyle = StyleSheet.flatten(
+      typeof styleProp === "function" ? styleProp({ pressed: false }) : styleProp,
+    );
+    expect(photoStyle.minHeight).toBe(178);
+    expect(photoStyle.height).toBeUndefined();
     expect(pressable(tree, "travel-spot-1")).toBeDefined();
     expect(pressable(tree, "travel-spot-2")).toBeDefined();
     expect(pressable(tree, "travel-spot-3")).toBeDefined();

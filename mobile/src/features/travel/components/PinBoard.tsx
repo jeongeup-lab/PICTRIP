@@ -91,7 +91,7 @@ export function PinBoard({ filter, spots, notice, onFilter, onPhotoStart, onSeeA
               ) : (
                 <PhotoStartCard
                   key={cell.key}
-                  style={{ height: cell.height }}
+                  style={{ minHeight: cell.height }}
                   onPress={onPhotoStart}
                 />
               ),
