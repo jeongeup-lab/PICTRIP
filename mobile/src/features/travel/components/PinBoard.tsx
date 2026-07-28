@@ -25,10 +25,9 @@ interface Props {
   notice: string | null;
   onFilter: (filter: BoardFilter) => void;
   onPhotoStart: () => void;
-  onSeeAll: () => void;
 }
 
-export function PinBoard({ filter, spots, notice, onFilter, onPhotoStart, onSeeAll }: Props) {
+export function PinBoard({ filter, spots, notice, onFilter, onPhotoStart }: Props) {
   const cells: Cell[] = [
     { key: "photo-start", height: boardPinHeight(0), spot: null },
     ...spots.map((spot, index) => ({
@@ -41,35 +40,27 @@ export function PinBoard({ filter, spots, notice, onFilter, onPhotoStart, onSeeA
 
   return (
     <View style={styles.section}>
-      <View style={styles.tools}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chips}
-        >
-          {BOARD_FILTERS.map(({ key, label }) => {
-            const active = key === filter;
-            return (
-              <Pressable
-                key={key}
-                testID={`board-filter-${key}`}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                style={[styles.chip, active && styles.chipActive]}
-                onPress={() => onFilter(key)}
-              >
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-        {spots.length > 0 ? (
-          <Pressable style={styles.all} hitSlop={8} onPress={onSeeAll} testID="board-all">
-            <Text style={styles.allText}>{spots.length}곳 보기</Text>
-            <Icon name="chevron-right" size={14} color={colors.ter} strokeWidth={2} />
-          </Pressable>
-        ) : null}
-      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chips}
+      >
+        {BOARD_FILTERS.map(({ key, label }) => {
+          const active = key === filter;
+          return (
+            <Pressable
+              key={key}
+              testID={`board-filter-${key}`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              style={[styles.chip, active && styles.chipActive]}
+              onPress={() => onFilter(key)}
+            >
+              <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
 
       {notice ? (
         <View style={styles.notice}>
@@ -105,7 +96,6 @@ export function PinBoard({ filter, spots, notice, onFilter, onPhotoStart, onSeeA
 
 const styles = StyleSheet.create({
   section: { marginTop: spacing.lg },
-  tools: { flexDirection: "row", alignItems: "center" },
   chips: { gap: 7, paddingHorizontal: spacing.lg, paddingVertical: 2 },
   chip: {
     height: 34,
@@ -117,14 +107,6 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: colors.ink },
   chipText: { fontSize: 12.5, fontWeight: "800", letterSpacing: -0.2, color: colors.sec },
   chipTextActive: { color: colors.onImage },
-  all: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-    paddingLeft: 6,
-    paddingRight: spacing.lg,
-  },
-  allText: { fontSize: 12.5, fontWeight: "700", color: colors.ter },
   notice: {
     flexDirection: "row",
     alignItems: "center",

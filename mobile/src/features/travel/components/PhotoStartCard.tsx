@@ -1,10 +1,9 @@
 import { Pressable, View, Text, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 import { Icon } from "@/components/Icon";
-import { ATTACH_NOTICE } from "@/features/travel/components/AskComposer";
 import { colors, spacing } from "@/constants/theme";
 
 export const PHOTO_START_TITLE = "사진으로 찾기";
-export const PHOTO_START_BODY = "마음에 든 사진을 올리면 닮은 국내 여행지를 찾아드려요";
+export const PHOTO_START_BODY = "닮은 곳을 찾아드려요";
 
 interface Props {
   onPress: () => void;
@@ -25,7 +24,6 @@ export function PhotoStartCard({ onPress, style }: Props) {
       </View>
       <Text style={styles.title}>{PHOTO_START_TITLE}</Text>
       <Text style={styles.body}>{PHOTO_START_BODY}</Text>
-      <Text style={styles.note}>{ATTACH_NOTICE}</Text>
     </Pressable>
   );
 }
@@ -53,5 +51,4 @@ const styles = StyleSheet.create({
   },
   title: { marginTop: 10, fontSize: 14, fontWeight: "800", letterSpacing: -0.3, color: colors.ink },
   body: { marginTop: 4, fontSize: 11.5, lineHeight: 16, textAlign: "center", color: colors.sec },
-  note: { marginTop: 5, fontSize: 10.5, textAlign: "center", color: colors.ter },
 });

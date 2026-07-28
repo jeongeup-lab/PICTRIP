@@ -227,17 +227,6 @@ describe("TravelScreen refine chips", () => {
     expect(input.question).toBeFalsy();
   });
 
-  it("sends the in-conversation refine chip as intent + patch, not as text", async () => {
-    const tree = await mount();
-    await press(tree, "answer-suggestion-실내만");
-
-    expect(askAgentMock).toHaveBeenCalledTimes(1);
-    const input = askAgentMock.mock.calls[0][0];
-    expect(input.patch).toEqual({ indoorOnly: true });
-    expect(input.intent).toEqual(INTENT);
-    expect(input.question).toBeFalsy();
-  });
-
   it("keeps the refine turn on the transcript with its chip label as the bubble", async () => {
     const tree = await mount();
     await press(tree, "travel-chip-실내만");
@@ -255,18 +244,14 @@ describe("TravelScreen refine chips in scrollback", () => {
     useConversation.setState({ turns: [answeredTurn, newerAnsweredTurn], busy: false });
   });
 
-  it("refines the turn the chip sits under, not whatever answered last", async () => {
+  it("shows no follow-up chips inside the conversation, only in the composer rail", async () => {
     const tree = await mount();
-    await press(tree, "answer-suggestion-실내만");
-
-    expect(askAgentMock).toHaveBeenCalledTimes(1);
-    const input = askAgentMock.mock.calls[0][0];
-    expect(input.intent).toEqual(INTENT);
-    expect(input.intent).not.toEqual(NEWER_INTENT);
-    expect(input.patch).toEqual({ indoorOnly: true });
+    expect(pressable(tree, "answer-suggestion-실내만")).toBeUndefined();
+    expect(pressable(tree, "answer-suggestion-사람 적은 곳만")).toBeUndefined();
+    expect(pressable(tree, "travel-chip-사람 적은 곳만")).toBeDefined();
   });
 
-  it("still refines the newest answer from the composer rail, which owns no turn", async () => {
+  it("refines the newest answer from the composer rail", async () => {
     const tree = await mount();
     await press(tree, "travel-chip-사람 적은 곳만");
 
@@ -282,8 +267,6 @@ describe("TravelScreen chip source", () => {
     useConversation.setState({ turns: [relabeledTurn], busy: false });
     const tree = await mount();
 
-    expect(pressable(tree, "answer-suggestion-실내만")).toBeDefined();
-    expect(pressable(tree, "answer-suggestion-사람 적은 곳만")).toBeUndefined();
     expect(pressable(tree, "travel-chip-실내만")).toBeDefined();
     expect(pressable(tree, "travel-chip-사람 적은 곳만")).toBeUndefined();
   });
@@ -293,7 +276,6 @@ describe("TravelScreen chip source", () => {
     const tree = await mount();
 
     expect(tree.root.findAllByProps({ testID: "turn-seed-4" }).length).toBeGreaterThan(0);
-    expect(pressable(tree, "answer-suggestion-실내만")).toBeUndefined();
     expect(pressable(tree, "travel-chip-지금 열리는 축제")).toBeDefined();
   });
 });

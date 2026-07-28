@@ -31,7 +31,6 @@ function mount(over: Partial<Parameters<typeof PinBoard>[0]> = {}) {
         notice={null}
         onFilter={noop}
         onPhotoStart={noop}
-        onSeeAll={noop}
         {...over}
       />,
     );
@@ -72,13 +71,8 @@ describe("PinBoard", () => {
     expect(onFilter).toHaveBeenCalledWith("hidden");
   });
 
-  it("shows the see-all link with a count only when the board has pins", () => {
-    const withPins = mount();
-    expect(pressable(withPins, "board-all")).toBeDefined();
-    expect(JSON.stringify(withPins.toJSON())).toContain('["3","곳 보기"]');
-
-    const empty = mount({ spots: [] });
-    expect(pressable(empty, "board-all")).toBeUndefined();
+  it("never renders a see-all link on the board", () => {
+    expect(pressable(mount(), "board-all")).toBeUndefined();
   });
 
   it("renders the location notice above the board when provided", () => {
