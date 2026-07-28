@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Animated, Easing, Pressable, ScrollView, View, Text, StyleSheet } from "react-native";
+import { Animated, Easing, FlatList, Pressable, View, Text, StyleSheet } from "react-native";
 import { Image } from "expo-image";
 import { Icon } from "@/components/Icon";
 import { SpotCard } from "@/features/travel/components/SpotCard";
@@ -7,23 +7,31 @@ import { StepList } from "@/features/travel/components/StepList";
 import { AnswerBlock } from "@/features/travel/components/AnswerBlock";
 import { playbackTicks, stepProgressAt } from "@/features/travel/lib/step-playback";
 import { RETRY_SUGGESTION } from "@/features/travel/lib/question";
+import type { TravelSpot } from "@/features/travel/api";
 import type { Turn } from "@/features/travel/stores/conversation-store";
 import { colors, spacing } from "@/constants/theme";
 
 const RISE_MS = 320;
-const RESULT_RAIL_LIMIT = 4;
 
 const PENDING_STEP = { tool: "pending", label: "여행지를 찾는 중", badge: null };
 
 interface Props {
   turn: Turn;
+  anchorId: string | null;
+  onSpotPress: (spot: TravelSpot) => void;
   onPlaybackEnd: (id: string) => void;
-  onOpenResults: (turn: Turn) => void;
   onRetry: (turn: Turn) => void;
   onGrow: () => void;
 }
 
-export function ConversationTurn({ turn, onPlaybackEnd, onOpenResults, onRetry, onGrow }: Props) {
+export function ConversationTurn({
+  turn,
+  anchorId,
+  onSpotPress,
+  onPlaybackEnd,
+  onRetry,
+  onGrow,
+}: Props) {
   const rise = useMemo(() => new Animated.Value(0), []);
   const [elapsed, setElapsed] = useState(0);
   const [voted, setVoted] = useState(false);
@@ -106,26 +114,24 @@ export function ConversationTurn({ turn, onPlaybackEnd, onOpenResults, onRetry, 
 
       {revealed && answer && answer.spots.length > 0 ? (
         <>
-          <ScrollView
+          <FlatList
             horizontal
+            data={answer.spots}
+            keyExtractor={(spot) => spot.contentId}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.rail}
-          >
-            {answer.spots.slice(0, RESULT_RAIL_LIMIT).map((spot) => (
-              <SpotCard key={spot.contentId} spot={spot} />
-            ))}
-          </ScrollView>
+            renderItem={({ item }) => (
+              <SpotCard
+                spot={item}
+                selected={item.contentId === anchorId}
+                dimmed={anchorId !== null && item.contentId !== anchorId}
+                onPress={() => onSpotPress(item)}
+              />
+            )}
+          />
 
           <View style={styles.foot}>
-            <Pressable
-              testID={`turn-results-${turn.id}`}
-              style={styles.link}
-              hitSlop={8}
-              onPress={() => onOpenResults(turn)}
-            >
-              <Text style={styles.linkText}>전체 {answer.spots.length}곳 보기</Text>
-              <Icon name="chevron-right" size={15} color={colors.ink} strokeWidth={2} />
-            </Pressable>
+            <Text style={styles.hint}>카드를 탭하면 그 장소 기준으로 이어서 물어볼 수 있어요</Text>
             <Pressable
               testID={`turn-vote-${turn.id}`}
               accessibilityLabel="도움이 됐어요"
@@ -192,8 +198,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: 16,
   },
-  link: { flexDirection: "row", alignItems: "center", gap: 3 },
-  linkText: { fontSize: 13.5, fontWeight: "700", letterSpacing: -0.2, color: colors.ink },
+  hint: { flex: 1, fontSize: 11.5, color: colors.ter },
   vote: {
     width: 30,
     height: 30,

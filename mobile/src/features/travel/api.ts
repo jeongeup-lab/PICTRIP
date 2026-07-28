@@ -35,6 +35,13 @@ export interface Suggestion {
   patch: RefinePatch;
 }
 
+export type AnchorAction = "food" | "cafe" | "nearby" | "crowd";
+
+export interface AskAnchor {
+  contentId: string;
+  action: AnchorAction;
+}
+
 export interface AgentStep {
   tool: string;
   label: string;
@@ -82,6 +89,7 @@ export interface AskInput {
   photo?: PhotoUpload | null;
   intent?: QueryIntent | null;
   patch?: RefinePatch | null;
+  anchor?: AskAnchor | null;
   coords?: Coords | null;
 }
 
@@ -93,6 +101,7 @@ function askForm(input: AskInput, photo: PhotoUpload): FormData {
   if (input.question) form.append("question", input.question);
   if (input.intent) form.append("intent", JSON.stringify(input.intent));
   if (input.patch) form.append("patch", JSON.stringify(input.patch));
+  if (input.anchor) form.append("anchor", JSON.stringify(input.anchor));
   if (input.coords) {
     form.append("lat", String(input.coords.lat));
     form.append("lng", String(input.coords.lng));
@@ -105,6 +114,7 @@ function askBody(input: AskInput): Record<string, unknown> {
   if (input.question) body.question = input.question;
   if (input.intent) body.intent = input.intent;
   if (input.patch) body.patch = input.patch;
+  if (input.anchor) body.anchor = input.anchor;
   if (input.coords) {
     body.lat = input.coords.lat;
     body.lng = input.coords.lng;

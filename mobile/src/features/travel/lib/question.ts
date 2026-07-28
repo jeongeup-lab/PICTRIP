@@ -8,7 +8,6 @@ export function composeQuestion(input: string, hasPhoto: boolean): string | null
   return hasPhoto ? PHOTO_ONLY_QUESTION : null;
 }
 
-export function resultsTitle(question: string): string {
-  const trimmed = question.trim();
-  return trimmed.length > 20 ? `${trimmed.slice(0, 20)}…` : trimmed;
+export function anchorQuestion(title: string, chipLabel: string): string {
+  return `${title} ${chipLabel}`;
 }

@@ -16,17 +16,25 @@ interface Props {
   spot: TravelSpot;
   style?: StyleProp<ViewStyle>;
   onSaveToggle?: (saved: boolean) => void;
+  onPress?: () => void;
+  selected?: boolean;
+  dimmed?: boolean;
 }
 
-export function SpotCard({ spot, style, onSaveToggle }: Props) {
+export function SpotCard({ spot, style, onSaveToggle, onPress, selected, dimmed }: Props) {
   const { saved, toggle } = useSaveOptimistic(spot.contentId);
 
   return (
     <Pressable
       testID={`travel-spot-${spot.contentId}`}
-      style={({ pressed }) => [styles.card, style, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.card,
+        style,
+        dimmed && styles.dimmed,
+        pressed && styles.pressed,
+      ]}
       onPressIn={() => prefetchSpot(spot.contentId)}
-      onPress={() => router.push(`/spots/${spot.contentId}`)}
+      onPress={onPress ?? (() => router.push(`/spots/${spot.contentId}`))}
     >
       <RemoteImage uri={spot.imageUrl} style={StyleSheet.absoluteFill} />
       <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
@@ -75,6 +83,8 @@ export function SpotCard({ spot, style, onSaveToggle }: Props) {
           {spot.regionLabel}
         </Text>
       </View>
+
+      {selected ? <View style={styles.selectedRing} pointerEvents="none" /> : null}
     </Pressable>
   );
 }
@@ -88,6 +98,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.skeleton,
   },
   pressed: { opacity: 0.9, transform: [{ scale: 0.975 }] },
+  dimmed: { opacity: 0.55 },
+  selectedRing: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 16,
+    borderWidth: 2.5,
+    borderColor: colors.accent,
+  },
   hairline: {
     position: "absolute",
     top: 0,

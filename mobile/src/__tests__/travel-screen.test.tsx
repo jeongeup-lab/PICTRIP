@@ -59,6 +59,7 @@ const answeredTurn: Turn = {
   errorMessage: null,
   intent: null,
   patch: null,
+  anchor: null,
 };
 
 const NEWER_INTENT: QueryIntent = {
@@ -84,6 +85,7 @@ const newerAnsweredTurn: Turn = {
   errorMessage: null,
   intent: null,
   patch: null,
+  anchor: null,
 };
 
 const legacyAnsweredTurn: Turn = {
@@ -96,6 +98,7 @@ const legacyAnsweredTurn: Turn = {
   errorMessage: null,
   intent: null,
   patch: null,
+  anchor: null,
 };
 
 const relabeledTurn: Turn = {
@@ -118,6 +121,7 @@ const failedRefineTurn: Turn = {
   errorMessage: "답을 만들지 못했어요.",
   intent: INTENT,
   patch: { indoorOnly: true },
+  anchor: null,
 };
 
 let mounted: renderer.ReactTestRenderer | null = null;
@@ -277,6 +281,100 @@ describe("TravelScreen chip source", () => {
 
     expect(tree.root.findAllByProps({ testID: "turn-seed-4" }).length).toBeGreaterThan(0);
     expect(pressable(tree, "travel-chip-지금 열리는 축제")).toBeDefined();
+  });
+});
+
+describe("TravelScreen anchored follow-ups", () => {
+  const spot = {
+    contentId: "126508",
+    title: "무릉계곡",
+    regionLabel: "강원도 동해시",
+    imageUrl: null,
+    tag: "하위 8%",
+    lat: 37.5,
+    lng: 129.0,
+  };
+  const spotAnsweredTurn: Turn = {
+    ...answeredTurn,
+    id: "seed-6",
+    answer: { ...ANSWER, spots: [spot] },
+  };
+
+  beforeEach(() => {
+    useConversation.setState({ turns: [spotAnsweredTurn], busy: false });
+  });
+
+  it("selects a card on first tap and swaps the composer rail to anchor chips", async () => {
+    const tree = await mount();
+    expect(pressable(tree, "travel-chip-근처 맛집")).toBeUndefined();
+
+    await press(tree, "travel-spot-126508");
+
+    expect(tree.root.findAllByProps({ testID: "travel-anchor-banner" }).length).toBeGreaterThan(0);
+    expect(pressable(tree, "travel-chip-근처 맛집")).toBeDefined();
+    expect(pressable(tree, "travel-chip-실내만")).toBeUndefined();
+  });
+
+  it("sends an anchor chip as contentId + action, labeled with the spot title", async () => {
+    const tree = await mount();
+    await press(tree, "travel-spot-126508");
+    await press(tree, "travel-chip-근처 맛집");
+
+    expect(askAgentMock).toHaveBeenCalledTimes(1);
+    const input = askAgentMock.mock.calls[0][0];
+    expect(input.anchor).toEqual({ contentId: "126508", action: "food" });
+    expect(input.question).toBeFalsy();
+    expect(input.intent).toBeFalsy();
+
+    const turns = useConversation.getState().turns;
+    expect(turns[turns.length - 1].question).toBe("무릉계곡 근처 맛집");
+    expect(turns[turns.length - 1].anchor).toEqual({ contentId: "126508", action: "food" });
+  });
+
+  it("opens the spot detail when the selected card is tapped again", async () => {
+    const { router } = jest.requireMock("expo-router") as { router: { push: jest.Mock } };
+    const tree = await mount();
+    await press(tree, "travel-spot-126508");
+    expect(router.push).not.toHaveBeenCalled();
+
+    await press(tree, "travel-spot-126508");
+    expect(router.push).toHaveBeenCalledWith("/spots/126508");
+  });
+
+  it("returns to refine chips when the anchor is cleared", async () => {
+    const tree = await mount();
+    await press(tree, "travel-spot-126508");
+    await press(tree, "travel-anchor-clear");
+
+    expect(pressable(tree, "travel-chip-근처 맛집")).toBeUndefined();
+    expect(pressable(tree, "travel-chip-실내만")).toBeDefined();
+  });
+
+  it("resends the anchor when a failed anchor turn is retried", async () => {
+    useConversation.setState({
+      turns: [
+        spotAnsweredTurn,
+        {
+          ...answeredTurn,
+          id: "seed-7",
+          question: "무릉계곡 근처 맛집",
+          request: "",
+          status: "failed",
+          answer: null,
+          errorMessage: "실패",
+          anchor: { contentId: "126508", action: "food" },
+        },
+      ],
+      busy: false,
+    });
+    const tree = await mount();
+    await press(tree, "turn-retry-seed-7");
+
+    expect(askAgentMock).toHaveBeenCalledTimes(1);
+    expect(askAgentMock.mock.calls[0][0].anchor).toEqual({
+      contentId: "126508",
+      action: "food",
+    });
   });
 });
 

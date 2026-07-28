@@ -12,6 +12,8 @@ interface Props {
   photo: PhotoUpload | null;
   chips: Chip[];
   disabled: boolean;
+  anchorTitle?: string | null;
+  onClearAnchor?: () => void;
   onChange: (text: string) => void;
   onSuggest: (chip: Chip) => void;
   onAttach: () => void;
@@ -24,6 +26,8 @@ export function AskComposer({
   photo,
   chips,
   disabled,
+  anchorTitle = null,
+  onClearAnchor,
   onChange,
   onSuggest,
   onAttach,
@@ -34,6 +38,24 @@ export function AskComposer({
 
   return (
     <View style={styles.dock}>
+      {anchorTitle ? (
+        <View style={styles.anchorRow} testID="travel-anchor-banner">
+          <View style={styles.anchorPill}>
+            <Text style={styles.anchorTitle} numberOfLines={1}>
+              {anchorTitle}
+            </Text>
+            <Pressable
+              testID="travel-anchor-clear"
+              accessibilityLabel="선택 해제"
+              hitSlop={8}
+              onPress={onClearAnchor}
+            >
+              <Icon name="close" size={13} color={colors.accentText} strokeWidth={2.4} />
+            </Pressable>
+          </View>
+          <Text style={styles.anchorNote}>카드를 한 번 더 탭하면 상세</Text>
+        </View>
+      ) : null}
       {photo ? (
         <View style={styles.attach} testID="travel-attach-banner">
           <Image source={{ uri: photo.uri }} style={styles.attachThumb} contentFit="cover" />
@@ -107,6 +129,35 @@ const styles = StyleSheet.create({
     borderTopColor: colors.line,
     paddingTop: 6,
   },
+  anchorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: spacing.lg,
+    marginBottom: 2,
+    marginTop: 2,
+  },
+  anchorPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    maxWidth: "60%",
+    paddingVertical: 6,
+    paddingLeft: 12,
+    paddingRight: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(230,0,35,0.25)",
+    backgroundColor: colors.accentFill,
+  },
+  anchorTitle: {
+    flexShrink: 1,
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+    color: colors.accentText,
+  },
+  anchorNote: { fontSize: 11, color: colors.ter },
   attach: {
     flexDirection: "row",
     alignItems: "center",
