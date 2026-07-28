@@ -350,6 +350,18 @@ describe("TravelScreen anchored follow-ups", () => {
     expect(pressable(tree, "travel-chip-실내만")).toBeDefined();
   });
 
+  it("drops the anchor as soon as the user types a free-text question", async () => {
+    const tree = await mount();
+    await press(tree, "travel-spot-126508");
+    expect(pressable(tree, "travel-chip-근처 맛집")).toBeDefined();
+
+    const input = tree.root.findByProps({ testID: "travel-input" });
+    await act(async () => input.props.onChangeText("주차 가능해?"));
+
+    expect(tree.root.findAllByProps({ testID: "travel-anchor-banner" })).toHaveLength(0);
+    expect(pressable(tree, "travel-chip-근처 맛집")).toBeUndefined();
+  });
+
   it("resends the anchor when a failed anchor turn is retried", async () => {
     useConversation.setState({
       turns: [

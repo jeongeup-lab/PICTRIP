@@ -274,18 +274,18 @@ def _anchor_crowd_response(row: CandidateRow) -> AskResponse:
         answer = [AnswerSegment(text=f"{row.title}의 혼잡도 정보가 아직 없어요.")]
     else:
         answer = [
-            AnswerSegment(text=f"{row.title}, 지금은 "),
+            AnswerSegment(text=f"{row.title} 오늘 혼잡도 예측은 "),
             AnswerSegment(text=label, emphasis=True),
-            AnswerSegment(text=" 상태예요."),
+            AnswerSegment(text=" 수준이에요."),
         ]
         if label == "한산" and row.percentile is not None:
-            answer.append(AnswerSegment(text=" 혼잡도 "))
+            answer.append(AnswerSegment(text=" 전국 관광지 중 "))
             answer.append(AnswerSegment(text=f"하위 {row.percentile}%", emphasis=True))
-            answer.append(AnswerSegment(text=" 수준이에요."))
+            answer.append(AnswerSegment(text=" 안쪽이에요."))
         elif label == "붐빔" and row.percentile is not None:
-            answer.append(AnswerSegment(text=" 혼잡도 "))
+            answer.append(AnswerSegment(text=" 전국 관광지 중 "))
             answer.append(AnswerSegment(text=f"상위 {100 - row.percentile}%", emphasis=True))
-            answer.append(AnswerSegment(text=" 수준이에요."))
+            answer.append(AnswerSegment(text=" 안쪽이에요."))
     logger.info("agent.anchor.done", action="crowd", results=0)
     return AskResponse(
         steps=steps,

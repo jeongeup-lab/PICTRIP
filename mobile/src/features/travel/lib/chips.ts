@@ -9,7 +9,7 @@ export const ANCHOR_CHIPS: Chip[] = [
   { kind: "anchor", label: "근처 맛집", action: "food" },
   { kind: "anchor", label: "근처 카페", action: "cafe" },
   { kind: "anchor", label: "주변 볼거리", action: "nearby" },
-  { kind: "anchor", label: "지금 붐벼?", action: "crowd" },
+  { kind: "anchor", label: "오늘 붐벼?", action: "crowd" },
 ];
 
 const NEARBY_CHIP: Chip = {

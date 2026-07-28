@@ -42,8 +42,8 @@
 응답한다(스트리밍 없음 — [ADR 0009](../adr/0009-travel-tab-conversational-agent.md)).
 사진이 붙으면 `multipart/form-data`, 아니면 JSON. rate-limit 20/분/IP.
 
-**요청** — `question` · `photo` · `intent` **셋 중 하나 이상**이 있어야 한다
-(없으면 `VALIDATION_FAILED`).
+**요청** — `question` · `photo` · `intent` · `anchor` **넷 중 하나 이상**이
+있어야 한다(없으면 `VALIDATION_FAILED`).
 
 | 필드 | 타입 | 비고 |
 |---|---|---|
@@ -51,11 +51,12 @@
 | `photo` | file | multipart 전용. 임베딩 후 즉시 폐기, **디스크에 닿지 않는다**(아래) |
 | `intent` | `QueryIntent` | 직전 응답의 `intent`를 되돌려 보내는 refine 경로. **있으면 Gemini를 호출하지 않는다** |
 | `patch` | `RefinePatch` | `intent` 위에 덮어쓸 축. `{crowdPreference?, indoorOnly?, nearMe?, drop?}` |
+| `anchor` | `{contentId, action}` | 카드 선택 후속 경로. `action` = `food`·`cafe`·`nearby`(앵커 좌표 반경 3km 결정적 조회, 거리순) · `crowd`(혼잡도 답변 전용 턴). **있으면 question/intent를 무시**하고 Gemini를 호출하지 않는다. 사진과 함께 오면 `VALIDATION_FAILED` |
 | `lat` / `lng` | float | 거리 정렬·`내 근처` 의도에만 사용 |
 | `region` | string | 폐기된 조건 시트의 잔재. OTA 전 구 앱만 보내고, 지역 조건으로만 옮겨 태운다(아래) |
 
-multipart에서 `intent`/`patch`는 **JSON 문자열 필드**로 온다 (파싱 실패 시
-`VALIDATION_FAILED`). 정형 조건 시트(`region`/`when`/`who`)는 폐기됐다
+multipart에서 `intent`/`patch`/`anchor`는 **JSON 문자열 필드**로 온다 (파싱
+실패 시 `VALIDATION_FAILED`). 정형 조건 시트(`region`/`when`/`who`)는 폐기됐다
 ([ADR 0010](../adr/0010-travel-tab-drops-condition-sheet.md)).
 
 **구 앱 `region` 호환 셈(OTA 롤아웃까지만).** 백엔드는 dev 머지 즉시 배포되고
@@ -88,8 +89,8 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 |---|---|---|
 | `steps[]` | `{tool, label, badge}` | 서버가 **실제로 실행한** 툴 순서. `badge`는 그 단계 후 잔여 건수(`128곳`) 또는 근거 표시(`Gemini` · `pgvector`) |
 | `answer[]` | `{text, emphasis}` | 문장 조각. `emphasis=true`는 `accentText` 800으로 렌더 (HTML을 보내지 않는다) |
-| `spots[]` | `{contentId, title, regionLabel, imageUrl, tag, lat, lng}` | 상위 20곳(대화 레일은 앞 4장만 그린다). `tag`는 카드 좌상단 배지(`하위 8%` · `4.2km` · `유사도 86%`) |
-| `totalCount` | int | `전체 N곳 보기`의 N |
+| `spots[]` | `{contentId, title, regionLabel, imageUrl, tag, lat, lng}` | 상위 20곳 — 대화 레일이 전부 그린다. `tag`는 카드 좌상단 배지(`하위 8%` · `4.2km` · `유사도 86%`). `anchor.action=crowd`는 빈 배열 |
+| `totalCount` | int | `spots[]` 길이 |
 | `intent` | `QueryIntent` | 서버가 **실제로 적용한** 의도. 다음 턴이 그대로 되돌려 보낸다 |
 | `refinements[]` | `{label, patch}` | 후속 제안 칩 최대 3개. `label`은 상태 전환 문구(`사람 적은 곳만`), `patch`는 그 칩이 바꿀 축 |
 | `suggestions[]` | `string[]` | `patch.drop`이 없는 `refinements[]`의 `label`만 **같은 순서**로 담은 목록. OTA 이전 구버전 앱과의 하위호환 전용이고 새 클라이언트는 `refinements`를 읽는다 |
@@ -109,7 +110,7 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 | `festival` | `feed/services/kto_channels.py` | `festivalOnly`면 다른 축을 건너뛰고 `searchFestival2` 오늘 진행분 풀만 본다 (로컬 `spots` 가시 행과 교집합) |
 | `title_search` | `spots/services/search.py` | 키워드가 lcls 코드에 하나도 안 걸릴 때의 폴백 (스팟 이름 trigram, 지역별로 각각 조회) |
 | `concentration` | `agent/services/retrieve.py` | 집중률 백분위 하위/상위 30%로 추림. 후보가 적어 아무도 30% 안에 못 들면 가장 한적한/붐비는 쪽 20곳을 남긴다 (선호를 버리고 전체로 되돌리지 않는다) |
-| `nearby` | `agent/repositories.py` | 현재 위치 기준 거리순 (SQL `ORDER BY`) |
+| `nearby` | `agent/repositories.py` · `spots/services/nearby.py` | 현재 위치 기준 거리순 (SQL `ORDER BY`). `anchor` 경로는 `find_nearby_spots`로 앵커 스팟 좌표 반경 3km(food·cafe·attraction 분류) |
 
 조회 모수는 지도 탭과 다르다. 에이전트는 `travel_category_sql()`을 쓰고
 (`spots/services/nearby.py`) 제외 집합이 `VE08`~`VE11`이라 VE06 공연시설·VE07
