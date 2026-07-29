@@ -20,7 +20,7 @@ from app.core.version import API_VERSION
 from app.kto.client import KtoClient
 from app.modules.admin import router as admin_router
 from app.modules.agent import router as agent_router
-from app.modules.agent.llm import close_client as close_llm_client
+from app.modules.agent.llm import close_clients as close_llm_clients
 from app.modules.feed import router as feed_router
 from app.modules.images import router as images_router
 from app.modules.map import router as map_router
@@ -57,7 +57,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             yield
         finally:
             await app.state.kto.aclose()
-            await close_llm_client()
+            await close_llm_clients()
             logger.info("app.shutdown")
 
 

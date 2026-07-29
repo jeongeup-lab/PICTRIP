@@ -1,0 +1,51 @@
+name: agent-intent-eval
+# 자유문 → QueryIntent 추출 품질 실측. GEMINI_API_KEY 가 CT112 컨테이너 .env 에만
+# 있어서 로컬에서는 돌릴 수 없다. 골든셋(tests/data/intent_golden.jsonl)은 이미지에
+# 안 실리므로 checkout 후 docker cp 로 넣는다. 읽기 전용 — DB 도 KTO 도 건드리지 않고
+# Gemini 만 호출한다. 무료 티어 RPM 을 넘지 않게 rpm 입력으로 페이싱한다.
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "모델 override (비우면 컨테이너의 GEMINI_MODEL)"
+        type: string
+        default: ""
+      rpm:
+        description: "분당 요청 상한 — Flash 무료 10, Flash-Lite 무료 15"
+        type: string
+        default: "10"
+      limit:
+        description: "앞에서 N건만 (비우면 전체)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-intent-eval
+  cancel-in-progress: false
+
+jobs:
+  eval:
+    runs-on: [self-hosted, ct112]
+    env:
+      MODEL: ${{ inputs.model }}
+      RPM: ${{ inputs.rpm }}
+      LIMIT: ${{ inputs.limit }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Score the golden set against the live Gemini key
+        run: |
+          set -euo pipefail
+          cid="$(docker ps -q --filter "publish=8000" | head -n1)"
+          if [ -z "$cid" ]; then echo "api container not found on :8000"; exit 1; fi
+
+          docker cp backend/tests/data/intent_golden.jsonl "$cid":/tmp/intent_golden.jsonl
+
+          args=(--golden /tmp/intent_golden.jsonl --rpm "$RPM")
+          if [ -n "$MODEL" ]; then args+=(--model "$MODEL"); fi
+          if [ -n "$LIMIT" ]; then args+=(--limit "$LIMIT"); fi
+
+          docker exec "$cid" python -m scripts.eval_intent "${args[@]}"

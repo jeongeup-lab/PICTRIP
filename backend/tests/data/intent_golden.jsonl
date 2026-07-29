@@ -1,0 +1,61 @@
+{"id": "chip-festival", "q": "지금 열리는 축제", "expect": {"festivalOnly": true}}
+{"id": "chip-sea-quiet", "q": "사람 적은 바닷가", "expect": {"moodHints": ["sea"], "crowdPreference": "quiet"}}
+{"id": "chip-indoor", "q": "비 와도 갈 만한 실내", "expect": {"indoorOnly": true}}
+{"id": "chip-jeju-quiet", "q": "제주에서 한적한 곳", "expect": {"regionHints": ["제주"], "crowdPreference": "quiet"}}
+{"id": "chip-near", "q": "여기서 가까운 곳", "expect": {"nearMe": true}}
+{"id": "region-category-1", "q": "여수 바다 보이는 카페", "expect": {"regionHints": ["여수"], "categoryKeywords": ["카페"], "moodHints": ["sea"]}}
+{"id": "region-category-2", "q": "강릉 해수욕장 알려줘", "expect": {"regionHints": ["강릉"], "categoryKeywords": ["해수욕장"], "moodHints": ["sea"]}}
+{"id": "region-category-3", "q": "부산 미술관 추천해줘", "expect": {"regionHints": ["부산"], "categoryKeywords": ["미술관"], "indoorOnly": false}}
+{"id": "region-category-4", "q": "경주 사찰 구경하고 싶어", "expect": {"regionHints": ["경주"], "categoryKeywords": ["사찰"]}}
+{"id": "region-category-5", "q": "속초 전망대 어디 있어", "expect": {"regionHints": ["속초"], "categoryKeywords": ["전망대"]}}
+{"id": "region-category-6", "q": "전주 한옥마을 근처 박물관", "expect": {"regionHints": ["전주"], "categoryKeywords": ["박물관"]}}
+{"id": "region-two-token", "q": "강원도 평창 계곡", "expect": {"regionHints": ["강원도 평창"], "categoryKeywords": ["계곡"]}}
+{"id": "region-only-1", "q": "제주 가볼 만한 곳", "expect": {"regionHints": ["제주"], "categoryKeywords": []}}
+{"id": "region-only-2", "q": "통영 어디가 좋아", "expect": {"regionHints": ["통영"], "categoryKeywords": []}}
+{"id": "category-only-1", "q": "수목원 가고 싶다", "expect": {"categoryKeywords": ["수목원"], "regionHints": []}}
+{"id": "category-only-2", "q": "테마파크 추천", "expect": {"categoryKeywords": ["테마파크"], "regionHints": []}}
+{"id": "category-only-3", "q": "박물관이랑 미술관 보고 싶어", "expect": {"categoryKeywords": ["박물관", "미술관"]}}
+{"id": "mood-sea", "q": "바다 보이는 곳", "expect": {"moodHints": ["sea"]}}
+{"id": "mood-mountain", "q": "숲속에서 조용히 쉬고 싶어", "expect": {"moodHints": ["mountain"], "crowdPreference": "quiet"}}
+{"id": "mood-lake", "q": "호수 있는 여행지", "expect": {"moodHints": ["lake"]}}
+{"id": "mood-island", "q": "섬 여행 가고 싶어", "expect": {"moodHints": ["island"]}}
+{"id": "mood-hanok", "q": "한옥 분위기 나는 곳", "expect": {"moodHints": ["hanok"]}}
+{"id": "mood-night", "q": "야경 예쁜 데 알려줘", "expect": {"moodHints": ["night"]}}
+{"id": "mood-street", "q": "도시 골목 걷기 좋은 곳", "expect": {"moodHints": ["street"]}}
+{"id": "mood-multi", "q": "산이랑 호수 같이 있는 데", "expect": {"moodHints": ["mountain", "lake"]}}
+{"id": "crowd-quiet-1", "q": "사람 없는 조용한 여행지", "expect": {"crowdPreference": "quiet"}}
+{"id": "crowd-quiet-2", "q": "안 붐비는 데 가고 싶어", "expect": {"crowdPreference": "quiet"}}
+{"id": "crowd-quiet-3", "q": "북적이지 않는 카페", "expect": {"crowdPreference": "quiet", "categoryKeywords": ["카페"]}}
+{"id": "crowd-popular-1", "q": "유명한 관광지 알려줘", "expect": {"crowdPreference": "popular"}}
+{"id": "crowd-popular-2", "q": "사람들이 많이 가는 핫플", "expect": {"crowdPreference": "popular"}}
+{"id": "crowd-any", "q": "괜찮은 여행지 추천해줘", "expect": {"crowdPreference": "any"}}
+{"id": "indoor-1", "q": "비 오는 날 갈 만한 곳", "expect": {"indoorOnly": true}}
+{"id": "indoor-2", "q": "더워서 실내로 가고 싶어", "expect": {"indoorOnly": true}}
+{"id": "indoor-3", "q": "추운데 실내 관광지 없나", "expect": {"indoorOnly": true}}
+{"id": "indoor-4", "q": "장마철에 애들이랑 갈 데", "expect": {"indoorOnly": true}}
+{"id": "outdoor-not-indoor", "q": "산책하기 좋은 공원", "expect": {"indoorOnly": false}}
+{"id": "near-1", "q": "근처 갈 만한 데 있어?", "expect": {"nearMe": true}}
+{"id": "near-2", "q": "여기서 가까운 박물관", "expect": {"nearMe": true, "categoryKeywords": ["박물관"]}}
+{"id": "near-3", "q": "지금 위치에서 제일 가까운 해수욕장", "expect": {"nearMe": true, "categoryKeywords": ["해수욕장"]}}
+{"id": "near-false", "q": "제주도 가까운 섬", "expect": {"nearMe": false, "regionHints": ["제주도"]}}
+{"id": "festival-1", "q": "이번 주 축제 뭐 있어", "expect": {"festivalOnly": true}}
+{"id": "festival-2", "q": "부산에서 하는 페스티벌", "expect": {"festivalOnly": true, "regionHints": ["부산"]}}
+{"id": "festival-3", "q": "요즘 열리는 행사 알려줘", "expect": {"festivalOnly": true}}
+{"id": "named-place-1", "q": "감천문화마을 근처 카페", "expect": {"namedPlaces": ["감천문화마을"], "categoryKeywords": ["카페"]}}
+{"id": "named-place-2", "q": "불국사 주변 볼거리", "expect": {"namedPlaces": ["불국사"]}}
+{"id": "named-place-3", "q": "성산일출봉이랑 우도 가고 싶어", "expect": {"namedPlaces": ["성산일출봉", "우도"]}}
+{"id": "named-place-not-common-noun", "q": "해수욕장 근처 맛집", "expect": {"namedPlaces": [], "categoryKeywords": ["해수욕장"]}}
+{"id": "oos-paris", "q": "파리 가볼 만한 곳", "expect": {"outOfScope": true}}
+{"id": "oos-osaka", "q": "오사카 3박 4일 코스 짜줘", "expect": {"outOfScope": true}}
+{"id": "oos-danang", "q": "다낭 해변 추천", "expect": {"outOfScope": true}}
+{"id": "oos-taipei", "q": "타이베이 야시장 어디가 좋아", "expect": {"outOfScope": true}}
+{"id": "oos-hawaii", "q": "하와이 신혼여행", "expect": {"outOfScope": true}}
+{"id": "oos-empty-arrays", "q": "교토 사찰 조용한 곳", "expect": {"outOfScope": true, "regionHints": [], "categoryKeywords": [], "moodHints": []}}
+{"id": "in-scope-jeju-not-oos", "q": "제주도 해변", "expect": {"outOfScope": false}}
+{"id": "in-scope-ulleungdo", "q": "울릉도 가는 법", "expect": {"outOfScope": false, "regionHints": ["울릉도"]}}
+{"id": "noise-greeting", "q": "안녕", "expect": {"categoryKeywords": [], "regionHints": [], "moodHints": [], "outOfScope": false}}
+{"id": "noise-thanks", "q": "고마워", "expect": {"categoryKeywords": [], "regionHints": [], "moodHints": []}}
+{"id": "no-invented-region", "q": "조용한 미술관", "expect": {"regionHints": [], "categoryKeywords": ["미술관"], "crowdPreference": "quiet"}}
+{"id": "no-invented-category", "q": "강릉 어디 갈까", "expect": {"categoryKeywords": [], "regionHints": ["강릉"]}}
+{"id": "combo-heavy", "q": "여수에서 사람 적고 비 와도 갈 만한 실내 전시관", "expect": {"regionHints": ["여수"], "crowdPreference": "quiet", "indoorOnly": true, "categoryKeywords": ["전시관"]}}
+{"id": "combo-near-quiet-mood", "q": "근처에 한적한 바닷가 없을까", "expect": {"nearMe": true, "crowdPreference": "quiet", "moodHints": ["sea"]}}

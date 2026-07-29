@@ -46,6 +46,7 @@ main = 릴리스 마커(web·CodeQL), `v*` 태그 = TestFlight(→
 | `mobile-deploy` | tag `v*` | EAS iOS 빌드 + TestFlight 제출 | ubuntu |
 | `backend-backfill-embeddings` / `-nicknames` | manual | 라이브 컨테이너 exec 백필 (기본 dry-run) | ct112 |
 | `backend-logs` / `backend-oidc-logs` | manual | 원격 로그 grep / OIDC 거부 사유 | ct112 |
+| `agent-intent-eval` | manual | 골든셋 61건으로 의도 추출 채점 (모델 비교용, 읽기 전용) — 키가 CT112에만 있어 로컬 실행 불가 | ct112 |
 | `overseas-backfill-thumbs` | manual | Commons 썸네일 직접 URL 재작성 | ct111 |
 | `pipeline-sync` ⚠️ | manual only | admin 수집 버튼 타깃 — **미배선(A7 보류)**: 시크릿 2종 + `GITHUB_DISPATCH_TOKEN` 필요 | ct112 |
 
@@ -53,7 +54,7 @@ main = 릴리스 마커(web·CodeQL), `v*` 태그 = TestFlight(→
 
 | 위치 | 내용 |
 |---|---|
-| CT112 `/opt/pictrip-api/.env` (:ro 마운트) | 백엔드 전체 — 수정 후 `docker restart` |
+| CT112 `/opt/pictrip-api/.env` (:ro 마운트) | 백엔드 전체 — 수정 후 `docker restart`. `CEREBRAS_API_KEY`가 없으면 LLM 폴백은 꺼진 채로 Gemini 단독 동작 |
 | CT111 `.../pipeline/.env` | `DATABASE_URL` · `KTO_API_KEY` |
 | GitHub Actions | `EXPO_TOKEN`; `pipeline-sync`용 2종은 미주입 |
 | Wrangler | `T1_SECRET` (백엔드 .env와 미러) |

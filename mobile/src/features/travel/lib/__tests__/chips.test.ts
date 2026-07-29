@@ -22,6 +22,18 @@ describe("idleChips", () => {
       if (chip.kind === "question") expect(chip.question.trim().length).toBeGreaterThan(0);
     }
   });
+
+  it("초기 칩 질문은 백엔드 PRESET_INTENTS 키와 글자까지 같다", () => {
+    const questions = idleChips(true).map((c) => (c.kind === "question" ? c.question : ""));
+
+    expect(questions).toEqual([
+      "여기서 가까운 곳",
+      "지금 열리는 축제",
+      "사람 적은 바닷가",
+      "비 와도 갈 만한 실내",
+      "제주에서 한적한 곳",
+    ]);
+  });
 });
 
 describe("refineChips", () => {

@@ -15,12 +15,38 @@ from app.modules.agent.schemas import (
     CrowdPreference,
     ExtractedPlace,
     Mood,
+    PlaceType,
     QueryIntent,
 )
 
 logger = get_logger(__name__)
 
 MAX_QUESTION_CHARS = 500
+
+PRESET_INTENTS: dict[str, QueryIntent] = {
+    "지금 열리는 축제": QueryIntent(festivalOnly=True),
+    "사람 적은 바닷가": QueryIntent(moodHints=["sea"], crowdPreference="quiet"),
+    "비 와도 갈 만한 실내": QueryIntent(indoorOnly=True),
+    "제주에서 한적한 곳": QueryIntent(regionHints=["제주"], crowdPreference="quiet"),
+    "여기서 가까운 곳": QueryIntent(nearMe=True),
+}
+
+
+PRESET_BADGE = "규칙"
+
+
+def preset_intent(question: str) -> QueryIntent | None:
+    preset = PRESET_INTENTS.get(" ".join(question.split()))
+    return preset.model_copy(deep=True) if preset is not None else None
+
+
+async def resolve_intent(question: str) -> tuple[QueryIntent, str]:
+    preset = preset_intent(question)
+    if preset is not None:
+        logger.info("agent.intent.preset", chars=len(question))
+        return preset, PRESET_BADGE
+    return await extract_intent(question), llm.active_name()
+
 
 _SYSTEM_PROMPT = """\
 너는 한국 여행지 검색 질문을 구조화하는 도우미다.
@@ -43,40 +69,41 @@ _SYSTEM_PROMPT = """\
 - 추측으로 조건을 만들어내지 않는다. 질문에 없으면 비운다.
 """
 
-_RESPONSE_SCHEMA: dict[str, Any] = {
-    "type": "OBJECT",
+_NAMED_PLACE_SCHEMA: dict[str, Any] = {
+    "type": "object",
     "properties": {
-        "categoryKeywords": {"type": "ARRAY", "items": {"type": "STRING"}},
-        "regionHints": {"type": "ARRAY", "items": {"type": "STRING"}},
-        "namedPlaces": {
-            "type": "ARRAY",
-            "items": {
-                "type": "OBJECT",
-                "properties": {
-                    "name": {"type": "STRING"},
-                    "nameKo": {"type": "STRING", "nullable": True},
-                    "placeType": {
-                        "type": "STRING",
-                        "enum": ["attraction", "restaurant", "cafe", "hotel", "region"],
-                    },
-                    "regionHint": {"type": "STRING", "nullable": True},
-                },
-                "required": ["name", "placeType"],
-            },
+        "name": {"type": "string"},
+        "nameKo": {"type": ["string", "null"]},
+        "placeType": {
+            "type": "string",
+            "enum": list(get_args(PlaceType)),
         },
-        "crowdPreference": {"type": "STRING", "enum": ["quiet", "any", "popular"]},
+        "regionHint": {"type": ["string", "null"]},
+    },
+    "required": ["name", "nameKo", "placeType", "regionHint"],
+    "additionalProperties": False,
+}
+
+_RESPONSE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "categoryKeywords": {"type": "array", "items": {"type": "string"}},
+        "regionHints": {"type": "array", "items": {"type": "string"}},
+        "namedPlaces": {"type": "array", "items": _NAMED_PLACE_SCHEMA},
+        "crowdPreference": {"type": "string", "enum": list(get_args(CrowdPreference))},
         "moodHints": {
-            "type": "ARRAY",
-            "items": {"type": "STRING", "enum": list(get_args(Mood))},
+            "type": "array",
+            "items": {"type": "string", "enum": list(get_args(Mood))},
         },
-        "festivalOnly": {"type": "BOOLEAN"},
-        "indoorOnly": {"type": "BOOLEAN"},
-        "nearMe": {"type": "BOOLEAN"},
-        "outOfScope": {"type": "BOOLEAN"},
+        "festivalOnly": {"type": "boolean"},
+        "indoorOnly": {"type": "boolean"},
+        "nearMe": {"type": "boolean"},
+        "outOfScope": {"type": "boolean"},
     },
     "required": [
         "categoryKeywords",
         "regionHints",
+        "namedPlaces",
         "crowdPreference",
         "moodHints",
         "festivalOnly",
@@ -84,13 +111,14 @@ _RESPONSE_SCHEMA: dict[str, Any] = {
         "nearMe",
         "outOfScope",
     ],
+    "additionalProperties": False,
 }
 
 _MOOD_CODES: tuple[Mood, ...] = get_args(Mood)
 
 
 async def extract_intent(question: str) -> QueryIntent:
-    data = await llm.get_client().generate_json(
+    data = await llm.generate_json(
         system=_SYSTEM_PROMPT,
         user_text=question.strip()[:MAX_QUESTION_CHARS],
         response_schema=_RESPONSE_SCHEMA,

@@ -78,16 +78,31 @@ crowdPreference, festivalOnly, indoorOnly, nearMe, outOfScope}`. 배열은 전�
 `drop` 축은 `crowd`·`indoor`·`near`·`region`·`category`이고, 해당 축의 intent
 필드를 기본값으로 되돌린다(`category`는 `categoryKeywords`+`moodHints` 둘 다).
 
-Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `outOfScope`가
+LLM은 `question` → 구조화 의도 추출에만 쓴다. 의도에 `outOfScope`가
 서면("파리 가볼 만한 곳") 검색을 돌리지 않고 `AGENT_OUT_OF_SCOPE`로 끊는다 —
 빈 의도로 전국 검색이 돌아 엉뚱한 국내 스팟을 추천하는 일이 없도록. 단 사진
 질의는 예외로, 해외 사진 → 국내 매칭이 제품의 본래 동작이라 그대로 진행한다.
+
+**의도 추출은 3단이다** (`agent/services/intent.py` → `agent/llm.py`).
+
+1. **preset** — 초기 칩 5개의 고정 문자열은 `PRESET_INTENTS` 표에서 결정론적으로
+   매핑한다. LLM 호출이 없고 `steps[].badge`는 `규칙`.
+   문자열 목록은 [travel-tab](travel-tab.md#칩).
+2. **Gemini** (`GEMINI_MODEL`) — 정본 스키마는 strict-mode JSON Schema이고
+   `llm.to_gemini_schema()`가 Gemini 방언(대문자 타입 · `nullable`)으로 옮긴다.
+3. **Cerebras** (`CEREBRAS_API_KEY`가 있을 때만) — OpenAI 호환
+   `response_format.json_schema` + `strict: true` 제약 디코딩.
+
+폴백은 **429·5xx·타임아웃에만** 일어난다. 스키마 거절(4xx)은 두 번째 제공자에서도
+같이 실패하므로 즉시 끊는다. 실패한 제공자는 60초 트립되어 다음 요청에서 건너뛰고,
+트립이 풀리면 다시 1순위로 돌아온다. 전 제공자가 429면 `RATE_LIMITED`, 그 밖의
+실패는 `AGENT_INTENT_UNAVAILABLE`.
 
 **응답 `data`**
 
 | 필드 | 타입 | 비고 |
 |---|---|---|
-| `steps[]` | `{tool, label, badge}` | 서버가 **실제로 실행한** 툴 순서. `badge`는 그 단계 후 잔여 건수(`128곳`) 또는 근거 표시(`Gemini` · `pgvector`) |
+| `steps[]` | `{tool, label, badge}` | 서버가 **실제로 실행한** 툴 순서. `badge`는 그 단계 후 잔여 건수(`128곳`) 또는 근거 표시(`규칙` · `Gemini` · `Cerebras` · `pgvector`) |
 | `answer[]` | `{text, emphasis}` | 문장 조각. `emphasis=true`는 `accentText` 800으로 렌더 (HTML을 보내지 않는다) |
 | `spots[]` | `{contentId, title, regionLabel, imageUrl, tag, lat, lng}` | 상위 20곳 — 대화 레일이 전부 그린다. `tag`는 카드 좌상단 배지(`하위 8%` · `4.2km` · `유사도 86%`). `anchor.action=crowd`는 빈 배열 |
 | `totalCount` | int | `spots[]` 길이 |
@@ -102,7 +117,7 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 
 | tool | 구현 | 하는 일 |
 |---|---|---|
-| `intent` | `agent/services/intent.py` | Gemini Flash 자유문 → 구조화 의도 |
+| `intent` | `agent/services/intent.py` | 자유문 → 구조화 의도. preset → Gemini → Cerebras 순 |
 | `photo_match` | `agent/services/photo.py` | CLIP 임베딩 → pgvector 유사도 (지역 조건은 SQL에 포함) |
 | `resolve_place` | `agent/services/resolve.py` | 장소명 → KTO 스팟 (질문이 특정 장소를 지목할 때) |
 | `category_search` | `agent/repositories.py` + `lcls_systm_codes` | 카테고리 키워드 → lcls 코드 → 스팟 조회 |
@@ -275,7 +290,7 @@ TTL 1h — 갱신 비용은 시간당 최대 20요청이다.
 | `OAUTH_PROVIDER_UNAVAILABLE` / `OAUTH_ID_TOKEN_INVALID` | 502 / 401 | 소셜 공급자 장애 / id_token 무효 |
 | `SESSION_STORE_UNAVAILABLE` | 503 | 세션 저장소 일시 장애 |
 | `ADMIN_UNAUTHORIZED` · `ADMIN_HISTORY_NOT_FOUND` · `ADMIN_TRIGGER_FAILED` · `ADMIN_VALIDATION` | 401·404·502·422 | 어드민 전용 |
-| `AGENT_INTENT_UNAVAILABLE` | 502 | Gemini Flash 무응답 → 재시도 칩 |
+| `AGENT_INTENT_UNAVAILABLE` | 502 | 모든 LLM 제공자 무응답 → 재시도 칩 |
 | `AGENT_NO_RESULTS` | 422 | 조건에 맞는 곳 0 → 조건 완화 안내 |
 | `AGENT_OUT_OF_SCOPE` | 422 | 해외 여행지 질의 → 국내만 가능 안내 |
 | `INTERNAL_ERROR` | 500 | 미분류 기본값 |

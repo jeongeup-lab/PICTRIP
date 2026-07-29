@@ -1770,26 +1770,21 @@ async def test_over_long_named_places_are_rejected_before_the_naver_fanout(
 
 
 async def test_extract_intent_truncates_a_chatty_llm_instead_of_failing(monkeypatch) -> None:
-    class FakeClient:
-        async def generate_json(self, **kwargs):
-            return {
-                "categoryKeywords": [
-                    f"k{i}" + "설" * MAX_TEXT_CHARS for i in range(MAX_KEYWORDS + 5)
-                ],
-                "regionHints": [
-                    f"r{i}" + "설" * MAX_TEXT_CHARS for i in range(MAX_REGION_HINTS + 5)
-                ],
-                "namedPlaces": [
-                    {
-                        "name": f"p{i}" + "설" * MAX_TEXT_CHARS,
-                        "regionHint": "설" * MAX_TEXT_CHARS * 2,
-                        "placeType": "attraction",
-                    }
-                    for i in range(MAX_NAMED_PLACES + 5)
-                ],
-            }
+    async def fake_generate_json(**kwargs):
+        return {
+            "categoryKeywords": [f"k{i}" + "설" * MAX_TEXT_CHARS for i in range(MAX_KEYWORDS + 5)],
+            "regionHints": [f"r{i}" + "설" * MAX_TEXT_CHARS for i in range(MAX_REGION_HINTS + 5)],
+            "namedPlaces": [
+                {
+                    "name": f"p{i}" + "설" * MAX_TEXT_CHARS,
+                    "regionHint": "설" * MAX_TEXT_CHARS * 2,
+                    "placeType": "attraction",
+                }
+                for i in range(MAX_NAMED_PLACES + 5)
+            ],
+        }
 
-    monkeypatch.setattr(llm, "get_client", FakeClient)
+    monkeypatch.setattr(llm, "generate_json", fake_generate_json)
 
     parsed = await intent_service.extract_intent("아무 질문")
 

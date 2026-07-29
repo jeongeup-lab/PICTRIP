@@ -129,7 +129,7 @@ async def _ask_with_photo(
 ) -> AskResponse:
     steps: list[AskStep] = []
     intent_task = (
-        asyncio.create_task(intent_service.extract_intent(question))
+        asyncio.create_task(intent_service.resolve_intent(question))
         if question and intent is None
         else None
     )
@@ -145,10 +145,8 @@ async def _ask_with_photo(
         intent = QueryIntent()
         if intent_task is not None:
             try:
-                intent = await intent_task
-                steps.append(
-                    AskStep(tool="intent", label="덧붙인 말에서 조건 추출", badge="Gemini")
-                )
+                intent, source = await intent_task
+                steps.append(AskStep(tool="intent", label="덧붙인 말에서 조건 추출", badge=source))
             except AppError as exc:
                 logger.warning("agent.photo.intent_skipped", code=exc.code)
 
@@ -335,8 +333,8 @@ async def _ask_with_question(
     if intent is not None:
         intent = refine_service.apply_patch(intent, patch)
     else:
-        intent = await intent_service.extract_intent(question)
-        steps.append(AskStep(tool="intent", label="질문에서 지역·조건 추출", badge="Gemini"))
+        intent, source = await intent_service.resolve_intent(question)
+        steps.append(AskStep(tool="intent", label="질문에서 지역·조건 추출", badge=source))
     if intent.outOfScope:
         raise AgentOutOfScope()
 
