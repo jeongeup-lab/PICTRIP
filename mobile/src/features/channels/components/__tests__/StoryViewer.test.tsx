@@ -10,6 +10,7 @@ import {
   getPermissionStatus,
   requestPermission,
 } from "@/features/map/usecases/request-location";
+import { prefetchSpot } from "@/features/spots/queries";
 import type { ChannelCard, ChannelKey, ChannelMeta } from "@/features/channels/api";
 
 jest.mock("expo-router", () => ({ router: { back: jest.fn(), push: jest.fn() } }));
@@ -19,6 +20,7 @@ jest.mock("@/features/channels/queries", () => ({
   useSeenChannels: jest.fn(),
 }));
 jest.mock("@/features/saved/hooks/use-save-optimistic", () => ({ useSaveOptimistic: jest.fn() }));
+jest.mock("@/features/spots/queries", () => ({ prefetchSpot: jest.fn() }));
 jest.mock("@/features/map/usecases/request-location", () => ({
   getPermissionStatus: jest.fn(),
   getCurrentCoords: jest.fn(),
@@ -226,7 +228,13 @@ describe("StoryViewer", () => {
 
   it("detail button closes the viewer then pushes the spot detail route", async () => {
     setChannels([meta("hot", "Hot")]);
-    cardsByKey.hot = [card({ title: "A", contentId: "777" })];
+    const selected = card({
+      title: "A",
+      contentId: "777",
+      imageUrl: "https://example.com/a.jpg",
+      regionLabel: "서울",
+    });
+    cardsByKey.hot = [selected];
     const order: string[] = [];
     (router.back as jest.Mock).mockImplementation(() => order.push("back"));
     (router.push as jest.Mock).mockImplementation(() => order.push("push"));
@@ -234,6 +242,7 @@ describe("StoryViewer", () => {
     await act(async () => {
       r.root.findByProps({ testID: "story-detail" }).props.onPress();
     });
+    expect(prefetchSpot).toHaveBeenCalledWith(selected);
     expect(router.push).toHaveBeenCalledWith("/spots/777");
     expect(order).toEqual(["back", "push"]);
   });
