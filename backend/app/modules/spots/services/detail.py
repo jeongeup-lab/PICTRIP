@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import secrets
+from collections.abc import Awaitable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 from redis.asyncio import Redis
 from sqlalchemy import func, select, text
@@ -40,6 +42,12 @@ _REFRESH_LOCK_KEY = "spotdetail:refresh:v1:{content_id}"
 _REFRESH_LOCK_TTL_SECONDS = 20
 _REFRESH_BACKOFF_KEY = "spotdetail:refresh-backoff:v1:{content_id}"
 _REFRESH_BACKOFF_TTL_SECONDS = 60
+_RELEASE_REFRESH_LOCK_SCRIPT = """
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("del", KEYS[1])
+end
+return 0
+"""
 
 
 @dataclass(frozen=True)
@@ -113,23 +121,34 @@ async def _set_refresh_backoff(redis: Redis, content_id: str) -> None:
         logger.warning("spot.detail.backoff_set_failed", content_id=content_id, error=str(exc))
 
 
-async def _acquire_refresh_lock(redis: Redis, content_id: str) -> bool:
+async def _acquire_refresh_lock(redis: Redis, content_id: str) -> tuple[bool, str | None]:
+    token = secrets.token_hex(16)
     try:
         acquired = await redis.set(
             _REFRESH_LOCK_KEY.format(content_id=content_id),
-            "1",
+            token,
             ex=_REFRESH_LOCK_TTL_SECONDS,
             nx=True,
         )
     except Exception as exc:
         logger.warning("spot.detail.refresh_lock_failed", content_id=content_id, error=str(exc))
-        return True
-    return bool(acquired)
+        return True, None
+    return bool(acquired), token if acquired else None
 
 
-async def _release_refresh_lock(redis: Redis, content_id: str) -> None:
+async def _release_refresh_lock(redis: Redis, content_id: str, token: str | None) -> None:
+    if token is None:
+        return
     try:
-        await redis.delete(_REFRESH_LOCK_KEY.format(content_id=content_id))
+        await cast(
+            Awaitable[Any],
+            redis.eval(
+                _RELEASE_REFRESH_LOCK_SCRIPT,
+                1,
+                _REFRESH_LOCK_KEY.format(content_id=content_id),
+                token,
+            ),
+        )
     except Exception as exc:
         logger.warning("spot.detail.refresh_unlock_failed", content_id=content_id, error=str(exc))
 
@@ -509,7 +528,8 @@ async def refresh_spot_detail(
 ) -> None:
     if await _refresh_in_backoff(redis, content_id):
         return
-    if not await _acquire_refresh_lock(redis, content_id):
+    acquired, lock_token = await _acquire_refresh_lock(redis, content_id)
+    if not acquired:
         return
     try:
         row = await load_spot_detail(session, kto, redis, content_id)
@@ -519,7 +539,7 @@ async def refresh_spot_detail(
         await _set_refresh_backoff(redis, content_id)
         logger.warning("spot.detail.refresh_failed", content_id=content_id, error=str(exc))
     finally:
-        await _release_refresh_lock(redis, content_id)
+        await _release_refresh_lock(redis, content_id, lock_token)
 
 
 async def refresh_spot_detail_in_background(

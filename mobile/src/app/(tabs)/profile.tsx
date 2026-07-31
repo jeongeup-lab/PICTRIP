@@ -61,9 +61,9 @@ export default function ProfileTab() {
             saved && saved.length > 0 ? (
               <SavedRail
                 spots={saved}
-                onPressItem={(id) => {
-                  prefetchSpot(id);
-                  router.push(`/spots/${id}`);
+                onPressItem={(spot) => {
+                  prefetchSpot(spot);
+                  router.push(`/spots/${spot.contentId}`);
                 }}
               />
             ) : (

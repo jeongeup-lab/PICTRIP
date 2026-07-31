@@ -9,7 +9,12 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.spots.services import load_spot_detail, refresh_spot_detail
-from app.modules.spots.services.detail import _DetailCache, _redis_set_detail
+from app.modules.spots.services.detail import (
+    _acquire_refresh_lock,
+    _DetailCache,
+    _redis_set_detail,
+    _release_refresh_lock,
+)
 from app.web.errors import KtoApiUnavailable, ResourceNotFound
 
 
@@ -244,6 +249,20 @@ async def test_failed_stale_refresh_enters_backoff(
     skipped_kto = FakeKto(_COMMON, _IMAGES)
     await refresh_spot_detail(db_session, skipped_kto, redis, "DT-DEFER-STALE-FAIL")
     assert skipped_kto.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_refresh_lock_only_releases_its_own_token(redis: FakeRedis) -> None:
+    content_id = "DT-LOCK-OWNER"
+    acquired, token = await _acquire_refresh_lock(redis, content_id)
+    assert acquired is True
+    assert token is not None
+
+    key = f"spotdetail:refresh:v1:{content_id}"
+    await redis.set(key, "replacement-owner", ex=20)
+    await _release_refresh_lock(redis, content_id, token)
+
+    assert await redis.get(key) == "replacement-owner"
 
 
 @pytest.mark.asyncio
