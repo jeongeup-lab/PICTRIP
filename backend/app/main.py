@@ -80,7 +80,13 @@ def create_app() -> FastAPI:
         allow_origins=settings.CORS_ORIGINS or ["*"],
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Trace-Id"],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            "Idempotency-Key",
+            "X-Trace-Id",
+            "X-PicTrip-Detail-Mode",
+        ],
         expose_headers=["X-Trace-Id"],
         max_age=86400,
     )
