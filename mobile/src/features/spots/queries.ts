@@ -57,7 +57,12 @@ export function useSpot(contentId: string, seed?: SpotSeed | null) {
     queryFn: () => getSpot(contentId),
     enabled: !!contentId,
     placeholderData: () => seedToDetail(resolved),
-    refetchInterval: (query) => (query.state.data?.detailStatus === "pending" ? 1500 : false),
+    refetchInterval: (query) => {
+      const status = query.state.data?.detailStatus;
+      if (status === "pending") return 1500;
+      if (status === "unavailable") return 60_000;
+      return false;
+    },
   });
 }
 

@@ -513,7 +513,7 @@ async def refresh_spot_detail(
         return
     try:
         row = await load_spot_detail(session, kto, redis, content_id)
-        if row.detail_status == "unavailable":
+        if row.detail_status in {"stale", "unavailable"}:
             await _set_refresh_backoff(redis, content_id)
     except Exception as exc:
         await _set_refresh_backoff(redis, content_id)

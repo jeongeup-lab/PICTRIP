@@ -229,6 +229,24 @@ async def test_background_refresh_populates_deferred_cache(
 
 
 @pytest.mark.asyncio
+async def test_failed_stale_refresh_enters_backoff(
+    db_session: AsyncSession, redis: FakeRedis
+) -> None:
+    await _insert_spot(db_session, "DT-DEFER-STALE-FAIL")
+    await _insert_detail(db_session, "DT-DEFER-STALE-FAIL", overview="old", age_days=8)
+    failing_kto = FakeKto(fail=True)
+
+    await refresh_spot_detail(db_session, failing_kto, redis, "DT-DEFER-STALE-FAIL")
+
+    assert failing_kto.calls == 3
+    assert await redis.exists("spotdetail:refresh-backoff:v1:DT-DEFER-STALE-FAIL") == 1
+
+    skipped_kto = FakeKto(_COMMON, _IMAGES)
+    await refresh_spot_detail(db_session, skipped_kto, redis, "DT-DEFER-STALE-FAIL")
+    assert skipped_kto.calls == 0
+
+
+@pytest.mark.asyncio
 async def test_stale_cache_refetches(db_session: AsyncSession, redis: FakeRedis) -> None:
     await _insert_spot(db_session, "DT-STALE")
     await _insert_detail(db_session, "DT-STALE", overview="old", age_days=8)

@@ -36,7 +36,8 @@
 `detailStatus="pending"`을 먼저 반환하고 KTO 상세를 백그라운드에서 채운다. 모바일은
 `pending`인 동안 1.5초 간격으로 다시 조회한다. 7일 캐시가 만료된 경우에는 기존 상세와
 `detailStatus="stale"`을 즉시 반환하고 갱신하며, KTO 갱신 실패 후 60초 동안은
-`detailStatus="unavailable"`로 재시도를 제한한다.
+`detailStatus="unavailable"`로 재시도를 제한한다. 캐시가 없는 `unavailable` 화면은
+백오프가 끝나는 60초 뒤 다시 조회한다.
 
 어드민 콘솔은 `/v1` 밖 `/admin` — 페이지 4종 + `/admin/api/*`(수집·임베딩
 상태/트리거, 이력, 헬스, overseas 목록·`is_hidden` 토글). 서명 쿠키 세션,
