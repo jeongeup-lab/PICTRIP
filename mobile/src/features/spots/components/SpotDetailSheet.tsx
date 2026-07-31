@@ -38,6 +38,7 @@ interface Props {
 export function SpotDetailSheet({ contentId, tabBarHeight, onClose, seed }: Props) {
   const { data, isLoading, isError, refetch, isPlaceholderData } = useSpot(contentId, seed);
   const detailPending = data?.detailStatus === "pending";
+  const detailUnavailable = data?.detailStatus === "unavailable";
   const { saved, toggle: onToggleSave } = useSaveOptimistic(contentId);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [snap, setSnap] = useState<Snap>("base");
@@ -140,6 +141,13 @@ export function SpotDetailSheet({ contentId, tabBarHeight, onClose, seed }: Prop
               <Text style={styles.errText}>불러오지 못했어요</Text>
               <Pressable style={styles.retry} onPress={() => refetch()}>
                 <Text style={styles.retryText}>다시 시도</Text>
+              </Pressable>
+            </View>
+          ) : detailUnavailable ? (
+            <View style={styles.err}>
+              <Text style={styles.errText}>상세 정보를 준비하지 못했어요</Text>
+              <Pressable style={styles.retry} onPress={() => refetch()}>
+                <Text style={styles.retryText}>지금 다시 시도</Text>
               </Pressable>
             </View>
           ) : isLoading || !data || isPlaceholderData || detailPending ? (

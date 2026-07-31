@@ -26,6 +26,7 @@ export default function SpotScreen() {
         ? [data.firstImageUrl]
         : [];
   const detailPending = data?.detailStatus === "pending";
+  const detailUnavailable = data?.detailStatus === "unavailable";
 
   const onShare = () => {
     if (!data) return;
@@ -77,7 +78,17 @@ export default function SpotScreen() {
           }
         />
 
-        {isLoading || !data || isPlaceholderData || detailPending ? (
+        {detailUnavailable ? (
+          <View style={styles.detailState}>
+            <Text style={styles.errTitle}>상세 정보를 준비하지 못했어요</Text>
+            <Text style={styles.errSub}>
+              기본 관광지 정보는 볼 수 있고, 잠시 후 자동으로 다시 시도해요
+            </Text>
+            <Pressable style={styles.retryBtn} onPress={() => refetch()}>
+              <Text style={styles.retryText}>지금 다시 시도</Text>
+            </Pressable>
+          </View>
+        ) : isLoading || !data || isPlaceholderData || detailPending ? (
           <View style={{ padding: spacing.lg, gap: spacing.md }}>
             <Skeleton height={18} />
             <Skeleton height={18} width="80%" />
@@ -126,6 +137,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.inset,
   },
   errWrap: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 44 },
+  detailState: {
+    alignItems: "center",
+    paddingHorizontal: 36,
+    paddingVertical: spacing.xxl,
+  },
   errTitle: {
     fontSize: 20,
     fontWeight: "700",
