@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, status
+from fastapi import APIRouter, BackgroundTasks, Header, status
 
 from app.core.db import DbSession
 from app.core.redis import RedisDep
@@ -16,6 +16,7 @@ from app.modules.spots.services import load_spot_detail, refresh_spot_detail_in_
 from app.web.envelope import ok
 
 router = APIRouter(tags=["SPT · spots"])
+_DEFERRED_DETAIL_MODE = "deferred-v1"
 
 
 @router.get(
@@ -29,9 +30,11 @@ async def get_spot(
     session: DbSession,
     kto: KtoDep,
     redis: RedisDep,
+    detail_mode: str | None = Header(default=None, alias="X-PicTrip-Detail-Mode"),
 ) -> dict[str, Any]:
-    row = await load_spot_detail(session, kto, redis, content_id, defer_refresh=True)
-    if row.detail_status in {"pending", "stale"}:
+    defer_refresh = detail_mode == _DEFERRED_DETAIL_MODE
+    row = await load_spot_detail(session, kto, redis, content_id, defer_refresh=defer_refresh)
+    if defer_refresh and row.detail_status in {"pending", "stale"}:
         background_tasks.add_task(refresh_spot_detail_in_background, kto, redis, content_id)
     payload = SpotDetailResponse(
         contentId=row.content_id,

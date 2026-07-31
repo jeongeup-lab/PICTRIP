@@ -101,7 +101,10 @@ async def test_detail_returns_envelope(
 ) -> None:
     await _insert_spot(override_db_and_seed, "RT-DETAIL")
 
-    resp = await client.get("/v1/spots/RT-DETAIL")
+    resp = await client.get(
+        "/v1/spots/RT-DETAIL",
+        headers={"X-PicTrip-Detail-Mode": "deferred-v1"},
+    )
 
     assert resp.status_code == 200
     body = resp.json()
@@ -153,5 +156,5 @@ async def test_detail_route_exposes_intro_and_category(
     assert resp.status_code == 200
     body = resp.json()
     assert body["data"]["category"] == "사적지"
-    assert body["data"]["detailStatus"] == "pending"
-    assert body["data"]["intro"] is None
+    assert body["data"]["detailStatus"] == "fresh"
+    assert body["data"]["intro"]["usetime"] == "09:30~17:30"
