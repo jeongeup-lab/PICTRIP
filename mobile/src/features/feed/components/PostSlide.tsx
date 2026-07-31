@@ -125,7 +125,7 @@ function MatchSlide({
     <Pressable
       testID="match-card"
       style={[styles.slide, { width }]}
-      onPressIn={() => prefetchSpot(match.contentId)}
+      onPressIn={() => prefetchSpot(match)}
       onPress={() => {
         onNavigate?.();
         router.push(`/spots/${match.contentId}`);

@@ -1,9 +1,25 @@
 import { useQuery } from "@tanstack/react-query";
 import { getSpot, getNearby } from "@/features/spots/api";
 import { queryClient } from "@/lib/query-client";
-import type { NearbySpot, SpotCard, SpotDetail } from "@/lib/api-types";
+import type { SpotDetail } from "@/lib/api-types";
 
-type SpotSeed = SpotCard & Partial<Pick<NearbySpot, "overview" | "regionName" | "sigunguName">>;
+interface SpotSeed {
+  contentId: string;
+  title: string;
+  firstImageUrl?: string | null;
+  imageUrl?: string | null;
+  addr1?: string | null;
+  mapx?: number | null;
+  mapy?: number | null;
+  lng?: number | null;
+  lat?: number | null;
+  category?: string | null;
+  overview?: string | null;
+  overviewFirst?: string | null;
+  regionName?: string | null;
+  sigunguName?: string | null;
+  regionLabel?: string | null;
+}
 
 const seedStash = new Map<string, SpotSeed>();
 
@@ -17,16 +33,16 @@ function seedToDetail(seed: SpotSeed | null | undefined): SpotDetail | undefined
   return {
     contentId: seed.contentId,
     title: seed.title,
-    firstImageUrl: seed.firstImageUrl,
+    firstImageUrl: seed.firstImageUrl ?? seed.imageUrl ?? null,
     addr1: seed.addr1 ?? null,
     addr2: null,
-    mapx: seed.mapx ?? null,
-    mapy: seed.mapy ?? null,
-    overview: seed.overview ?? null,
+    mapx: seed.mapx ?? seed.lng ?? null,
+    mapy: seed.mapy ?? seed.lat ?? null,
+    overview: seed.overview ?? seed.overviewFirst ?? null,
     homepage: null,
     tel: null,
-    category: seed.category,
-    regionName: seed.regionName ?? null,
+    category: seed.category ?? null,
+    regionName: seed.regionName ?? seed.regionLabel ?? null,
     sigunguName: seed.sigunguName ?? null,
     detailStatus: "placeholder",
     images: [],
@@ -41,6 +57,7 @@ export function useSpot(contentId: string, seed?: SpotSeed | null) {
     queryFn: () => getSpot(contentId),
     enabled: !!contentId,
     placeholderData: () => seedToDetail(resolved),
+    refetchInterval: (query) => (query.state.data?.detailStatus === "pending" ? 1500 : false),
   });
 }
 

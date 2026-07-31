@@ -39,6 +39,8 @@ AOF everysec + RDB · `noeviction` 256mb. 전부 재계산 가능한 캐시.
 | `denyjti:{jti}` | refresh 잔여 수명 | 로그아웃/탈퇴 denylist (**fail-open**) |
 | `rl:{bucket}:{ip}` | 60s | rate-limit 카운터 (fail-open) |
 | `spotdetail:v1:{contentId}` | 1h | 상세 응답 hot front |
+| `spotdetail:refresh:v1:{contentId}` | 20s | 상세 백그라운드 갱신 중복 방지 락 (SET NX) |
+| `spotdetail:refresh-backoff:v1:{contentId}` | 60s | KTO 상세 갱신 실패 재시도 제한 |
 | `rlte:{contentId}` | 1h | 연관 관광지 (Redis 전용 — 테이블 없음) |
 | `match:{revision}:{overseasId}` | 6h | 매칭 결과 — `matching:revision` incr로 전체 무효화 |
 | `channel:{key}:{version}` | KTO 채널 3d / 집중률 1h | 홈 채널 카드 |

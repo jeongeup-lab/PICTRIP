@@ -11,6 +11,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db import async_session_factory
 from app.core.logging import get_logger
 from app.kto.client import KtoClient, KtoService
 from app.modules.spots.models import (
@@ -35,6 +36,10 @@ _DETAIL_TTL = timedelta(days=7)
 
 _REDIS_KEY = "spotdetail:v1:{content_id}"
 _REDIS_TTL_SECONDS = int(timedelta(hours=1).total_seconds())
+_REFRESH_LOCK_KEY = "spotdetail:refresh:v1:{content_id}"
+_REFRESH_LOCK_TTL_SECONDS = 20
+_REFRESH_BACKOFF_KEY = "spotdetail:refresh-backoff:v1:{content_id}"
+_REFRESH_BACKOFF_TTL_SECONDS = 60
 
 
 @dataclass(frozen=True)
@@ -87,6 +92,46 @@ async def _redis_set_detail(redis: Redis, content_id: str, cache: _DetailCache) 
         await redis.set(key, payload, ex=_REDIS_TTL_SECONDS)
     except Exception as exc:
         logger.warning("spot.detail.cache_set_failed", content_id=content_id, error=str(exc))
+
+
+async def _refresh_in_backoff(redis: Redis, content_id: str) -> bool:
+    try:
+        return bool(await redis.get(_REFRESH_BACKOFF_KEY.format(content_id=content_id)))
+    except Exception as exc:
+        logger.warning("spot.detail.backoff_get_failed", content_id=content_id, error=str(exc))
+        return False
+
+
+async def _set_refresh_backoff(redis: Redis, content_id: str) -> None:
+    try:
+        await redis.set(
+            _REFRESH_BACKOFF_KEY.format(content_id=content_id),
+            "1",
+            ex=_REFRESH_BACKOFF_TTL_SECONDS,
+        )
+    except Exception as exc:
+        logger.warning("spot.detail.backoff_set_failed", content_id=content_id, error=str(exc))
+
+
+async def _acquire_refresh_lock(redis: Redis, content_id: str) -> bool:
+    try:
+        acquired = await redis.set(
+            _REFRESH_LOCK_KEY.format(content_id=content_id),
+            "1",
+            ex=_REFRESH_LOCK_TTL_SECONDS,
+            nx=True,
+        )
+    except Exception as exc:
+        logger.warning("spot.detail.refresh_lock_failed", content_id=content_id, error=str(exc))
+        return True
+    return bool(acquired)
+
+
+async def _release_refresh_lock(redis: Redis, content_id: str) -> None:
+    try:
+        await redis.delete(_REFRESH_LOCK_KEY.format(content_id=content_id))
+    except Exception as exc:
+        logger.warning("spot.detail.refresh_unlock_failed", content_id=content_id, error=str(exc))
 
 
 def _is_fresh(cached_at: datetime, modified_time: datetime | None) -> bool:
@@ -352,6 +397,8 @@ async def load_spot_detail(
     kto: KtoClient,
     redis: Redis,
     content_id: str,
+    *,
+    defer_refresh: bool = False,
 ) -> SpotDetailRow:
     spot = await _load_spot_context(session, content_id)
     ctx = _DetailContext(spot, spot.region_name, spot.sigungu_name, spot.category)
@@ -382,6 +429,26 @@ async def load_spot_detail(
             images=cache.images,
             status="fresh",
             intro=_extract_intro(spot.content_type_id, cache.intro_data),
+        )
+
+    if defer_refresh:
+        if cache is not None:
+            return ctx.assemble(
+                overview=cache.overview,
+                homepage=cache.homepage,
+                tel=cache.tel,
+                images=cache.images,
+                status="stale",
+                intro=_extract_intro(spot.content_type_id, cache.intro_data),
+            )
+        status = "unavailable" if await _refresh_in_backoff(redis, content_id) else "pending"
+        return ctx.assemble(
+            overview=None,
+            homepage=None,
+            tel=None,
+            images=[],
+            status=status,
+            intro=None,
         )
 
     try:
@@ -432,3 +499,33 @@ async def load_spot_detail(
         status="fresh",
         intro=_extract_intro(spot.content_type_id, intro_data),
     )
+
+
+async def refresh_spot_detail(
+    session: AsyncSession,
+    kto: KtoClient,
+    redis: Redis,
+    content_id: str,
+) -> None:
+    if await _refresh_in_backoff(redis, content_id):
+        return
+    if not await _acquire_refresh_lock(redis, content_id):
+        return
+    try:
+        row = await load_spot_detail(session, kto, redis, content_id)
+        if row.detail_status == "unavailable":
+            await _set_refresh_backoff(redis, content_id)
+    except Exception as exc:
+        await _set_refresh_backoff(redis, content_id)
+        logger.warning("spot.detail.refresh_failed", content_id=content_id, error=str(exc))
+    finally:
+        await _release_refresh_lock(redis, content_id)
+
+
+async def refresh_spot_detail_in_background(
+    kto: KtoClient,
+    redis: Redis,
+    content_id: str,
+) -> None:
+    async with async_session_factory() as session:
+        await refresh_spot_detail(session, kto, redis, content_id)

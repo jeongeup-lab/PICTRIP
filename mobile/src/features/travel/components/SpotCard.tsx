@@ -33,7 +33,7 @@ export function SpotCard({ spot, style, onSaveToggle, onPress, selected, dimmed 
         dimmed && styles.dimmed,
         pressed && styles.pressed,
       ]}
-      onPressIn={() => prefetchSpot(spot.contentId)}
+      onPressIn={() => prefetchSpot(spot)}
       onPress={onPress ?? (() => router.push(`/spots/${spot.contentId}`))}
     >
       <RemoteImage uri={spot.imageUrl} style={StyleSheet.absoluteFill} />
