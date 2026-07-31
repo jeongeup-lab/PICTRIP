@@ -24,6 +24,7 @@ import {
 } from "@/features/map/usecases/request-location";
 import { PermissionPrimer } from "@/features/map/components/PermissionPrimer";
 import { StoryCard } from "@/features/channels/components/StoryCard";
+import { prefetchSpot } from "@/features/spots/queries";
 import { colors } from "@/constants/theme";
 
 interface Props {
@@ -125,9 +126,11 @@ export function StoryViewer({ start }: Props) {
   };
 
   const onDetail = () => {
-    if (!currentCard?.contentId) return;
+    const contentId = currentCard?.contentId;
+    if (!contentId) return;
+    prefetchSpot({ ...currentCard, contentId });
     close();
-    router.push(`/spots/${currentCard.contentId}`);
+    router.push(`/spots/${contentId}`);
   };
 
   const onAllow = () => {

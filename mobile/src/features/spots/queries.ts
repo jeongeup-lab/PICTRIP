@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getSpot, getNearby } from "@/features/spots/api";
 import { queryClient } from "@/lib/query-client";
@@ -21,11 +22,31 @@ interface SpotSeed {
   regionLabel?: string | null;
 }
 
-const seedStash = new Map<string, SpotSeed>();
+interface StashedSeed {
+  seed: SpotSeed;
+  expiresAt: number;
+}
+
+const seedStash = new Map<string, StashedSeed>();
+const SEED_STASH_TTL_MS = 30_000;
+const PENDING_REFETCH_INTERVAL_MS = 750;
 
 function stashSeed(seed: SpotSeed) {
   if (seedStash.size > 300) seedStash.clear();
-  seedStash.set(seed.contentId, seed);
+  seedStash.set(seed.contentId, {
+    seed,
+    expiresAt: Date.now() + SEED_STASH_TTL_MS,
+  });
+}
+
+function activeSeed(contentId: string): SpotSeed | null {
+  const stashed = seedStash.get(contentId);
+  if (!stashed || stashed.expiresAt < Date.now()) return null;
+  return stashed.seed;
+}
+
+function seedImageUrl(seed: SpotSeed | null | undefined): string | null {
+  return seed?.imageUrl ?? seed?.firstImageUrl ?? null;
 }
 
 function seedToDetail(seed: SpotSeed | null | undefined): SpotDetail | undefined {
@@ -33,7 +54,7 @@ function seedToDetail(seed: SpotSeed | null | undefined): SpotDetail | undefined
   return {
     contentId: seed.contentId,
     title: seed.title,
-    firstImageUrl: seed.firstImageUrl ?? seed.imageUrl ?? null,
+    firstImageUrl: seedImageUrl(seed),
     addr1: seed.addr1 ?? null,
     addr2: null,
     mapx: seed.mapx ?? seed.lng ?? null,
@@ -51,15 +72,21 @@ function seedToDetail(seed: SpotSeed | null | undefined): SpotDetail | undefined
 }
 
 export function useSpot(contentId: string, seed?: SpotSeed | null) {
-  const resolved = seed ?? seedStash.get(contentId) ?? null;
+  const [stashedSeed] = useState(() => activeSeed(contentId));
+  const resolved = seed ?? (stashedSeed?.contentId === contentId ? stashedSeed : null);
+  const preferredImageUrl = seedImageUrl(resolved);
   return useQuery({
     queryKey: ["spot", contentId],
     queryFn: () => getSpot(contentId),
     enabled: !!contentId,
     placeholderData: () => seedToDetail(resolved),
+    select: (detail) =>
+      preferredImageUrl && detail.firstImageUrl !== preferredImageUrl
+        ? { ...detail, firstImageUrl: preferredImageUrl }
+        : detail,
     refetchInterval: (query) => {
       const status = query.state.data?.detailStatus;
-      if (status === "pending") return 1500;
+      if (status === "pending") return PENDING_REFETCH_INTERVAL_MS;
       if (status === "unavailable") return 60_000;
       return false;
     },
