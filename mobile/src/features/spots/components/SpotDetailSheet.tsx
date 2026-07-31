@@ -37,6 +37,7 @@ interface Props {
 
 export function SpotDetailSheet({ contentId, tabBarHeight, onClose, seed }: Props) {
   const { data, isLoading, isError, refetch, isPlaceholderData } = useSpot(contentId, seed);
+  const detailPending = data?.detailStatus === "pending";
   const { saved, toggle: onToggleSave } = useSaveOptimistic(contentId);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [snap, setSnap] = useState<Snap>("base");
@@ -141,7 +142,7 @@ export function SpotDetailSheet({ contentId, tabBarHeight, onClose, seed }: Prop
                 <Text style={styles.retryText}>다시 시도</Text>
               </Pressable>
             </View>
-          ) : isLoading || !data || isPlaceholderData ? (
+          ) : isLoading || !data || isPlaceholderData || detailPending ? (
             <View style={{ padding: spacing.lg, gap: spacing.md }}>
               <Skeleton height={18} />
               <Skeleton height={18} width="80%" />
