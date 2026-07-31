@@ -108,9 +108,9 @@ async def test_detail_returns_envelope(
     assert body["error"] is None
     data = body["data"]
     assert data["contentId"] == "RT-DETAIL"
-    assert data["overview"] == "상세 설명"
-    assert data["detailStatus"] == "fresh"
-    assert data["images"][0]["originImageUrl"] == "http://kto/1.jpg"
+    assert data["overview"] is None
+    assert data["detailStatus"] == "pending"
+    assert data["images"] == []
     assert "moods" not in data
     assert "detailStatus" in data
     assert "congestion" not in data
@@ -150,8 +150,8 @@ async def test_detail_route_exposes_intro_and_category(
     await override_db_and_seed.commit()
 
     resp = await client.get("/v1/spots/DT-RT-INTRO")
-
     assert resp.status_code == 200
     body = resp.json()
     assert body["data"]["category"] == "사적지"
-    assert body["data"]["intro"]["usetime"] == "09:30~17:30"
+    assert body["data"]["detailStatus"] == "pending"
+    assert body["data"]["intro"] is None

@@ -59,7 +59,7 @@ export interface SpotDetail {
   category: string | null;
   regionName: string | null;
   sigunguName: string | null;
-  detailStatus: string;
+  detailStatus: "fresh" | "stale" | "unavailable" | "pending" | "placeholder";
   images: SpotImage[];
   intro: SpotIntro | null;
 }

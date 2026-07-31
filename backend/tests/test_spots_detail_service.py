@@ -8,7 +8,7 @@ from fakeredis.aioredis import FakeRedis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.spots.services import load_spot_detail
+from app.modules.spots.services import load_spot_detail, refresh_spot_detail
 from app.modules.spots.services.detail import _DetailCache, _redis_set_detail
 from app.web.errors import KtoApiUnavailable, ResourceNotFound
 
@@ -158,6 +158,74 @@ async def test_cache_miss_fetches_then_caches(db_session: AsyncSession, redis: F
     row2 = await load_spot_detail(db_session, kto2, redis, "DT-MISS")
     assert kto2.calls == 0
     assert row2.overview == "한라산 정상 풍경"
+
+
+@pytest.mark.asyncio
+async def test_deferred_cache_miss_returns_pending_without_waiting(
+    db_session: AsyncSession, redis: FakeRedis
+) -> None:
+    await _insert_spot(db_session, "DT-DEFER-MISS")
+    kto = FakeKto(_COMMON, _IMAGES)
+
+    row = await load_spot_detail(
+        db_session,
+        kto,
+        redis,
+        "DT-DEFER-MISS",
+        defer_refresh=True,
+    )
+
+    assert kto.calls == 0
+    assert row.detail_status == "pending"
+    assert row.title == "title-DT-DEFER-MISS"
+    assert row.overview is None
+    assert row.images == []
+
+
+@pytest.mark.asyncio
+async def test_deferred_stale_cache_returns_immediately(
+    db_session: AsyncSession, redis: FakeRedis
+) -> None:
+    await _insert_spot(db_session, "DT-DEFER-STALE")
+    await _insert_detail(db_session, "DT-DEFER-STALE", overview="old", age_days=8)
+    await _insert_image(db_session, "DT-DEFER-STALE", 0, "http://stale/0.jpg")
+    kto = FakeKto(_COMMON, _IMAGES)
+
+    row = await load_spot_detail(
+        db_session,
+        kto,
+        redis,
+        "DT-DEFER-STALE",
+        defer_refresh=True,
+    )
+
+    assert kto.calls == 0
+    assert row.detail_status == "stale"
+    assert row.overview == "old"
+    assert [i.origin_image_url for i in row.images] == ["http://stale/0.jpg"]
+
+
+@pytest.mark.asyncio
+async def test_background_refresh_populates_deferred_cache(
+    db_session: AsyncSession, redis: FakeRedis
+) -> None:
+    await _insert_spot(db_session, "DT-DEFER-REFRESH")
+    kto = FakeKto(_COMMON, _IMAGES, _INTRO)
+
+    await refresh_spot_detail(db_session, kto, redis, "DT-DEFER-REFRESH")
+    row = await load_spot_detail(
+        db_session,
+        FakeKto(),
+        redis,
+        "DT-DEFER-REFRESH",
+        defer_refresh=True,
+    )
+
+    assert kto.calls == 3
+    assert row.detail_status == "fresh"
+    assert row.overview == "한라산 정상 풍경"
+    assert row.intro is not None
+    assert row.intro.usetime == "09:30~17:30"
 
 
 @pytest.mark.asyncio

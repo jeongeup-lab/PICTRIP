@@ -15,7 +15,11 @@ from app.modules.spots.services.concentration import (
     load_hidden_spots,
     load_hot_spots,
 )
-from app.modules.spots.services.detail import load_spot_detail
+from app.modules.spots.services.detail import (
+    load_spot_detail,
+    refresh_spot_detail,
+    refresh_spot_detail_in_background,
+)
 from app.modules.spots.services.nearby import (
     NearbyCategory,
     NearbySpotRow,
@@ -70,6 +74,8 @@ __all__ = [
     "load_spot_detail",
     "lock_current_spot_image",
     "map_region_tokens_to_sido",
+    "refresh_spot_detail",
+    "refresh_spot_detail_in_background",
     "save_spot",
     "search_spots_by_title",
     "travel_category_sql",

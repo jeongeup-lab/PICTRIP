@@ -25,6 +25,7 @@ export default function SpotScreen() {
       : data?.firstImageUrl
         ? [data.firstImageUrl]
         : [];
+  const detailPending = data?.detailStatus === "pending";
 
   const onShare = () => {
     if (!data) return;
@@ -76,7 +77,7 @@ export default function SpotScreen() {
           }
         />
 
-        {isLoading || !data || isPlaceholderData ? (
+        {isLoading || !data || isPlaceholderData || detailPending ? (
           <View style={{ padding: spacing.lg, gap: spacing.md }}>
             <Skeleton height={18} />
             <Skeleton height={18} width="80%" />

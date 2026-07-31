@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, BackgroundTasks, status
 
 from app.core.db import DbSession
 from app.core.redis import RedisDep
@@ -12,7 +12,7 @@ from app.modules.spots.schemas import (
     SpotImageOut,
     SpotIntro,
 )
-from app.modules.spots.services import load_spot_detail
+from app.modules.spots.services import load_spot_detail, refresh_spot_detail_in_background
 from app.web.envelope import ok
 
 router = APIRouter(tags=["SPT · spots"])
@@ -24,9 +24,15 @@ router = APIRouter(tags=["SPT · spots"])
     summary="Spot detail (overview/images lazy KTO fetch + 7-day cache)",
 )
 async def get_spot(
-    content_id: str, session: DbSession, kto: KtoDep, redis: RedisDep
+    content_id: str,
+    background_tasks: BackgroundTasks,
+    session: DbSession,
+    kto: KtoDep,
+    redis: RedisDep,
 ) -> dict[str, Any]:
-    row = await load_spot_detail(session, kto, redis, content_id)
+    row = await load_spot_detail(session, kto, redis, content_id, defer_refresh=True)
+    if row.detail_status in {"pending", "stale"}:
+        background_tasks.add_task(refresh_spot_detail_in_background, kto, redis, content_id)
     payload = SpotDetailResponse(
         contentId=row.content_id,
         title=row.title,
