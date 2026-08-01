@@ -180,6 +180,10 @@ async def test_detail_route_signs_type1_images_and_passes_type3_through(
                 "smallimageurl": "http://tong.visitkorea.or.kr/cms/resource/2/2_image3_1.jpg",
                 "cpyrhtDivCd": "Type3",
             },
+            {
+                "originimgurl": "http://tong.visitkorea.or.kr/cms/resource/3/3_image2_1.jpg",
+                "smallimageurl": "http://tong.visitkorea.or.kr/cms/resource/3/3_image3_1.jpg",
+            },
         ],
     )
     await override_db_and_seed.execute(
@@ -197,10 +201,14 @@ async def test_detail_route_signs_type1_images_and_passes_type3_through(
     assert data["firstImageUrl"].startswith("https://img.pictrip.org/t1/1620/")
     assert data["firstImageUrl"].endswith("/9_image1_1.jpg")
 
-    type1, type3 = data["images"]
+    type1, type3, unknown = data["images"]
     assert type1["originImageUrl"].startswith("https://img.pictrip.org/t1/1620/")
     assert type1["smallImageUrl"].startswith("https://img.pictrip.org/t1/320/")
     assert type3["originImageUrl"] == (
         "https://tong.visitkorea.or.kr/cms/resource/2/2_image2_1.jpg"
     )
     assert type3["smallImageUrl"] == type3["originImageUrl"]
+    assert unknown["originImageUrl"] == (
+        "https://tong.visitkorea.or.kr/cms/resource/3/3_image2_1.jpg"
+    )
+    assert unknown["smallImageUrl"] == unknown["originImageUrl"]
