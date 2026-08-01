@@ -152,4 +152,38 @@ describe("spot detail seed", () => {
     expect(result?.data?.firstImageUrl).toBe("https://tong.visitkorea.or.kr/cms/a_image2_1.jpg");
     now.mockRestore();
   });
+
+  it("swaps a tile-width card seed for the detail-width url of the same image", async () => {
+    const target = "tong.visitkorea.or.kr/cms/resource/9/9_image1_1.jpg";
+    const heroUrl = `https://img.pictrip.org/t1/1620/bbb/${target}`;
+    (getSpot as jest.Mock).mockResolvedValue({ ...detail("fresh"), firstImageUrl: heroUrl });
+    const seed = {
+      contentId: "777",
+      title: "관광지",
+      imageUrl: `https://img.pictrip.org/t1/320/aaa/${target}`,
+    };
+
+    let result: ReturnType<typeof useSpot> | undefined;
+    function Harness() {
+      result = useSpot("777", seed);
+      return null;
+    }
+
+    await act(async () => {
+      tree = renderer.create(
+        <QueryClientProvider client={queryClient}>
+          <Harness />
+        </QueryClientProvider>,
+      );
+    });
+
+    expect(result?.data?.firstImageUrl).toBe(seed.imageUrl);
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(result?.data?.detailStatus).toBe("fresh");
+    expect(result?.data?.firstImageUrl).toBe(heroUrl);
+  });
 });
