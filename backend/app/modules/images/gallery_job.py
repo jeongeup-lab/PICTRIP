@@ -167,7 +167,7 @@ async def embed_gallery_spots(
     )
     by_id = dict(targets)
     for content_id, vector, image_count, status, gallery in outcomes:
-        if gallery:
+        if status != KTO_FAILED:
             await replace_spot_images(session, content_id, gallery)
         if status == OK and vector is not None:
             written = await _record_gallery(
