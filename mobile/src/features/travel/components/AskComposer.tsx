@@ -2,10 +2,12 @@ import { ScrollView, Pressable, View, Text, TextInput, StyleSheet } from "react-
 import { Image } from "expo-image";
 import { Icon } from "@/components/Icon";
 import type { PhotoUpload } from "@/features/travel/api";
-import type { Chip } from "@/features/travel/lib/chips";
+import { NEARBY_CHIP, type Chip } from "@/features/travel/lib/chips";
 import { colors, spacing } from "@/constants/theme";
 
 export const ATTACH_NOTICE = "서버에 저장하지 않고 비교 후 폐기해요";
+
+export const ASK_PLACEHOLDER = "사진을 올리거나 물어보세요";
 
 interface Props {
   value: string;
@@ -13,9 +15,11 @@ interface Props {
   chips: Chip[];
   disabled: boolean;
   anchorTitle?: string | null;
+  nearbyEnabled?: boolean;
   onClearAnchor?: () => void;
   onChange: (text: string) => void;
   onSuggest: (chip: Chip) => void;
+  onNearby: () => void;
   onAttach: () => void;
   onClearAttach: () => void;
   onSubmit: () => void;
@@ -27,9 +31,11 @@ export function AskComposer({
   chips,
   disabled,
   anchorTitle = null,
+  nearbyEnabled = false,
   onClearAnchor,
   onChange,
   onSuggest,
+  onNearby,
   onAttach,
   onClearAttach,
   onSubmit,
@@ -88,35 +94,51 @@ export function AskComposer({
       </ScrollView>
 
       <View style={styles.composer}>
-        <Pressable
-          testID="travel-attach"
-          style={styles.iconButton}
-          hitSlop={4}
-          onPress={onAttach}
-          disabled={disabled}
-        >
-          <Icon name="plus" size={20} color={colors.sec} strokeWidth={2} />
-        </Pressable>
         <TextInput
           testID="travel-input"
           style={styles.input}
           value={value}
           onChangeText={onChange}
-          placeholder={photo ? "사진에 덧붙일 말 (선택)" : "무엇이든 물어보세요"}
+          placeholder={photo ? "사진에 덧붙일 말 (선택)" : ASK_PLACEHOLDER}
           placeholderTextColor={colors.ter}
           returnKeyType="send"
           onSubmitEditing={onSubmit}
           editable={!disabled}
         />
-        <Pressable
-          testID="travel-send"
-          accessibilityLabel="보내기"
-          style={[styles.send, ready && styles.sendReady]}
-          onPress={onSubmit}
-          disabled={!ready}
-        >
-          <Icon name="arrow-up" size={17} color={colors.onImage} strokeWidth={2.2} />
-        </Pressable>
+        <View style={styles.actions}>
+          <View style={styles.actionsLeft}>
+            <Pressable
+              testID="travel-attach"
+              accessibilityLabel="사진 올리기"
+              style={styles.attachButton}
+              hitSlop={4}
+              onPress={onAttach}
+              disabled={disabled}
+            >
+              <Icon name="image" size={17} color={colors.accent} strokeWidth={2} />
+            </Pressable>
+            {nearbyEnabled ? (
+              <Pressable
+                testID="travel-nearby"
+                style={({ pressed }) => [styles.nearby, pressed && styles.chipPressed]}
+                onPress={onNearby}
+                disabled={disabled}
+              >
+                <Icon name="location" size={15} color={colors.sec} strokeWidth={1.9} />
+                <Text style={styles.nearbyText}>{NEARBY_CHIP.label}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          <Pressable
+            testID="travel-send"
+            accessibilityLabel="보내기"
+            style={[styles.send, ready && styles.sendReady]}
+            onPress={onSubmit}
+            disabled={!ready}
+          >
+            <Icon name="arrow-up" size={17} color={colors.onImage} strokeWidth={2.2} />
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -190,33 +212,53 @@ const styles = StyleSheet.create({
   chipPressed: { backgroundColor: colors.fill },
   chipText: { fontSize: 13.5, fontWeight: "700", color: colors.sec },
   composer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
     marginTop: 4,
     marginHorizontal: spacing.lg,
     marginBottom: 14,
-    padding: 5,
-    borderRadius: 999,
+    paddingTop: 12,
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: colors.line,
     backgroundColor: colors.inset,
   },
-  iconButton: {
+  actions: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 10,
+  },
+  actionsLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
+  attachButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(230,0,35,0.32)",
     alignItems: "center",
     justifyContent: "center",
   },
+  nearby: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    height: 36,
+    paddingHorizontal: 13,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  nearbyText: { fontSize: 13, fontWeight: "700", letterSpacing: -0.2, color: colors.sec },
   input: {
-    flex: 1,
     minWidth: 0,
+    minHeight: 22,
+    padding: 0,
+    paddingHorizontal: 2,
     fontSize: 14.5,
     fontWeight: "500",
     letterSpacing: -0.2,
     color: colors.ink,
-    padding: 0,
   },
   send: {
     width: 36,

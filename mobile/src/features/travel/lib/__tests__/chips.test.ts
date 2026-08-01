@@ -1,26 +1,35 @@
-import { ANCHOR_CHIPS, composerChips, idleChips, refineChips } from "@/features/travel/lib/chips";
+import {
+  ANCHOR_CHIPS,
+  composerChips,
+  idleChips,
+  NEARBY_CHIP,
+  refineChips,
+} from "@/features/travel/lib/chips";
 
 describe("idleChips", () => {
-  it("좌표가 없으면 거리 칩을 내지 않는다", () => {
-    const labels = idleChips(false).map((c) => c.label);
+  it("거리 칩은 더 이상 칩 레일에 있지 않다", () => {
+    const labels = idleChips().map((c) => c.label);
 
-    expect(labels).not.toContain("여기서 가까운 순");
+    expect(labels).not.toContain(NEARBY_CHIP.label);
     expect(labels).toContain("지금 열리는 축제");
   });
 
-  it("좌표가 있으면 거리 칩이 맨 앞에 온다", () => {
-    expect(idleChips(true)[0].label).toBe("여기서 가까운 순");
-  });
-
   it("초기 칩은 전부 질문형이다", () => {
-    expect(idleChips(true).every((c) => c.kind === "question")).toBe(true);
+    expect(idleChips().every((c) => c.kind === "question")).toBe(true);
   });
 
   it("초기 칩은 빈 질문을 싣지 않는다", () => {
-    for (const chip of idleChips(true)) {
+    for (const chip of idleChips()) {
       expect(chip.kind).toBe("question");
       if (chip.kind === "question") expect(chip.question.trim().length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("NEARBY_CHIP", () => {
+  it("컴포저 액션 행이 쓰는 질문형 칩이다", () => {
+    expect(NEARBY_CHIP.kind).toBe("question");
+    if (NEARBY_CHIP.kind === "question") expect(NEARBY_CHIP.question).toBe("여기서 가까운 곳");
   });
 });
 
@@ -39,18 +48,18 @@ describe("refineChips", () => {
 
 describe("composerChips", () => {
   it("제안이 있으면 refine 칩을 쓴다", () => {
-    const chips = composerChips([{ label: "가까운 순으로", patch: { nearMe: true } }], true);
+    const chips = composerChips([{ label: "가까운 순으로", patch: { nearMe: true } }]);
 
     expect(chips).toEqual([{ kind: "refine", label: "가까운 순으로", patch: { nearMe: true } }]);
   });
 
   it("제안이 비면 초기 칩으로 되돌아간다", () => {
-    expect(composerChips([], false)).toEqual(idleChips(false));
-    expect(composerChips(undefined, true)).toEqual(idleChips(true));
+    expect(composerChips([])).toEqual(idleChips());
+    expect(composerChips(undefined)).toEqual(idleChips());
   });
 
   it("카드가 선택되면 제안 대신 앵커 칩을 쓴다", () => {
-    const chips = composerChips([{ label: "실내만", patch: { indoorOnly: true } }], true, true);
+    const chips = composerChips([{ label: "실내만", patch: { indoorOnly: true } }], true);
 
     expect(chips).toEqual(ANCHOR_CHIPS);
     expect(chips.every((c) => c.kind === "anchor")).toBe(true);

@@ -1,26 +1,32 @@
-import { useCallback, useRef, useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, View, Text, StyleSheet } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Animated,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  View,
+  Text,
+  StyleSheet,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useChannelCards } from "@/features/channels/queries";
 import { AskComposer } from "@/features/travel/components/AskComposer";
-import { PinBoard, type BoardFilter } from "@/features/travel/components/PinBoard";
 import { ConversationTurn } from "@/features/travel/components/ConversationTurn";
+import { Mascot } from "@/features/travel/components/Mascot";
 import { TravelToast } from "@/features/travel/components/TravelToast";
 import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
 import { useAskAgentMutation } from "@/features/travel/queries";
 import { useConversation, type Turn } from "@/features/travel/stores/conversation-store";
-import { channelCardsToSpots } from "@/features/travel/lib/channel-spots";
-import { mergeBoardSpots } from "@/features/travel/lib/board";
 import { agentErrorMessage, PHOTO_PICK_FAILED } from "@/features/travel/lib/agent-errors";
 import { composeQuestion, anchorQuestion } from "@/features/travel/lib/question";
-import { composerChips, type Chip } from "@/features/travel/lib/chips";
+import { composerChips, NEARBY_CHIP, type Chip } from "@/features/travel/lib/chips";
 import { pickTravelPhoto } from "@/features/travel/usecases/pick-travel-photo";
 import type { AskInput, PhotoUpload, TravelSpot } from "@/features/travel/api";
 import { colors, spacing } from "@/constants/theme";
 
-const NEARBY_NOTICE = "위치를 켜면 근처를 찾아드려요";
-const TOAST_BOTTOM = 104;
+const TOAST_BOTTOM = 150;
+const GREETING_FADE_MS = 180;
 
 export default function TravelScreen() {
   const scrollRef = useRef<ScrollView>(null);
@@ -28,7 +34,6 @@ export default function TravelScreen() {
   const [draft, setDraft] = useState("");
   const [photo, setPhoto] = useState<PhotoUpload | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [filter, setFilter] = useState<BoardFilter>("all");
   const [anchorSpot, setAnchorSpot] = useState<TravelSpot | null>(null);
 
   const turns = useConversation((s) => s.turns);
@@ -38,26 +43,23 @@ export default function TravelScreen() {
   const resolveTurn = useConversation((s) => s.resolve);
   const failTurn = useConversation((s) => s.fail);
   const finishPlayback = useConversation((s) => s.finishPlayback);
+  const clearTurns = useConversation((s) => s.clear);
 
-  const { coords, phase } = useNearbyCoords();
+  const { coords } = useNearbyCoords();
   const ask = useAskAgentMutation();
 
-  const hot = useChannelCards("hot");
-  const hidden = useChannelCards("hidden");
-  const around = useChannelCards("around", coords ?? undefined);
+  const empty = turns.length === 0;
+  const greetFade = useMemo(() => new Animated.Value(1), []);
 
-  const hotSpots = channelCardsToSpots("hot", hot.data?.cards ?? []);
-  const hiddenSpots = channelCardsToSpots("hidden", hidden.data?.cards ?? []);
-  const aroundSpots =
-    phase === "ready" ? channelCardsToSpots("around", around.data?.cards ?? []) : [];
-  const boardSpots =
-    filter === "all"
-      ? mergeBoardSpots([hotSpots, hiddenSpots, aroundSpots]).map((spot) => ({
-          ...spot,
-          tag: null,
-        }))
-      : { hot: hotSpots, hidden: hiddenSpots, around: aroundSpots }[filter];
-  const boardNotice = filter === "around" && phase !== "ready" ? NEARBY_NOTICE : null;
+  useEffect(() => {
+    const fade = Animated.timing(greetFade, {
+      toValue: empty ? 1 : 0,
+      duration: GREETING_FADE_MS,
+      useNativeDriver: true,
+    });
+    fade.start();
+    return () => fade.stop();
+  }, [empty, greetFade]);
 
   const scrollToEnd = useCallback(() => {
     requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
@@ -143,6 +145,15 @@ export default function TravelScreen() {
     [refineFrom, lastAnswered],
   );
 
+  const onNearby = useCallback(() => submit(NEARBY_CHIP.question, null), [submit]);
+
+  const onNewChat = useCallback(() => {
+    clearTurns();
+    setDraft("");
+    setPhoto(null);
+    setAnchorSpot(null);
+  }, [clearTurns]);
+
   const onSpotPress = useCallback(
     (spot: TravelSpot) => {
       if (anchorSpot?.contentId === spot.contentId) {
@@ -186,50 +197,33 @@ export default function TravelScreen() {
     }
   }, []);
 
-  const onPhotoStart = useCallback(async () => {
-    if (busy) return;
-    try {
-      const picked = await pickTravelPhoto();
-      if (picked) submit(draft, picked);
-    } catch {
-      setToast(PHOTO_PICK_FAILED);
-    }
-  }, [busy, draft, submit]);
-
-  const chips = composerChips(
-    lastAnswered?.answer?.refinements,
-    coords !== null,
-    anchorSpot !== null,
-  );
+  const chips = composerChips(lastAnswered?.answer?.refinements, anchorSpot !== null);
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.bar}>
         <Text style={styles.wordmark}>PICTRIP</Text>
+        {empty ? null : (
+          <Pressable
+            testID="travel-new-chat"
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.newChat, pressed && styles.newChatPressed]}
+            hitSlop={6}
+            onPress={onNewChat}
+          >
+            <Text style={styles.newChatText}>새 대화</Text>
+          </Pressable>
+        )}
       </View>
 
-      <ScrollView
-        ref={scrollRef}
-        style={styles.scroll}
-        contentContainerStyle={styles.body}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.lede}>
-          <Text style={styles.eyebrow}>VISUAL BOARD</Text>
-          <Text style={styles.headline}>오늘,{"\n"}어디로 갈까요</Text>
-          <Text style={styles.sub}>사진을 모으고 질문을 더하면 닮은 국내 여행지로 이어드려요</Text>
-        </View>
-
-        <PinBoard
-          filter={filter}
-          spots={boardSpots}
-          notice={boardNotice}
-          onFilter={setFilter}
-          onPhotoStart={() => void onPhotoStart()}
-        />
-
-        {turns.length > 0 ? (
+      <View style={styles.stage}>
+        <ScrollView
+          ref={scrollRef}
+          style={styles.scroll}
+          contentContainerStyle={styles.body}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.talk}>
             {turns.map((turn) => (
               <ConversationTurn
@@ -243,8 +237,19 @@ export default function TravelScreen() {
               />
             ))}
           </View>
-        ) : null}
-      </ScrollView>
+        </ScrollView>
+
+        <Animated.View
+          testID="travel-greeting"
+          style={[styles.greeting, { opacity: greetFade }]}
+          pointerEvents="none"
+          accessibilityElementsHidden={!empty}
+          importantForAccessibility={empty ? "auto" : "no-hide-descendants"}
+        >
+          <Mascot floating={empty} />
+          <Text style={styles.greetingText}>오늘,{"\n"}어디로 갈까요</Text>
+        </Animated.View>
+      </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <AskComposer
@@ -253,9 +258,11 @@ export default function TravelScreen() {
           chips={chips}
           disabled={busy}
           anchorTitle={anchorSpot?.title ?? null}
+          nearbyEnabled={coords !== null}
           onClearAnchor={() => setAnchorSpot(null)}
           onChange={onChangeDraft}
           onSuggest={submitDockChip}
+          onNearby={onNearby}
           onAttach={() => void onAttach()}
           onClearAttach={() => setPhoto(null)}
           onSubmit={() => submit(draft, photo)}
@@ -270,36 +277,46 @@ export default function TravelScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   bar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    minHeight: 32,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    alignItems: "center",
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
   },
   wordmark: { fontSize: 20, fontWeight: "800", letterSpacing: -0.5, color: colors.ink },
+  newChat: {
+    height: 32,
+    paddingHorizontal: 13,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.line,
+    justifyContent: "center",
+  },
+  newChatPressed: { backgroundColor: colors.fill },
+  newChatText: { fontSize: 13, fontWeight: "700", letterSpacing: -0.2, color: colors.sec },
+  stage: { flex: 1 },
   scroll: { flex: 1 },
   body: { paddingBottom: spacing.xxl },
-  lede: { paddingTop: spacing.xl, paddingHorizontal: spacing.lg, paddingBottom: 6 },
-  eyebrow: {
-    fontSize: 10.5,
-    fontWeight: "900",
-    letterSpacing: 1.3,
-    color: colors.accentText,
+  greeting: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  headline: {
-    marginTop: 7,
-    fontSize: 25,
+  greetingText: {
+    marginTop: 16,
+    textAlign: "center",
+    fontSize: 26,
     fontWeight: "800",
-    letterSpacing: -0.8,
-    lineHeight: 33.5,
+    letterSpacing: -0.9,
+    lineHeight: 34,
     color: colors.ink,
   },
-  sub: { marginTop: 8, fontSize: 13, lineHeight: 19, color: colors.sec },
-  talk: {
-    marginTop: 30,
-    marginHorizontal: spacing.lg,
-    paddingTop: 22,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-  },
+  talk: { marginTop: 22, marginHorizontal: spacing.lg },
 });
