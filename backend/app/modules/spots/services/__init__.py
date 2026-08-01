@@ -16,6 +16,7 @@ from app.modules.spots.services.concentration import (
     load_hot_spots,
 )
 from app.modules.spots.services.detail import (
+    invalidate_spot_detail_cache,
     load_spot_detail,
     parse_kto_detail_images,
     refresh_spot_detail,
@@ -65,6 +66,7 @@ __all__ = [
     "find_nearby_spots",
     "find_nearby_spots_bbox",
     "image_bearing_spots_stmt",
+    "invalidate_spot_detail_cache",
     "list_saved_spots",
     "load_active_spot_cards_by_ids",
     "load_concentration_rates",

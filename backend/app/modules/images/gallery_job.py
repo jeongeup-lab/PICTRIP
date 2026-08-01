@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import httpx
+from redis.asyncio import Redis
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -35,6 +36,7 @@ class GalleryResult:
     failed: int = 0
     skipped: int = 0
     by_status: dict[str, int] = field(default_factory=dict)
+    image_writes: list[str] = field(default_factory=list)
 
     def record(self, status: str) -> None:
         self.by_status[status] = self.by_status.get(status, 0) + 1
@@ -169,6 +171,7 @@ async def embed_gallery_spots(
     for content_id, vector, image_count, status, gallery in outcomes:
         if status != KTO_FAILED:
             await replace_spot_images(session, content_id, gallery)
+            result.image_writes.append(content_id)
         if status == OK and vector is not None:
             written = await _record_gallery(
                 session, content_id, by_id[content_id], vector, image_count
@@ -185,8 +188,11 @@ async def run_gallery_embedding_job(
     limit: int | None = None,
     batch_size: int = 50,
     concurrency: int = 8,
+    redis: Redis | None = None,
     session_factory: async_sessionmaker[AsyncSession] = async_session_factory,
 ) -> GalleryResult:
+    from app.modules.spots.services import invalidate_spot_detail_cache
+
     async with session_factory() as session:
         targets = await collect_gallery_targets(session, limit=limit)
     logger.info("gallery_embed.job.start", targets=len(targets))
@@ -200,11 +206,15 @@ async def run_gallery_embedding_job(
         async with httpx.AsyncClient(headers={"user-agent": "PicTrip-embed"}) as client:
             for i in range(0, len(targets), max(1, batch_size)):
                 batch = targets[i : i + max(1, batch_size)]
+                invalidated = len(result.image_writes)
                 async with session_factory() as session:
                     await embed_gallery_spots(
                         session, batch, kto=kto, client=client, dl_sem=dl_sem, result=result
                     )
                     await session.commit()
+                if redis is not None:
+                    for content_id in result.image_writes[invalidated:]:
+                        await invalidate_spot_detail_cache(redis, content_id)
     finally:
         await kto.aclose()
     logger.info(

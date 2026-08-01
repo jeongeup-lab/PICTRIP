@@ -107,6 +107,13 @@ async def _redis_set_detail(redis: Redis, content_id: str, cache: _DetailCache) 
         logger.warning("spot.detail.cache_set_failed", content_id=content_id, error=str(exc))
 
 
+async def invalidate_spot_detail_cache(redis: Redis, content_id: str) -> None:
+    try:
+        await redis.delete(_REDIS_KEY.format(content_id=content_id))
+    except Exception as exc:
+        logger.warning("spot.detail.cache_del_failed", content_id=content_id, error=str(exc))
+
+
 async def _refresh_in_backoff(redis: Redis, content_id: str) -> bool:
     try:
         return bool(await redis.get(_REFRESH_BACKOFF_KEY.format(content_id=content_id)))

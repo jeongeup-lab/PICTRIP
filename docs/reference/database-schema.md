@@ -38,7 +38,7 @@ AOF everysec + RDB · `noeviction` 256mb. 전부 재계산 가능한 캐시.
 |---|---|---|
 | `denyjti:{jti}` | refresh 잔여 수명 | 로그아웃/탈퇴 denylist (**fail-open**) |
 | `rl:{bucket}:{ip}` | 60s | rate-limit 카운터 (fail-open) |
-| `spotdetail:v1:{contentId}` | 1h | 상세 응답 hot front |
+| `spotdetail:v2:{contentId}` | 1h | 상세 응답 hot front. 갤러리 백필이 `spot_images`를 바꾸면 해당 키를 지운다 |
 | `spotdetail:refresh:v1:{contentId}` | 20s | 상세 백그라운드 갱신 중복 방지 락 (SET NX, 소유 토큰 compare-and-delete) |
 | `spotdetail:refresh-backoff:v1:{contentId}` | 60s | KTO 상세 갱신 실패 재시도 제한 |
 | `rlte:{contentId}` | 1h | 연관 관광지 (Redis 전용 — 테이블 없음) |

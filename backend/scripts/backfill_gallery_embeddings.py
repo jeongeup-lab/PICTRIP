@@ -26,6 +26,7 @@ async def _run_backfill(redis: Redis, args: argparse.Namespace) -> GalleryResult
             limit=args.limit,
             batch_size=args.batch_size,
             concurrency=args.concurrency,
+            redis=redis,
         )
     finally:
         await invalidate_all_match_cache(redis)
