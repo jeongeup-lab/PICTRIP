@@ -10,8 +10,8 @@
 | 테이블 | 적재 | 요지 |
 |---|---|---|
 | `spots` | pipeline (일일) | KTO 마스터. `show_flag=1` 부분 인덱스 다수 · `cpyrht_div_cd` CHECK(Type1/Type3) · `idx_spots_image_pool` |
-| `spot_details` | backend (lazy) | detail* 7일 캐시. **`overview`는 여기, verbatim** |
-| `spot_images` | backend (lazy) | detailImage2 URL만 (bytes 금지) · (content_id, sort_order) unique |
+| `spot_details` | backend (lazy) | detail* 90일 캐시 — 실무 무효화는 `spots.modified_time` 비교. **`overview`는 여기, verbatim** |
+| `spot_images` | backend (lazy) + gallery-backfill | detailImage2 URL·`cpyrht_div_cd`만 (bytes 금지) · (content_id, sort_order) unique. 갤러리 잡이 임베딩용으로 부르는 detailImage2 응답을 같은 콜로 함께 적재 |
 | `spot_embeddings` | backend 잡 | 대표사진 CLIP `halfvec(512)` · HNSW(halfvec_cosine, m/ef=0005와 일치 필수) |
 | `spot_embeddings_gallery` | backend 잡 | 갤러리 ≤5장 centroid · 0020 트리거가 이미지 변경 시 행 삭제 |
 | `embedding_failures` | backend 잡 | 재시도 큐 (`reason`, `--only-failed` 대상) |

@@ -135,7 +135,8 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
 ## Backend DB facts (Alembic history is authoritative)
 
 - `overview` lives on `spot_details`, not `spots` (from `detailCommon2`, cached
-  7 days, verbatim).
+  90 days, verbatim). 무효화는 `spots.modified_time` 비교가 담당 — 일일 동기화가
+  변경분을 올리면 그 스팟만 다시 받는다.
 - Embedding columns are `halfvec(512)` (`spot_embeddings.embedding`,
   `users.taste_vector`). Cast vector literals: `... <=> $1::halfvec(512)`.
 - Related-spots (TarRlteTar) are Redis-only: key `rlte:{contentId}`, TTL 1h.

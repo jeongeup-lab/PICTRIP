@@ -26,6 +26,7 @@ class SimilarResultRow:
 class SpotImageRow:
     origin_image_url: str
     small_image_url: str | None
+    cpyrht_div_cd: str | None = None
 
 
 @dataclass
@@ -56,6 +57,7 @@ class SpotDetailRow:
     images: list[SpotImageRow]
     category: str | None = None
     intro: SpotIntroRow | None = None
+    cpyrht_div_cd: str | None = None
 
 
 @dataclass

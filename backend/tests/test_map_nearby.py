@@ -277,3 +277,54 @@ async def test_nearby_route_bbox_params_override_radius(db_session, client):
     assert resp.status_code == 200
     ids = {i["contentId"] for i in resp.json()["data"]}
     assert ids == {"inbox"}
+
+
+async def test_nearby_cards_sign_type1_images_at_tile_width(
+    db_session: AsyncSession, monkeypatch
+) -> None:
+    from app.config import settings
+    from app.modules.map.services import nearby_cards
+
+    monkeypatch.setattr(settings, "IMG_PROXY_T1_SECRET", "s3cret")
+    await _seed(
+        db_session,
+        "t1-card",
+        lat=LAT,
+        lng=LNG,
+        img="http://tong.visitkorea.or.kr/cms/resource/3/3_image2_1.jpg",
+    )
+    await _seed(
+        db_session,
+        "t3-card",
+        lat=LAT,
+        lng=LNG,
+        img="http://tong.visitkorea.or.kr/cms/resource/4/4_image2_1.jpg",
+    )
+    await db_session.execute(
+        text("UPDATE spots SET cpyrht_div_cd = 'Type1' WHERE content_id = 't1-card'")
+    )
+    await db_session.execute(
+        text("UPDATE spots SET cpyrht_div_cd = 'Type3' WHERE content_id = 't3-card'")
+    )
+
+    cards = {
+        c.contentId: c
+        for c in await nearby_cards(
+            db_session,
+            lat=LAT,
+            lng=LNG,
+            radius=1000,
+            category=None,
+            sw_lat=None,
+            sw_lng=None,
+            ne_lat=None,
+            ne_lng=None,
+        )
+    }
+
+    assert cards["t1-card"].firstImageUrl is not None
+    assert cards["t1-card"].firstImageUrl.startswith("https://img.pictrip.org/t1/320/")
+    assert cards["t1-card"].firstImageUrl.endswith("/3_image1_1.jpg")
+    assert cards["t3-card"].firstImageUrl == (
+        "https://tong.visitkorea.or.kr/cms/resource/4/4_image2_1.jpg"
+    )

@@ -1,5 +1,7 @@
 name: gallery-backfill
 # 갤러리(다중 이미지) centroid 임베딩 일일 백필 — 매칭 품질 P1(PR #155)의 적재 경로.
+# 같은 detailImage2 응답을 spot_images 에도 적재한다(URL·cpyrht_div_cd) — 상세화면
+# 갤러리가 쓰는 행이라, KTO 쿼터를 추가로 쓰지 않고 상세 lazy fetch 몫을 줄인다.
 # attraction 스팟 11.6k를 KTO detailImage2 일일 쿼터(~1,000콜, 초과 시 429) 안에서
 # 하루 800스팟씩 소진될 때까지 나눠 채운다 — 상세화면 lazy fetch 등 앱 트래픽
 # 몫으로 ~200콜 헤드룸을 남긴다. 잡은 resumable(실패 스팟은 행을 안 써서 다음

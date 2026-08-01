@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import math
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import httpx
 from sqlalchemy import func, select
@@ -15,6 +16,9 @@ from app.kto.client import KtoClient, KtoService
 from app.modules.images.embedding_job import OK, SOURCE_CHANGED, _embed_one
 from app.modules.images.models import SpotEmbeddingGallery
 from app.web.errors import KtoApiUnavailable
+
+if TYPE_CHECKING:
+    from app.modules.spots.services import SpotImageRow
 
 logger = get_logger(__name__)
 
@@ -69,17 +73,21 @@ def centroid(vectors: list[list[float]]) -> list[float]:
     return [v / norm for v in mean]
 
 
-async def _gallery_image_urls(kto: KtoClient, content_id: str, first_image_url: str) -> list[str]:
+async def _gallery_images(
+    kto: KtoClient, content_id: str, first_image_url: str
+) -> tuple[list[str], list[SpotImageRow]]:
+    from app.modules.spots.services import parse_kto_detail_images
+
     async with _kto_sem:
         items = await kto.call(KtoService.KOR, "detailImage2", contentId=content_id, imageYN="Y")
+    gallery = parse_kto_detail_images(items)
     urls = [first_image_url]
-    for item in items:
-        origin = item.get("originimgurl")
-        if isinstance(origin, str) and origin and origin not in urls:
-            urls.append(origin)
+    for image in gallery:
+        if image.origin_image_url not in urls:
+            urls.append(image.origin_image_url)
         if len(urls) >= MAX_GALLERY_IMAGES:
             break
-    return urls
+    return urls, gallery
 
 
 async def _embed_gallery_one(
@@ -89,18 +97,18 @@ async def _embed_gallery_one(
     kto: KtoClient,
     client: httpx.AsyncClient,
     dl_sem: asyncio.Semaphore,
-) -> tuple[str, list[float] | None, int, str]:
+) -> tuple[str, list[float] | None, int, str, list[SpotImageRow]]:
     try:
-        urls = await _gallery_image_urls(kto, content_id, first_image_url)
+        urls, gallery = await _gallery_images(kto, content_id, first_image_url)
     except KtoApiUnavailable:
-        return (content_id, None, 0, KTO_FAILED)
+        return (content_id, None, 0, KTO_FAILED, [])
     outcomes = await asyncio.gather(*(_embed_one(content_id, url, client, dl_sem) for url in urls))
     vectors = [
         vector for _cid, _url, vector, status, _detail in outcomes if status == OK and vector
     ]
     if not vectors:
-        return (content_id, None, 0, NO_IMAGES)
-    return (content_id, centroid(vectors), len(vectors), OK)
+        return (content_id, None, 0, NO_IMAGES, gallery)
+    return (content_id, centroid(vectors), len(vectors), OK, gallery)
 
 
 async def _record_gallery(
@@ -145,6 +153,8 @@ async def embed_gallery_spots(
     dl_sem: asyncio.Semaphore,
     result: GalleryResult | None = None,
 ) -> GalleryResult:
+    from app.modules.spots.services import replace_spot_images
+
     result = result or GalleryResult()
     if not targets:
         return result
@@ -156,7 +166,9 @@ async def embed_gallery_spots(
         )
     )
     by_id = dict(targets)
-    for content_id, vector, image_count, status in outcomes:
+    for content_id, vector, image_count, status, gallery in outcomes:
+        if gallery:
+            await replace_spot_images(session, content_id, gallery)
         if status == OK and vector is not None:
             written = await _record_gallery(
                 session, content_id, by_id[content_id], vector, image_count
