@@ -23,9 +23,12 @@ export function preferredSeedImageUrl(
   serverUrl: string | null | undefined,
 ): string {
   const seed = parseT1(seedUrl);
+  if (!seed) return seedUrl;
   const server = parseT1(serverUrl);
-  if (seed && server && seed.target === server.target && server.width > seed.width) {
-    return serverUrl as string;
+  if (!server) {
+    if (!serverUrl || serverUrl.startsWith(T1_PREFIX)) return seedUrl;
+    return serverUrl;
   }
+  if (seed.target === server.target && server.width > seed.width) return serverUrl as string;
   return seedUrl;
 }
