@@ -13,6 +13,12 @@ describe("preferredSeedImageUrl", () => {
     expect(preferredSeedImageUrl(hero, tile)).toBe(hero);
   });
 
+  it("drops a transformed seed when the server declines to transform", () => {
+    const raw = "https://tong.visitkorea.or.kr/cms/resource/9/9_image2_1.jpg";
+    expect(preferredSeedImageUrl(tile, raw)).toBe(raw);
+    expect(preferredSeedImageUrl(hero, raw)).toBe(raw);
+  });
+
   it("keeps the seed when the upstream image differs", () => {
     const other = "https://img.pictrip.org/t1/1620/ccc/tong.visitkorea.or.kr/cms/other.jpg";
     expect(preferredSeedImageUrl(tile, other)).toBe(tile);
