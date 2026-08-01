@@ -12,9 +12,11 @@ export const ANCHOR_CHIPS: Chip[] = [
   { kind: "anchor", label: "오늘 붐벼?", action: "crowd" },
 ];
 
-const NEARBY_CHIP: Chip = {
+export type QuestionChip = Extract<Chip, { kind: "question" }>;
+
+export const NEARBY_CHIP: QuestionChip = {
   kind: "question",
-  label: "여기서 가까운 순",
+  label: "내 근처",
   question: "여기서 가까운 곳",
 };
 
@@ -25,8 +27,8 @@ const BASE_CHIPS: Chip[] = [
   { kind: "question", label: "제주에서 한적한 곳", question: "제주에서 한적한 곳" },
 ];
 
-export function idleChips(hasCoords: boolean): Chip[] {
-  return hasCoords ? [NEARBY_CHIP, ...BASE_CHIPS] : [...BASE_CHIPS];
+export function idleChips(): Chip[] {
+  return [...BASE_CHIPS];
 }
 
 export function refineChips(refinements: Suggestion[] | null | undefined): Chip[] {
@@ -35,10 +37,9 @@ export function refineChips(refinements: Suggestion[] | null | undefined): Chip[
 
 export function composerChips(
   refinements: Suggestion[] | null | undefined,
-  hasCoords: boolean,
   anchored: boolean = false,
 ): Chip[] {
   if (anchored) return ANCHOR_CHIPS;
   const refine = refineChips(refinements);
-  return refine.length > 0 ? refine : idleChips(hasCoords);
+  return refine.length > 0 ? refine : idleChips();
 }

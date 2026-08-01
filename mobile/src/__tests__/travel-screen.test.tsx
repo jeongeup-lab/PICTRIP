@@ -9,7 +9,6 @@ jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }
 jest.mock("react-native-safe-area-context", () => ({
   SafeAreaView: (props: { children?: unknown }) => props.children,
 }));
-jest.mock("@/features/channels/queries", () => ({ useChannelCards: jest.fn() }));
 jest.mock("@/features/travel/hooks/use-nearby-coords", () => ({ useNearbyCoords: jest.fn() }));
 jest.mock("@/features/travel/usecases/pick-travel-photo", () => ({
   pickTravelPhoto: jest.fn(async () => null),
@@ -20,9 +19,6 @@ jest.mock("@/features/saved/hooks/use-save-optimistic", () => ({
 }));
 jest.mock("@/features/spots/queries", () => ({ prefetchSpot: jest.fn() }));
 
-const { useChannelCards } = jest.requireMock("@/features/channels/queries") as {
-  useChannelCards: jest.Mock;
-};
 const { pickTravelPhoto } = jest.requireMock("@/features/travel/usecases/pick-travel-photo") as {
   pickTravelPhoto: jest.Mock;
 };
@@ -130,7 +126,6 @@ let client: QueryClient;
 beforeEach(() => {
   jest.clearAllMocks();
   useConversation.getState().clear();
-  useChannelCards.mockReturnValue({ data: undefined, isError: true });
   useNearbyCoordsMock.mockReturnValue({ coords: COORDS, phase: "ready" });
   askAgentMock.mockResolvedValue(ANSWER);
   client = new QueryClient({
@@ -166,25 +161,43 @@ function pressable(tree: renderer.ReactTestRenderer, testID: string) {
     .find((node) => typeof node.props.onPress === "function");
 }
 
+function greeting(tree: renderer.ReactTestRenderer) {
+  return tree.root
+    .findAllByProps({ testID: "travel-greeting" })
+    .find((node) => node.props.importantForAccessibility !== undefined)!;
+}
+
 async function press(tree: renderer.ReactTestRenderer, testID: string) {
   const node = pressable(tree, testID);
   if (!node) throw new Error(`no pressable with testID ${testID}`);
   await act(async () => node.props.onPress());
 }
 
-describe("TravelScreen starter chips", () => {
-  it("offers the distance chip only when a location fix exists", async () => {
-    const withFix = await mount();
-    expect(pressable(withFix, "travel-chip-여기서 가까운 순")).toBeDefined();
-    await act(async () => withFix.unmount());
-    mounted = null;
+describe("TravelScreen empty state", () => {
+  it("keeps the dock — composer and starter chips — on screen with no turns yet", async () => {
+    const tree = await mount();
 
-    useNearbyCoordsMock.mockReturnValue({ coords: null, phase: "unavailable" });
-    const withoutFix = await mount();
-    expect(pressable(withoutFix, "travel-chip-여기서 가까운 순")).toBeUndefined();
-    expect(pressable(withoutFix, "travel-chip-지금 열리는 축제")).toBeDefined();
+    expect(useConversation.getState().turns).toHaveLength(0);
+    expect(greeting(tree).props.importantForAccessibility).toBe("auto");
+    expect(tree.root.findAllByProps({ testID: "travel-mascot" }).length).toBeGreaterThan(0);
+    expect(tree.root.findAllByProps({ testID: "travel-input" }).length).toBeGreaterThan(0);
+    expect(pressable(tree, "travel-chip-지금 열리는 축제")).toBeDefined();
   });
 
+  it("leaves the composer in place once the first turn lands", async () => {
+    const tree = await mount();
+    const before = tree.root.findAllByProps({ testID: "travel-send" }).length;
+
+    await press(tree, "travel-chip-지금 열리는 축제");
+
+    expect(useConversation.getState().turns).toHaveLength(1);
+    expect(tree.root.findAllByProps({ testID: "travel-send" })).toHaveLength(before);
+    expect(tree.root.findAllByProps({ testID: "travel-input" }).length).toBeGreaterThan(0);
+    expect(greeting(tree).props.importantForAccessibility).toBe("no-hide-descendants");
+  });
+});
+
+describe("TravelScreen starter chips", () => {
   it("sends a starter chip as a free-text question, never as a patch", async () => {
     const tree = await mount();
     await press(tree, "travel-chip-지금 열리는 축제");
@@ -198,7 +211,32 @@ describe("TravelScreen starter chips", () => {
   });
 });
 
-describe("TravelScreen photo start card", () => {
+describe("TravelScreen nearby action", () => {
+  it("offers the nearby pill only when a location fix exists", async () => {
+    const withFix = await mount();
+    expect(pressable(withFix, "travel-nearby")).toBeDefined();
+    await act(async () => withFix.unmount());
+    mounted = null;
+
+    useNearbyCoordsMock.mockReturnValue({ coords: null, phase: "unavailable" });
+    const withoutFix = await mount();
+    expect(pressable(withoutFix, "travel-nearby")).toBeUndefined();
+    expect(pressable(withoutFix, "travel-chip-지금 열리는 축제")).toBeDefined();
+  });
+
+  it("sends the nearby pill as a free-text question", async () => {
+    const tree = await mount();
+    await press(tree, "travel-nearby");
+
+    expect(askAgentMock).toHaveBeenCalledTimes(1);
+    const input = askAgentMock.mock.calls[0][0];
+    expect(input.question).toBe("여기서 가까운 곳");
+    expect(input.patch).toBeUndefined();
+    expect(input.coords).toEqual(COORDS);
+  });
+});
+
+describe("TravelScreen photo attach", () => {
   it("carries the text already typed in the composer along with the photo", async () => {
     const photo = { uri: "file:///a.jpg", name: "a.jpg", type: "image/jpeg" };
     pickTravelPhoto.mockResolvedValueOnce(photo);
@@ -206,12 +244,31 @@ describe("TravelScreen photo start card", () => {
     const input = tree.root.findByProps({ testID: "travel-input" });
     await act(async () => input.props.onChangeText("제주 바다 같은 곳"));
 
-    await press(tree, "travel-photo-start");
+    await press(tree, "travel-attach");
+    await press(tree, "travel-send");
 
     expect(askAgentMock).toHaveBeenCalledTimes(1);
     const sent = askAgentMock.mock.calls[0][0];
     expect(sent.question).toBe("제주 바다 같은 곳");
     expect(sent.photo).toEqual(photo);
+  });
+});
+
+describe("TravelScreen new chat", () => {
+  it("shows the action only once a conversation exists, and empties it", async () => {
+    const empty = await mount();
+    expect(pressable(empty, "travel-new-chat")).toBeUndefined();
+    await act(async () => empty.unmount());
+    mounted = null;
+
+    useConversation.setState({ turns: [answeredTurn], busy: false });
+    const tree = await mount();
+    await press(tree, "travel-new-chat");
+
+    expect(useConversation.getState().turns).toEqual([]);
+    expect(useConversation.getState().busy).toBe(false);
+    expect(tree.root.findAllByProps({ testID: "turn-seed-1" })).toHaveLength(0);
+    expect(pressable(tree, "travel-chip-지금 열리는 축제")).toBeDefined();
   });
 });
 
