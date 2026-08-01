@@ -281,3 +281,33 @@ async def test_kto_failure_leaves_detail_images_untouched(
         text("SELECT origin_image_url FROM spot_images WHERE content_id = 'gj-keep'")
     )
     assert kept == "https://img/kept.jpg"
+
+
+@pytest.mark.asyncio
+async def test_successful_empty_response_clears_stale_detail_images(
+    db_session: AsyncSession, httpx_mock, fake_clip: None
+) -> None:
+    await _seed_spot(db_session, "gj-empty")
+    await db_session.execute(
+        text(
+            "INSERT INTO spot_images (content_id, origin_image_url, sort_order) "
+            "VALUES ('gj-empty', 'https://img/deleted.jpg', 0)"
+        )
+    )
+    await db_session.flush()
+    httpx_mock.add_response(url="https://img/first.jpg", content=b"\x00")
+
+    async with AsyncClient() as client:
+        result = await embed_gallery_spots(
+            db_session,
+            [("gj-empty", "https://img/first.jpg")],
+            kto=_StubKto(),
+            client=client,
+            dl_sem=asyncio.Semaphore(4),
+        )
+
+    assert result.written == 1
+    remaining = await db_session.scalar(
+        text("SELECT count(*) FROM spot_images WHERE content_id = 'gj-empty'")
+    )
+    assert remaining == 0
