@@ -7,7 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, Header, status
 from app.core.db import DbSession
 from app.core.redis import RedisDep
 from app.kto.client import KtoDep
-from app.kto.display import t1_display_url, t1_thumb_url
+from app.kto.display import T1_TILE_WIDTH, t1_display_url
 from app.modules.spots.schemas import (
     SpotDetailResponse,
     SpotImageOut,
@@ -55,7 +55,9 @@ async def get_spot(
             SpotImageOut(
                 originImageUrl=t1_display_url(i.origin_image_url, i.cpyrht_div_cd)
                 or i.origin_image_url,
-                smallImageUrl=t1_thumb_url(i.origin_image_url, i.small_image_url, i.cpyrht_div_cd),
+                smallImageUrl=t1_display_url(
+                    i.origin_image_url, i.cpyrht_div_cd, width=T1_TILE_WIDTH
+                ),
             )
             for i in row.images
         ],

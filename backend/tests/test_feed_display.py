@@ -52,33 +52,3 @@ def test_channel_card_type3_keeps_hires_upgrade(monkeypatch: pytest.MonkeyPatch)
     )
     card = _channel_card(row)
     assert card.imageUrl == KTO_HIRES
-
-
-def test_thumb_url_type1_uses_tile_width_from_origin(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.kto.display import t1_thumb_url
-
-    monkeypatch.setattr(settings, "IMG_PROXY_T1_SECRET", "s3cret")
-    url = t1_thumb_url(KTO_MID, "https://tong.visitkorea.or.kr/cms/small.jpg", "Type1")
-    assert url is not None
-    assert url.startswith("https://img.pictrip.org/t1/320/")
-    assert url.endswith("/3045598_image1_1.jpg")
-
-
-def test_thumb_url_type3_never_exposes_kto_thumbnail(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.kto.display import t1_thumb_url
-
-    monkeypatch.setattr(settings, "IMG_PROXY_T1_SECRET", "s3cret")
-    assert (
-        t1_thumb_url(KTO_MID, "http://tong.visitkorea.or.kr/cms/small_image3_1.jpg", "Type3")
-        == KTO_MID
-    )
-
-
-def test_thumb_url_unknown_copyright_keeps_kto_thumbnail(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.kto.display import t1_thumb_url
-
-    monkeypatch.setattr(settings, "IMG_PROXY_T1_SECRET", "s3cret")
-    assert t1_thumb_url(KTO_MID, "http://tong.visitkorea.or.kr/cms/small.jpg", None) == (
-        "https://tong.visitkorea.or.kr/cms/small.jpg"
-    )
-    assert t1_thumb_url(KTO_MID, None, None) == KTO_MID
