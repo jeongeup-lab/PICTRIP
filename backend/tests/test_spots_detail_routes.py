@@ -158,3 +158,48 @@ async def test_detail_route_exposes_intro_and_category(
     assert body["data"]["category"] == "사적지"
     assert body["data"]["detailStatus"] == "fresh"
     assert body["data"]["intro"]["usetime"] == "09:30~17:30"
+
+
+@pytest.mark.asyncio
+async def test_detail_route_signs_type1_images_and_passes_type3_through(
+    client: AsyncClient,
+    override_db_and_seed: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "IMG_PROXY_T1_SECRET", "s3cret")
+    app.dependency_overrides[get_kto] = lambda: FakeKto(
+        [{"overview": "설명", "homepage": None, "tel": None}],
+        [
+            {
+                "originimgurl": "http://tong.visitkorea.or.kr/cms/resource/1/1_image2_1.jpg",
+                "smallimageurl": "http://tong.visitkorea.or.kr/cms/resource/1/1_image3_1.jpg",
+                "cpyrhtDivCd": "Type1",
+            },
+            {
+                "originimgurl": "http://tong.visitkorea.or.kr/cms/resource/2/2_image2_1.jpg",
+                "cpyrhtDivCd": "Type3",
+            },
+        ],
+    )
+    await override_db_and_seed.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, first_image_url, "
+            "cpyrht_div_cd, show_flag) VALUES ('DT-RT-T1', 12, 't', "
+            "'http://tong.visitkorea.or.kr/cms/resource/9/9_image2_1.jpg', 'Type1', 1)"
+        )
+    )
+    await override_db_and_seed.commit()
+
+    resp = await client.get("/v1/spots/DT-RT-T1")
+
+    data = resp.json()["data"]
+    assert data["firstImageUrl"].startswith("https://img.pictrip.org/t1/1620/")
+    assert data["firstImageUrl"].endswith("/9_image1_1.jpg")
+
+    type1, type3 = data["images"]
+    assert type1["originImageUrl"].startswith("https://img.pictrip.org/t1/1620/")
+    assert type1["smallImageUrl"].startswith("https://img.pictrip.org/t1/320/")
+    assert type3["originImageUrl"] == (
+        "https://tong.visitkorea.or.kr/cms/resource/2/2_image2_1.jpg"
+    )
+    assert type3["smallImageUrl"] == type3["originImageUrl"]

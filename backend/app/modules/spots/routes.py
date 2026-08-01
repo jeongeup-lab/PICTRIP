@@ -7,6 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, Header, status
 from app.core.db import DbSession
 from app.core.redis import RedisDep
 from app.kto.client import KtoDep
+from app.kto.display import T1_TILE_WIDTH, t1_display_url
 from app.modules.spots.schemas import (
     SpotDetailResponse,
     SpotImageOut,
@@ -22,7 +23,7 @@ _DEFERRED_DETAIL_MODE = "deferred-v1"
 @router.get(
     "/spots/{content_id}",
     status_code=status.HTTP_200_OK,
-    summary="Spot detail (overview/images lazy KTO fetch + 7-day cache)",
+    summary="Spot detail (overview/images lazy KTO fetch + 90-day cache)",
 )
 async def get_spot(
     content_id: str,
@@ -39,7 +40,7 @@ async def get_spot(
     payload = SpotDetailResponse(
         contentId=row.content_id,
         title=row.title,
-        firstImageUrl=row.first_image_url,
+        firstImageUrl=t1_display_url(row.first_image_url, row.cpyrht_div_cd),
         addr1=row.addr1,
         mapx=row.mapx,
         mapy=row.mapy,
@@ -51,7 +52,15 @@ async def get_spot(
         sigunguName=row.sigungu_name,
         detailStatus=row.detail_status,
         images=[
-            SpotImageOut(originImageUrl=i.origin_image_url, smallImageUrl=i.small_image_url)
+            SpotImageOut(
+                originImageUrl=t1_display_url(i.origin_image_url, i.cpyrht_div_cd)
+                or i.origin_image_url,
+                smallImageUrl=t1_display_url(
+                    i.small_image_url or i.origin_image_url,
+                    i.cpyrht_div_cd,
+                    width=T1_TILE_WIDTH,
+                ),
+            )
             for i in row.images
         ],
         category=row.category,

@@ -34,9 +34,9 @@ from app.web.errors import KtoApiUnavailable, ResourceNotFound
 
 logger = get_logger(__name__)
 
-_DETAIL_TTL = timedelta(days=7)
+_DETAIL_TTL = timedelta(days=90)
 
-_REDIS_KEY = "spotdetail:v1:{content_id}"
+_REDIS_KEY = "spotdetail:v2:{content_id}"
 _REDIS_TTL_SECONDS = int(timedelta(hours=1).total_seconds())
 _REFRESH_LOCK_KEY = "spotdetail:refresh:v1:{content_id}"
 _REFRESH_LOCK_TTL_SECONDS = 20
@@ -77,7 +77,10 @@ async def _redis_get_detail(redis: Redis, content_id: str) -> _DetailCache | Non
             tel=d["tel"],
             intro_data=d["intro_data"],
             cached_at=datetime.fromisoformat(d["cached_at"]),
-            images=[SpotImageRow(origin_image_url=o, small_image_url=s) for o, s in d["images"]],
+            images=[
+                SpotImageRow(origin_image_url=o, small_image_url=s, cpyrht_div_cd=c)
+                for o, s, c in d["images"]
+            ],
         )
     except (ValueError, KeyError, TypeError) as exc:
         logger.warning("spot.detail.cache_corrupt", content_id=content_id, error=str(exc))
@@ -93,7 +96,9 @@ async def _redis_set_detail(redis: Redis, content_id: str, cache: _DetailCache) 
             "tel": cache.tel,
             "intro_data": cache.intro_data,
             "cached_at": cache.cached_at.isoformat(),
-            "images": [[i.origin_image_url, i.small_image_url] for i in cache.images],
+            "images": [
+                [i.origin_image_url, i.small_image_url, i.cpyrht_div_cd] for i in cache.images
+            ],
         }
     )
     try:
@@ -162,15 +167,55 @@ def _is_fresh(cached_at: datetime, modified_time: datetime | None) -> bool:
 async def _load_detail_images(session: AsyncSession, content_id: str) -> list[SpotImageRow]:
     rows = (
         await session.execute(
-            select(SpotImage.origin_image_url, SpotImage.small_image_url)
+            select(
+                SpotImage.origin_image_url,
+                SpotImage.small_image_url,
+                SpotImage.cpyrht_div_cd,
+            )
             .where(SpotImage.content_id == content_id)
             .order_by(SpotImage.sort_order)
         )
     ).all()
     return [
-        SpotImageRow(origin_image_url=r.origin_image_url, small_image_url=r.small_image_url)
+        SpotImageRow(
+            origin_image_url=r.origin_image_url,
+            small_image_url=r.small_image_url,
+            cpyrht_div_cd=r.cpyrht_div_cd,
+        )
         for r in rows
     ]
+
+
+async def replace_spot_images(
+    session: AsyncSession, content_id: str, images: list[SpotImageRow]
+) -> None:
+    if images:
+        img_stmt = pg_insert(SpotImage).values(
+            [
+                {
+                    "content_id": content_id,
+                    "origin_image_url": image.origin_image_url,
+                    "small_image_url": image.small_image_url,
+                    "cpyrht_div_cd": image.cpyrht_div_cd,
+                    "sort_order": order,
+                }
+                for order, image in enumerate(images)
+            ]
+        )
+        img_stmt = img_stmt.on_conflict_do_update(
+            index_elements=["content_id", "sort_order"],
+            set_={
+                "origin_image_url": img_stmt.excluded.origin_image_url,
+                "small_image_url": img_stmt.excluded.small_image_url,
+                "cpyrht_div_cd": img_stmt.excluded.cpyrht_div_cd,
+            },
+        )
+        await session.execute(img_stmt)
+
+    await session.execute(
+        text("DELETE FROM spot_images WHERE content_id = :cid AND sort_order >= :n"),
+        {"cid": content_id, "n": len(images)},
+    )
 
 
 def _extract_intro(content_type_id: int, intro_data: dict[str, Any] | None) -> SpotIntroRow | None:
@@ -232,6 +277,7 @@ def _assemble_detail(
         images=images,
         category=category,
         intro=intro,
+        cpyrht_div_cd=spot.cpyrht_div_cd,
     )
 
 
@@ -242,7 +288,7 @@ async def _persist_detail(
     overview: str | None,
     homepage: str | None,
     tel: str | None,
-    images: list[tuple[str, str | None]],
+    images: list[SpotImageRow],
     intro_data: dict[str, Any] | None = None,
 ) -> None:
     detail_stmt = pg_insert(SpotDetail).values(
@@ -266,32 +312,7 @@ async def _persist_detail(
         },
     )
     await session.execute(detail_stmt)
-
-    if images:
-        img_stmt = pg_insert(SpotImage).values(
-            [
-                {
-                    "content_id": content_id,
-                    "origin_image_url": origin,
-                    "small_image_url": small,
-                    "sort_order": order,
-                }
-                for order, (origin, small) in enumerate(images)
-            ]
-        )
-        img_stmt = img_stmt.on_conflict_do_update(
-            index_elements=["content_id", "sort_order"],
-            set_={
-                "origin_image_url": img_stmt.excluded.origin_image_url,
-                "small_image_url": img_stmt.excluded.small_image_url,
-            },
-        )
-        await session.execute(img_stmt)
-
-    await session.execute(
-        text("DELETE FROM spot_images WHERE content_id = :cid AND sort_order >= :n"),
-        {"cid": content_id, "n": len(images)},
-    )
+    await replace_spot_images(session, content_id, images)
     await session.commit()
 
 
@@ -338,6 +359,7 @@ async def _load_spot_context(session: AsyncSession, content_id: str) -> Any:
                 Spot.addr2,
                 Spot.mapx,
                 Spot.mapy,
+                Spot.cpyrht_div_cd,
                 Spot.modified_time,
                 Region.ldong_regn_nm.label("region_name"),
                 Sigungu.ldong_signgu_nm.label("sigungu_name"),
@@ -373,12 +395,28 @@ async def _read_cached_detail(
     return detail, existing_images
 
 
+def parse_kto_detail_images(items: list[dict[str, Any]]) -> list[SpotImageRow]:
+    images: list[SpotImageRow] = []
+    for item in items:
+        origin = clean_scalar(item.get("originimgurl"))
+        if origin is None:
+            continue
+        images.append(
+            SpotImageRow(
+                origin_image_url=origin,
+                small_image_url=clean_scalar(item.get("smallimageurl")),
+                cpyrht_div_cd=clean_scalar(item.get("cpyrhtDivCd")),
+            )
+        )
+    return images
+
+
 _KTO_DETAIL_BUDGET = 8.0
 
 
 async def _fetch_kto_detail(
     kto: KtoClient, content_id: str, content_type_id: int
-) -> tuple[str | None, str | None, str | None, list[tuple[str, str | None]], dict[str, Any]]:
+) -> tuple[str | None, str | None, str | None, list[SpotImageRow], dict[str, Any]]:
     try:
         common_items, image_items, intro_items = await asyncio.wait_for(
             asyncio.gather(
@@ -400,12 +438,7 @@ async def _fetch_kto_detail(
     overview = verbatim(common.get("overview"))
     homepage = clean_homepage(common.get("homepage"))
     tel = clean_scalar(common.get("tel"))
-    images: list[tuple[str, str | None]] = []
-    for item in image_items:
-        origin = clean_scalar(item.get("originimgurl"))
-        if origin is None:
-            continue
-        images.append((origin, clean_scalar(item.get("smallimageurl"))))
+    images = parse_kto_detail_images(image_items)
 
     intro_data: dict[str, Any] = intro_items[0] if intro_items else {}
     return overview, homepage, tel, images, intro_data
@@ -496,7 +529,6 @@ async def load_spot_detail(
     await _persist_detail(
         session, content_id, spot.content_type_id, overview, homepage, tel, images, intro_data
     )
-    image_rows = [SpotImageRow(origin_image_url=o, small_image_url=s) for o, s in images]
     await _redis_set_detail(
         redis,
         content_id,
@@ -506,7 +538,7 @@ async def load_spot_detail(
             tel=tel,
             intro_data=intro_data,
             cached_at=datetime.now(UTC),
-            images=image_rows,
+            images=images,
         ),
     )
 
@@ -514,7 +546,7 @@ async def load_spot_detail(
         overview=overview,
         homepage=homepage,
         tel=tel,
-        images=image_rows,
+        images=images,
         status="fresh",
         intro=_extract_intro(spot.content_type_id, intro_data),
     )

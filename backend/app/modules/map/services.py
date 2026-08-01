@@ -7,6 +7,7 @@ from redis.asyncio import Redis
 
 from app.core.db import AsyncSession
 from app.core.logging import get_logger
+from app.kto.display import T1_TILE_WIDTH, t1_display_url
 from app.modules.map import repositories as repo
 from app.modules.map.kakao_local import kakao_local_get
 from app.modules.map.schemas import NearbySpotCard, RegionLabel
@@ -100,7 +101,7 @@ async def nearby_cards(
         NearbySpotCard(
             contentId=r.content_id,
             title=r.title,
-            firstImageUrl=r.first_image_url,
+            firstImageUrl=t1_display_url(r.first_image_url, r.cpyrht_div_cd, width=T1_TILE_WIDTH),
             addr1=r.addr1,
             mapx=r.mapx,
             mapy=r.mapy,

@@ -17,8 +17,10 @@ from app.modules.spots.services.concentration import (
 )
 from app.modules.spots.services.detail import (
     load_spot_detail,
+    parse_kto_detail_images,
     refresh_spot_detail,
     refresh_spot_detail_in_background,
+    replace_spot_images,
 )
 from app.modules.spots.services.nearby import (
     NearbyCategory,
@@ -74,8 +76,10 @@ __all__ = [
     "load_spot_detail",
     "lock_current_spot_image",
     "map_region_tokens_to_sido",
+    "parse_kto_detail_images",
     "refresh_spot_detail",
     "refresh_spot_detail_in_background",
+    "replace_spot_images",
     "save_spot",
     "search_spots_by_title",
     "travel_category_sql",

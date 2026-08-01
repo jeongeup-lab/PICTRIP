@@ -209,3 +209,75 @@ async def test_empty_detail_gallery_falls_back_to_first_image_only(
         )
     ).one()
     assert row.image_count == 1
+
+
+@pytest.mark.asyncio
+async def test_embed_persists_detail_images_with_copyright(
+    db_session: AsyncSession, httpx_mock, fake_clip: None
+) -> None:
+    await _seed_spot(db_session, "gj-img")
+    await db_session.flush()
+    kto = _StubKto(
+        {
+            "gj-img": [
+                {
+                    "originimgurl": "https://img/a.jpg",
+                    "smallimageurl": "https://img/a-s.jpg",
+                    "cpyrhtDivCd": "Type1",
+                },
+                {"originimgurl": "https://img/b.jpg", "cpyrhtDivCd": "Type3"},
+            ]
+        }
+    )
+    httpx_mock.add_response(url="https://img/first.jpg", content=b"\x00")
+    httpx_mock.add_response(url="https://img/a.jpg", content=b"\x01")
+    httpx_mock.add_response(url="https://img/b.jpg", content=b"\x02")
+
+    async with AsyncClient() as client:
+        await embed_gallery_spots(
+            db_session,
+            [("gj-img", "https://img/first.jpg")],
+            kto=kto,
+            client=client,
+            dl_sem=asyncio.Semaphore(4),
+        )
+
+    rows = (
+        await db_session.execute(
+            text(
+                "SELECT origin_image_url, small_image_url, cpyrht_div_cd FROM spot_images "
+                "WHERE content_id = 'gj-img' ORDER BY sort_order"
+            )
+        )
+    ).all()
+    assert [r.origin_image_url for r in rows] == ["https://img/a.jpg", "https://img/b.jpg"]
+    assert [r.small_image_url for r in rows] == ["https://img/a-s.jpg", None]
+    assert [r.cpyrht_div_cd for r in rows] == ["Type1", "Type3"]
+
+
+@pytest.mark.asyncio
+async def test_kto_failure_leaves_detail_images_untouched(
+    db_session: AsyncSession, httpx_mock, fake_clip: None
+) -> None:
+    await _seed_spot(db_session, "gj-keep")
+    await db_session.execute(
+        text(
+            "INSERT INTO spot_images (content_id, origin_image_url, sort_order) "
+            "VALUES ('gj-keep', 'https://img/kept.jpg', 0)"
+        )
+    )
+    await db_session.flush()
+
+    async with AsyncClient() as client:
+        await embed_gallery_spots(
+            db_session,
+            [("gj-keep", "https://img/first.jpg")],
+            kto=_StubKto(fail=True),
+            client=client,
+            dl_sem=asyncio.Semaphore(4),
+        )
+
+    kept = await db_session.scalar(
+        text("SELECT origin_image_url FROM spot_images WHERE content_id = 'gj-keep'")
+    )
+    assert kept == "https://img/kept.jpg"
