@@ -311,3 +311,32 @@ async def test_successful_empty_response_clears_stale_detail_images(
         text("SELECT count(*) FROM spot_images WHERE content_id = 'gj-empty'")
     )
     assert remaining == 0
+
+
+@pytest.mark.asyncio
+async def test_image_writes_track_spots_needing_cache_invalidation(
+    db_session: AsyncSession, httpx_mock, fake_clip: None
+) -> None:
+    await _seed_spot(db_session, "gj-track")
+    await _seed_spot(db_session, "gj-track-fail")
+    await db_session.flush()
+    httpx_mock.add_response(url="https://img/first.jpg", content=b"\x00")
+
+    async with AsyncClient() as client:
+        ok_result = await embed_gallery_spots(
+            db_session,
+            [("gj-track", "https://img/first.jpg")],
+            kto=_StubKto(),
+            client=client,
+            dl_sem=asyncio.Semaphore(4),
+        )
+        fail_result = await embed_gallery_spots(
+            db_session,
+            [("gj-track-fail", "https://img/first.jpg")],
+            kto=_StubKto(fail=True),
+            client=client,
+            dl_sem=asyncio.Semaphore(4),
+        )
+
+    assert ok_result.image_writes == ["gj-track"]
+    assert fail_result.image_writes == []

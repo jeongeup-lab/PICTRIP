@@ -8,7 +8,11 @@ from fakeredis.aioredis import FakeRedis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.spots.services import load_spot_detail, refresh_spot_detail
+from app.modules.spots.services import (
+    invalidate_spot_detail_cache,
+    load_spot_detail,
+    refresh_spot_detail,
+)
 from app.modules.spots.services.detail import (
     _DETAIL_TTL,
     _acquire_refresh_lock,
@@ -549,3 +553,17 @@ async def test_image_copyright_survives_kto_fetch_and_redis_roundtrip(
     await redis.flushall()
     from_pg = await load_spot_detail(db_session, FakeKto(), redis, "DT-CPY")
     assert [i.cpyrht_div_cd for i in from_pg.images] == ["Type1", "Type3"]
+
+
+@pytest.mark.asyncio
+async def test_invalidate_detail_cache_drops_the_current_key(
+    db_session: AsyncSession, redis: FakeRedis
+) -> None:
+    await _insert_spot(db_session, "DT-INVAL")
+    kto = FakeKto(_COMMON, _IMAGES)
+    await load_spot_detail(db_session, kto, redis, "DT-INVAL")
+    assert await redis.get("spotdetail:v2:DT-INVAL") is not None
+
+    await invalidate_spot_detail_cache(redis, "DT-INVAL")
+
+    assert await redis.get("spotdetail:v2:DT-INVAL") is None
