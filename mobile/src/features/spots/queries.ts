@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getSpot, getNearby } from "@/features/spots/api";
+import { preferredSeedImageUrl } from "@/features/spots/lib/seed-image";
 import { queryClient } from "@/lib/query-client";
 import type { SpotDetail } from "@/lib/api-types";
 
@@ -80,10 +81,11 @@ export function useSpot(contentId: string, seed?: SpotSeed | null) {
     queryFn: () => getSpot(contentId),
     enabled: !!contentId,
     placeholderData: () => seedToDetail(resolved),
-    select: (detail) =>
-      preferredImageUrl && detail.firstImageUrl !== preferredImageUrl
-        ? { ...detail, firstImageUrl: preferredImageUrl }
-        : detail,
+    select: (detail) => {
+      if (!preferredImageUrl) return detail;
+      const chosen = preferredSeedImageUrl(preferredImageUrl, detail.firstImageUrl);
+      return detail.firstImageUrl === chosen ? detail : { ...detail, firstImageUrl: chosen };
+    },
     refetchInterval: (query) => {
       const status = query.state.data?.detailStatus;
       if (status === "pending") return PENDING_REFETCH_INTERVAL_MS;
