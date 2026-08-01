@@ -177,6 +177,7 @@ async def test_detail_route_signs_type1_images_and_passes_type3_through(
             },
             {
                 "originimgurl": "http://tong.visitkorea.or.kr/cms/resource/2/2_image2_1.jpg",
+                "smallimageurl": "http://tong.visitkorea.or.kr/cms/resource/2/2_image3_1.jpg",
                 "cpyrhtDivCd": "Type3",
             },
         ],
