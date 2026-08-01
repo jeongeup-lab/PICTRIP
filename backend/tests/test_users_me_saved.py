@@ -193,3 +193,33 @@ async def test_saved_card_category_is_subtype_label(
     assert r.status_code == 200
     card = next(c for c in r.json()["data"] if c["contentId"] == "CATSPOT-1")
     assert card["category"] == "사적지"
+
+
+async def test_saved_cards_sign_type1_images_at_tile_width(
+    client: AsyncClient,
+    override_db_and_seed: AsyncSession,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(settings, "IMG_PROXY_T1_SECRET", "s3cret")
+    uid = await _seed_user(override_db_and_seed)
+    await override_db_and_seed.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, first_image_url, "
+            "cpyrht_div_cd, show_flag) VALUES ('SV-T1', 12, 't', "
+            "'http://tong.visitkorea.or.kr/cms/resource/5/5_image2_1.jpg', 'Type1', 1), "
+            "('SV-T3', 12, 't', "
+            "'http://tong.visitkorea.or.kr/cms/resource/6/6_image2_1.jpg', 'Type3', 1)"
+        )
+    )
+    await override_db_and_seed.commit()
+    await _insert_saved_row(override_db_and_seed, user_id=uid, content_id="SV-T1")
+    await _insert_saved_row(override_db_and_seed, user_id=uid, content_id="SV-T3")
+
+    r = await client.get("/v1/users/me/saved", headers=_auth(uid))
+
+    cards = {c["contentId"]: c for c in r.json()["data"]}
+    assert cards["SV-T1"]["firstImageUrl"].startswith("https://img.pictrip.org/t1/320/")
+    assert cards["SV-T1"]["firstImageUrl"].endswith("/5_image1_1.jpg")
+    assert cards["SV-T3"]["firstImageUrl"] == (
+        "https://tong.visitkorea.or.kr/cms/resource/6/6_image2_1.jpg"
+    )

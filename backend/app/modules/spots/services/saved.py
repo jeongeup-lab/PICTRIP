@@ -73,6 +73,7 @@ async def list_saved_spots(
             Spot.addr1,
             Spot.mapx,
             Spot.mapy,
+            Spot.cpyrht_div_cd,
             LclsSystmCode.lcls_systm3_nm,
             UserSavedSpot.saved_at,
         )
@@ -106,6 +107,7 @@ async def list_saved_spots(
             addr1=r.addr1,
             mapx=float(r.mapx) if r.mapx is not None else None,
             mapy=float(r.mapy) if r.mapy is not None else None,
+            cpyrht_div_cd=r.cpyrht_div_cd,
             lcls_systm3_nm=r.lcls_systm3_nm,
         )
         for r in page

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query, Response, status
 
 from app.core.db import DbSession
 from app.core.redis import RedisDep
+from app.kto.display import T1_TILE_WIDTH, t1_display_url
 from app.modules.spots import services as spots_services
 from app.modules.spots.schemas import SpotCard
 from app.modules.users import services
@@ -150,7 +151,7 @@ async def list_saved(
         SpotCard(
             contentId=r.content_id,
             title=r.title,
-            firstImageUrl=r.first_image_url,
+            firstImageUrl=t1_display_url(r.first_image_url, r.cpyrht_div_cd, width=T1_TILE_WIDTH),
             addr1=r.addr1,
             mapx=r.mapx,
             mapy=r.mapy,
