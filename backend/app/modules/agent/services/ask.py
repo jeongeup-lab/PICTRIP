@@ -157,10 +157,8 @@ async def _ask_with_photo(
             except AppError as exc:
                 logger.warning("agent.photo.intent_skipped", code=exc.code)
 
-    prefixes = (
-        await retrieve.resolve_region_prefixes(session, hints=intent.regionHints)
-        or pre_ota_region_prefixes
-    )
+    scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
+    prefixes = scope.prefixes or pre_ota_region_prefixes
     rows = await photo_service.match_vector(session, vector, region_prefixes=prefixes)
     steps.append(
         AskStep(
@@ -169,6 +167,10 @@ async def _ask_with_photo(
             badge="pgvector",
         )
     )
+    if not rows and scope.widenable:
+        prefixes = scope.sido_prefixes
+        rows = await photo_service.match_vector(session, vector, region_prefixes=prefixes)
+        steps.append(AskStep(tool="photo_match", label=_widen_label(scope), badge="pgvector"))
 
     similarity = {row.content_id: photo_service.similarity(row) for row in rows}
     briefs = await repositories.load_candidates_by_ids(session, [row.content_id for row in rows])
@@ -365,10 +367,9 @@ async def _ask_with_question(
     keywords = _keywords(intent)
     codes = await retrieve.resolve_category_codes(session, keywords)
     mood_ids = await repositories.find_mood_ids(session, list(intent.moodHints))
-    prefixes = (
-        await retrieve.resolve_region_prefixes(session, hints=intent.regionHints)
-        or pre_ota_region_prefixes
-    )
+    scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
+    prefixes = scope.prefixes or pre_ota_region_prefixes
+    region_widened: str | None = None
     place_only = refine_service.named_place_is_the_only_constraint(
         intent, keywords=keywords, prefixes=prefixes, near=near
     )
@@ -402,15 +403,26 @@ async def _ask_with_question(
                 badge=_count(candidates),
             )
         )
+        if not candidates and scope.widenable:
+            prefixes = scope.sido_prefixes
+            candidates = await retrieve.search_by_title(session, keywords, region_prefixes=prefixes)
+            region_widened = scope.narrowed_hint
+            steps.append(
+                AskStep(
+                    tool="title_search",
+                    label=_widen_label(scope),
+                    badge=_count(candidates),
+                )
+            )
     else:
         preference = intent.crowdPreference
         indoor_only = intent.indoorOnly
 
-        async def search(within_codes: list[str]) -> list[CandidateRow]:
+        async def search(within_codes: list[str], within_prefixes: list[str]) -> list[CandidateRow]:
             return await retrieve.search_candidates(
                 session,
                 codes=within_codes,
-                region_prefixes=prefixes,
+                region_prefixes=within_prefixes,
                 preference=preference,
                 lat=lat,
                 lng=lng,
@@ -419,7 +431,7 @@ async def _ask_with_question(
                 mood_ids=mood_ids,
             )
 
-        candidates = await search(codes)
+        candidates = await search(codes, prefixes)
         steps.append(
             AskStep(
                 tool="category_search",
@@ -427,8 +439,19 @@ async def _ask_with_question(
                 badge=_count(candidates),
             )
         )
+        if not candidates and scope.widenable:
+            prefixes = scope.sido_prefixes
+            candidates = await search(codes, prefixes)
+            region_widened = scope.narrowed_hint
+            steps.append(
+                AskStep(
+                    tool="category_search",
+                    label=_widen_label(scope),
+                    badge=_count(candidates),
+                )
+            )
         if not candidates and indoor_only and codes:
-            candidates = await search([])
+            candidates = await search([], prefixes)
             intent = intent.model_copy(update={"categoryKeywords": []})
             steps.append(
                 AskStep(
@@ -466,7 +489,9 @@ async def _ask_with_question(
     )
     return AskResponse(
         steps=steps,
-        answer=_answer(top, intent=intent, near=near, lat=lat, lng=lng),
+        answer=_answer(
+            top, intent=intent, near=near, lat=lat, lng=lng, region_widened=region_widened
+        ),
         spots=spots,
         totalCount=len(spots),
         intent=intent,
@@ -598,6 +623,10 @@ def _keywords(intent: QueryIntent) -> list[str]:
     return list(intent.categoryKeywords)
 
 
+def _widen_label(scope: retrieve.RegionScope) -> str:
+    return f"{scope.narrowed_hint} 결과 없음 — {scope.sido_prefixes[0]}로 넓힘"
+
+
 def _search_label(keywords: list[str], prefixes: list[str], *, indoor: bool) -> str:
     if indoor:
         head = "실내"
@@ -639,11 +668,18 @@ def _answer(
     near: bool,
     lat: float | None,
     lng: float | None,
+    region_widened: str | None = None,
 ) -> list[AnswerSegment]:
     segments = [AnswerSegment(text="조건에 맞는 곳으로 ")]
     segments.append(AnswerSegment(text=f"{len(top)}곳", emphasis=True))
     segments.append(AnswerSegment(text=" 추렸어요"))
 
+    if region_widened is not None:
+        region = top[0].region_name if top and top[0].region_name else "인근 시도"
+        segments.append(AnswerSegment(text=f". {region_widened} 안에서는 찾지 못해 "))
+        segments.append(AnswerSegment(text=region, emphasis=True))
+        segments.append(AnswerSegment(text=" 전체에서 골랐어요."))
+        return segments
     if intent.crowdPreference == "quiet":
         pcts = [row.percentile for row in top if row.percentile is not None]
         if pcts:
