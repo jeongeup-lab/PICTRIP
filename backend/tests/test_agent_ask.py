@@ -42,7 +42,11 @@ from app.modules.agent.services import retrieve
 from app.modules.agent.services import suggest as suggest_service
 from app.modules.feed.services import kto_channels
 from app.modules.feed.services.channels import ChannelCardRow
-from app.modules.spots.services import MAX_REGION_TOKENS, map_region_tokens_to_sido
+from app.modules.spots.services import (
+    MAX_REGION_TOKENS,
+    map_region_tokens_to_prefixes,
+    map_region_tokens_to_sido,
+)
 from app.web.errors import KtoApiUnavailable
 
 LAT, LNG = 35.15, 129.05
@@ -149,6 +153,12 @@ async def _seed(session: AsyncSession) -> None:
         text(
             "INSERT INTO sigungus (ldong_signgu_cd, ldong_regn_cd, ldong_signgu_nm) "
             "VALUES ('26380', '26', '사하구') ON CONFLICT DO NOTHING"
+        )
+    )
+    await session.execute(
+        text(
+            "INSERT INTO sigungus (ldong_signgu_cd, ldong_regn_cd, ldong_signgu_nm) "
+            "VALUES ('26350', '26', '해운대구'), ('26500', '26', '수영구') ON CONFLICT DO NOTHING"
         )
     )
     await session.execute(
@@ -313,6 +323,49 @@ async def test_ask_reports_no_results_when_nothing_matches(
 
     assert res.status_code == 422
     assert res.json()["error"]["code"] == "AGENT_NO_RESULTS"
+
+
+@pytest.mark.integration
+async def test_a_sigungu_hint_does_not_leak_the_rest_of_the_sido(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"], regionHints=["사하"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "사하 계곡"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert {spot["contentId"] for spot in data["spots"]} == {"v1", "v2", "v3"}
+    assert not any("넓힘" in step["label"] for step in data["steps"])
+
+
+@pytest.mark.integration
+async def test_an_empty_sigungu_widens_to_the_sido_and_says_so(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"], regionHints=["수영"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "수영 계곡"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert {spot["contentId"] for spot in data["spots"]} == {"v1", "v2", "v3"}
+    answer = "".join(segment["text"] for segment in data["answer"])
+    assert "수영" in answer
+    assert "부산광역시" in answer
+    assert any("넓힘" in step["label"] for step in data["steps"])
 
 
 @pytest.mark.integration
@@ -1629,6 +1682,97 @@ def test_intent_string_caps_accept_a_long_place_name_and_reject_longer() -> None
         ExtractedPlace(name="속초해수욕장", regionHint=over)
     with pytest.raises(ValidationError):
         ExtractedPlace(name="속초해수욕장", nameKo=over)
+
+
+class _RegionRow:
+    def __init__(self, sido: str, sigungu: str | None, tier: int) -> None:
+        self.sido = sido
+        self.sigungu = sigungu
+        self.tier = tier
+
+
+class _RegionResult:
+    def __init__(self, rows: list[_RegionRow]) -> None:
+        self._rows = rows
+
+    def all(self) -> list[_RegionRow]:
+        return self._rows
+
+
+class _RegionSession:
+    def __init__(self, by_token: dict[str, list[_RegionRow]]) -> None:
+        self._by_token = by_token
+        self.tokens: list[str] = []
+
+    async def execute(self, statement: object, params: dict[str, str]) -> _RegionResult:
+        token = params["tok"]
+        self.tokens.append(token)
+        return _RegionResult(self._by_token.get(token, []))
+
+
+async def test_a_sigungu_token_resolves_to_a_sigungu_qualified_prefix() -> None:
+    session = _RegionSession({"경주": [_RegionRow("경상북도", "경주시", 2)]})
+
+    mapping = await map_region_tokens_to_prefixes(session, {"경주"})
+
+    assert mapping["경주"].prefix == "경상북도 경주시"
+    assert mapping["경주"].sido == "경상북도"
+    assert mapping["경주"].narrowed is True
+
+
+async def test_a_sido_token_outranks_a_same_named_sigungu() -> None:
+    session = _RegionSession(
+        {"제주": [_RegionRow("제주특별자치도", None, 1), _RegionRow("제주특별자치도", "제주시", 2)]}
+    )
+
+    mapping = await map_region_tokens_to_prefixes(session, {"제주"})
+
+    assert mapping["제주"].prefix == "제주특별자치도"
+    assert mapping["제주"].narrowed is False
+
+
+async def test_an_ambiguous_sigungu_token_resolves_to_nothing() -> None:
+    session = _RegionSession(
+        {"중구": [_RegionRow("서울특별시", "중구", 2), _RegionRow("부산광역시", "중구", 2)]}
+    )
+
+    assert await map_region_tokens_to_prefixes(session, {"중구"}) == {}
+
+
+async def test_an_ambiguous_sido_token_resolves_to_nothing() -> None:
+    session = _RegionSession(
+        {"충청": [_RegionRow("충청남도", None, 1), _RegionRow("충청북도", None, 1)]}
+    )
+
+    assert await map_region_tokens_to_prefixes(session, {"충청"}) == {}
+
+
+async def test_resolving_a_region_costs_one_query_per_token() -> None:
+    session = _RegionSession({"경주": [_RegionRow("경상북도", "경주시", 2)]})
+
+    await map_region_tokens_to_prefixes(session, {"경주", "여수"})
+
+    assert len(session.tokens) == 2
+
+
+async def test_a_narrowed_scope_reports_the_sido_it_can_widen_to() -> None:
+    session = _RegionSession({"경주": [_RegionRow("경상북도", "경주시", 2)]})
+
+    scope = await retrieve.resolve_region_scope(session, hints=["경주"])
+
+    assert scope.prefixes == ["경상북도 경주시"]
+    assert scope.sido_prefixes == ["경상북도"]
+    assert scope.narrowed_hint == "경주"
+    assert scope.widenable is True
+
+
+async def test_a_sido_scope_is_not_widenable() -> None:
+    session = _RegionSession({"제주": [_RegionRow("제주특별자치도", None, 1)]})
+
+    scope = await retrieve.resolve_region_scope(session, hints=["제주"])
+
+    assert scope.prefixes == ["제주특별자치도"]
+    assert scope.widenable is False
 
 
 class _CountingResult:

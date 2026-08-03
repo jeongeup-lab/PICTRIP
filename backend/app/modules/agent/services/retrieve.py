@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from app.core.db import AsyncSession
 from app.kto.display import t1_display_url
 from app.modules.agent import repositories
@@ -8,7 +10,7 @@ from app.modules.agent.repositories import INDOOR_L3 as INDOOR_L3
 from app.modules.agent.repositories import CandidateOrder, CandidateRow
 from app.modules.agent.schemas import MAX_HINT_TOKENS, AgentSpotCard, CrowdPreference
 from app.modules.agent.services.geo import haversine_km
-from app.modules.spots.services import map_region_tokens_to_sido, search_spots_by_title
+from app.modules.spots.services import map_region_tokens_to_prefixes, search_spots_by_title
 
 CANDIDATE_LIMIT = 400
 TITLE_KEYWORD_LIMIT = 3
@@ -29,12 +31,39 @@ async def resolve_category_codes(session: AsyncSession, keywords: list[str]) -> 
     return codes
 
 
-async def resolve_region_prefixes(session: AsyncSession, *, hints: list[str]) -> list[str]:
+@dataclass(frozen=True, slots=True)
+class RegionScope:
+    prefixes: list[str]
+    sido_prefixes: list[str]
+    narrowed_hint: str | None = None
+
+    @property
+    def widenable(self) -> bool:
+        return self.narrowed_hint is not None and self.sido_prefixes != self.prefixes
+
+
+EMPTY_REGION_SCOPE = RegionScope(prefixes=[], sido_prefixes=[])
+
+
+async def resolve_region_scope(session: AsyncSession, *, hints: list[str]) -> RegionScope:
     if not hints:
-        return []
+        return EMPTY_REGION_SCOPE
     tokens = {token for hint in hints for token in _hint_tokens(hint)}
-    mapping = await map_region_tokens_to_sido(session, tokens)
-    return sorted(set(mapping.values())) if mapping else []
+    mapping = await map_region_tokens_to_prefixes(session, tokens)
+    if not mapping:
+        return EMPTY_REGION_SCOPE
+    narrowed = next(
+        (token for token, resolved in sorted(mapping.items()) if resolved.narrowed), None
+    )
+    return RegionScope(
+        prefixes=sorted({resolved.prefix for resolved in mapping.values()}),
+        sido_prefixes=sorted({resolved.sido for resolved in mapping.values()}),
+        narrowed_hint=narrowed,
+    )
+
+
+async def resolve_region_prefixes(session: AsyncSession, *, hints: list[str]) -> list[str]:
+    return (await resolve_region_scope(session, hints=hints)).prefixes
 
 
 def _hint_tokens(hint: str) -> list[str]:

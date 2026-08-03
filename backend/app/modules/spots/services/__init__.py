@@ -43,7 +43,9 @@ from app.modules.spots.services.rows import (
 from app.modules.spots.services.saved import list_saved_spots, save_spot, unsave_spot
 from app.modules.spots.services.search import (
     MAX_REGION_TOKENS,
+    RegionPrefix,
     SpotSearchRow,
+    map_region_tokens_to_prefixes,
     map_region_tokens_to_sido,
     search_spots_by_title,
 )
@@ -53,6 +55,7 @@ __all__ = [
     "ConcentrationCardRow",
     "NearbyCategory",
     "NearbySpotRow",
+    "RegionPrefix",
     "SpotCardRow",
     "SpotDetailRow",
     "SpotImageRow",
@@ -77,6 +80,7 @@ __all__ = [
     "load_spot_cards_by_ids",
     "load_spot_detail",
     "lock_current_spot_image",
+    "map_region_tokens_to_prefixes",
     "map_region_tokens_to_sido",
     "parse_kto_detail_images",
     "refresh_spot_detail",

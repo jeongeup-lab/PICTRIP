@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import text
 
@@ -108,3 +110,56 @@ async def map_region_tokens_to_sido(session: AsyncSession, tokens: set[str]) -> 
         if len(rows) == 1:
             mapping[cleaned] = rows[0].ldong_regn_nm
     return mapping
+
+
+@dataclass(frozen=True, slots=True)
+class RegionPrefix:
+    prefix: str
+    sido: str
+
+    @property
+    def narrowed(self) -> bool:
+        return self.prefix != self.sido
+
+
+_SIDO_TIER = 1
+_SIGUNGU_TIER = 2
+
+_REGION_PREFIX_SQL = """
+    SELECT r.ldong_regn_nm AS sido, CAST(NULL AS varchar) AS sigungu, 1 AS tier
+    FROM regions r
+    WHERE r.ldong_regn_nm LIKE :tok || '%'
+    UNION
+    SELECT r.ldong_regn_nm AS sido, g.ldong_signgu_nm AS sigungu, 2 AS tier
+    FROM sigungus g
+    JOIN regions r ON r.ldong_regn_cd = g.ldong_regn_cd
+    WHERE g.ldong_signgu_nm LIKE :tok || '%'
+"""
+
+
+async def map_region_tokens_to_prefixes(
+    session: AsyncSession, tokens: set[str]
+) -> dict[str, RegionPrefix]:
+    mapping: dict[str, RegionPrefix] = {}
+    for token in sorted(tokens)[:MAX_REGION_TOKENS]:
+        cleaned = token.strip()
+        if len(cleaned) < 2:
+            continue
+        rows = (await session.execute(text(_REGION_PREFIX_SQL), {"tok": cleaned})).all()
+        if (resolved := _pick_region_prefix(rows)) is not None:
+            mapping[cleaned] = resolved
+    return mapping
+
+
+def _pick_region_prefix(rows: Sequence[Any]) -> RegionPrefix | None:
+    sido_rows = [row for row in rows if row.tier == _SIDO_TIER]
+    if sido_rows:
+        if len(sido_rows) > 1:
+            return None
+        sido = sido_rows[0].sido
+        return RegionPrefix(prefix=sido, sido=sido)
+    sigungu_rows = [row for row in rows if row.tier == _SIGUNGU_TIER]
+    if len(sigungu_rows) != 1:
+        return None
+    row = sigungu_rows[0]
+    return RegionPrefix(prefix=f"{row.sido} {row.sigungu}", sido=row.sido)
