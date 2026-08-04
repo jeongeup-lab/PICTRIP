@@ -16,11 +16,19 @@ interface Props {
   turn: Turn;
   anchorId: string | null;
   onSpotPress: (spot: TravelSpot) => void;
+  onSpotAnchor: (spot: TravelSpot) => void;
   onRetry: (turn: Turn) => void;
   onGrow: () => void;
 }
 
-export function ConversationTurn({ turn, anchorId, onSpotPress, onRetry, onGrow }: Props) {
+export function ConversationTurn({
+  turn,
+  anchorId,
+  onSpotPress,
+  onSpotAnchor,
+  onRetry,
+  onGrow,
+}: Props) {
   const rise = useMemo(() => new Animated.Value(0), []);
   const waiting = turn.status === "pending";
   const answer = turn.answer;
@@ -94,12 +102,15 @@ export function ConversationTurn({ turn, anchorId, onSpotPress, onRetry, onGrow 
                 selected={item.contentId === anchorId}
                 dimmed={anchorId !== null && item.contentId !== anchorId}
                 onPress={() => onSpotPress(item)}
+                onAnchor={() => onSpotAnchor(item)}
               />
             )}
           />
 
           <View style={styles.foot}>
-            <Text style={styles.hint}>카드를 탭하면 그 장소 기준으로 이어서 물어볼 수 있어요</Text>
+            <Text style={styles.hint}>
+              카드를 탭하면 상세, 여기 기준으로를 누르면 이 장소로 이어서 물어봐요
+            </Text>
           </View>
         </>
       ) : null}

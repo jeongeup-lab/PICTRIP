@@ -61,7 +61,7 @@ export function AskComposer({
               <Icon name="close" size={13} color={colors.accentText} strokeWidth={2.4} />
             </Pressable>
           </View>
-          <Text style={styles.anchorNote}>카드를 한 번 더 탭하면 상세</Text>
+          <Text style={styles.anchorNote}>이 장소 기준으로 물어봐요</Text>
         </View>
       ) : null}
       {photo ? (
