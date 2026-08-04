@@ -12,6 +12,7 @@ jest.mock("react-native-safe-area-context", () => ({
 jest.mock("@/features/travel/hooks/use-nearby-coords", () => ({ useNearbyCoords: jest.fn() }));
 jest.mock("@/features/travel/usecases/pick-travel-photo", () => ({
   pickTravelPhoto: jest.fn(async () => null),
+  shootTravelPhoto: jest.fn(async () => null),
 }));
 jest.mock("@/features/travel/api", () => ({ askAgent: jest.fn() }));
 jest.mock("@/features/saved/hooks/use-save-optimistic", () => ({
@@ -19,8 +20,11 @@ jest.mock("@/features/saved/hooks/use-save-optimistic", () => ({
 }));
 jest.mock("@/features/spots/queries", () => ({ prefetchSpot: jest.fn() }));
 
-const { pickTravelPhoto } = jest.requireMock("@/features/travel/usecases/pick-travel-photo") as {
+const { pickTravelPhoto, shootTravelPhoto } = jest.requireMock(
+  "@/features/travel/usecases/pick-travel-photo",
+) as {
   pickTravelPhoto: jest.Mock;
+  shootTravelPhoto: jest.Mock;
 };
 const askAgentMock = askAgent as jest.Mock;
 const useNearbyCoordsMock = useNearbyCoords as jest.Mock;
@@ -270,6 +274,29 @@ describe("TravelScreen photo attach", () => {
     const sent = askAgentMock.mock.calls[0][0];
     expect(sent.question).toBe("제주 바다 같은 곳");
     expect(sent.photo).toEqual(photo);
+  });
+
+  it("촬영한 사진도 같은 첨부 경로를 탄다", async () => {
+    const shot = { uri: "file://shot.jpg", name: "shot.jpg", type: "image/jpeg" };
+    shootTravelPhoto.mockResolvedValueOnce(shot);
+    const tree = await mount();
+
+    await press(tree, "travel-shoot");
+    await press(tree, "travel-send");
+
+    expect(shootTravelPhoto).toHaveBeenCalledTimes(1);
+    expect(pickTravelPhoto).not.toHaveBeenCalled();
+    expect(askAgentMock.mock.calls[0][0].photo).toEqual(shot);
+  });
+
+  it("카메라를 열지 못해도 앨범 첨부는 건드리지 않는다", async () => {
+    shootTravelPhoto.mockRejectedValueOnce(new Error("denied"));
+    const tree = await mount();
+
+    await press(tree, "travel-shoot");
+
+    expect(askAgentMock).not.toHaveBeenCalled();
+    expect(tree.root.findByProps({ testID: "travel-attach" })).toBeTruthy();
   });
 });
 

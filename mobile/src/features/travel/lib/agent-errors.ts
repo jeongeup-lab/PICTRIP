@@ -17,6 +17,8 @@ const FALLBACK = "답을 만들지 못했어요. 잠시 후 다시 시도해 주
 
 export const PHOTO_PICK_FAILED = "사진을 불러오지 못했어요. 사진 접근 권한을 확인해 주세요.";
 
+export const PHOTO_SHOOT_FAILED = "카메라를 열지 못했어요. 카메라 권한을 확인해 주세요.";
+
 export function agentErrorMessage(error: unknown): string {
   if (!(error instanceof AppError)) return FALLBACK;
   return MESSAGES[error.code] ?? FALLBACK;
