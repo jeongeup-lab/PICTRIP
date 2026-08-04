@@ -2793,3 +2793,48 @@ async def test_widening_names_the_sido_that_owns_the_narrowed_hint() -> None:
     assert scope.narrowed_hint == "여수"
     assert scope.narrowed_sido == "전라남도"
     assert ask_service._widen_label(scope) == "여수 결과 없음 — 전라남도로 넓힘"
+
+
+@pytest.mark.integration
+async def test_a_photo_in_an_empty_sigungu_widens_instead_of_giving_up(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    for cid in ("v1", "j1"):
+        await db_session.execute(
+            text("INSERT INTO spot_embeddings (content_id, embedding) VALUES (:c, :v)"),
+            {"c": cid, "v": _VEC},
+        )
+    await db_session.flush()
+
+    tried: list[list[str]] = []
+    real_match = photo_service.match_vector
+
+    async def spy(session, vector, *, region_prefixes):  # type: ignore[no-untyped-def]
+        tried.append(list(region_prefixes))
+        return await real_match(session, vector, region_prefixes=region_prefixes)
+
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(regionHints=["수영"])
+
+    async def fake_embed(*, image_bytes, image_mime):  # type: ignore[no-untyped-def]
+        return [0.1] * 512
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    monkeypatch.setattr(photo_service, "embed_photo", fake_embed)
+    monkeypatch.setattr(photo_service, "match_vector", spy)
+    monkeypatch.setattr(ask_service.photo_service, "match_vector", spy)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            files={"photo": ("a.jpg", b"x", "image/jpeg")},
+            data={"question": "수영에서 이런 분위기"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    assert tried == [["부산광역시 수영구"], ["부산광역시"]]
+    answer = "".join(segment["text"] for segment in res.json()["data"]["answer"])
+    assert "수영" in answer
+    assert "부산광역시" in answer
