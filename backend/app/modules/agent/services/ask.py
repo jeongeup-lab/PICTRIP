@@ -159,6 +159,8 @@ async def _ask_with_photo(
 
     scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
     prefixes = scope.prefixes or pre_ota_region_prefixes
+    if not scope.prefixes and pre_ota_region_prefixes:
+        intent = intent.model_copy(update={"regionHints": list(pre_ota_region_prefixes)})
     near = intent.nearMe and lat is not None and lng is not None
 
     async def matched(within: list[str]) -> tuple[list[VectorMatchRow], list[CandidateRow]]:
@@ -405,6 +407,8 @@ async def _ask_with_question(
     mood_ids = await repositories.find_mood_ids(session, list(intent.moodHints))
     scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
     prefixes = scope.prefixes or pre_ota_region_prefixes
+    if not scope.prefixes and pre_ota_region_prefixes:
+        intent = intent.model_copy(update={"regionHints": list(pre_ota_region_prefixes)})
     region_widened: retrieve.RegionScope | None = None
     place_only = refine_service.named_place_is_the_only_constraint(
         intent, keywords=keywords, prefixes=prefixes, near=near
