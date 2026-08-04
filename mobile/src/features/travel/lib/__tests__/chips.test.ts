@@ -59,9 +59,29 @@ describe("composerChips", () => {
   });
 
   it("카드가 선택되면 제안 대신 앵커 칩을 쓴다", () => {
-    const chips = composerChips([{ label: "실내만", patch: { indoorOnly: true } }], true);
+    const chips = composerChips([{ label: "실내만", patch: { indoorOnly: true } }], {
+      hasCrowd: true,
+    });
 
     expect(chips).toEqual(ANCHOR_CHIPS);
     expect(chips.every((c) => c.kind === "anchor")).toBe(true);
+  });
+});
+
+describe("anchorChips", () => {
+  it("혼잡도 데이터가 없는 카드에서는 '오늘 붐벼?'를 내리지 않는다", () => {
+    const labels = composerChips(null, { hasCrowd: false }).map((chip) => chip.label);
+    expect(labels).not.toContain("오늘 붐벼?");
+    expect(labels).toContain("근처 맛집");
+  });
+
+  it("혼잡도가 있으면 네 칩을 모두 보여준다", () => {
+    const labels = composerChips(null, { hasCrowd: true }).map((chip) => chip.label);
+    expect(labels).toContain("오늘 붐벼?");
+    expect(labels).toHaveLength(4);
+  });
+
+  it("hasCrowd 가 없는 응답은 보수적으로 숨긴다", () => {
+    expect(composerChips(null, {}).map((chip) => chip.label)).not.toContain("오늘 붐벼?");
   });
 });

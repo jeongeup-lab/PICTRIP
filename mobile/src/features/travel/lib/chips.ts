@@ -5,12 +5,18 @@ export type Chip =
   | { kind: "refine"; label: string; patch: RefinePatch }
   | { kind: "anchor"; label: string; action: AnchorAction };
 
-export const ANCHOR_CHIPS: Chip[] = [
+export type AnchorChip = Extract<Chip, { kind: "anchor" }>;
+
+export const ANCHOR_CHIPS: AnchorChip[] = [
   { kind: "anchor", label: "근처 맛집", action: "food" },
   { kind: "anchor", label: "근처 카페", action: "cafe" },
   { kind: "anchor", label: "주변 볼거리", action: "nearby" },
   { kind: "anchor", label: "오늘 붐벼?", action: "crowd" },
 ];
+
+export function anchorChips(hasCrowd: boolean): Chip[] {
+  return hasCrowd ? ANCHOR_CHIPS : ANCHOR_CHIPS.filter((chip) => chip.action !== "crowd");
+}
 
 export type QuestionChip = Extract<Chip, { kind: "question" }>;
 
@@ -37,9 +43,9 @@ export function refineChips(refinements: Suggestion[] | null | undefined): Chip[
 
 export function composerChips(
   refinements: Suggestion[] | null | undefined,
-  anchored: boolean = false,
+  anchor: { hasCrowd?: boolean } | null = null,
 ): Chip[] {
-  if (anchored) return ANCHOR_CHIPS;
+  if (anchor) return anchorChips(anchor.hasCrowd === true);
   const refine = refineChips(refinements);
   return refine.length > 0 ? refine : idleChips();
 }
