@@ -197,7 +197,7 @@ export default function TravelScreen() {
     }
   }, []);
 
-  const chips = composerChips(lastAnswered?.answer?.refinements, anchorSpot !== null);
+  const chips = composerChips(lastAnswered?.answer?.refinements, anchorSpot);
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
