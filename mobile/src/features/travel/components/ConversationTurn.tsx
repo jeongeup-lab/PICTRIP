@@ -5,6 +5,7 @@ import { SpotCard } from "@/features/travel/components/SpotCard";
 import { StepList } from "@/features/travel/components/StepList";
 import { AnswerBlock } from "@/features/travel/components/AnswerBlock";
 import { TurnMap } from "@/features/travel/components/TurnMap";
+import { PhotoCompare } from "@/features/travel/components/PhotoCompare";
 import { placed } from "@/features/travel/lib/spot-geo";
 import { pendingSteps } from "@/features/travel/lib/pending-steps";
 import { RETRY_SUGGESTION } from "@/features/travel/lib/question";
@@ -89,6 +90,10 @@ export function ConversationTurn({
         ) : (
           <StepList steps={steps} shown={steps.length} completed={waiting ? 0 : steps.length} />
         )}
+
+        {answer && turn.photo && answer.spots.length > 0 ? (
+          <PhotoCompare photo={turn.photo} match={answer.spots[0]} />
+        ) : null}
 
         {answer ? <AnswerBlock answer={answer.answer} /> : null}
       </View>

@@ -14,6 +14,7 @@ import { router } from "expo-router";
 import { AskComposer } from "@/features/travel/components/AskComposer";
 import { ConversationTurn } from "@/features/travel/components/ConversationTurn";
 import { Mascot } from "@/features/travel/components/Mascot";
+import { StartActions } from "@/features/travel/components/StartActions";
 import { TravelToast } from "@/features/travel/components/TravelToast";
 import { TravelMapSheet } from "@/features/travel/components/TravelMapSheet";
 import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
@@ -51,7 +52,7 @@ export default function TravelScreen() {
   const failTurn = useConversation((s) => s.fail);
   const clearTurns = useConversation((s) => s.clear);
 
-  const { coords } = useNearbyCoords();
+  const { coords, askable: locationAskable, ask: askLocation } = useNearbyCoords();
   const ask = useAskAgentMutation();
 
   const empty = turns.length === 0;
@@ -268,12 +269,19 @@ export default function TravelScreen() {
         <Animated.View
           testID="travel-greeting"
           style={[styles.greeting, { opacity: greetFade }]}
-          pointerEvents="none"
+          pointerEvents="box-none"
           accessibilityElementsHidden={!empty}
           importantForAccessibility={empty ? "auto" : "no-hide-descendants"}
         >
           <Mascot floating={empty} />
           <Text style={styles.greetingText}>오늘,{"\n"}어디로 갈까요</Text>
+          <View style={styles.startActions} pointerEvents={empty ? "auto" : "none"}>
+            <StartActions
+              onPickPhoto={() => void onAttach()}
+              onAskLocation={() => void askLocation()}
+              locationAskable={locationAskable}
+            />
+          </View>
         </Animated.View>
       </View>
 
@@ -344,6 +352,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  startActions: { alignItems: "center", width: "100%", paddingHorizontal: spacing.lg },
   greetingText: {
     marginTop: 16,
     textAlign: "center",
