@@ -177,6 +177,7 @@ async def _ask_with_photo(
         prefixes = scope.sido_prefixes
         rows = await photo_service.match_vector(session, vector, region_prefixes=prefixes)
         widened = scope
+        intent = intent.model_copy(update={"regionHints": list(scope.sido_prefixes)})
         steps.append(AskStep(tool="photo_match", label=_widen_label(scope), badge="pgvector"))
 
     similarity = {row.content_id: photo_service.similarity(row) for row in rows}
@@ -417,6 +418,7 @@ async def _ask_with_question(
             prefixes = scope.sido_prefixes
             candidates = await retrieve.search_by_title(session, keywords, region_prefixes=prefixes)
             region_widened = scope
+            intent = intent.model_copy(update={"regionHints": list(scope.sido_prefixes)})
             steps.append(
                 AskStep(
                     tool="title_search",
@@ -453,6 +455,7 @@ async def _ask_with_question(
             prefixes = scope.sido_prefixes
             candidates = await search(codes, prefixes)
             region_widened = scope
+            intent = intent.model_copy(update={"regionHints": list(scope.sido_prefixes)})
             steps.append(
                 AskStep(
                     tool="category_search",
@@ -634,13 +637,13 @@ def _keywords(intent: QueryIntent) -> list[str]:
 
 
 def _widen_label(scope: retrieve.RegionScope) -> str:
-    return f"{scope.narrowed_hint} 결과 없음 — {scope.narrowed_sido}로 넓힘"
+    return f"{scope.narrowed_label} 결과 없음 — {scope.widened_label}로 넓힘"
 
 
 def _widen_sentence(scope: retrieve.RegionScope) -> list[AnswerSegment]:
     return [
-        AnswerSegment(text=f". {scope.narrowed_hint} 안에서는 찾지 못해 "),
-        AnswerSegment(text=scope.narrowed_sido or "인근 시도", emphasis=True),
+        AnswerSegment(text=f". {scope.narrowed_label} 안에서는 찾지 못해 "),
+        AnswerSegment(text=scope.widened_label, emphasis=True),
         AnswerSegment(text=" 전체에서 골랐어요."),
     ]
 

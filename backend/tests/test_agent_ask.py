@@ -1762,7 +1762,7 @@ async def test_a_narrowed_scope_reports_the_sido_it_can_widen_to() -> None:
 
     assert scope.prefixes == ["경상북도 경주시"]
     assert scope.sido_prefixes == ["경상북도"]
-    assert scope.narrowed_hint == "경주"
+    assert scope.narrowed_hints == ("경주",)
     assert scope.widenable is True
 
 
@@ -2790,8 +2790,8 @@ async def test_widening_names_the_sido_that_owns_the_narrowed_hint() -> None:
 
     scope = await retrieve.resolve_region_scope(session, hints=["부산", "여수"])
 
-    assert scope.narrowed_hint == "여수"
-    assert scope.narrowed_sido == "전라남도"
+    assert scope.narrowed_hints == ("여수",)
+    assert scope.narrowed_sidos == ("전라남도",)
     assert ask_service._widen_label(scope) == "여수 결과 없음 — 전라남도로 넓힘"
 
 
@@ -2838,3 +2838,36 @@ async def test_a_photo_in_an_empty_sigungu_widens_instead_of_giving_up(
     answer = "".join(segment["text"] for segment in res.json()["data"]["answer"])
     assert "수영" in answer
     assert "부산광역시" in answer
+
+
+async def test_two_narrowed_sigungus_both_appear_in_the_widening_notice() -> None:
+    session = _RegionSession(
+        {
+            "경주": [_RegionRow("경상북도", "경주시", 2)],
+            "여수": [_RegionRow("전라남도", "여수시", 2)],
+        }
+    )
+
+    scope = await retrieve.resolve_region_scope(session, hints=["경주", "여수"])
+
+    assert scope.narrowed_hints == ("경주", "여수")
+    assert scope.narrowed_sidos == ("경상북도", "전라남도")
+    assert ask_service._widen_label(scope) == "경주 · 여수 결과 없음 — 경상북도 · 전라남도로 넓힘"
+
+
+@pytest.mark.integration
+async def test_widening_hands_the_sido_back_so_follow_up_chips_do_not_renarrow(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"], regionHints=["수영"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "수영 계곡"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    assert res.json()["data"]["intent"]["regionHints"] == ["부산광역시"]
