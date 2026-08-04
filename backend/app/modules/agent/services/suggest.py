@@ -33,9 +33,13 @@ def _category_noun(intent: QueryIntent) -> str:
 
 
 def releasable_axes(
-    intent: QueryIntent, axes: frozenset[DropAxis] = ALL_AXES, *, has_coords: bool
+    intent: QueryIntent,
+    axes: frozenset[DropAxis] = ALL_AXES,
+    *,
+    has_coords: bool,
+    region_applied: bool = True,
 ) -> list[DropAxis]:
-    engaged = _engaged(intent, has_coords=has_coords)
+    engaged = _engaged(intent, has_coords=has_coords, region_applied=region_applied)
     return [
         axis
         for axis in _DROP_ORDER
@@ -50,10 +54,13 @@ def derive_for_zero(
     *,
     has_coords: bool,
     axes: frozenset[DropAxis] = ALL_AXES,
+    region_applied: bool = True,
 ) -> list[Suggestion]:
     return [
         Suggestion(label=drop_label(intent, axis), patch=RefinePatch(drop=axis))
-        for axis in releasable_axes(intent, axes, has_coords=has_coords)
+        for axis in releasable_axes(
+            intent, axes, has_coords=has_coords, region_applied=region_applied
+        )
     ][:MAX_SUGGESTIONS]
 
 
@@ -64,6 +71,7 @@ def derive(
     result_count: int,
     axes: frozenset[DropAxis] = ALL_AXES,
     indoor_available: bool = True,
+    region_applied: bool = True,
 ) -> list[Suggestion]:
     if intent.festivalOnly:
         return []
@@ -81,23 +89,30 @@ def derive(
         chips.append(Suggestion(label="실내만", patch=RefinePatch(indoorOnly=True)))
     if "near" in axes and has_coords and not intent.nearMe:
         chips.append(Suggestion(label="가까운 순으로", patch=RefinePatch(nearMe=True)))
-    releasable = _releasable_axis(intent, axes, has_coords=has_coords)
+    releasable = _releasable_axis(
+        intent, axes, has_coords=has_coords, region_applied=region_applied
+    )
     if result_count < THIN_RESULT_COUNT and releasable is not None:
         chips.insert(0, Suggestion(label="조건 하나 풀기", patch=RefinePatch(drop=releasable)))
     return chips[:MAX_SUGGESTIONS]
 
 
 def _releasable_axis(
-    intent: QueryIntent, axes: frozenset[DropAxis], *, has_coords: bool
+    intent: QueryIntent, axes: frozenset[DropAxis], *, has_coords: bool, region_applied: bool = True
 ) -> DropAxis | None:
-    return next(iter(releasable_axes(intent, axes, has_coords=has_coords)), None)
+    return next(
+        iter(releasable_axes(intent, axes, has_coords=has_coords, region_applied=region_applied)),
+        None,
+    )
 
 
-def _engaged(intent: QueryIntent, *, has_coords: bool) -> dict[DropAxis, bool]:
+def _engaged(
+    intent: QueryIntent, *, has_coords: bool, region_applied: bool
+) -> dict[DropAxis, bool]:
     return {
         "crowd": intent.crowdPreference != "any",
         "indoor": intent.indoorOnly,
         "category": bool(intent.categoryKeywords or intent.moodHints),
         "near": intent.nearMe and has_coords,
-        "region": bool(intent.regionHints),
+        "region": bool(intent.regionHints) and region_applied,
     }

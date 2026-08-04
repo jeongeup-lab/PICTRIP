@@ -194,7 +194,11 @@ async def _ask_with_photo(
     if not ordered:
         steps[-1] = steps[-1].model_copy(update={"badge": _count(ordered)})
         return _zero_response(
-            steps, intent, has_coords=lat is not None and lng is not None, axes=PHOTO_AXES
+            steps,
+            intent,
+            has_coords=lat is not None and lng is not None,
+            region_applied=bool(prefixes),
+            axes=PHOTO_AXES,
         )
 
     top = ordered[: retrieve.RESULT_LIMIT]
@@ -511,7 +515,11 @@ async def _ask_with_question(
     merged = _merge(pinned, pool)
     if not merged:
         return _zero_response(
-            steps, intent, has_coords=lat is not None and lng is not None, axes=axes
+            steps,
+            intent,
+            has_coords=lat is not None and lng is not None,
+            region_applied=bool(prefixes),
+            axes=axes,
         )
 
     top = merged[: retrieve.RESULT_LIMIT]
@@ -756,9 +764,11 @@ def _count(rows: list[CandidateRow]) -> str:
     return f"{len(rows)}곳"
 
 
-def _applied_conditions(intent: QueryIntent) -> list[str]:
+def _applied_conditions(
+    intent: QueryIntent, *, has_coords: bool, region_applied: bool
+) -> list[str]:
     labels: list[str] = []
-    if intent.regionHints:
+    if intent.regionHints and region_applied:
         labels.append(intent.regionHints[0])
     if intent.categoryKeywords:
         labels.append(intent.categoryKeywords[0])
@@ -768,13 +778,15 @@ def _applied_conditions(intent: QueryIntent) -> list[str]:
         labels.append("한적")
     elif intent.crowdPreference == "popular":
         labels.append("유명한 곳")
-    if intent.nearMe:
+    if intent.nearMe and has_coords:
         labels.append("내 근처")
     return labels
 
 
-def _zero_answer(intent: QueryIntent, *, releasable: bool) -> list[AnswerSegment]:
-    conditions = _applied_conditions(intent)
+def _zero_answer(
+    intent: QueryIntent, *, releasable: bool, has_coords: bool, region_applied: bool
+) -> list[AnswerSegment]:
+    conditions = _applied_conditions(intent, has_coords=has_coords, region_applied=region_applied)
     head = " + ".join(conditions) if conditions else "이 조건"
     segments = [
         AnswerSegment(text=f"{head} 조건으로는 "),
@@ -793,17 +805,22 @@ def _zero_response(
     intent: QueryIntent,
     *,
     has_coords: bool,
+    region_applied: bool,
     axes: frozenset[DropAxis],
 ) -> AskResponse:
-    refinements = suggest_service.derive_for_zero(intent, has_coords=has_coords, axes=axes)
-    logger.info(
-        "agent.ask.zero",
-        conditions=len(_applied_conditions(intent)),
-        releasable=len(refinements),
+    refinements = suggest_service.derive_for_zero(
+        intent, has_coords=has_coords, axes=axes, region_applied=region_applied
     )
+    conditions = _applied_conditions(intent, has_coords=has_coords, region_applied=region_applied)
+    logger.info("agent.ask.zero", conditions=len(conditions), releasable=len(refinements))
     return AskResponse(
         steps=steps,
-        answer=_zero_answer(intent, releasable=bool(refinements)),
+        answer=_zero_answer(
+            intent,
+            releasable=bool(refinements),
+            has_coords=has_coords,
+            region_applied=region_applied,
+        ),
         spots=[],
         totalCount=0,
         intent=intent,
