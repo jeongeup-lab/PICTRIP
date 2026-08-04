@@ -529,7 +529,7 @@ async def _ask_with_question(
         return _zero_response(
             steps,
             intent,
-            has_coords=lat is not None and lng is not None and bool(candidates),
+            has_coords=lat is not None and lng is not None and (not title_only or bool(candidates)),
             region_hints=list(prefixes),
             keywords=[
                 keyword
