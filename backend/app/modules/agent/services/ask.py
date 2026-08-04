@@ -87,6 +87,7 @@ async def ask(
     patch: RefinePatch | None = None,
     anchor: AskAnchor | None = None,
     pre_ota_region_prefixes: list[str] | None = None,
+    legacy_client: bool = False,
 ) -> AskResponse:
     cleaned = (question or "").strip()
     if anchor is not None:
@@ -104,6 +105,7 @@ async def ask(
             intent=intent,
             patch=patch,
             pre_ota_region_prefixes=pre_ota_region_prefixes or [],
+            legacy_client=legacy_client,
         )
     if not cleaned and intent is None:
         raise ValidationFailed("question, photo or intent is required")
@@ -117,6 +119,7 @@ async def ask(
         intent=intent,
         patch=patch,
         pre_ota_region_prefixes=pre_ota_region_prefixes or [],
+        legacy_client=legacy_client,
     )
 
 
@@ -131,6 +134,7 @@ async def _ask_with_photo(
     intent: QueryIntent | None,
     patch: RefinePatch | None,
     pre_ota_region_prefixes: list[str],
+    legacy_client: bool,
 ) -> AskResponse:
     steps: list[AskStep] = []
     intent_task = (
@@ -200,8 +204,9 @@ async def _ask_with_photo(
             intent,
             has_coords=lat is not None and lng is not None,
             region_applied=bool(prefixes),
+            category_applied=True,
             axes=PHOTO_AXES,
-            legacy_client=bool(pre_ota_region_prefixes),
+            legacy_client=legacy_client,
         )
 
     top = ordered[: retrieve.RESULT_LIMIT]
@@ -376,6 +381,7 @@ async def _ask_with_question(
     intent: QueryIntent | None,
     patch: RefinePatch | None,
     pre_ota_region_prefixes: list[str],
+    legacy_client: bool,
 ) -> AskResponse:
     steps: list[AskStep] = []
     if intent is not None:
@@ -524,8 +530,9 @@ async def _ask_with_question(
             intent,
             has_coords=lat is not None and lng is not None,
             region_applied=bool(prefixes),
+            category_applied=title_only or bool(codes) or bool(mood_ids),
             axes=axes,
-            legacy_client=bool(pre_ota_region_prefixes),
+            legacy_client=legacy_client,
         )
 
     top = merged[: retrieve.RESULT_LIMIT]
@@ -783,8 +790,8 @@ def _applied_conditions(
     labels: list[str] = []
     if "region" in axes and intent.regionHints and region_applied:
         labels.append(intent.regionHints[0])
-    if "category" in axes and intent.categoryKeywords:
-        labels.append(intent.categoryKeywords[0])
+    if "category" in axes and (intent.categoryKeywords or intent.moodHints):
+        labels.append(suggest_service.category_noun(intent))
     if "indoor" in axes and intent.indoorOnly:
         labels.append("실내")
     if "crowd" in axes:
@@ -807,9 +814,9 @@ def _zero_answer(
     conditions = _applied_conditions(
         intent, has_coords=has_coords, region_applied=region_applied, axes=axes
     )
-    head = " + ".join(conditions) if conditions else "이 조건"
+    head = f"{' + '.join(conditions)} 조건" if conditions else "이 조건"
     segments = [
-        AnswerSegment(text=f"{head} 조건으로는 "),
+        AnswerSegment(text=f"{head}으로는 "),
         AnswerSegment(text="0곳", emphasis=True),
         AnswerSegment(text="이에요."),
     ]
@@ -823,11 +830,16 @@ def _zero_response(
     *,
     has_coords: bool,
     region_applied: bool,
+    category_applied: bool,
     axes: frozenset[DropAxis],
     legacy_client: bool,
 ) -> AskResponse:
     refinements = suggest_service.derive_for_zero(
-        intent, has_coords=has_coords, axes=axes, region_applied=region_applied
+        intent,
+        has_coords=has_coords,
+        axes=axes,
+        region_applied=region_applied,
+        category_applied=category_applied,
     )
     if not refinements or legacy_client:
         raise AgentNoResults()

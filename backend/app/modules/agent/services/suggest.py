@@ -25,10 +25,10 @@ def _axis_noun(intent: QueryIntent, axis: DropAxis) -> str:
         return "실내"
     if axis == "near":
         return "내 근처"
-    return _category_noun(intent)
+    return category_noun(intent)
 
 
-def _category_noun(intent: QueryIntent) -> str:
+def category_noun(intent: QueryIntent) -> str:
     return intent.categoryKeywords[0] if intent.categoryKeywords else "분위기"
 
 
@@ -38,8 +38,14 @@ def releasable_axes(
     *,
     has_coords: bool,
     region_applied: bool = True,
+    category_applied: bool = True,
 ) -> list[DropAxis]:
-    engaged = _engaged(intent, has_coords=has_coords, region_applied=region_applied)
+    engaged = _engaged(
+        intent,
+        has_coords=has_coords,
+        region_applied=region_applied,
+        category_applied=category_applied,
+    )
     effective = intent if region_applied else intent.model_copy(update={"regionHints": []})
     return [
         axis
@@ -56,11 +62,16 @@ def derive_for_zero(
     has_coords: bool,
     axes: frozenset[DropAxis] = ALL_AXES,
     region_applied: bool = True,
+    category_applied: bool = True,
 ) -> list[Suggestion]:
     return [
         Suggestion(label=drop_label(intent, axis), patch=RefinePatch(drop=axis))
         for axis in releasable_axes(
-            intent, axes, has_coords=has_coords, region_applied=region_applied
+            intent,
+            axes,
+            has_coords=has_coords,
+            region_applied=region_applied,
+            category_applied=category_applied,
         )
     ][:MAX_SUGGESTIONS]
 
@@ -108,12 +119,12 @@ def _releasable_axis(
 
 
 def _engaged(
-    intent: QueryIntent, *, has_coords: bool, region_applied: bool
+    intent: QueryIntent, *, has_coords: bool, region_applied: bool, category_applied: bool
 ) -> dict[DropAxis, bool]:
     return {
         "crowd": intent.crowdPreference != "any",
         "indoor": intent.indoorOnly,
-        "category": bool(intent.categoryKeywords or intent.moodHints),
+        "category": bool(intent.categoryKeywords or intent.moodHints) and category_applied,
         "near": intent.nearMe and has_coords,
         "region": bool(intent.regionHints) and region_applied,
     }

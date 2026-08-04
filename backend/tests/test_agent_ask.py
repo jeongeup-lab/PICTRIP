@@ -3303,3 +3303,54 @@ async def test_a_photo_with_no_releasable_axis_stays_an_error_not_an_empty_turn(
 
     assert res.status_code == 422
     assert res.json()["error"]["code"] == "AGENT_NO_RESULTS"
+
+
+@pytest.mark.integration
+async def test_an_old_app_on_the_default_region_is_still_treated_as_legacy(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["존재하지않는유형"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask", json={"question": "존재하지않는유형", "region": "all"}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "AGENT_NO_RESULTS"
+
+
+def test_zero_chips_skip_category_when_no_code_or_mood_reached_the_query() -> None:
+    intent = QueryIntent(categoryKeywords=["존재하지않는유형"], indoorOnly=True)
+
+    unapplied = suggest_service.derive_for_zero(intent, has_coords=False, category_applied=False)
+    applied = suggest_service.derive_for_zero(intent, has_coords=False, category_applied=True)
+
+    assert [chip.label for chip in unapplied] == ["실내 조건 풀기"]
+    assert "존재하지않는유형 조건 풀기" in [chip.label for chip in applied]
+
+
+@pytest.mark.integration
+async def test_a_mood_only_zero_turn_names_the_mood_instead_of_saying_this_condition(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(moodHints=["lake"], crowdPreference="quiet")
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "한적한 호수"})
+    finally:
+        app.dependency_overrides.clear()
+
+    data = res.json()["data"]
+    assert data["spots"] == []
+    answer = "".join(segment["text"] for segment in data["answer"])
+    assert answer.startswith("분위기 + 한적 조건으로는 ")
+    assert "이 조건 조건" not in answer

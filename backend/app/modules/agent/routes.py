@@ -48,6 +48,7 @@ async def agent_ask(
         patch=payload.patch,
         anchor=payload.anchor,
         pre_ota_region_prefixes=payload.pre_ota_region_prefixes,
+        legacy_client=payload.region is not None,
     )
     return ok(result)
 
