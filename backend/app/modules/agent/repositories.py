@@ -143,6 +143,8 @@ WITH scored AS (
            spots.first_image_url AS image_url,
            spots.cpyrht_div_cd,
            sc.concentration_rate,
+           COALESCE(spots.lcls_systm2 = ANY(CAST(:indoor_l2 AS text[]))
+                    OR spots.lcls_systm3 = ANY(CAST(:indoor_l3 AS text[])), FALSE) AS indoor,
            {percentile} AS percentile
     FROM spots
     LEFT JOIN regions r ON r.ldong_regn_cd = spots.ldong_regn_cd
@@ -225,11 +227,9 @@ async def find_candidates(
     if region_prefixes:
         region_clause = _REGION_CLAUSE
         params["region_patterns"] = [f"{prefix}%" for prefix in region_prefixes]
-    indoor_clause = ""
-    if indoor_only:
-        indoor_clause = _INDOOR_CLAUSE
-        params["indoor_l2"] = list(INDOOR_L2)
-        params["indoor_l3"] = list(INDOOR_L3)
+    params["indoor_l2"] = list(INDOOR_L2)
+    params["indoor_l3"] = list(INDOOR_L3)
+    indoor_clause = _INDOOR_CLAUSE if indoor_only else ""
     mood_clause = ""
     if mood_ids:
         mood_clause = _MOOD_CLAUSE
@@ -268,6 +268,7 @@ async def find_candidates(
                 float(row.concentration_rate) if row.concentration_rate is not None else None
             ),
             percentile=int(row.percentile) if row.percentile is not None else None,
+            indoor=bool(row.indoor),
         )
         for row in result
     ]

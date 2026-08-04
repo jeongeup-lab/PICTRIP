@@ -12,7 +12,7 @@ from app.kto.client import get_kto
 from app.main import app
 from app.modules.agent.repositories import CandidateRow
 from app.modules.agent.services import ask as ask_service
-from app.modules.spots.services import NearbySpotRow
+from app.modules.spots.services import NearbyCategory, NearbySpotRow
 
 ANCHOR_LAT, ANCHOR_LNG = 33.5567, 126.7597
 
@@ -251,7 +251,8 @@ def test_anchor_card_carries_distance_tag_and_short_region() -> None:
             mapy=ANCHOR_LAT,
             dist=442.0,
             cpyrht_div_cd="Type1",
-        )
+        ),
+        has_crowd=False,
     )
 
     assert card.tag == "0.4km"
@@ -279,3 +280,30 @@ def test_anchor_crowd_response_emphasises_percentile_for_calm_spots() -> None:
     assert "한산" in joined
     assert "하위 12%" in joined
     assert response.spots == []
+
+
+def test_anchor_card_reports_whether_crowd_data_exists() -> None:
+    row = NearbySpotRow(
+        content_id="f1",
+        title="해녀촌식당",
+        first_image_url="http://kto/i.jpg",
+        addr1="제주특별자치도 제주시 구좌읍 1",
+        mapx=ANCHOR_LNG,
+        mapy=ANCHOR_LAT,
+        dist=442.0,
+        cpyrht_div_cd="Type1",
+    )
+
+    assert ask_service._anchor_card(row, has_crowd=True).hasCrowd is True
+    assert ask_service._anchor_card(row, has_crowd=False).hasCrowd is False
+
+
+def test_the_travel_anchor_keeps_museums_that_the_map_predicate_drops() -> None:
+    from app.modules.spots.services.nearby import _predicate_for, _predicate_sql
+
+    assert ask_service.ANCHOR_CATEGORIES["nearby"] is NearbyCategory.attraction
+    map_sql = _predicate_sql(_predicate_for(NearbyCategory.attraction, False))
+    travel_sql = _predicate_sql(_predicate_for(NearbyCategory.attraction, True))
+
+    assert "VE07" in map_sql
+    assert "VE07" not in travel_sql

@@ -215,6 +215,7 @@ async def _ask_with_photo(
             has_coords=lat is not None and lng is not None,
             result_count=len(spots),
             axes=PHOTO_AXES,
+            indoor_available=any(row.indoor for row in ordered),
         ),
     )
 
@@ -256,12 +257,14 @@ async def _ask_with_anchor(session: AsyncSession, anchor: AskAnchor) -> AskRespo
         lng=row.lng,
         radius=ANCHOR_RADIUS_M,
         category=ANCHOR_CATEGORIES[anchor.action],
+        travel_only=anchor.action == "nearby",
     )
     kept = [near for near in found if near.content_id != row.content_id]
     kept = kept[: retrieve.RESULT_LIMIT]
     if not kept:
         raise AgentNoResults()
-    spots = [_anchor_card(near) for near in kept]
+    rated = await repositories.load_candidates_by_ids(session, [n.content_id for n in kept])
+    spots = [_anchor_card(near, has_crowd=_has_crowd(rated.get(near.content_id))) for near in kept]
     steps = [AskStep(tool="nearby", label=f"{row.title} 주변 {noun} 조회", badge=f"{len(spots)}곳")]
     answer = [
         AnswerSegment(text=f"{row.title} 주변 {noun} "),
@@ -314,7 +317,11 @@ def _anchor_crowd_response(row: CandidateRow) -> AskResponse:
     )
 
 
-def _anchor_card(row: NearbySpotRow) -> AgentSpotCard:
+def _has_crowd(row: CandidateRow | None) -> bool:
+    return row is not None and row.concentration_rate is not None
+
+
+def _anchor_card(row: NearbySpotRow, *, has_crowd: bool) -> AgentSpotCard:
     return AgentSpotCard(
         contentId=row.content_id,
         title=row.title,
@@ -323,6 +330,7 @@ def _anchor_card(row: NearbySpotRow) -> AgentSpotCard:
         tag=_meters_label(row.dist) if row.dist is not None else None,
         lat=row.mapy,
         lng=row.mapx,
+        hasCrowd=has_crowd,
     )
 
 
@@ -512,6 +520,7 @@ async def _ask_with_question(
             has_coords=lat is not None and lng is not None,
             result_count=len(spots),
             axes=axes,
+            indoor_available=any(row.indoor for row in merged),
         ),
     )
 
