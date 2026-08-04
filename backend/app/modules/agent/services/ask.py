@@ -857,6 +857,6 @@ def _zero_response(
         answer=_zero_answer(searched, axes=axes),
         spots=[],
         totalCount=0,
-        intent=intent,
+        intent=searched,
         refinements=refinements,
     )
