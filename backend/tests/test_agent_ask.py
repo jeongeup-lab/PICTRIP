@@ -3413,3 +3413,22 @@ def test_searched_intent_leaves_an_intent_alone_when_every_axis_reached_the_quer
         )
         is intent
     )
+
+
+@pytest.mark.integration
+async def test_a_zero_turn_hands_back_an_intent_the_drop_chip_can_actually_move(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["존재하지않는유형"], regionHints=["없는지역이름"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "없는지역이름 존재하지않는유형"})
+    finally:
+        app.dependency_overrides.clear()
+
+    data = res.json()["data"]
+    assert data["spots"] == []
+    assert data["intent"]["regionHints"] == []
