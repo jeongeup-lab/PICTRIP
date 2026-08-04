@@ -13,6 +13,7 @@ from redis.asyncio import Redis
 from app.core.logging import get_logger
 from app.kto.client import KtoClient, KtoService
 from app.modules.feed.services.channels import ChannelCardRow
+from app.web.errors import AppError
 
 logger = get_logger(__name__)
 
@@ -287,15 +288,18 @@ async def load_kto_channel_cached(redis: Redis, kto: KtoClient, key: str) -> lis
 
 
 _FESTIVAL_POOL_KEY = "festival:pool:v2"
-_FESTIVAL_POOL_TTL = 3600
+_FESTIVAL_POOL_TTL = 86_400
 
 
-async def load_festival_pool(redis: Redis, kto: KtoClient) -> list[ChannelCardRow]:
+async def load_festival_pool(
+    redis: Redis, kto: KtoClient, *, fetch_timeout: float | None = None
+) -> list[ChannelCardRow]:
     try:
         cached = await redis.get(_FESTIVAL_POOL_KEY)
     except Exception as exc:
         logger.warning("feed.festival.cache_get_failed", error=str(exc))
         cached = None
+    stale: list[ChannelCardRow] = []
     if cached:
         try:
             payload = json.loads(cached)
@@ -305,7 +309,18 @@ async def load_festival_pool(redis: Redis, kto: KtoClient) -> list[ChannelCardRo
         else:
             if payload.get("date") == _today().isoformat():
                 return rows
-    cards = await fetch_festival_pool_cards(kto)
+            stale = rows
+    try:
+        if fetch_timeout is None:
+            cards = await fetch_festival_pool_cards(kto)
+        else:
+            async with asyncio.timeout(fetch_timeout):
+                cards = await fetch_festival_pool_cards(kto)
+    except (AppError, TimeoutError):
+        if not stale:
+            raise
+        logger.warning("feed.festival.serving_stale", cards=len(stale))
+        return stale
     try:
         await redis.set(
             _FESTIVAL_POOL_KEY,

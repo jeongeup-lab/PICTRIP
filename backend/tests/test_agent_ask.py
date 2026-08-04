@@ -43,6 +43,7 @@ from app.modules.agent.services import suggest as suggest_service
 from app.modules.feed.services import kto_channels
 from app.modules.feed.services.channels import ChannelCardRow
 from app.modules.spots.services import MAX_REGION_TOKENS, map_region_tokens_to_sido
+from app.web.errors import KtoApiUnavailable
 
 LAT, LNG = 35.15, 129.05
 _VEC = "[" + ",".join(["0.1"] * 512) + "]"
@@ -2044,7 +2045,9 @@ def _festival_card(content_id: str, *, title: str, region_label: str, dday: str)
 
 
 def _festival_pool(cards: list[ChannelCardRow]) -> Callable[..., Awaitable[list[ChannelCardRow]]]:
-    async def load(redis: object, kto: object) -> list[ChannelCardRow]:
+    async def load(
+        redis: object, kto: object, *, fetch_timeout: float | None = None
+    ) -> list[ChannelCardRow]:
         return cards
 
     return load
@@ -2561,3 +2564,45 @@ async def test_festival_hint_buried_mid_token_still_falls_back_nationwide(
     assert [s["contentId"] for s in body["spots"]] == ["f1"]
     sentence = "".join(part["text"] for part in body["answer"])
     assert "광주에는 오늘 열리는 축제가 없어 전국에서 골랐어요" in sentence
+
+
+@pytest.mark.integration
+async def test_a_dead_kto_answers_with_a_festival_code_not_a_gateway_error(
+    db_session, client, seeded_festivals, monkeypatch
+) -> None:
+    async def down(redis: object, kto: object, **kwargs: object) -> list[ChannelCardRow]:
+        raise KtoApiUnavailable()
+
+    monkeypatch.setattr(ask_service.feed_services, "load_festival_pool", down)
+    monkeypatch.setattr(
+        intent_service, "extract_intent", _fake_intent(QueryIntent(festivalOnly=True))
+    )
+    _override_with_kto(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "지금 열리는 축제"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "AGENT_FESTIVAL_UNAVAILABLE"
+
+
+@pytest.mark.integration
+async def test_a_hanging_kto_does_not_hold_the_festival_turn_open(
+    db_session, client, seeded_festivals, monkeypatch
+) -> None:
+    async def hang(redis: object, kto: object, **kwargs: object) -> list[ChannelCardRow]:
+        raise TimeoutError()
+
+    monkeypatch.setattr(ask_service.feed_services, "load_festival_pool", hang)
+    monkeypatch.setattr(
+        intent_service, "extract_intent", _fake_intent(QueryIntent(festivalOnly=True))
+    )
+    _override_with_kto(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "지금 열리는 축제"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "AGENT_FESTIVAL_UNAVAILABLE"
