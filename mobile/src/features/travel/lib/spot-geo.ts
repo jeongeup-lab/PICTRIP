@@ -1,3 +1,4 @@
+import type { LatLng } from "@/features/map/lib/geo";
 import type { TravelSpot } from "@/features/travel/api";
 
 export interface PlacedSpot {
@@ -72,11 +73,16 @@ export function spreadKm(spots: PlacedSpot[]): number {
 export function regionGroups(spots: PlacedSpot[]): RegionGroup[] {
   const counts = new Map<string, number>();
   spots.forEach((s) => {
-    const label = areaLabel(s.spot.regionLabel);
-    if (label) counts.set(label, (counts.get(label) ?? 0) + 1);
+    const key = s.spot.regionLabel.trim().replace(/\s+/g, " ");
+    if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
   });
-  return [...counts.entries()]
-    .map(([label, count]) => ({ label, count }))
+  const keys = [...counts.keys()];
+  const narrow = keys.map(areaLabel);
+  return keys
+    .map((key, index) => ({
+      label: narrow.filter((n) => n === narrow[index]).length > 1 ? key : narrow[index],
+      count: counts.get(key) ?? 0,
+    }))
     .sort((a, b) => b.count - a.count);
 }
 
@@ -84,6 +90,16 @@ function areaLabel(regionLabel: string): string {
   const parts = regionLabel.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "";
   return parts[parts.length - 1];
+}
+
+export function bounds(spots: PlacedSpot[]): { sw: LatLng; ne: LatLng } | null {
+  if (spots.length === 0) return null;
+  const lats = spots.map((s) => s.lat);
+  const lngs = spots.map((s) => s.lng);
+  return {
+    sw: { lat: Math.min(...lats), lng: Math.min(...lngs) },
+    ne: { lat: Math.max(...lats), lng: Math.max(...lngs) },
+  };
 }
 
 export function spatialSummary(spots: PlacedSpot[]): string | null {

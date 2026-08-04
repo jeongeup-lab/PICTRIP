@@ -1,4 +1,5 @@
 import {
+  bounds,
   placed,
   previewPoints,
   regionGroups,
@@ -155,5 +156,57 @@ describe("spatialSummary", () => {
 
     expect(summary).toContain("등 3곳으로 나뉘어요.");
     expect(summary).toContain("km 떨어져요.");
+  });
+});
+
+describe("regionGroups with same-named districts", () => {
+  it("keeps 서울 중구 and 대구 중구 apart", () => {
+    const groups = regionGroups(
+      placed([
+        spot({ contentId: "a", regionLabel: "서울 중구", lat: 37.56, lng: 126.99 }),
+        spot({ contentId: "b", regionLabel: "대구 중구", lat: 35.87, lng: 128.6 }),
+      ]),
+    );
+
+    expect(groups.map((g) => g.label).sort()).toEqual(["대구 중구", "서울 중구"]);
+  });
+
+  it("still shortens a district whose name is unambiguous here", () => {
+    const groups = regionGroups(
+      placed([
+        spot({ contentId: "a", regionLabel: "제주 제주시", lat: 33.5, lng: 126.5 }),
+        spot({ contentId: "b", regionLabel: "제주 서귀포시", lat: 33.25, lng: 126.56 }),
+      ]),
+    );
+
+    expect(groups.map((g) => g.label).sort()).toEqual(["서귀포시", "제주시"]);
+  });
+
+  it("never claims that two far-apart 중구 are the same place", () => {
+    const summary = spatialSummary(
+      placed([
+        spot({ contentId: "a", regionLabel: "서울 중구", lat: 37.56, lng: 126.99 }),
+        spot({ contentId: "b", regionLabel: "대구 중구", lat: 35.87, lng: 128.6 }),
+      ]),
+    );
+
+    expect(summary).not.toContain("모두");
+  });
+});
+
+describe("bounds", () => {
+  it("spans the corners of every pinned spot", () => {
+    const box = bounds(
+      placed([
+        spot({ contentId: "a", lat: 33.2, lng: 126.2 }),
+        spot({ contentId: "b", lat: 33.6, lng: 126.9 }),
+      ]),
+    );
+
+    expect(box).toEqual({ sw: { lat: 33.2, lng: 126.2 }, ne: { lat: 33.6, lng: 126.9 } });
+  });
+
+  it("is null when nothing can be pinned", () => {
+    expect(bounds([])).toBeNull();
   });
 });

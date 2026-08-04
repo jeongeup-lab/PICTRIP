@@ -47,6 +47,9 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true, accentDot =
   function fail(msg, human, detail){ document.getElementById('msg').textContent = human; post('error',{message:msg, detail:detail||''}); }
   function clearPins(){ pins.forEach(function(o){ o.setMap(null); }); pins = []; }
   function setCenter(lat,lng){ if(map){ map.setCenter(new kakao.maps.LatLng(lat,lng)); } }
+  function fitBounds(sw,ne,pad){ if(!map) return;
+    var b = new kakao.maps.LatLngBounds(new kakao.maps.LatLng(sw.lat,sw.lng), new kakao.maps.LatLng(ne.lat,ne.lng));
+    map.setBounds(b, pad.top||0, pad.right||0, pad.bottom||0, pad.left||0); }
   function esc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function pinEl(s, sel){
     var el = document.createElement('div');
@@ -85,6 +88,7 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true, accentDot =
     else if(m.cmd==='setPins') setPins(m.spots);
     else if(m.cmd==='setSelected') setSelected(m.contentId);
     else if(m.cmd==='setUserMarker') setUserMarker(m.lat,m.lng);
+    else if(m.cmd==='fitBounds') fitBounds(m.sw,m.ne,m.pad||{});
   }catch(_){} }
   document.addEventListener('message', handle);
   window.addEventListener('message', handle);

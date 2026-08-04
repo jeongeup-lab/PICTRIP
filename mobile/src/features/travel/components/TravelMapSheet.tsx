@@ -5,7 +5,7 @@ import { router } from "expo-router";
 import { RemoteImage } from "@/components/RemoteImage";
 import { Icon } from "@/components/Icon";
 import { KakaoWebMap } from "@/features/map/components/KakaoWebMap";
-import { spatialSummary, type PlacedSpot } from "@/features/travel/lib/spot-geo";
+import { bounds, spatialSummary, type PlacedSpot } from "@/features/travel/lib/spot-geo";
 import type { NearbySpot } from "@/lib/api-types";
 import { colors, spacing } from "@/constants/theme";
 
@@ -48,6 +48,11 @@ export function TravelMapSheet({ spots, question, onClose }: Props) {
     return { lat, lng };
   }, [spots]);
 
+  const fit = useMemo(() => {
+    const box = bounds(spots);
+    return box ? { ...box, pad: { top: 96, right: 32, bottom: 132, left: 32 } } : null;
+  }, [spots]);
+
   const summary = useMemo(() => spatialSummary(spots), [spots]);
 
   const select = useCallback(
@@ -64,6 +69,7 @@ export function TravelMapSheet({ spots, question, onClose }: Props) {
       <View style={styles.root} testID="travel-map-sheet">
         <KakaoWebMap
           center={center}
+          fit={fit}
           pins={pins}
           selectedId={selectedId}
           userLocation={null}
@@ -102,7 +108,11 @@ export function TravelMapSheet({ spots, question, onClose }: Props) {
             keyExtractor={(item) => item.spot.contentId}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.strip}
-            onScrollToIndexFailed={() => undefined}
+            getItemLayout={(_data, index) => ({
+              length: CARD_WIDTH + CARD_GAP,
+              offset: (CARD_WIDTH + CARD_GAP) * index,
+              index,
+            })}
             renderItem={({ item }) => (
               <Pressable
                 testID={`travel-map-card-${item.spot.contentId}`}
