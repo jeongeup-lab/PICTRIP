@@ -201,6 +201,7 @@ async def _ask_with_photo(
             has_coords=lat is not None and lng is not None,
             region_applied=bool(prefixes),
             axes=PHOTO_AXES,
+            legacy_client=bool(pre_ota_region_prefixes),
         )
 
     top = ordered[: retrieve.RESULT_LIMIT]
@@ -524,6 +525,7 @@ async def _ask_with_question(
             has_coords=lat is not None and lng is not None,
             region_applied=bool(prefixes),
             axes=axes,
+            legacy_client=bool(pre_ota_region_prefixes),
         )
 
     top = merged[: retrieve.RESULT_LIMIT]
@@ -798,7 +800,6 @@ def _applied_conditions(
 def _zero_answer(
     intent: QueryIntent,
     *,
-    releasable: bool,
     has_coords: bool,
     region_applied: bool,
     axes: frozenset[DropAxis],
@@ -812,10 +813,7 @@ def _zero_answer(
         AnswerSegment(text="0곳", emphasis=True),
         AnswerSegment(text="이에요."),
     ]
-    if releasable:
-        segments.append(AnswerSegment(text=" 조건 하나를 풀면 찾을 수 있어요."))
-    else:
-        segments.append(AnswerSegment(text=" 조건을 조금 바꿔서 다시 물어봐 주세요."))
+    segments.append(AnswerSegment(text=" 조건 하나를 풀면 찾을 수 있어요."))
     return segments
 
 
@@ -826,10 +824,13 @@ def _zero_response(
     has_coords: bool,
     region_applied: bool,
     axes: frozenset[DropAxis],
+    legacy_client: bool,
 ) -> AskResponse:
     refinements = suggest_service.derive_for_zero(
         intent, has_coords=has_coords, axes=axes, region_applied=region_applied
     )
+    if not refinements or legacy_client:
+        raise AgentNoResults()
     conditions = _applied_conditions(
         intent, has_coords=has_coords, region_applied=region_applied, axes=axes
     )
@@ -838,7 +839,6 @@ def _zero_response(
         steps=steps,
         answer=_zero_answer(
             intent,
-            releasable=bool(refinements),
             has_coords=has_coords,
             region_applied=region_applied,
             axes=axes,

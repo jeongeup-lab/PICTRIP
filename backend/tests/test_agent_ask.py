@@ -3250,7 +3250,7 @@ def test_zero_chips_do_not_offer_a_drop_that_lands_on_a_named_place_alone() -> N
 
 
 @pytest.mark.integration
-async def test_a_zero_turn_keeps_the_region_an_old_app_sent_outside_the_intent(
+async def test_an_old_app_keeps_the_error_instead_of_a_turn_it_cannot_escape(
     db_session, client, seeded, monkeypatch
 ) -> None:
     async def fake_intent(question: str) -> QueryIntent:
@@ -3265,10 +3265,41 @@ async def test_a_zero_turn_keeps_the_region_an_old_app_sent_outside_the_intent(
     finally:
         app.dependency_overrides.clear()
 
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "AGENT_NO_RESULTS"
+
+
+@pytest.mark.integration
+async def test_an_old_app_gets_back_the_region_its_search_actually_used(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "계곡", "region": "jeju"})
+    finally:
+        app.dependency_overrides.clear()
+
     assert res.status_code == 200
-    data = res.json()["data"]
-    assert data["spots"] == []
-    assert data["intent"]["regionHints"] == ["제주"]
-    answer = "".join(segment["text"] for segment in data["answer"])
-    assert "제주" in answer
-    assert "지역 넓히기" in [chip["label"] for chip in data["refinements"]]
+    assert res.json()["data"]["intent"]["regionHints"] == ["제주"]
+
+
+@pytest.mark.integration
+async def test_a_photo_with_no_releasable_axis_stays_an_error_not_an_empty_turn(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_embed(*, image_bytes, image_mime):
+        return [0.1] * 512
+
+    monkeypatch.setattr(photo_service, "embed_photo", fake_embed)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", files={"photo": ("a.jpg", b"x", "image/jpeg")})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "AGENT_NO_RESULTS"
