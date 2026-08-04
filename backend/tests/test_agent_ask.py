@@ -3475,3 +3475,31 @@ def test_searched_intent_keeps_only_the_values_that_reached_the_query() -> None:
     assert searched.regionHints == ["제주특별자치도"]
     assert searched.categoryKeywords == ["박물관"]
     assert searched.nearMe is False
+
+
+@pytest.mark.integration
+async def test_a_photo_that_matched_nothing_does_not_blame_the_near_filter(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(regionHints=["제주"], nearMe=True)
+
+    async def fake_embed(*, image_bytes, image_mime):
+        return [0.1] * 512
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    monkeypatch.setattr(photo_service, "embed_photo", fake_embed)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            files={"photo": ("a.jpg", b"x", "image/jpeg")},
+            data={"question": "제주 근처 이런 분위기", "lat": str(LAT), "lng": str(LNG)},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    data = res.json()["data"]
+    labels = [chip["label"] for chip in data["refinements"]]
+    assert "내 근처 조건 풀기" not in labels
+    assert "내 근처" not in "".join(segment["text"] for segment in data["answer"])
