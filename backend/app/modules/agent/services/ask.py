@@ -204,7 +204,7 @@ async def _ask_with_photo(
             intent,
             has_coords=lat is not None and lng is not None,
             region_applied=bool(prefixes),
-            category_applied=True,
+            keywords_applied=True,
             axes=PHOTO_AXES,
             legacy_client=legacy_client,
         )
@@ -530,7 +530,7 @@ async def _ask_with_question(
             intent,
             has_coords=lat is not None and lng is not None,
             region_applied=bool(prefixes),
-            category_applied=title_only or bool(codes) or bool(mood_ids),
+            keywords_applied=title_only or bool(codes),
             axes=axes,
             legacy_client=legacy_client,
         )
@@ -784,18 +784,28 @@ def _rebadge_last(steps: list[AskStep], tool: str, badge: str) -> None:
             return
 
 
-def _applied_conditions(
+def searched_intent(
     intent: QueryIntent,
     *,
     has_coords: bool,
     region_applied: bool,
-    category_applied: bool,
-    axes: frozenset[DropAxis],
-) -> list[str]:
+    keywords_applied: bool,
+) -> QueryIntent:
+    update: dict[str, object] = {}
+    if not region_applied:
+        update["regionHints"] = []
+    if not keywords_applied:
+        update["categoryKeywords"] = []
+    if not has_coords:
+        update["nearMe"] = False
+    return intent.model_copy(update=update) if update else intent
+
+
+def _applied_conditions(intent: QueryIntent, *, axes: frozenset[DropAxis]) -> list[str]:
     labels: list[str] = []
-    if "region" in axes and intent.regionHints and region_applied:
+    if "region" in axes and intent.regionHints:
         labels.append(intent.regionHints[0])
-    if "category" in axes and category_applied and (intent.categoryKeywords or intent.moodHints):
+    if "category" in axes and (intent.categoryKeywords or intent.moodHints):
         labels.append(suggest_service.category_noun(intent))
     if "indoor" in axes and intent.indoorOnly:
         labels.append("실내")
@@ -804,26 +814,13 @@ def _applied_conditions(
             labels.append("한적")
         elif intent.crowdPreference == "popular":
             labels.append("유명한 곳")
-    if "near" in axes and intent.nearMe and has_coords:
+    if "near" in axes and intent.nearMe:
         labels.append("내 근처")
     return labels
 
 
-def _zero_answer(
-    intent: QueryIntent,
-    *,
-    has_coords: bool,
-    region_applied: bool,
-    category_applied: bool,
-    axes: frozenset[DropAxis],
-) -> list[AnswerSegment]:
-    conditions = _applied_conditions(
-        intent,
-        has_coords=has_coords,
-        region_applied=region_applied,
-        category_applied=category_applied,
-        axes=axes,
-    )
+def _zero_answer(intent: QueryIntent, *, axes: frozenset[DropAxis]) -> list[AnswerSegment]:
+    conditions = _applied_conditions(intent, axes=axes)
     head = f"{' + '.join(conditions)} 조건" if conditions else "이 조건"
     segments = [
         AnswerSegment(text=f"{head}으로는 "),
@@ -840,36 +837,24 @@ def _zero_response(
     *,
     has_coords: bool,
     region_applied: bool,
-    category_applied: bool,
+    keywords_applied: bool,
     axes: frozenset[DropAxis],
     legacy_client: bool,
 ) -> AskResponse:
-    refinements = suggest_service.derive_for_zero(
+    searched = searched_intent(
         intent,
         has_coords=has_coords,
-        axes=axes,
         region_applied=region_applied,
-        category_applied=category_applied,
+        keywords_applied=keywords_applied,
     )
+    refinements = suggest_service.derive_for_zero(searched, has_coords=has_coords, axes=axes)
     if not refinements or legacy_client:
         raise AgentNoResults()
-    conditions = _applied_conditions(
-        intent,
-        has_coords=has_coords,
-        region_applied=region_applied,
-        category_applied=category_applied,
-        axes=axes,
-    )
+    conditions = _applied_conditions(searched, axes=axes)
     logger.info("agent.ask.zero", conditions=len(conditions), releasable=len(refinements))
     return AskResponse(
         steps=steps,
-        answer=_zero_answer(
-            intent,
-            has_coords=has_coords,
-            region_applied=region_applied,
-            category_applied=category_applied,
-            axes=axes,
-        ),
+        answer=_zero_answer(searched, axes=axes),
         spots=[],
         totalCount=0,
         intent=intent,
