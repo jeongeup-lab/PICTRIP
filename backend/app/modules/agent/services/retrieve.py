@@ -36,6 +36,7 @@ class RegionScope:
     prefixes: list[str]
     sido_prefixes: list[str]
     narrowed_hint: str | None = None
+    narrowed_sido: str | None = None
 
     @property
     def widenable(self) -> bool:
@@ -53,12 +54,14 @@ async def resolve_region_scope(session: AsyncSession, *, hints: list[str]) -> Re
     if not mapping:
         return EMPTY_REGION_SCOPE
     narrowed = next(
-        (token for token, resolved in sorted(mapping.items()) if resolved.narrowed), None
+        ((token, resolved) for token, resolved in sorted(mapping.items()) if resolved.narrowed),
+        None,
     )
     return RegionScope(
         prefixes=_drop_covered({resolved.prefix for resolved in mapping.values()}),
         sido_prefixes=sorted({resolved.sido for resolved in mapping.values()}),
-        narrowed_hint=narrowed,
+        narrowed_hint=narrowed[0] if narrowed else None,
+        narrowed_sido=narrowed[1].sido if narrowed else None,
     )
 
 

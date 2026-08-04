@@ -167,9 +167,11 @@ async def _ask_with_photo(
             badge="pgvector",
         )
     )
+    widened: retrieve.RegionScope | None = None
     if not rows and scope.widenable:
         prefixes = scope.sido_prefixes
         rows = await photo_service.match_vector(session, vector, region_prefixes=prefixes)
+        widened = scope
         steps.append(AskStep(tool="photo_match", label=_widen_label(scope), badge="pgvector"))
 
     similarity = {row.content_id: photo_service.similarity(row) for row in rows}
@@ -192,8 +194,11 @@ async def _ask_with_photo(
     answer = [
         AnswerSegment(text="사진과 닮은 곳으로 "),
         AnswerSegment(text=f"{len(top)}곳", emphasis=True),
-        AnswerSegment(text=" 찾았어요. 원본 사진은 비교 후 바로 폐기했어요."),
+        AnswerSegment(text=" 찾았어요."),
     ]
+    if widened is not None:
+        answer.extend(_widen_sentence(widened))
+    answer.append(AnswerSegment(text=" 원본 사진은 비교 후 바로 폐기했어요."))
     return AskResponse(
         steps=steps,
         answer=answer,
@@ -369,7 +374,7 @@ async def _ask_with_question(
     mood_ids = await repositories.find_mood_ids(session, list(intent.moodHints))
     scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
     prefixes = scope.prefixes or pre_ota_region_prefixes
-    region_widened: str | None = None
+    region_widened: retrieve.RegionScope | None = None
     place_only = refine_service.named_place_is_the_only_constraint(
         intent, keywords=keywords, prefixes=prefixes, near=near
     )
@@ -403,10 +408,10 @@ async def _ask_with_question(
                 badge=_count(candidates),
             )
         )
-        if not candidates and scope.widenable:
+        if not candidates and not pinned and scope.widenable:
             prefixes = scope.sido_prefixes
             candidates = await retrieve.search_by_title(session, keywords, region_prefixes=prefixes)
-            region_widened = scope.narrowed_hint
+            region_widened = scope
             steps.append(
                 AskStep(
                     tool="title_search",
@@ -439,10 +444,10 @@ async def _ask_with_question(
                 badge=_count(candidates),
             )
         )
-        if not candidates and scope.widenable:
+        if not candidates and not pinned and scope.widenable:
             prefixes = scope.sido_prefixes
             candidates = await search(codes, prefixes)
-            region_widened = scope.narrowed_hint
+            region_widened = scope
             steps.append(
                 AskStep(
                     tool="category_search",
@@ -624,7 +629,15 @@ def _keywords(intent: QueryIntent) -> list[str]:
 
 
 def _widen_label(scope: retrieve.RegionScope) -> str:
-    return f"{scope.narrowed_hint} 결과 없음 — {scope.sido_prefixes[0]}로 넓힘"
+    return f"{scope.narrowed_hint} 결과 없음 — {scope.narrowed_sido}로 넓힘"
+
+
+def _widen_sentence(scope: retrieve.RegionScope) -> list[AnswerSegment]:
+    return [
+        AnswerSegment(text=f". {scope.narrowed_hint} 안에서는 찾지 못해 "),
+        AnswerSegment(text=scope.narrowed_sido or "인근 시도", emphasis=True),
+        AnswerSegment(text=" 전체에서 골랐어요."),
+    ]
 
 
 def _search_label(keywords: list[str], prefixes: list[str], *, indoor: bool) -> str:
@@ -668,17 +681,14 @@ def _answer(
     near: bool,
     lat: float | None,
     lng: float | None,
-    region_widened: str | None = None,
+    region_widened: retrieve.RegionScope | None = None,
 ) -> list[AnswerSegment]:
     segments = [AnswerSegment(text="조건에 맞는 곳으로 ")]
     segments.append(AnswerSegment(text=f"{len(top)}곳", emphasis=True))
     segments.append(AnswerSegment(text=" 추렸어요"))
 
     if region_widened is not None:
-        region = top[0].region_name if top and top[0].region_name else "인근 시도"
-        segments.append(AnswerSegment(text=f". {region_widened} 안에서는 찾지 못해 "))
-        segments.append(AnswerSegment(text=region, emphasis=True))
-        segments.append(AnswerSegment(text=" 전체에서 골랐어요."))
+        segments.extend(_widen_sentence(region_widened))
         return segments
     if intent.crowdPreference == "quiet":
         pcts = [row.percentile for row in top if row.percentile is not None]

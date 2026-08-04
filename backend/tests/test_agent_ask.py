@@ -2778,3 +2778,18 @@ async def test_a_hanging_kto_does_not_hold_the_festival_turn_open(
 
     assert res.status_code == 422
     assert res.json()["error"]["code"] == "AGENT_FESTIVAL_UNAVAILABLE"
+
+
+async def test_widening_names_the_sido_that_owns_the_narrowed_hint() -> None:
+    session = _RegionSession(
+        {
+            "부산": [_RegionRow("부산광역시", None, 1)],
+            "여수": [_RegionRow("전라남도", "여수시", 2)],
+        }
+    )
+
+    scope = await retrieve.resolve_region_scope(session, hints=["부산", "여수"])
+
+    assert scope.narrowed_hint == "여수"
+    assert scope.narrowed_sido == "전라남도"
+    assert ask_service._widen_label(scope) == "여수 결과 없음 — 전라남도로 넓힘"
