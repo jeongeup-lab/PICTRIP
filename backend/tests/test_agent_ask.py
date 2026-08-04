@@ -3354,3 +3354,25 @@ async def test_a_mood_only_zero_turn_names_the_mood_instead_of_saying_this_condi
     answer = "".join(segment["text"] for segment in data["answer"])
     assert answer.startswith("분위기 + 한적 조건으로는 ")
     assert "이 조건 조건" not in answer
+
+
+def test_zero_answer_drops_a_category_that_never_reached_the_query() -> None:
+    intent = QueryIntent(categoryKeywords=["존재하지않는유형"], indoorOnly=True)
+
+    unapplied = ask_service._applied_conditions(
+        intent,
+        has_coords=False,
+        region_applied=True,
+        category_applied=False,
+        axes=suggest_service.ALL_AXES,
+    )
+    applied = ask_service._applied_conditions(
+        intent,
+        has_coords=False,
+        region_applied=True,
+        category_applied=True,
+        axes=suggest_service.ALL_AXES,
+    )
+
+    assert unapplied == ["실내"]
+    assert applied == ["존재하지않는유형", "실내"]

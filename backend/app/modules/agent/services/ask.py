@@ -785,12 +785,17 @@ def _rebadge_last(steps: list[AskStep], tool: str, badge: str) -> None:
 
 
 def _applied_conditions(
-    intent: QueryIntent, *, has_coords: bool, region_applied: bool, axes: frozenset[DropAxis]
+    intent: QueryIntent,
+    *,
+    has_coords: bool,
+    region_applied: bool,
+    category_applied: bool,
+    axes: frozenset[DropAxis],
 ) -> list[str]:
     labels: list[str] = []
     if "region" in axes and intent.regionHints and region_applied:
         labels.append(intent.regionHints[0])
-    if "category" in axes and (intent.categoryKeywords or intent.moodHints):
+    if "category" in axes and category_applied and (intent.categoryKeywords or intent.moodHints):
         labels.append(suggest_service.category_noun(intent))
     if "indoor" in axes and intent.indoorOnly:
         labels.append("실내")
@@ -809,10 +814,15 @@ def _zero_answer(
     *,
     has_coords: bool,
     region_applied: bool,
+    category_applied: bool,
     axes: frozenset[DropAxis],
 ) -> list[AnswerSegment]:
     conditions = _applied_conditions(
-        intent, has_coords=has_coords, region_applied=region_applied, axes=axes
+        intent,
+        has_coords=has_coords,
+        region_applied=region_applied,
+        category_applied=category_applied,
+        axes=axes,
     )
     head = f"{' + '.join(conditions)} 조건" if conditions else "이 조건"
     segments = [
@@ -844,7 +854,11 @@ def _zero_response(
     if not refinements or legacy_client:
         raise AgentNoResults()
     conditions = _applied_conditions(
-        intent, has_coords=has_coords, region_applied=region_applied, axes=axes
+        intent,
+        has_coords=has_coords,
+        region_applied=region_applied,
+        category_applied=category_applied,
+        axes=axes,
     )
     logger.info("agent.ask.zero", conditions=len(conditions), releasable=len(refinements))
     return AskResponse(
@@ -853,6 +867,7 @@ def _zero_response(
             intent,
             has_coords=has_coords,
             region_applied=region_applied,
+            category_applied=category_applied,
             axes=axes,
         ),
         spots=[],
