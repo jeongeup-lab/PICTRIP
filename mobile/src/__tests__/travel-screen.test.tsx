@@ -130,7 +130,12 @@ let client: QueryClient;
 beforeEach(() => {
   jest.clearAllMocks();
   useConversation.getState().clear();
-  useNearbyCoordsMock.mockReturnValue({ coords: COORDS, phase: "ready" });
+  useNearbyCoordsMock.mockReturnValue({
+    coords: COORDS,
+    phase: "ready",
+    askable: false,
+    ask: jest.fn(),
+  });
   askAgentMock.mockResolvedValue(ANSWER);
   client = new QueryClient({
     defaultOptions: {
@@ -224,7 +229,12 @@ describe("TravelScreen starter chips", () => {
   });
 
   it("좌표가 없으면 자유문 칩으로 물러난다", async () => {
-    useNearbyCoordsMock.mockReturnValue({ coords: null, phase: "unavailable" });
+    useNearbyCoordsMock.mockReturnValue({
+      coords: null,
+      phase: "unavailable",
+      askable: false,
+      ask: jest.fn(),
+    });
     const tree = await mount();
 
     expect(pressable(tree, "travel-chip-근처 맛집")).toBeUndefined();
@@ -241,7 +251,12 @@ describe("TravelScreen nearby action", () => {
     await act(async () => withFix.unmount());
     mounted = null;
 
-    useNearbyCoordsMock.mockReturnValue({ coords: null, phase: "unavailable" });
+    useNearbyCoordsMock.mockReturnValue({
+      coords: null,
+      phase: "unavailable",
+      askable: false,
+      ask: jest.fn(),
+    });
     const withoutFix = await mount();
     expect(pressable(withoutFix, "travel-nearby")).toBeUndefined();
     expect(pressable(withoutFix, "travel-chip-사람 적은 바닷가")).toBeDefined();
@@ -516,6 +531,81 @@ describe("TravelScreen anchored follow-ups", () => {
       contentId: "126508",
       action: "food",
     });
+  });
+});
+
+describe("TravelScreen photo-first start", () => {
+  it("puts a photo call to action on the empty screen", async () => {
+    const tree = await mount();
+
+    expect(tree.root.findAllByProps({ testID: "travel-start-photo" }).length).toBeGreaterThan(0);
+  });
+
+  it("takes the start actions out of reach once the conversation begins", async () => {
+    useConversation.setState({ turns: [answeredTurn], busy: false });
+    const tree = await mount();
+
+    const greeting = tree.root.findByProps({ testID: "travel-greeting" });
+    expect(greeting.props.importantForAccessibility).toBe("no-hide-descendants");
+    expect(greeting.props.accessibilityElementsHidden).toBe(true);
+  });
+
+  it("asks for location only when the system has not decided yet", async () => {
+    const askMock = jest.fn().mockResolvedValue(true);
+    useNearbyCoordsMock.mockReturnValue({
+      coords: null,
+      phase: "unavailable",
+      askable: true,
+      ask: askMock,
+    });
+    const tree = await mount();
+
+    await press(tree, "travel-start-location");
+
+    expect(askMock).toHaveBeenCalled();
+  });
+
+  it("does not nag when location was already granted", async () => {
+    const tree = await mount();
+
+    expect(tree.root.findAllByProps({ testID: "travel-start-location" })).toHaveLength(0);
+  });
+});
+
+describe("TravelScreen photo answer", () => {
+  const photo = { uri: "file:///mine.jpg", name: "mine.jpg", type: "image/jpeg" };
+  const photoTurn: Turn = {
+    ...answeredTurn,
+    id: "seed-photo",
+    photo,
+    answer: {
+      ...ANSWER,
+      spots: [
+        {
+          contentId: "126508",
+          title: "월정리해변",
+          regionLabel: "제주 제주시",
+          imageUrl: "https://img/1.jpg",
+          tag: "유사도 84%",
+          lat: null,
+          lng: null,
+        },
+      ],
+    },
+  };
+
+  it("shows the uploaded photo beside the closest match", async () => {
+    useConversation.setState({ turns: [photoTurn], busy: false });
+    const tree = await mount();
+
+    expect(tree.root.findAllByProps({ testID: "travel-photo-compare" }).length).toBeGreaterThan(0);
+  });
+
+  it("draws no comparison for a text-only turn", async () => {
+    useConversation.setState({ turns: [answeredTurn], busy: false });
+    const tree = await mount();
+
+    expect(tree.root.findAllByProps({ testID: "travel-photo-compare" })).toHaveLength(0);
   });
 });
 

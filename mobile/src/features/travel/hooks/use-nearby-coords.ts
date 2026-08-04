@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   getCurrentCoords,
   getPermissionStatus,
+  requestPermission,
   type Coords,
 } from "@/features/map/usecases/request-location";
 
@@ -10,11 +11,14 @@ export type NearbyPhase = "checking" | "ready" | "unavailable";
 export interface UseNearbyCoords {
   coords: Coords | null;
   phase: NearbyPhase;
+  askable: boolean;
+  ask: () => Promise<boolean>;
 }
 
 export function useNearbyCoords(): UseNearbyCoords {
   const [coords, setCoords] = useState<Coords | null>(null);
   const [phase, setPhase] = useState<NearbyPhase>("checking");
+  const [askable, setAskable] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -22,6 +26,7 @@ export function useNearbyCoords(): UseNearbyCoords {
       const status = await getPermissionStatus();
       if (!alive) return;
       if (status !== "granted") {
+        setAskable(status === "undetermined");
         setPhase("unavailable");
         return;
       }
@@ -39,5 +44,22 @@ export function useNearbyCoords(): UseNearbyCoords {
     };
   }, []);
 
-  return { coords, phase };
+  const ask = useCallback(async () => {
+    setAskable(false);
+    const status = await requestPermission();
+    if (status !== "granted") {
+      setPhase("unavailable");
+      return false;
+    }
+    const fix = await getCurrentCoords();
+    if (!fix) {
+      setPhase("unavailable");
+      return false;
+    }
+    setCoords(fix);
+    setPhase("ready");
+    return true;
+  }, []);
+
+  return { coords, phase, askable, ask };
 }
