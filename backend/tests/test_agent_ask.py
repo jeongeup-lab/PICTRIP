@@ -3115,7 +3115,12 @@ def test_zero_chips_stay_within_the_dock_budget() -> None:
 def test_zero_chips_skip_near_when_the_request_carried_no_coords() -> None:
     intent = QueryIntent(categoryKeywords=["계곡"], nearMe=True)
 
-    without = suggest_service.derive_for_zero(intent, has_coords=False)
+    without = suggest_service.derive_for_zero(
+        ask_service.searched_intent(
+            intent, has_coords=False, region_applied=True, keywords_applied=True
+        ),
+        has_coords=False,
+    )
     with_coords = suggest_service.derive_for_zero(intent, has_coords=True)
 
     assert [chip.label for chip in without] == ["계곡 조건 풀기"]
@@ -3125,8 +3130,13 @@ def test_zero_chips_skip_near_when_the_request_carried_no_coords() -> None:
 def test_zero_chips_skip_region_when_the_hint_never_resolved() -> None:
     intent = QueryIntent(categoryKeywords=["계곡"], regionHints=["없는지역"])
 
-    unresolved = suggest_service.derive_for_zero(intent, has_coords=False, region_applied=False)
-    resolved = suggest_service.derive_for_zero(intent, has_coords=False, region_applied=True)
+    unresolved = suggest_service.derive_for_zero(
+        ask_service.searched_intent(
+            intent, has_coords=False, region_applied=False, keywords_applied=True
+        ),
+        has_coords=False,
+    )
+    resolved = suggest_service.derive_for_zero(intent, has_coords=False)
 
     assert [chip.label for chip in unresolved] == ["계곡 조건 풀기"]
     assert "지역 넓히기" in [chip.label for chip in resolved]
@@ -3244,7 +3254,12 @@ def test_zero_chips_do_not_offer_a_drop_that_lands_on_a_named_place_alone() -> N
         namedPlaces=[ExtractedPlace(name="어떤장소", nameKo="어떤장소")],
     )
 
-    unresolved = suggest_service.derive_for_zero(intent, has_coords=False, region_applied=False)
+    unresolved = suggest_service.derive_for_zero(
+        ask_service.searched_intent(
+            intent, has_coords=False, region_applied=False, keywords_applied=True
+        ),
+        has_coords=False,
+    )
 
     assert [chip.label for chip in unresolved] == []
 
@@ -3328,8 +3343,13 @@ async def test_an_old_app_on_the_default_region_is_still_treated_as_legacy(
 def test_zero_chips_skip_category_when_no_code_or_mood_reached_the_query() -> None:
     intent = QueryIntent(categoryKeywords=["존재하지않는유형"], indoorOnly=True)
 
-    unapplied = suggest_service.derive_for_zero(intent, has_coords=False, category_applied=False)
-    applied = suggest_service.derive_for_zero(intent, has_coords=False, category_applied=True)
+    unapplied = suggest_service.derive_for_zero(
+        ask_service.searched_intent(
+            intent, has_coords=False, region_applied=True, keywords_applied=False
+        ),
+        has_coords=False,
+    )
+    applied = suggest_service.derive_for_zero(intent, has_coords=False)
 
     assert [chip.label for chip in unapplied] == ["실내 조건 풀기"]
     assert "존재하지않는유형 조건 풀기" in [chip.label for chip in applied]
@@ -3360,19 +3380,36 @@ def test_zero_answer_drops_a_category_that_never_reached_the_query() -> None:
     intent = QueryIntent(categoryKeywords=["존재하지않는유형"], indoorOnly=True)
 
     unapplied = ask_service._applied_conditions(
-        intent,
-        has_coords=False,
-        region_applied=True,
-        category_applied=False,
+        ask_service.searched_intent(
+            intent, has_coords=False, region_applied=True, keywords_applied=False
+        ),
         axes=suggest_service.ALL_AXES,
     )
-    applied = ask_service._applied_conditions(
-        intent,
-        has_coords=False,
-        region_applied=True,
-        category_applied=True,
-        axes=suggest_service.ALL_AXES,
-    )
+    applied = ask_service._applied_conditions(intent, axes=suggest_service.ALL_AXES)
 
     assert unapplied == ["실내"]
     assert applied == ["존재하지않는유형", "실내"]
+
+
+def test_a_mood_that_survives_an_unresolved_keyword_is_labeled_as_mood() -> None:
+    intent = QueryIntent(categoryKeywords=["없는유형"], moodHints=["sea"])
+
+    searched = ask_service.searched_intent(
+        intent, has_coords=False, region_applied=True, keywords_applied=False
+    )
+
+    assert ask_service._applied_conditions(searched, axes=suggest_service.ALL_AXES) == ["분위기"]
+    assert [chip.label for chip in suggest_service.derive_for_zero(searched, has_coords=False)] == [
+        "분위기 조건 풀기"
+    ]
+
+
+def test_searched_intent_leaves_an_intent_alone_when_every_axis_reached_the_query() -> None:
+    intent = QueryIntent(categoryKeywords=["계곡"], regionHints=["제주"], nearMe=True)
+
+    assert (
+        ask_service.searched_intent(
+            intent, has_coords=True, region_applied=True, keywords_applied=True
+        )
+        is intent
+    )
