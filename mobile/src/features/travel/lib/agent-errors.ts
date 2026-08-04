@@ -1,6 +1,7 @@
 import { AppError, type ErrorCode } from "@/lib/app-error";
 
 const MESSAGES: Partial<Record<ErrorCode, string>> = {
+  AGENT_FESTIVAL_UNAVAILABLE: "축제 정보를 가져오지 못했어요. 잠시 후 다시 시도해 주세요.",
   AGENT_INTENT_UNAVAILABLE: "지금은 질문을 이해하지 못했어요. 잠시 후 다시 시도해 주세요.",
   AGENT_NO_RESULTS: "조건에 맞는 곳을 찾지 못했어요. 조건을 조금 넓혀서 다시 물어봐 주세요.",
   AGENT_OUT_OF_SCOPE:
