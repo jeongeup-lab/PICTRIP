@@ -3550,3 +3550,51 @@ async def test_a_category_search_emptied_by_the_near_clause_still_offers_to_rele
     data = res.json()["data"]
     assert data["spots"] == []
     assert "내 근처 조건 풀기" in [chip["label"] for chip in data["refinements"]]
+
+
+@pytest.mark.integration
+async def test_a_category_with_no_rows_at_all_does_not_blame_the_near_filter(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["박물관"], regionHints=["제주"], nearMe=True)
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask", json={"question": "제주 근처 박물관", "lat": LAT, "lng": LNG}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    data = res.json()["data"]
+    assert data["spots"] == []
+    assert "내 근처 조건 풀기" not in [chip["label"] for chip in data["refinements"]]
+
+
+@pytest.mark.integration
+async def test_a_photo_that_matched_nothing_leaves_one_culprit_in_the_funnel(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(regionHints=["제주"], nearMe=True)
+
+    async def fake_embed(*, image_bytes, image_mime):
+        return [0.1] * 512
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    monkeypatch.setattr(photo_service, "embed_photo", fake_embed)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            files={"photo": ("a.jpg", b"x", "image/jpeg")},
+            data={"question": "제주 근처 이런 분위기", "lat": str(LAT), "lng": str(LNG)},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    steps = res.json()["data"]["steps"]
+    assert [step["tool"] for step in steps if step["tool"] == "nearby"] == []
+    assert len([step for step in steps if step["badge"] == "0곳"]) == 1
