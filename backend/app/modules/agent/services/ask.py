@@ -203,8 +203,8 @@ async def _ask_with_photo(
             steps,
             intent,
             has_coords=lat is not None and lng is not None,
-            region_applied=bool(prefixes),
-            keywords_applied=True,
+            region_hints=list(prefixes),
+            keywords=list(intent.categoryKeywords),
             axes=PHOTO_AXES,
             legacy_client=legacy_client,
         )
@@ -410,7 +410,8 @@ async def _ask_with_question(
 
     near = intent.nearMe and lat is not None and lng is not None
     keywords = _keywords(intent)
-    codes = await retrieve.resolve_category_codes(session, keywords)
+    category = await retrieve.resolve_category_scope(session, keywords)
+    codes = category.codes
     mood_ids = await repositories.find_mood_ids(session, list(intent.moodHints))
     scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
     prefixes = scope.prefixes or pre_ota_region_prefixes
@@ -529,8 +530,12 @@ async def _ask_with_question(
             steps,
             intent,
             has_coords=lat is not None and lng is not None,
-            region_applied=bool(prefixes),
-            keywords_applied=title_only or bool(codes),
+            region_hints=list(prefixes),
+            keywords=[
+                keyword
+                for keyword in intent.categoryKeywords
+                if title_only or keyword in category.matched
+            ],
             axes=axes,
             legacy_client=legacy_client,
         )
@@ -788,15 +793,15 @@ def searched_intent(
     intent: QueryIntent,
     *,
     has_coords: bool,
-    region_applied: bool,
-    keywords_applied: bool,
+    region_hints: list[str],
+    keywords: list[str],
 ) -> QueryIntent:
     update: dict[str, object] = {}
-    if not region_applied:
-        update["regionHints"] = []
-    if not keywords_applied:
-        update["categoryKeywords"] = []
-    if not has_coords:
+    if list(intent.regionHints) != region_hints:
+        update["regionHints"] = list(region_hints)
+    if list(intent.categoryKeywords) != keywords:
+        update["categoryKeywords"] = list(keywords)
+    if not has_coords and intent.nearMe:
         update["nearMe"] = False
     return intent.model_copy(update=update) if update else intent
 
@@ -836,16 +841,13 @@ def _zero_response(
     intent: QueryIntent,
     *,
     has_coords: bool,
-    region_applied: bool,
-    keywords_applied: bool,
+    region_hints: list[str],
+    keywords: list[str],
     axes: frozenset[DropAxis],
     legacy_client: bool,
 ) -> AskResponse:
     searched = searched_intent(
-        intent,
-        has_coords=has_coords,
-        region_applied=region_applied,
-        keywords_applied=keywords_applied,
+        intent, has_coords=has_coords, region_hints=region_hints, keywords=keywords
     )
     refinements = suggest_service.derive_for_zero(searched, has_coords=has_coords, axes=axes)
     if not refinements or legacy_client:

@@ -22,13 +22,27 @@ BUSY_RATE = 70.0
 CALM_RATE = 30.0
 
 
-async def resolve_category_codes(session: AsyncSession, keywords: list[str]) -> list[str]:
+@dataclass(frozen=True, slots=True)
+class CategoryScope:
+    codes: list[str]
+    matched: list[str]
+
+
+async def resolve_category_scope(session: AsyncSession, keywords: list[str]) -> CategoryScope:
     codes: list[str] = []
+    matched: list[str] = []
     for keyword in keywords:
-        for code in await repositories.find_category_codes(session, keyword):
+        found = await repositories.find_category_codes(session, keyword)
+        if found:
+            matched.append(keyword)
+        for code in found:
             if code not in codes:
                 codes.append(code)
-    return codes
+    return CategoryScope(codes=codes, matched=matched)
+
+
+async def resolve_category_codes(session: AsyncSession, keywords: list[str]) -> list[str]:
+    return (await resolve_category_scope(session, keywords)).codes
 
 
 @dataclass(frozen=True, slots=True)
