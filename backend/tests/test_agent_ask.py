@@ -2871,3 +2871,35 @@ async def test_widening_hands_the_sido_back_so_follow_up_chips_do_not_renarrow(
 
     assert res.status_code == 200
     assert res.json()["data"]["intent"]["regionHints"] == ["부산광역시"]
+
+
+@pytest.mark.integration
+async def test_a_sigungu_whose_only_match_lacks_coords_still_widens_for_near_me(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    await db_session.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, addr1, first_image_url, "
+            "show_flag, lcls_systm1, lcls_systm3, ldong_regn_cd, ldong_signgu_cd) "
+            "VALUES ('n1', 12, '수영계곡', '부산광역시 수영구 1', 'http://kto/i.jpg', 1, "
+            "'NA', 'NA010100', '26', '26500')"
+        )
+    )
+    await db_session.flush()
+
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"], regionHints=["수영"], nearMe=True)
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask", json={"question": "수영 계곡", "lat": LAT, "lng": LNG}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert {spot["contentId"] for spot in data["spots"]} == {"v1", "v2", "v3"}
+    assert any("넓힘" in step["label"] for step in data["steps"])
