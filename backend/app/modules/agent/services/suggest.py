@@ -40,12 +40,13 @@ def releasable_axes(
     region_applied: bool = True,
 ) -> list[DropAxis]:
     engaged = _engaged(intent, has_coords=has_coords, region_applied=region_applied)
+    effective = intent if region_applied else intent.model_copy(update={"regionHints": []})
     return [
         axis
         for axis in _DROP_ORDER
         if axis in axes
         and engaged[axis]
-        and not refine_service.drop_leaves_named_place_only(intent, axis, has_coords=has_coords)
+        and not refine_service.drop_leaves_named_place_only(effective, axis, has_coords=has_coords)
     ]
 
 
