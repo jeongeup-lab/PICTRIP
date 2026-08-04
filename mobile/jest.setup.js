@@ -21,3 +21,9 @@ jest.mock("expo-file-system", () => ({
   File: jest.fn(() => ({ exists: true, create: jest.fn() })),
   Paths: { document: "file:///document/" },
 }));
+
+// KakaoWebMap renders a WebView; the native module is absent under jest.
+jest.mock("react-native-webview", () => {
+  const { View } = require("react-native");
+  return { WebView: View };
+});

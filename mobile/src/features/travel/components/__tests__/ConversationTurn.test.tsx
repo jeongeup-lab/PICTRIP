@@ -55,7 +55,7 @@ const turn = (over: Partial<Turn> = {}): Turn => ({
 
 const noop = () => undefined;
 
-function mount(t: Turn, anchorId: string | null = null, onGrow = noop) {
+function mount(t: Turn, anchorId: string | null = null, onGrow = noop, onOpenMap = noop) {
   let tree: renderer.ReactTestRenderer;
   act(() => {
     tree = renderer.create(
@@ -64,6 +64,7 @@ function mount(t: Turn, anchorId: string | null = null, onGrow = noop) {
         anchorId={anchorId}
         onSpotPress={noop}
         onSpotAnchor={noop}
+        onOpenMap={onOpenMap}
         onRetry={noop}
         onGrow={onGrow}
       />,
@@ -143,6 +144,34 @@ describe("ConversationTurn once the answer lands", () => {
   it("offers no feedback control that goes nowhere", () => {
     const tree = mount(turn());
     expect(tree.root.findAllByProps({ testID: "turn-vote-t1" })).toHaveLength(0);
+  });
+
+  it("offers a map for results that carry coordinates", () => {
+    const tree = mount(
+      turn({ answer: { ...answer, spots: [{ ...answer.spots[0], lat: 33.5, lng: 126.5 }] } }),
+    );
+
+    expect(tree.root.findAllByProps({ testID: "travel-turn-map" }).length).toBeGreaterThan(0);
+  });
+
+  it("hides the map when no result can be pinned", () => {
+    const tree = mount(turn());
+
+    expect(tree.root.findAllByProps({ testID: "travel-turn-map" })).toHaveLength(0);
+  });
+
+  it("hands the whole turn to the map opener", () => {
+    const onOpenMap = jest.fn();
+    const mapped = turn({
+      answer: { ...answer, spots: [{ ...answer.spots[0], lat: 33.5, lng: 126.5 }] },
+    });
+    const tree = mount(mapped, null, noop, onOpenMap);
+
+    act(() => {
+      tree.root.findByProps({ testID: "travel-turn-map" }).props.onPress();
+    });
+
+    expect(onOpenMap).toHaveBeenCalledWith(mapped);
   });
 
   it("puts every result on the rail without a see-all link", () => {

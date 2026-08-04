@@ -4,6 +4,8 @@ import { Image } from "expo-image";
 import { SpotCard } from "@/features/travel/components/SpotCard";
 import { StepList } from "@/features/travel/components/StepList";
 import { AnswerBlock } from "@/features/travel/components/AnswerBlock";
+import { TurnMap } from "@/features/travel/components/TurnMap";
+import { placed } from "@/features/travel/lib/spot-geo";
 import { pendingSteps } from "@/features/travel/lib/pending-steps";
 import { RETRY_SUGGESTION } from "@/features/travel/lib/question";
 import type { TravelSpot } from "@/features/travel/api";
@@ -17,6 +19,7 @@ interface Props {
   anchorId: string | null;
   onSpotPress: (spot: TravelSpot) => void;
   onSpotAnchor: (spot: TravelSpot) => void;
+  onOpenMap: (turn: Turn) => void;
   onRetry: (turn: Turn) => void;
   onGrow: () => void;
 }
@@ -26,6 +29,7 @@ export function ConversationTurn({
   anchorId,
   onSpotPress,
   onSpotAnchor,
+  onOpenMap,
   onRetry,
   onGrow,
 }: Props) {
@@ -33,6 +37,7 @@ export function ConversationTurn({
   const waiting = turn.status === "pending";
   const answer = turn.answer;
   const steps = waiting ? pendingSteps(turn) : (answer?.steps ?? []);
+  const mappable = useMemo(() => placed(answer?.spots ?? []), [answer]);
 
   useEffect(() => {
     Animated.timing(rise, {
@@ -90,6 +95,8 @@ export function ConversationTurn({
 
       {answer && answer.spots.length > 0 ? (
         <>
+          {mappable.length > 0 ? <TurnMap spots={mappable} onOpen={() => onOpenMap(turn)} /> : null}
+
           <FlatList
             horizontal
             data={answer.spots}

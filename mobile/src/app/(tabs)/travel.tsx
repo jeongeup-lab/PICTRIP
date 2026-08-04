@@ -15,6 +15,7 @@ import { AskComposer } from "@/features/travel/components/AskComposer";
 import { ConversationTurn } from "@/features/travel/components/ConversationTurn";
 import { Mascot } from "@/features/travel/components/Mascot";
 import { TravelToast } from "@/features/travel/components/TravelToast";
+import { TravelMapSheet } from "@/features/travel/components/TravelMapSheet";
 import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
 import { useAskAgentMutation } from "@/features/travel/queries";
 import { useConversation, type Turn } from "@/features/travel/stores/conversation-store";
@@ -26,6 +27,7 @@ import {
 import { composeQuestion, anchorQuestion, MY_LOCATION } from "@/features/travel/lib/question";
 import { composerChips, NEARBY_CHIP, type Chip } from "@/features/travel/lib/chips";
 import { pickTravelPhoto, shootTravelPhoto } from "@/features/travel/usecases/pick-travel-photo";
+import { placed, type PlacedSpot } from "@/features/travel/lib/spot-geo";
 import type { AskInput, PhotoUpload, TravelSpot } from "@/features/travel/api";
 import { colors, spacing } from "@/constants/theme";
 
@@ -39,6 +41,7 @@ export default function TravelScreen() {
   const [photo, setPhoto] = useState<PhotoUpload | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [anchorSpot, setAnchorSpot] = useState<TravelSpot | null>(null);
+  const [mapTurn, setMapTurn] = useState<{ spots: PlacedSpot[]; question: string } | null>(null);
 
   const turns = useConversation((s) => s.turns);
   const busy = useConversation((s) => s.busy);
@@ -171,6 +174,11 @@ export default function TravelScreen() {
     router.push(`/spots/${spot.contentId}`);
   }, []);
 
+  const onOpenMap = useCallback((turn: Turn) => {
+    const spots = placed(turn.answer?.spots ?? []);
+    if (spots.length > 0) setMapTurn({ spots, question: turn.question });
+  }, []);
+
   const onSpotAnchor = useCallback((spot: TravelSpot) => {
     setAnchorSpot((current) => (current?.contentId === spot.contentId ? null : spot));
   }, []);
@@ -249,6 +257,7 @@ export default function TravelScreen() {
                 anchorId={anchorSpot?.contentId ?? null}
                 onSpotPress={onSpotPress}
                 onSpotAnchor={onSpotAnchor}
+                onOpenMap={onOpenMap}
                 onRetry={onRetry}
                 onGrow={scrollToEnd}
               />
@@ -286,6 +295,14 @@ export default function TravelScreen() {
           onSubmit={() => submit(draft, photo)}
         />
       </KeyboardAvoidingView>
+
+      {mapTurn ? (
+        <TravelMapSheet
+          spots={mapTurn.spots}
+          question={mapTurn.question}
+          onClose={() => setMapTurn(null)}
+        />
+      ) : null}
 
       <TravelToast message={toast} bottom={TOAST_BOTTOM} onHide={() => setToast(null)} />
     </SafeAreaView>
