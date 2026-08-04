@@ -3117,7 +3117,10 @@ def test_zero_chips_skip_near_when_the_request_carried_no_coords() -> None:
 
     without = suggest_service.derive_for_zero(
         ask_service.searched_intent(
-            intent, has_coords=False, region_applied=True, keywords_applied=True
+            intent,
+            has_coords=False,
+            region_hints=list(intent.regionHints),
+            keywords=list(intent.categoryKeywords),
         ),
         has_coords=False,
     )
@@ -3132,7 +3135,7 @@ def test_zero_chips_skip_region_when_the_hint_never_resolved() -> None:
 
     unresolved = suggest_service.derive_for_zero(
         ask_service.searched_intent(
-            intent, has_coords=False, region_applied=False, keywords_applied=True
+            intent, has_coords=False, region_hints=[], keywords=list(intent.categoryKeywords)
         ),
         has_coords=False,
     )
@@ -3256,7 +3259,7 @@ def test_zero_chips_do_not_offer_a_drop_that_lands_on_a_named_place_alone() -> N
 
     unresolved = suggest_service.derive_for_zero(
         ask_service.searched_intent(
-            intent, has_coords=False, region_applied=False, keywords_applied=True
+            intent, has_coords=False, region_hints=[], keywords=list(intent.categoryKeywords)
         ),
         has_coords=False,
     )
@@ -3345,7 +3348,7 @@ def test_zero_chips_skip_category_when_no_code_or_mood_reached_the_query() -> No
 
     unapplied = suggest_service.derive_for_zero(
         ask_service.searched_intent(
-            intent, has_coords=False, region_applied=True, keywords_applied=False
+            intent, has_coords=False, region_hints=list(intent.regionHints), keywords=[]
         ),
         has_coords=False,
     )
@@ -3381,7 +3384,7 @@ def test_zero_answer_drops_a_category_that_never_reached_the_query() -> None:
 
     unapplied = ask_service._applied_conditions(
         ask_service.searched_intent(
-            intent, has_coords=False, region_applied=True, keywords_applied=False
+            intent, has_coords=False, region_hints=list(intent.regionHints), keywords=[]
         ),
         axes=suggest_service.ALL_AXES,
     )
@@ -3395,7 +3398,7 @@ def test_a_mood_that_survives_an_unresolved_keyword_is_labeled_as_mood() -> None
     intent = QueryIntent(categoryKeywords=["없는유형"], moodHints=["sea"])
 
     searched = ask_service.searched_intent(
-        intent, has_coords=False, region_applied=True, keywords_applied=False
+        intent, has_coords=False, region_hints=list(intent.regionHints), keywords=[]
     )
 
     assert ask_service._applied_conditions(searched, axes=suggest_service.ALL_AXES) == ["분위기"]
@@ -3409,7 +3412,10 @@ def test_searched_intent_leaves_an_intent_alone_when_every_axis_reached_the_quer
 
     assert (
         ask_service.searched_intent(
-            intent, has_coords=True, region_applied=True, keywords_applied=True
+            intent,
+            has_coords=True,
+            region_hints=list(intent.regionHints),
+            keywords=list(intent.categoryKeywords),
         )
         is intent
     )
@@ -3432,3 +3438,40 @@ async def test_a_zero_turn_hands_back_an_intent_the_drop_chip_can_actually_move(
     data = res.json()["data"]
     assert data["spots"] == []
     assert data["intent"]["regionHints"] == []
+
+
+@pytest.mark.integration
+async def test_a_zero_turn_keeps_only_the_region_hint_that_actually_resolved(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(
+            categoryKeywords=["존재하지않는유형"], regionHints=["없는지역이름", "제주"]
+        )
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "없는지역이름 제주"})
+    finally:
+        app.dependency_overrides.clear()
+
+    data = res.json()["data"]
+    assert data["spots"] == []
+    answer = "".join(segment["text"] for segment in data["answer"])
+    assert "없는지역이름" not in answer
+    assert "없는지역이름" not in data["intent"]["regionHints"]
+
+
+def test_searched_intent_keeps_only_the_values_that_reached_the_query() -> None:
+    intent = QueryIntent(
+        categoryKeywords=["박물관", "없는유형"], regionHints=["없는지역", "제주"], nearMe=True
+    )
+
+    searched = ask_service.searched_intent(
+        intent, has_coords=False, region_hints=["제주특별자치도"], keywords=["박물관"]
+    )
+
+    assert searched.regionHints == ["제주특별자치도"]
+    assert searched.categoryKeywords == ["박물관"]
+    assert searched.nearMe is False
