@@ -4,7 +4,7 @@ import asyncio
 import json
 import random
 from collections.abc import Awaitable, Callable
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -291,6 +291,35 @@ _FESTIVAL_POOL_KEY = "festival:pool:v2"
 _FESTIVAL_POOL_TTL = 86_400
 
 
+def _cached_end_date(row: ChannelCardRow, *, cached_on: date) -> date | None:
+    if not row.dday or not row.dday.startswith("D-"):
+        return None
+    try:
+        return cached_on + timedelta(days=int(row.dday[2:]))
+    except ValueError:
+        return None
+
+
+def _revalidated(
+    rows: list[ChannelCardRow], *, cached_on: str | None, today: date
+) -> list[ChannelCardRow]:
+    try:
+        cached_date = date.fromisoformat(cached_on or "")
+    except ValueError:
+        return []
+    shifted: list[ChannelCardRow] = []
+    for row in rows:
+        end = _cached_end_date(row, cached_on=cached_date)
+        if end is None or end < today:
+            continue
+        line = f"{end.month}월 {end.day}일까지"
+        if row.region_label:
+            line = f"{line} · {row.region_label}"
+        shifted.append(replace(row, dday=f"D-{max((end - today).days, 0)}", line=line))
+    shifted.sort(key=lambda c: int((c.dday or "D-999")[2:]))
+    return shifted
+
+
 async def load_festival_pool(
     redis: Redis, kto: KtoClient, *, fetch_timeout: float | None = None
 ) -> list[ChannelCardRow]:
@@ -309,7 +338,7 @@ async def load_festival_pool(
         else:
             if payload.get("date") == _today().isoformat():
                 return rows
-            stale = rows
+            stale = _revalidated(rows, cached_on=payload.get("date"), today=_today())
     try:
         if fetch_timeout is None:
             cards = await fetch_festival_pool_cards(kto)

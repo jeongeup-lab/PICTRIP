@@ -586,3 +586,63 @@ async def test_festival_pool_fetch_timeout_surfaces_when_nothing_is_cached(
         await kto_channels.load_festival_pool(
             redis_client_fake, AsyncMock(spec=KtoClient), fetch_timeout=0.01
         )
+
+
+async def test_stale_festival_cards_are_rescored_against_today(
+    redis_client_fake, monkeypatch
+) -> None:
+    from app.modules.feed.services import kto_channels
+
+    monkeypatch.setattr(kto_channels, "_today", lambda: TODAY)
+    kto = AsyncMock(spec=KtoClient)
+    kto.call = AsyncMock(return_value=FESTIVAL_POOL_ITEMS)
+    fresh = {c.content_id: c for c in await kto_channels.load_festival_pool(redis_client_fake, kto)}
+    assert fresh
+
+    monkeypatch.setattr(kto_channels, "_today", lambda: TODAY + timedelta(days=1))
+    kto.call = AsyncMock(side_effect=KtoApiUnavailable())
+
+    served = await kto_channels.load_festival_pool(redis_client_fake, kto)
+
+    assert served
+    for card in served:
+        assert int(card.dday[2:]) == int(fresh[card.content_id].dday[2:]) - 1
+
+
+async def test_a_festival_that_already_ended_is_dropped_from_the_stale_pool(
+    redis_client_fake, monkeypatch
+) -> None:
+    from app.modules.feed.services import kto_channels
+
+    items = [
+        {
+            "contentid": "short",
+            "title": "곧 끝나는 축제",
+            "addr1": "서울특별시 종로구 1",
+            "firstimage": "https://kto/i.jpg",
+            "eventstartdate": "20260701",
+            "eventenddate": "20260713",
+        },
+        {
+            "contentid": "long",
+            "title": "오래 하는 축제",
+            "addr1": "서울특별시 종로구 2",
+            "firstimage": "https://kto/i.jpg",
+            "eventstartdate": "20260701",
+            "eventenddate": "20260810",
+        },
+    ]
+    monkeypatch.setattr(kto_channels, "_today", lambda: TODAY)
+    kto = AsyncMock(spec=KtoClient)
+    kto.call = AsyncMock(return_value=items)
+    fresh = await kto_channels.load_festival_pool(redis_client_fake, kto)
+    assert {c.content_id for c in fresh} == {"short", "long"}
+
+    monkeypatch.setattr(kto_channels, "_today", lambda: TODAY + timedelta(days=2))
+    kto.call = AsyncMock(side_effect=KtoApiUnavailable())
+
+    served = await kto_channels.load_festival_pool(redis_client_fake, kto)
+
+    assert [c.content_id for c in served] == ["long"]
+    assert served[0].dday == "D-27"
+    assert served[0].line.startswith("8월 10일까지")

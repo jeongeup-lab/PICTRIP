@@ -19,4 +19,8 @@ describe("agentErrorMessage", () => {
     expect(fallback).toBe("답을 만들지 못했어요. 잠시 후 다시 시도해 주세요.");
     expect(agentErrorMessage(new AppError("INTERNAL_ERROR", "", 500))).toBe(fallback);
   });
+  it("축제 조회 실패에 전용 안내를 쓴다", () => {
+    const error = new AppError("AGENT_FESTIVAL_UNAVAILABLE", "kto down", 422);
+    expect(agentErrorMessage(error)).toContain("축제");
+  });
 });
