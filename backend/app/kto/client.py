@@ -37,12 +37,21 @@ class KtoService(StrEnum):
     GALLERY = "PhotoGalleryService1"
 
 
+DATA_GO_KR_HOST = "apis.data.go.kr"
+
+
+def https_data_go_kr(base_url: str) -> str:
+    if base_url.startswith("http://") and urlparse(base_url).hostname == DATA_GO_KR_HOST:
+        return "https://" + base_url[len("http://") :]
+    return base_url
+
+
 _SERVICE_BASE: dict[KtoService, str] = {
-    KtoService.KOR: settings.KTO_BASE_URL_KOR,
-    KtoService.TARRLTE: settings.KTO_BASE_URL_TARRLTE,
-    KtoService.CNCTR: settings.KTO_BASE_URL_CNCTR,
-    KtoService.PET: settings.KTO_BASE_URL_PET,
-    KtoService.GALLERY: settings.KTO_BASE_URL_GALLERY,
+    KtoService.KOR: https_data_go_kr(settings.KTO_BASE_URL_KOR),
+    KtoService.TARRLTE: https_data_go_kr(settings.KTO_BASE_URL_TARRLTE),
+    KtoService.CNCTR: https_data_go_kr(settings.KTO_BASE_URL_CNCTR),
+    KtoService.PET: https_data_go_kr(settings.KTO_BASE_URL_PET),
+    KtoService.GALLERY: https_data_go_kr(settings.KTO_BASE_URL_GALLERY),
 }
 
 

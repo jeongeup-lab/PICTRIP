@@ -52,3 +52,24 @@ def test_channel_card_type3_keeps_hires_upgrade(monkeypatch: pytest.MonkeyPatch)
     )
     card = _channel_card(row)
     assert card.imageUrl == KTO_HIRES
+
+
+def test_a_plain_http_data_go_kr_base_is_forced_to_https() -> None:
+    from app.kto.client import https_data_go_kr
+
+    assert (
+        https_data_go_kr("http://apis.data.go.kr/B551011/KorService2")
+        == "https://apis.data.go.kr/B551011/KorService2"
+    )
+
+
+def test_every_kto_service_resolves_to_https() -> None:
+    from app.kto.client import _SERVICE_BASE
+
+    assert all(base.startswith("https://") for base in _SERVICE_BASE.values())
+
+
+def test_a_non_data_go_kr_base_is_left_alone() -> None:
+    from app.kto.client import https_data_go_kr
+
+    assert https_data_go_kr("http://localhost:9999/stub") == "http://localhost:9999/stub"
