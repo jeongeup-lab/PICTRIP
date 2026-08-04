@@ -25,6 +25,7 @@ export interface Turn {
 interface ConversationState {
   turns: Turn[];
   busy: boolean;
+  activeId: string | null;
   start: (turn: {
     id: string;
     question: string;
@@ -47,9 +48,11 @@ function patch(turns: Turn[], id: string, next: Partial<Turn>): Turn[] {
 export const useConversation = create<ConversationState>((set) => ({
   turns: [],
   busy: false,
+  activeId: null,
   start: ({ id, question, request, photo, intent = null, patch = null, anchor = null }) =>
     set((s) => ({
       busy: true,
+      activeId: id,
       turns: [
         ...s.turns,
         {
@@ -69,11 +72,24 @@ export const useConversation = create<ConversationState>((set) => ({
   retry: (id) =>
     set((s) => ({
       busy: true,
+      activeId: id,
       turns: patch(s.turns, id, { status: "pending", errorMessage: null }),
     })),
   resolve: (id, answer) =>
-    set((s) => ({ busy: false, turns: patch(s.turns, id, { status: "done", answer }) })),
+    set((s) =>
+      s.activeId === id
+        ? { busy: false, activeId: null, turns: patch(s.turns, id, { status: "done", answer }) }
+        : s,
+    ),
   fail: (id, errorMessage) =>
-    set((s) => ({ busy: false, turns: patch(s.turns, id, { status: "failed", errorMessage }) })),
-  clear: () => set({ turns: [], busy: false }),
+    set((s) =>
+      s.activeId === id
+        ? {
+            busy: false,
+            activeId: null,
+            turns: patch(s.turns, id, { status: "failed", errorMessage }),
+          }
+        : s,
+    ),
+  clear: () => set({ turns: [], busy: false, activeId: null }),
 }));

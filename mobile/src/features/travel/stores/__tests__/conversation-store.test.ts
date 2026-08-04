@@ -23,6 +23,29 @@ describe("conversation store", () => {
     expect(useConversation.getState().turns[0].status).toBe("done");
   });
 
+  it("ignores a response that lands after the conversation was cleared", () => {
+    useConversation.getState().start({ id: "t1", question: "계곡", request: "계곡", photo: null });
+    useConversation.getState().clear();
+    useConversation.getState().start({ id: "t2", question: "바다", request: "바다", photo: null });
+
+    useConversation.getState().resolve("t1", answer);
+
+    expect(useConversation.getState().busy).toBe(true);
+    expect(useConversation.getState().turns).toHaveLength(1);
+    expect(useConversation.getState().turns[0].status).toBe("pending");
+  });
+
+  it("ignores a late failure from a turn the user already walked away from", () => {
+    useConversation.getState().start({ id: "t1", question: "계곡", request: "계곡", photo: null });
+    useConversation.getState().clear();
+    useConversation.getState().start({ id: "t2", question: "바다", request: "바다", photo: null });
+
+    useConversation.getState().fail("t1", "실패");
+
+    expect(useConversation.getState().busy).toBe(true);
+    expect(useConversation.getState().turns[0].errorMessage).toBeNull();
+  });
+
   it("releases the dock immediately on failure so the retry chip works", () => {
     useConversation.getState().start({ id: "t1", question: "계곡", request: "계곡", photo: null });
     useConversation.getState().fail("t1", "답을 만들지 못했어요.");
