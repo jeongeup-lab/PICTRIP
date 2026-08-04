@@ -3526,3 +3526,27 @@ async def test_a_title_search_that_found_nothing_does_not_blame_the_near_filter(
     assert data["spots"] == []
     assert "내 근처 조건 풀기" not in [chip["label"] for chip in data["refinements"]]
     assert "내 근처" not in "".join(segment["text"] for segment in data["answer"])
+
+
+@pytest.mark.integration
+async def test_a_category_search_emptied_by_the_near_clause_still_offers_to_release_it(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    await db_session.execute(text("UPDATE spots SET mapx = NULL, mapy = NULL"))
+    await db_session.flush()
+
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"], nearMe=True)
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask", json={"question": "근처 계곡", "lat": LAT, "lng": LNG}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    data = res.json()["data"]
+    assert data["spots"] == []
+    assert "내 근처 조건 풀기" in [chip["label"] for chip in data["refinements"]]
