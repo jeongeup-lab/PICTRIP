@@ -35,12 +35,20 @@ async def resolve_category_codes(session: AsyncSession, keywords: list[str]) -> 
 class RegionScope:
     prefixes: list[str]
     sido_prefixes: list[str]
-    narrowed_hint: str | None = None
-    narrowed_sido: str | None = None
+    narrowed_hints: tuple[str, ...] = ()
+    narrowed_sidos: tuple[str, ...] = ()
 
     @property
     def widenable(self) -> bool:
-        return self.narrowed_hint is not None and self.sido_prefixes != self.prefixes
+        return bool(self.narrowed_hints) and self.sido_prefixes != self.prefixes
+
+    @property
+    def narrowed_label(self) -> str:
+        return " · ".join(self.narrowed_hints)
+
+    @property
+    def widened_label(self) -> str:
+        return " · ".join(self.narrowed_sidos) or "인근 시도"
 
 
 EMPTY_REGION_SCOPE = RegionScope(prefixes=[], sido_prefixes=[])
@@ -53,15 +61,14 @@ async def resolve_region_scope(session: AsyncSession, *, hints: list[str]) -> Re
     mapping = await map_region_tokens_to_prefixes(session, tokens)
     if not mapping:
         return EMPTY_REGION_SCOPE
-    narrowed = next(
-        ((token, resolved) for token, resolved in sorted(mapping.items()) if resolved.narrowed),
-        None,
-    )
+    narrowed = [
+        (token, resolved) for token, resolved in sorted(mapping.items()) if resolved.narrowed
+    ]
     return RegionScope(
         prefixes=_drop_covered({resolved.prefix for resolved in mapping.values()}),
         sido_prefixes=sorted({resolved.sido for resolved in mapping.values()}),
-        narrowed_hint=narrowed[0] if narrowed else None,
-        narrowed_sido=narrowed[1].sido if narrowed else None,
+        narrowed_hints=tuple(token for token, _ in narrowed),
+        narrowed_sidos=tuple(dict.fromkeys(resolved.sido for _, resolved in narrowed)),
     )
 
 
