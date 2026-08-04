@@ -181,14 +181,14 @@ describe("TravelScreen empty state", () => {
     expect(greeting(tree).props.importantForAccessibility).toBe("auto");
     expect(tree.root.findAllByProps({ testID: "travel-mascot" }).length).toBeGreaterThan(0);
     expect(tree.root.findAllByProps({ testID: "travel-input" }).length).toBeGreaterThan(0);
-    expect(pressable(tree, "travel-chip-지금 열리는 축제")).toBeDefined();
+    expect(pressable(tree, "travel-chip-근처 맛집")).toBeDefined();
   });
 
   it("leaves the composer in place once the first turn lands", async () => {
     const tree = await mount();
     const before = tree.root.findAllByProps({ testID: "travel-send" }).length;
 
-    await press(tree, "travel-chip-지금 열리는 축제");
+    await press(tree, "travel-chip-근처 맛집");
 
     expect(useConversation.getState().turns).toHaveLength(1);
     expect(tree.root.findAllByProps({ testID: "travel-send" })).toHaveLength(before);
@@ -198,16 +198,35 @@ describe("TravelScreen empty state", () => {
 });
 
 describe("TravelScreen starter chips", () => {
-  it("sends a starter chip as a free-text question, never as a patch", async () => {
+  it("좌표가 있으면 근처 칩이 스팟 없는 앵커로 나간다", async () => {
     const tree = await mount();
-    await press(tree, "travel-chip-지금 열리는 축제");
+    await press(tree, "travel-chip-근처 맛집");
 
     expect(askAgentMock).toHaveBeenCalledTimes(1);
     const input = askAgentMock.mock.calls[0][0];
-    expect(input.question).toBe("지금 열리는 축제");
-    expect(input.patch).toBeUndefined();
-    expect(input.intent).toBeUndefined();
+    expect(input.anchor).toEqual({ action: "food" });
     expect(input.coords).toEqual(COORDS);
+    expect(input.question).toBeUndefined();
+    expect(input.intent).toBeUndefined();
+  });
+
+  it("축제 칩은 준비된 intent 를 직송해 Gemini 를 건너뛴다", async () => {
+    const tree = await mount();
+    await press(tree, "travel-chip-지금 축제");
+
+    const input = askAgentMock.mock.calls[0][0];
+    expect(input.intent?.festivalOnly).toBe(true);
+    expect(input.question).toBeUndefined();
+  });
+
+  it("좌표가 없으면 자유문 칩으로 물러난다", async () => {
+    useNearbyCoordsMock.mockReturnValue({ coords: null, phase: "unavailable" });
+    const tree = await mount();
+
+    expect(pressable(tree, "travel-chip-근처 맛집")).toBeUndefined();
+    await press(tree, "travel-chip-사람 적은 바닷가");
+
+    expect(askAgentMock.mock.calls[0][0].question).toBe("사람 적은 바닷가");
   });
 });
 
@@ -221,7 +240,7 @@ describe("TravelScreen nearby action", () => {
     useNearbyCoordsMock.mockReturnValue({ coords: null, phase: "unavailable" });
     const withoutFix = await mount();
     expect(pressable(withoutFix, "travel-nearby")).toBeUndefined();
-    expect(pressable(withoutFix, "travel-chip-지금 열리는 축제")).toBeDefined();
+    expect(pressable(withoutFix, "travel-chip-사람 적은 바닷가")).toBeDefined();
   });
 
   it("sends the nearby pill as a free-text question", async () => {
@@ -268,7 +287,7 @@ describe("TravelScreen new chat", () => {
     expect(useConversation.getState().turns).toEqual([]);
     expect(useConversation.getState().busy).toBe(false);
     expect(tree.root.findAllByProps({ testID: "turn-seed-1" })).toHaveLength(0);
-    expect(pressable(tree, "travel-chip-지금 열리는 축제")).toBeDefined();
+    expect(pressable(tree, "travel-chip-근처 맛집")).toBeDefined();
   });
 });
 
@@ -337,7 +356,7 @@ describe("TravelScreen chip source", () => {
     const tree = await mount();
 
     expect(tree.root.findAllByProps({ testID: "turn-seed-4" }).length).toBeGreaterThan(0);
-    expect(pressable(tree, "travel-chip-지금 열리는 축제")).toBeDefined();
+    expect(pressable(tree, "travel-chip-근처 맛집")).toBeDefined();
   });
 });
 

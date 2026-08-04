@@ -92,7 +92,7 @@ async def ask(
     if anchor is not None:
         if image_bytes is not None:
             raise ValidationFailed("anchor cannot be combined with photo")
-        return await _ask_with_anchor(session, anchor)
+        return await _ask_with_anchor(session, anchor, lat=lat, lng=lng)
     if image_bytes is not None:
         return await _ask_with_photo(
             session,
@@ -241,33 +241,44 @@ def _photo_card(
     return retrieve.to_card(row, tag=f"유사도 {round(similarity.get(row.content_id, 0.0) * 100)}%")
 
 
-async def _ask_with_anchor(session: AsyncSession, anchor: AskAnchor) -> AskResponse:
-    briefs = await repositories.load_candidates_by_ids(session, [anchor.contentId])
-    row = briefs.get(anchor.contentId)
-    if row is None:
-        raise AgentNoResults()
+async def _ask_with_anchor(
+    session: AsyncSession, anchor: AskAnchor, *, lat: float | None, lng: float | None
+) -> AskResponse:
+    row: CandidateRow | None = None
+    if anchor.contentId is not None:
+        briefs = await repositories.load_candidates_by_ids(session, [anchor.contentId])
+        row = briefs.get(anchor.contentId)
+        if row is None:
+            raise AgentNoResults()
     if anchor.action == "crowd":
+        if row is None:
+            raise ValidationFailed("crowd anchor requires contentId")
         return _anchor_crowd_response(row)
-    if row.lat is None or row.lng is None:
+    center_lat = row.lat if row is not None else lat
+    center_lng = row.lng if row is not None else lng
+    if center_lat is None or center_lng is None:
+        if row is None:
+            raise ValidationFailed("anchor requires contentId or coords")
         raise AgentNoResults()
+    origin = row.title if row is not None else "내 위치"
     noun = ANCHOR_NOUNS[anchor.action]
     found = await find_nearby_spots(
         session,
-        lat=row.lat,
-        lng=row.lng,
+        lat=center_lat,
+        lng=center_lng,
         radius=ANCHOR_RADIUS_M,
         category=ANCHOR_CATEGORIES[anchor.action],
         travel_only=anchor.action == "nearby",
     )
-    kept = [near for near in found if near.content_id != row.content_id]
+    kept = [near for near in found if row is None or near.content_id != row.content_id]
     kept = kept[: retrieve.RESULT_LIMIT]
     if not kept:
         raise AgentNoResults()
     rated = await repositories.load_candidates_by_ids(session, [n.content_id for n in kept])
     spots = [_anchor_card(near, has_crowd=_has_crowd(rated.get(near.content_id))) for near in kept]
-    steps = [AskStep(tool="nearby", label=f"{row.title} 주변 {noun} 조회", badge=f"{len(spots)}곳")]
+    steps = [AskStep(tool="nearby", label=f"{origin} 주변 {noun} 조회", badge=f"{len(spots)}곳")]
     answer = [
-        AnswerSegment(text=f"{row.title} 주변 {noun} "),
+        AnswerSegment(text=f"{origin} 주변 {noun} "),
         AnswerSegment(text=f"{len(spots)}곳", emphasis=True),
         AnswerSegment(text=" 찾았어요."),
     ]

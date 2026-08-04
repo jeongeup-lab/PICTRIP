@@ -19,7 +19,7 @@ import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
 import { useAskAgentMutation } from "@/features/travel/queries";
 import { useConversation, type Turn } from "@/features/travel/stores/conversation-store";
 import { agentErrorMessage, PHOTO_PICK_FAILED } from "@/features/travel/lib/agent-errors";
-import { composeQuestion, anchorQuestion } from "@/features/travel/lib/question";
+import { composeQuestion, anchorQuestion, MY_LOCATION } from "@/features/travel/lib/question";
 import { composerChips, NEARBY_CHIP, type Chip } from "@/features/travel/lib/chips";
 import { pickTravelPhoto } from "@/features/travel/usecases/pick-travel-photo";
 import type { AskInput, PhotoUpload, TravelSpot } from "@/features/travel/api";
@@ -106,19 +106,29 @@ export default function TravelScreen() {
         return;
       }
       if (chip.kind === "anchor") {
-        if (!anchorSpot) return;
+        if (!anchorSpot && !coords) return;
         nextId.current += 1;
         const id = `turn-${nextId.current}`;
-        const anchor = { contentId: anchorSpot.contentId, action: chip.action };
+        const anchor = anchorSpot
+          ? { contentId: anchorSpot.contentId, action: chip.action }
+          : { action: chip.action };
         startTurn({
           id,
-          question: anchorQuestion(anchorSpot.title, chip.label),
+          question: anchorQuestion(anchorSpot?.title ?? MY_LOCATION, chip.label),
           request: "",
           photo: null,
           anchor,
         });
         scrollToEnd();
         run(id, { anchor });
+        return;
+      }
+      if (chip.kind === "intent") {
+        nextId.current += 1;
+        const id = `turn-${nextId.current}`;
+        startTurn({ id, question: chip.label, request: "", photo: null, intent: chip.intent });
+        scrollToEnd();
+        run(id, { intent: chip.intent });
         return;
       }
       const intent = source?.answer?.intent ?? null;
@@ -137,7 +147,7 @@ export default function TravelScreen() {
       scrollToEnd();
       run(id, { photo: attached, intent, patch: chip.patch });
     },
-    [busy, submit, anchorSpot, startTurn, scrollToEnd, run],
+    [busy, submit, anchorSpot, coords, startTurn, scrollToEnd, run],
   );
 
   const submitDockChip = useCallback(
@@ -197,7 +207,7 @@ export default function TravelScreen() {
     }
   }, []);
 
-  const chips = composerChips(lastAnswered?.answer?.refinements, anchorSpot);
+  const chips = composerChips(lastAnswered?.answer?.refinements, anchorSpot, coords !== null);
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>

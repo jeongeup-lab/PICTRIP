@@ -1,9 +1,10 @@
-import type { AnchorAction, RefinePatch, Suggestion } from "@/features/travel/api";
+import type { AnchorAction, QueryIntent, RefinePatch, Suggestion } from "@/features/travel/api";
 
 export type Chip =
   | { kind: "question"; label: string; question: string }
   | { kind: "refine"; label: string; patch: RefinePatch }
-  | { kind: "anchor"; label: string; action: AnchorAction };
+  | { kind: "anchor"; label: string; action: AnchorAction }
+  | { kind: "intent"; label: string; intent: QueryIntent };
 
 export type AnchorChip = Extract<Chip, { kind: "anchor" }>;
 
@@ -26,15 +27,27 @@ export const NEARBY_CHIP: QuestionChip = {
   question: "여기서 가까운 곳",
 };
 
+export const FESTIVAL_CHIP: Chip = {
+  kind: "intent",
+  label: "지금 축제",
+  intent: { categoryKeywords: [], regionHints: [], festivalOnly: true },
+};
+
+const NEARBY_IDLE_CHIPS: Chip[] = [
+  { kind: "anchor", label: "근처 맛집", action: "food" },
+  { kind: "anchor", label: "근처 볼거리", action: "nearby" },
+  { kind: "anchor", label: "근처 카페", action: "cafe" },
+];
+
 const BASE_CHIPS: Chip[] = [
-  { kind: "question", label: "지금 열리는 축제", question: "지금 열리는 축제" },
+  FESTIVAL_CHIP,
   { kind: "question", label: "사람 적은 바닷가", question: "사람 적은 바닷가" },
   { kind: "question", label: "비 와도 갈 만한 실내", question: "비 와도 갈 만한 실내" },
   { kind: "question", label: "제주에서 한적한 곳", question: "제주에서 한적한 곳" },
 ];
 
-export function idleChips(): Chip[] {
-  return [...BASE_CHIPS];
+export function idleChips(hasCoords: boolean = false): Chip[] {
+  return hasCoords ? [...NEARBY_IDLE_CHIPS, FESTIVAL_CHIP] : [...BASE_CHIPS];
 }
 
 export function refineChips(refinements: Suggestion[] | null | undefined): Chip[] {
@@ -44,8 +57,9 @@ export function refineChips(refinements: Suggestion[] | null | undefined): Chip[
 export function composerChips(
   refinements: Suggestion[] | null | undefined,
   anchor: { hasCrowd?: boolean } | null = null,
+  hasCoords: boolean = false,
 ): Chip[] {
   if (anchor) return anchorChips(anchor.hasCrowd === true);
   const refine = refineChips(refinements);
-  return refine.length > 0 ? refine : idleChips();
+  return refine.length > 0 ? refine : idleChips(hasCoords);
 }

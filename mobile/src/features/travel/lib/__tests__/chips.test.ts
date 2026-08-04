@@ -11,16 +11,26 @@ describe("idleChips", () => {
     const labels = idleChips().map((c) => c.label);
 
     expect(labels).not.toContain(NEARBY_CHIP.label);
-    expect(labels).toContain("지금 열리는 축제");
+    expect(labels).toContain("지금 축제");
   });
 
-  it("초기 칩은 전부 질문형이다", () => {
-    expect(idleChips().every((c) => c.kind === "question")).toBe(true);
+  it("좌표가 없으면 위치가 필요 없는 칩만 낸다", () => {
+    expect(idleChips(false).some((c) => c.kind === "anchor")).toBe(false);
   });
 
-  it("초기 칩은 빈 질문을 싣지 않는다", () => {
+  it("좌표가 있으면 근처 칩이 앞에 오고 즐길거리는 넣지 않는다", () => {
+    const labels = idleChips(true).map((c) => c.label);
+
+    expect(labels).toEqual(["근처 맛집", "근처 볼거리", "근처 카페", "지금 축제"]);
+    expect(labels).not.toContain("근처 즐길거리");
+  });
+
+  it("좌표가 있는 초기 칩은 한 개도 Gemini를 태우지 않는다", () => {
+    expect(idleChips(true).every((c) => c.kind === "anchor" || c.kind === "intent")).toBe(true);
+  });
+
+  it("질문형 칩은 빈 질문을 싣지 않는다", () => {
     for (const chip of idleChips()) {
-      expect(chip.kind).toBe("question");
       if (chip.kind === "question") expect(chip.question.trim().length).toBeGreaterThan(0);
     }
   });
