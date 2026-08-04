@@ -191,7 +191,7 @@ async def _ask_with_photo(
         steps.append(AskStep(tool="photo_match", label=_widen_label(scope), badge="pgvector"))
 
     similarity = {row.content_id: photo_service.similarity(row) for row in rows}
-    if near and lat is not None and lng is not None:
+    if near and lat is not None and lng is not None and rows:
         ordered = sorted(
             ordered, key=lambda row: retrieve.distance_km(row, lat=lat, lng=lng) or 0.0
         )
@@ -437,6 +437,25 @@ async def _ask_with_question(
         steps.append(AskStep(tool="resolve_place", label="질문 속 장소 확인", badge=_count(pinned)))
 
     axes = suggest_service.ALL_AXES
+    near_is_a_cause = True
+    preference = intent.crowdPreference
+    wants_indoor = intent.indoorOnly
+
+    async def search(
+        within_codes: list[str], within_prefixes: list[str], *, with_near: bool = near
+    ) -> list[CandidateRow]:
+        return await retrieve.search_candidates(
+            session,
+            codes=within_codes,
+            region_prefixes=within_prefixes,
+            preference=preference,
+            lat=lat,
+            lng=lng,
+            near=with_near,
+            indoor_only=wants_indoor,
+            mood_ids=mood_ids,
+        )
+
     if place_only:
         if not pinned:
             raise AgentNoResults()
@@ -464,21 +483,7 @@ async def _ask_with_question(
                 )
             )
     else:
-        preference = intent.crowdPreference
         indoor_only = intent.indoorOnly
-
-        async def search(within_codes: list[str], within_prefixes: list[str]) -> list[CandidateRow]:
-            return await retrieve.search_candidates(
-                session,
-                codes=within_codes,
-                region_prefixes=within_prefixes,
-                preference=preference,
-                lat=lat,
-                lng=lng,
-                near=near,
-                indoor_only=indoor_only,
-                mood_ids=mood_ids,
-            )
 
         candidates = await search(codes, prefixes)
         steps.append(
@@ -526,10 +531,14 @@ async def _ask_with_question(
 
     merged = _merge(pinned, pool)
     if not merged:
+        if near and title_only:
+            near_is_a_cause = bool(candidates)
+        elif near and not place_only and not candidates:
+            near_is_a_cause = bool(await search(codes, prefixes, with_near=False))
         return _zero_response(
             steps,
             intent,
-            has_coords=lat is not None and lng is not None and (not title_only or bool(candidates)),
+            has_coords=lat is not None and lng is not None and near_is_a_cause,
             region_hints=list(prefixes),
             keywords=[
                 keyword
