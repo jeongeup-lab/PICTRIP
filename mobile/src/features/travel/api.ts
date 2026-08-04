@@ -38,7 +38,7 @@ export interface Suggestion {
 export type AnchorAction = "food" | "cafe" | "nearby" | "crowd";
 
 export interface AskAnchor {
-  contentId: string;
+  contentId?: string;
   action: AnchorAction;
 }
 

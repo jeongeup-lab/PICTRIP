@@ -307,3 +307,54 @@ def test_the_travel_anchor_keeps_museums_that_the_map_predicate_drops() -> None:
 
     assert "VE07" in map_sql
     assert "VE07" not in travel_sql
+
+
+@pytest.mark.integration
+async def test_an_anchor_without_a_content_id_centres_on_my_coords(
+    db_session, client, anchor_seeded
+) -> None:
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={"anchor": {"action": "food"}, "lat": ANCHOR_LAT, "lng": ANCHOR_LNG},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["spots"]
+    assert "내 위치 주변 맛집" in "".join(part["text"] for part in data["answer"])
+    assert data["steps"][0]["label"].startswith("내 위치 주변 맛집")
+
+
+@pytest.mark.integration
+async def test_an_anchor_with_neither_a_spot_nor_coords_is_rejected(
+    db_session, client, anchor_seeded
+) -> None:
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"anchor": {"action": "food"}})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "VALIDATION_FAILED"
+
+
+@pytest.mark.integration
+async def test_asking_my_own_coords_whether_they_are_busy_is_rejected(
+    db_session, client, anchor_seeded
+) -> None:
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={"anchor": {"action": "crowd"}, "lat": ANCHOR_LAT, "lng": ANCHOR_LNG},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "VALIDATION_FAILED"

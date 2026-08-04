@@ -96,7 +96,7 @@ PRE_OTA_REGION_PREFIXES: dict[str, tuple[str, ...]] = {
 
 
 class AskAnchor(BaseModel):
-    contentId: Annotated[str, StringConstraints(min_length=1, max_length=32)]
+    contentId: Annotated[str, StringConstraints(min_length=1, max_length=32)] | None = None
     action: AnchorAction
 
 
