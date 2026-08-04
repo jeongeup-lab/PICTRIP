@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Animated, Easing, FlatList, Pressable, View, Text, StyleSheet } from "react-native";
 import { Image } from "expo-image";
-import { Icon } from "@/components/Icon";
 import { SpotCard } from "@/features/travel/components/SpotCard";
 import { StepList } from "@/features/travel/components/StepList";
 import { AnswerBlock } from "@/features/travel/components/AnswerBlock";
-import { playbackTicks, stepProgressAt } from "@/features/travel/lib/step-playback";
+import { pendingSteps } from "@/features/travel/lib/pending-steps";
 import { RETRY_SUGGESTION } from "@/features/travel/lib/question";
 import type { TravelSpot } from "@/features/travel/api";
 import type { Turn } from "@/features/travel/stores/conversation-store";
@@ -13,29 +12,19 @@ import { colors, spacing } from "@/constants/theme";
 
 const RISE_MS = 320;
 
-const PENDING_STEP = { tool: "pending", label: "여행지를 찾는 중", badge: null };
-
 interface Props {
   turn: Turn;
   anchorId: string | null;
   onSpotPress: (spot: TravelSpot) => void;
-  onPlaybackEnd: (id: string) => void;
   onRetry: (turn: Turn) => void;
   onGrow: () => void;
 }
 
-export function ConversationTurn({
-  turn,
-  anchorId,
-  onSpotPress,
-  onPlaybackEnd,
-  onRetry,
-  onGrow,
-}: Props) {
+export function ConversationTurn({ turn, anchorId, onSpotPress, onRetry, onGrow }: Props) {
   const rise = useMemo(() => new Animated.Value(0), []);
-  const [elapsed, setElapsed] = useState(0);
-  const [voted, setVoted] = useState(false);
-  const steps = turn.answer?.steps ?? [];
+  const waiting = turn.status === "pending";
+  const answer = turn.answer;
+  const steps = waiting ? pendingSteps(turn) : (answer?.steps ?? []);
 
   useEffect(() => {
     Animated.timing(rise, {
@@ -47,25 +36,8 @@ export function ConversationTurn({
   }, [rise]);
 
   useEffect(() => {
-    if (turn.status !== "playing") return;
-    const timers = playbackTicks(steps.length).map((ms) =>
-      setTimeout(() => {
-        setElapsed(ms);
-        onGrow();
-      }, ms),
-    );
-    return () => timers.forEach(clearTimeout);
-  }, [turn.status, steps.length, onGrow]);
-
-  const progress = stepProgressAt(steps.length, elapsed);
-  const settled = turn.status === "playing" && progress.finished;
-
-  useEffect(() => {
-    if (settled) onPlaybackEnd(turn.id);
-  }, [settled, onPlaybackEnd, turn.id]);
-
-  const revealed = turn.status === "done" || settled;
-  const answer = turn.answer;
+    if (turn.status === "done") onGrow();
+  }, [turn.status, onGrow]);
 
   return (
     <Animated.View
@@ -102,17 +74,13 @@ export function ConversationTurn({
             </Pressable>
           </View>
         ) : (
-          <StepList
-            steps={turn.status === "pending" ? [PENDING_STEP] : steps}
-            shown={turn.status === "pending" ? 1 : revealed ? steps.length : progress.shown}
-            completed={turn.status === "pending" ? 0 : revealed ? steps.length : progress.completed}
-          />
+          <StepList steps={steps} shown={steps.length} completed={waiting ? 0 : steps.length} />
         )}
 
-        {revealed && answer ? <AnswerBlock answer={answer.answer} /> : null}
+        {answer ? <AnswerBlock answer={answer.answer} /> : null}
       </View>
 
-      {revealed && answer && answer.spots.length > 0 ? (
+      {answer && answer.spots.length > 0 ? (
         <>
           <FlatList
             horizontal
@@ -132,20 +100,6 @@ export function ConversationTurn({
 
           <View style={styles.foot}>
             <Text style={styles.hint}>카드를 탭하면 그 장소 기준으로 이어서 물어볼 수 있어요</Text>
-            <Pressable
-              testID={`turn-vote-${turn.id}`}
-              accessibilityLabel="도움이 됐어요"
-              style={[styles.vote, voted && styles.voteOn]}
-              hitSlop={8}
-              onPress={() => setVoted((v) => !v)}
-            >
-              <Icon
-                name="check"
-                size={17}
-                color={voted ? colors.ink : colors.ter}
-                strokeWidth={2.2}
-              />
-            </Pressable>
           </View>
         </>
       ) : null}
@@ -199,12 +153,4 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   hint: { flex: 1, fontSize: 11.5, color: colors.ter },
-  vote: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  voteOn: { backgroundColor: colors.fill },
 });

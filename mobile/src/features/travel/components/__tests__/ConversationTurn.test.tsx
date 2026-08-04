@@ -2,8 +2,8 @@ import renderer, { act } from "react-test-renderer";
 import { FlatList, Text } from "react-native";
 import { ConversationTurn } from "@/features/travel/components/ConversationTurn";
 import { SpotCard } from "@/features/travel/components/SpotCard";
+import { StepList } from "@/features/travel/components/StepList";
 import type { Turn } from "@/features/travel/stores/conversation-store";
-import { playbackDurationMs, STEP_INTERVAL_MS } from "@/features/travel/lib/step-playback";
 
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
 jest.mock("@/features/saved/hooks/use-save-optimistic", () => ({
@@ -44,7 +44,7 @@ const turn = (over: Partial<Turn> = {}): Turn => ({
   question: "여름에 시원한 계곡",
   request: "여름에 시원한 계곡",
   photo: null,
-  status: "playing",
+  status: "done",
   answer,
   errorMessage: null,
   intent: null,
@@ -55,7 +55,7 @@ const turn = (over: Partial<Turn> = {}): Turn => ({
 
 const noop = () => undefined;
 
-function mount(t: Turn, onPlaybackEnd = noop, anchorId: string | null = null) {
+function mount(t: Turn, anchorId: string | null = null, onGrow = noop) {
   let tree: renderer.ReactTestRenderer;
   act(() => {
     tree = renderer.create(
@@ -63,9 +63,8 @@ function mount(t: Turn, onPlaybackEnd = noop, anchorId: string | null = null) {
         turn={t}
         anchorId={anchorId}
         onSpotPress={noop}
-        onPlaybackEnd={onPlaybackEnd}
         onRetry={noop}
-        onGrow={noop}
+        onGrow={onGrow}
       />,
     );
   });
@@ -88,34 +87,61 @@ const spinners = (tree: renderer.ReactTestRenderer) =>
 beforeEach(() => jest.useFakeTimers());
 afterEach(() => jest.useRealTimers());
 
-describe("ConversationTurn playback", () => {
-  it("holds a single spinner row while the request is still in flight", () => {
+describe("ConversationTurn while waiting", () => {
+  it("names the stages that actually run for a free-text question", () => {
     const tree = mount(turn({ status: "pending", answer: null }));
-    expect(texts(tree)).toContain("여행지를 찾는 중");
+    expect(texts(tree)).toContain("질문에서 조건 읽는 중");
+    expect(texts(tree)).toContain("여행지 찾는 중");
     expect(texts(tree)).not.toContain("계곡 유형 조회");
   });
 
-  it("reveals server steps one at a time instead of all at once", () => {
-    const tree = mount(turn());
-    expect(texts(tree)).toContain("계곡 유형 조회");
-    expect(texts(tree)).not.toContain("혼잡도 하위 30% 추림");
-
-    act(() => jest.advanceTimersByTime(STEP_INTERVAL_MS));
-    expect(texts(tree)).toContain("혼잡도 하위 30% 추림");
-    expect(texts(tree)).not.toContain("주차·편의시설 확인");
+  it("drops the intent stage when the request carries a prepared intent", () => {
+    const tree = mount(
+      turn({
+        status: "pending",
+        answer: null,
+        request: "",
+        intent: { categoryKeywords: [], regionHints: [] },
+      }),
+    );
+    expect(texts(tree)).not.toContain("질문에서 조건 읽는 중");
+    expect(texts(tree)).toContain("여행지 찾는 중");
   });
 
-  it("withholds the answer and the result rail until playback ends", () => {
-    const onPlaybackEnd = jest.fn();
-    const tree = mount(turn(), onPlaybackEnd);
-    act(() => jest.advanceTimersByTime(2 * STEP_INTERVAL_MS));
-    expect(texts(tree)).not.toContain("하위 30%");
-    expect(onPlaybackEnd).not.toHaveBeenCalled();
+  it("leaves every waiting stage unchecked", () => {
+    const tree = mount(turn({ status: "pending", answer: null }));
+    const list = tree.root.findByType(StepList);
+    expect(list.props.shown).toBe(2);
+    expect(list.props.completed).toBe(0);
+    expect(spinners(tree)).toBeGreaterThan(0);
+  });
+});
 
-    act(() => jest.advanceTimersByTime(playbackDurationMs(3)));
+describe("ConversationTurn once the answer lands", () => {
+  it("shows the answer and the rail with no further delay", () => {
+    const tree = mount(turn());
     expect(texts(tree)).toContain("하위 30%");
-    expect(onPlaybackEnd).toHaveBeenCalledWith("t1");
+    expect(tree.root.findAllByType(SpotCard)).toHaveLength(1);
     expect(spinners(tree)).toBe(0);
+  });
+
+  it("shows every server step at once, all completed", () => {
+    const tree = mount(turn());
+    expect(texts(tree)).toContain("계곡 유형 조회");
+    expect(texts(tree)).toContain("혼잡도 하위 30% 추림");
+    expect(texts(tree)).toContain("주차·편의시설 확인");
+  });
+
+  it("does not advance anything on a timer", () => {
+    const tree = mount(turn());
+    const before = texts(tree).join("");
+    act(() => jest.advanceTimersByTime(5000));
+    expect(texts(tree).join("")).toBe(before);
+  });
+
+  it("offers no feedback control that goes nowhere", () => {
+    const tree = mount(turn());
+    expect(tree.root.findAllByProps({ testID: "turn-vote-t1" })).toHaveLength(0);
   });
 
   it("puts every result on the rail without a see-all link", () => {
@@ -124,7 +150,7 @@ describe("ConversationTurn playback", () => {
       contentId: `c${i}`,
       title: `spot-${i}`,
     }));
-    const tree = mount(turn({ status: "done", answer: { ...answer, spots: many } }));
+    const tree = mount(turn({ answer: { ...answer, spots: many } }));
     const rail = tree.root.findByType(FlatList);
     expect(rail.props.data).toHaveLength(20);
     expect(texts(tree).join("")).not.toContain("전체");
@@ -132,7 +158,7 @@ describe("ConversationTurn playback", () => {
 
   it("marks the anchored card selected and dims the rest", () => {
     const two = [answer.spots[0], { ...answer.spots[0], contentId: "126509", title: "다른계곡" }];
-    const tree = mount(turn({ status: "done", answer: { ...answer, spots: two } }), noop, "126508");
+    const tree = mount(turn({ answer: { ...answer, spots: two } }), "126508");
     const cards = tree.root.findAllByType(SpotCard);
     expect(cards).toHaveLength(2);
     expect(cards[0].props.selected).toBe(true);
@@ -141,23 +167,19 @@ describe("ConversationTurn playback", () => {
     expect(cards[1].props.dimmed).toBe(true);
   });
 
-  it("shows a failed turn as an error line with a retry chip, no steps", () => {
+  it("keeps follow-up chips out of the answer block", () => {
+    const tree = mount(turn());
+    expect(tree.root.findAllByProps({ testID: "answer-suggestion-실내만" })).toHaveLength(0);
+  });
+});
+
+describe("ConversationTurn when the request fails", () => {
+  it("shows an error line with a retry chip, no steps", () => {
     const tree = mount(
       turn({ status: "failed", answer: null, errorMessage: "조건에 맞는 곳을 찾지 못했어요." }),
     );
     expect(texts(tree)).toContain("조건에 맞는 곳을 찾지 못했어요.");
     expect(texts(tree)).toContain("다시 시도");
     expect(spinners(tree)).toBe(0);
-  });
-
-  it("renders a completed turn without replaying it", () => {
-    const tree = mount(turn({ status: "done" }));
-    expect(texts(tree)).toContain("하위 30%");
-    expect(spinners(tree)).toBe(0);
-  });
-
-  it("keeps follow-up chips out of the answer block", () => {
-    const tree = mount(turn({ status: "done" }));
-    expect(tree.root.findAllByProps({ testID: "answer-suggestion-실내만" })).toHaveLength(0);
   });
 });
