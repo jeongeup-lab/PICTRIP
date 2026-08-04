@@ -308,7 +308,7 @@ async def test_ask_rejects_a_request_without_question_or_photo(db_session, clien
 
 
 @pytest.mark.integration
-async def test_ask_reports_no_results_when_nothing_matches(
+async def test_nothing_matching_answers_with_zero_and_a_way_out(
     db_session, client, seeded, monkeypatch
 ) -> None:
     async def fake_intent(question: str) -> QueryIntent:
@@ -321,8 +321,53 @@ async def test_ask_reports_no_results_when_nothing_matches(
     finally:
         app.dependency_overrides.clear()
 
-    assert res.status_code == 422
-    assert res.json()["error"]["code"] == "AGENT_NO_RESULTS"
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["spots"] == []
+    assert data["totalCount"] == 0
+    answer = "".join(segment["text"] for segment in data["answer"])
+    assert "0곳" in answer
+    assert [chip["label"] for chip in data["refinements"]] == ["박물관 조건 풀기", "지역 넓히기"]
+
+
+@pytest.mark.integration
+async def test_a_zero_turn_keeps_the_funnel_steps_that_show_where_it_died(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["박물관"], regionHints=["제주"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "제주 박물관"})
+    finally:
+        app.dependency_overrides.clear()
+
+    steps = res.json()["data"]["steps"]
+    assert [step["badge"] for step in steps if step["tool"] == "category_search"] == ["0곳"]
+
+
+@pytest.mark.integration
+async def test_a_zero_turn_offers_only_conditions_that_are_still_applied(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["박물관"], regionHints=["제주"], indoorOnly=True)
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "제주 실내 박물관"})
+    finally:
+        app.dependency_overrides.clear()
+
+    data = res.json()["data"]
+    assert data["intent"]["indoorOnly"] is True
+    assert data["intent"]["categoryKeywords"] == []
+    labels = [chip["label"] for chip in data["refinements"]]
+    assert labels == ["실내 조건 풀기", "지역 넓히기"]
+    assert not any("박물관" in label for label in labels)
 
 
 @pytest.mark.integration
@@ -531,6 +576,35 @@ async def test_photo_query_applies_the_region_hint_inside_the_vector_query(
 
 
 @pytest.mark.integration
+async def test_a_photo_that_matches_nothing_answers_with_zero_not_an_error(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(regionHints=["제주"])
+
+    async def fake_embed(*, image_bytes, image_mime):  # type: ignore[no-untyped-def]
+        return [0.1] * 512
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    monkeypatch.setattr(photo_service, "embed_photo", fake_embed)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            files={"photo": ("a.jpg", b"x", "image/jpeg")},
+            data={"question": "제주에서 이런 분위기"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["spots"] == []
+    assert "0곳" in "".join(segment["text"] for segment in data["answer"])
+    assert [chip["label"] for chip in data["refinements"]] == ["지역 넓히기"]
+
+
+@pytest.mark.integration
 async def test_photo_turn_hides_chips_whose_axis_the_photo_search_never_applies(
     db_session, client, seeded, monkeypatch
 ) -> None:
@@ -609,8 +683,8 @@ async def test_unmatched_keyword_with_no_title_hit_does_not_widen_to_everything(
     finally:
         app.dependency_overrides.clear()
 
-    assert res.status_code == 422
-    assert res.json()["error"]["code"] == "AGENT_NO_RESULTS"
+    assert res.status_code == 200
+    assert res.json()["data"]["spots"] == []
 
 
 @pytest.mark.integration
@@ -2996,3 +3070,42 @@ def test_a_truncated_candidate_sweep_does_not_hide_the_indoor_chip() -> None:
     )
 
     assert "실내만" in [chip.label for chip in chips]
+
+
+def test_zero_chips_name_every_condition_the_user_can_still_release() -> None:
+    intent = QueryIntent(
+        categoryKeywords=["계곡"], regionHints=["제주"], indoorOnly=True, crowdPreference="quiet"
+    )
+
+    chips = suggest_service.derive_for_zero(intent, has_coords=False)
+
+    assert [chip.label for chip in chips] == ["한적 조건 풀기", "실내 조건 풀기", "계곡 조건 풀기"]
+    assert [chip.patch.drop for chip in chips] == ["crowd", "indoor", "category"]
+
+
+def test_zero_chips_say_widen_for_region_rather_than_release() -> None:
+    chips = suggest_service.derive_for_zero(QueryIntent(regionHints=["제주"]), has_coords=False)
+
+    assert [chip.label for chip in chips] == ["지역 넓히기"]
+
+
+def test_zero_chips_fall_back_to_mood_wording_when_no_keyword_was_named() -> None:
+    chips = suggest_service.derive_for_zero(QueryIntent(moodHints=["sea"]), has_coords=False)
+
+    assert [chip.label for chip in chips] == ["분위기 조건 풀기"]
+
+
+def test_zero_chips_are_empty_when_nothing_is_releasable() -> None:
+    assert suggest_service.derive_for_zero(QueryIntent(), has_coords=False) == []
+
+
+def test_zero_chips_stay_within_the_dock_budget() -> None:
+    intent = QueryIntent(
+        categoryKeywords=["계곡"],
+        regionHints=["제주"],
+        indoorOnly=True,
+        crowdPreference="quiet",
+        nearMe=True,
+    )
+
+    assert len(suggest_service.derive_for_zero(intent, has_coords=True)) == 3

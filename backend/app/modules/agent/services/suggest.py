@@ -9,6 +9,52 @@ MAX_SUGGESTIONS = 3
 THIN_RESULT_COUNT = 5
 ALL_AXES: frozenset[DropAxis] = frozenset(get_args(DropAxis))
 _DROP_ORDER: tuple[DropAxis, ...] = ("crowd", "indoor", "category", "near", "region")
+_WIDEN_REGION_LABEL = "지역 넓히기"
+
+
+def drop_label(intent: QueryIntent, axis: DropAxis) -> str:
+    if axis == "region":
+        return _WIDEN_REGION_LABEL
+    return f"{_axis_noun(intent, axis)} 조건 풀기"
+
+
+def _axis_noun(intent: QueryIntent, axis: DropAxis) -> str:
+    if axis == "crowd":
+        return "한적" if intent.crowdPreference == "quiet" else "유명한 곳"
+    if axis == "indoor":
+        return "실내"
+    if axis == "near":
+        return "내 근처"
+    return _category_noun(intent)
+
+
+def _category_noun(intent: QueryIntent) -> str:
+    return intent.categoryKeywords[0] if intent.categoryKeywords else "분위기"
+
+
+def releasable_axes(
+    intent: QueryIntent, axes: frozenset[DropAxis] = ALL_AXES, *, has_coords: bool
+) -> list[DropAxis]:
+    engaged = _engaged(intent)
+    return [
+        axis
+        for axis in _DROP_ORDER
+        if axis in axes
+        and engaged[axis]
+        and not refine_service.drop_leaves_named_place_only(intent, axis, has_coords=has_coords)
+    ]
+
+
+def derive_for_zero(
+    intent: QueryIntent,
+    *,
+    has_coords: bool,
+    axes: frozenset[DropAxis] = ALL_AXES,
+) -> list[Suggestion]:
+    return [
+        Suggestion(label=drop_label(intent, axis), patch=RefinePatch(drop=axis))
+        for axis in releasable_axes(intent, axes, has_coords=has_coords)
+    ][:MAX_SUGGESTIONS]
 
 
 def derive(
@@ -44,20 +90,14 @@ def derive(
 def _releasable_axis(
     intent: QueryIntent, axes: frozenset[DropAxis], *, has_coords: bool
 ) -> DropAxis | None:
-    axis = _narrowest_axis(intent, axes)
-    if axis is None or refine_service.drop_leaves_named_place_only(
-        intent, axis, has_coords=has_coords
-    ):
-        return None
-    return axis
+    return next(iter(releasable_axes(intent, axes, has_coords=has_coords)), None)
 
 
-def _narrowest_axis(intent: QueryIntent, axes: frozenset[DropAxis]) -> DropAxis | None:
-    engaged: dict[DropAxis, bool] = {
+def _engaged(intent: QueryIntent) -> dict[DropAxis, bool]:
+    return {
         "crowd": intent.crowdPreference != "any",
         "indoor": intent.indoorOnly,
         "category": bool(intent.categoryKeywords or intent.moodHints),
         "near": intent.nearMe,
         "region": bool(intent.regionHints),
     }
-    return next((axis for axis in _DROP_ORDER if axis in axes and engaged[axis]), None)
