@@ -555,6 +555,10 @@ async def _ask_festivals(
             fallback = _fallback_sentence(intent.regionHints[0], region_has_festivals=bool(scoped))
     else:
         cards = nationwide
+    shown = [card for card in cards[: retrieve.RESULT_LIMIT] if card.content_id]
+    rated = await repositories.load_candidates_by_ids(
+        session, [card.content_id or "" for card in shown]
+    )
     spots = [
         AgentSpotCard(
             contentId=card.content_id or "",
@@ -562,9 +566,9 @@ async def _ask_festivals(
             regionLabel=card.region_label,
             imageUrl=t1_display_url(card.image_url, card.cpyrht_div_cd),
             tag=card.dday,
+            hasCrowd=_has_crowd(rated.get(card.content_id or "")),
         )
-        for card in cards[: retrieve.RESULT_LIMIT]
-        if card.content_id
+        for card in shown
     ]
     if not spots:
         raise AgentNoResults()
