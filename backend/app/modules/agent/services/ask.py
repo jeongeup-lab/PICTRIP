@@ -14,7 +14,7 @@ from app.modules.agent.errors import (
     AgentNoResults,
     AgentOutOfScope,
 )
-from app.modules.agent.repositories import CandidateRow
+from app.modules.agent.repositories import CandidateRow, VectorMatchRow
 from app.modules.agent.schemas import (
     MAX_HINT_TOKENS,
     AgentSpotCard,
@@ -159,36 +159,35 @@ async def _ask_with_photo(
 
     scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
     prefixes = scope.prefixes or pre_ota_region_prefixes
-    try:
-        rows = await photo_service.match_vector(session, vector, region_prefixes=prefixes)
-    except AgentNoResults:
-        if not scope.widenable:
-            raise
-        rows = []
-    steps.append(
-        AskStep(
-            tool="photo_match",
-            label=_photo_label(prefixes),
-            badge="pgvector",
+    near = intent.nearMe and lat is not None and lng is not None
+
+    async def matched(within: list[str]) -> tuple[list[VectorMatchRow], list[CandidateRow]]:
+        try:
+            found = await photo_service.match_vector(session, vector, region_prefixes=within)
+        except AgentNoResults:
+            return [], []
+        briefs = await repositories.load_candidates_by_ids(
+            session, [row.content_id for row in found]
         )
-    )
+        usable = [briefs[row.content_id] for row in found if row.content_id in briefs]
+        if near:
+            usable = [row for row in usable if row.lat is not None and row.lng is not None]
+        return found, usable
+
+    rows, ordered = await matched(prefixes)
+    steps.append(AskStep(tool="photo_match", label=_photo_label(prefixes), badge="pgvector"))
     widened: retrieve.RegionScope | None = None
-    if not rows:
+    if not ordered and scope.widenable:
         prefixes = scope.sido_prefixes
-        rows = await photo_service.match_vector(session, vector, region_prefixes=prefixes)
+        rows, ordered = await matched(prefixes)
         widened = scope
         intent = intent.model_copy(update={"regionHints": list(scope.sido_prefixes)})
         steps.append(AskStep(tool="photo_match", label=_widen_label(scope), badge="pgvector"))
 
     similarity = {row.content_id: photo_service.similarity(row) for row in rows}
-    briefs = await repositories.load_candidates_by_ids(session, [row.content_id for row in rows])
-    ordered = [briefs[row.content_id] for row in rows if row.content_id in briefs]
-
-    near = intent.nearMe and lat is not None and lng is not None
     if near and lat is not None and lng is not None:
         ordered = sorted(
-            [row for row in ordered if row.lat is not None and row.lng is not None],
-            key=lambda row: retrieve.distance_km(row, lat=lat, lng=lng) or 0.0,
+            ordered, key=lambda row: retrieve.distance_km(row, lat=lat, lng=lng) or 0.0
         )
         steps.append(AskStep(tool="nearby", label="현재 위치에서 가까운 순", badge=_count(ordered)))
 
@@ -414,7 +413,7 @@ async def _ask_with_question(
                 badge=_count(candidates),
             )
         )
-        if not candidates and not pinned and scope.widenable:
+        if not _locatable(candidates, near=near) and not pinned and scope.widenable:
             prefixes = scope.sido_prefixes
             candidates = await retrieve.search_by_title(session, keywords, region_prefixes=prefixes)
             region_widened = scope
@@ -451,7 +450,7 @@ async def _ask_with_question(
                 badge=_count(candidates),
             )
         )
-        if not candidates and not pinned and scope.widenable:
+        if not _locatable(candidates, near=near) and not pinned and scope.widenable:
             prefixes = scope.sido_prefixes
             candidates = await search(codes, prefixes)
             region_widened = scope
@@ -634,6 +633,12 @@ def _token_hits(token: str, address: list[str]) -> bool:
 
 def _keywords(intent: QueryIntent) -> list[str]:
     return list(intent.categoryKeywords)
+
+
+def _locatable(rows: list[CandidateRow], *, near: bool) -> list[CandidateRow]:
+    if not near:
+        return rows
+    return [row for row in rows if row.lat is not None and row.lng is not None]
 
 
 def _widen_label(scope: retrieve.RegionScope) -> str:
