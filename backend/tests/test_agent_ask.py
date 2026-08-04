@@ -3247,3 +3247,28 @@ def test_zero_chips_do_not_offer_a_drop_that_lands_on_a_named_place_alone() -> N
     unresolved = suggest_service.derive_for_zero(intent, has_coords=False, region_applied=False)
 
     assert [chip.label for chip in unresolved] == []
+
+
+@pytest.mark.integration
+async def test_a_zero_turn_keeps_the_region_an_old_app_sent_outside_the_intent(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["존재하지않는유형"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask", json={"question": "존재하지않는유형", "region": "jeju"}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["spots"] == []
+    assert data["intent"]["regionHints"] == ["제주"]
+    answer = "".join(segment["text"] for segment in data["answer"])
+    assert "제주" in answer
+    assert "지역 넓히기" in [chip["label"] for chip in data["refinements"]]
