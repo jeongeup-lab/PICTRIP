@@ -2954,3 +2954,45 @@ async def test_a_festival_with_crowd_data_keeps_the_crowd_chip(
     crowd = {spot["contentId"]: spot["hasCrowd"] for spot in res.json()["data"]["spots"]}
     assert crowd["f1"] is True
     assert crowd["f2"] is False
+
+
+@pytest.mark.integration
+async def test_a_festival_without_a_local_image_still_reports_its_crowd_data(
+    db_session, client, seeded_festivals, monkeypatch
+) -> None:
+    await db_session.execute(
+        text("UPDATE spots SET first_image_url = NULL WHERE content_id = 'f1'")
+    )
+    await db_session.execute(
+        text(
+            "INSERT INTO spot_concentration (content_id, concentration_rate, base_ymd, raw_name) "
+            "VALUES ('f1', 55.00, DATE '2026-07-01', 'f1') ON CONFLICT DO NOTHING"
+        )
+    )
+    await db_session.flush()
+    monkeypatch.setattr(
+        ask_service.feed_services,
+        "load_festival_pool",
+        _festival_pool(
+            [_festival_card("f1", title="봉화축제", region_label="경상북도 봉화군", dday="D-2")]
+        ),
+    )
+    monkeypatch.setattr(
+        intent_service, "extract_intent", _fake_intent(QueryIntent(festivalOnly=True))
+    )
+    _override_with_kto(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "지금 열리는 축제"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    assert res.json()["data"]["spots"][0]["hasCrowd"] is True
+
+
+def test_a_truncated_candidate_sweep_does_not_hide_the_indoor_chip() -> None:
+    chips = suggest_service.derive(
+        QueryIntent(), has_coords=False, result_count=20, indoor_available=True
+    )
+
+    assert "실내만" in [chip.label for chip in chips]

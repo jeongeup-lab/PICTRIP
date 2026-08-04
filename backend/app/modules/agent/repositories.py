@@ -301,6 +301,18 @@ WHERE spots.content_id = ANY(CAST(:ids AS text[]))
 """
 
 
+_RATED_IDS_SQL = """
+SELECT content_id FROM spot_concentration WHERE content_id = ANY(CAST(:ids AS text[]))
+"""
+
+
+async def find_rated_content_ids(session: AsyncSession, content_ids: list[str]) -> set[str]:
+    if not content_ids:
+        return set()
+    result = await session.execute(text(_RATED_IDS_SQL), {"ids": content_ids})
+    return {row.content_id for row in result}
+
+
 async def load_candidates_by_ids(
     session: AsyncSession, content_ids: list[str]
 ) -> dict[str, CandidateRow]:

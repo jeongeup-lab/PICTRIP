@@ -520,7 +520,9 @@ async def _ask_with_question(
             has_coords=lat is not None and lng is not None,
             result_count=len(spots),
             axes=axes,
-            indoor_available=any(row.indoor for row in merged),
+            indoor_available=(
+                any(row.indoor for row in merged) or len(candidates) >= retrieve.CANDIDATE_LIMIT
+            ),
         ),
     )
 
@@ -556,7 +558,7 @@ async def _ask_festivals(
     else:
         cards = nationwide
     shown = [card for card in cards[: retrieve.RESULT_LIMIT] if card.content_id]
-    rated = await repositories.load_candidates_by_ids(
+    rated = await repositories.find_rated_content_ids(
         session, [card.content_id or "" for card in shown]
     )
     spots = [
@@ -566,7 +568,7 @@ async def _ask_festivals(
             regionLabel=card.region_label,
             imageUrl=t1_display_url(card.image_url, card.cpyrht_div_cd),
             tag=card.dday,
-            hasCrowd=_has_crowd(rated.get(card.content_id or "")),
+            hasCrowd=card.content_id in rated,
         )
         for card in shown
     ]
