@@ -18,10 +18,14 @@ import { TravelToast } from "@/features/travel/components/TravelToast";
 import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
 import { useAskAgentMutation } from "@/features/travel/queries";
 import { useConversation, type Turn } from "@/features/travel/stores/conversation-store";
-import { agentErrorMessage, PHOTO_PICK_FAILED } from "@/features/travel/lib/agent-errors";
+import {
+  agentErrorMessage,
+  PHOTO_PICK_FAILED,
+  PHOTO_SHOOT_FAILED,
+} from "@/features/travel/lib/agent-errors";
 import { composeQuestion, anchorQuestion, MY_LOCATION } from "@/features/travel/lib/question";
 import { composerChips, NEARBY_CHIP, type Chip } from "@/features/travel/lib/chips";
-import { pickTravelPhoto } from "@/features/travel/usecases/pick-travel-photo";
+import { pickTravelPhoto, shootTravelPhoto } from "@/features/travel/usecases/pick-travel-photo";
 import type { AskInput, PhotoUpload, TravelSpot } from "@/features/travel/api";
 import { colors, spacing } from "@/constants/theme";
 
@@ -195,17 +199,24 @@ export default function TravelScreen() {
     if (text.trim().length > 0) setAnchorSpot(null);
   }, []);
 
-  const onAttach = useCallback(async () => {
-    try {
-      const picked = await pickTravelPhoto();
-      if (picked) {
-        setPhoto(picked);
-        setAnchorSpot(null);
+  const attachFrom = useCallback(
+    async (source: () => Promise<PhotoUpload | null>, failure: string) => {
+      try {
+        const picked = await source();
+        if (picked) {
+          setPhoto(picked);
+          setAnchorSpot(null);
+        }
+      } catch {
+        setToast(failure);
       }
-    } catch {
-      setToast(PHOTO_PICK_FAILED);
-    }
-  }, []);
+    },
+    [],
+  );
+
+  const onAttach = useCallback(() => attachFrom(pickTravelPhoto, PHOTO_PICK_FAILED), [attachFrom]);
+
+  const onShoot = useCallback(() => attachFrom(shootTravelPhoto, PHOTO_SHOOT_FAILED), [attachFrom]);
 
   const chips = composerChips(lastAnswered?.answer?.refinements, anchorSpot, coords !== null);
 
@@ -274,6 +285,7 @@ export default function TravelScreen() {
           onSuggest={submitDockChip}
           onNearby={onNearby}
           onAttach={() => void onAttach()}
+          onShoot={() => void onShoot()}
           onClearAttach={() => setPhoto(null)}
           onSubmit={() => submit(draft, photo)}
         />

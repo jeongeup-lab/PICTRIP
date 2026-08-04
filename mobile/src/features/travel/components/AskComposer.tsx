@@ -21,6 +21,7 @@ interface Props {
   onSuggest: (chip: Chip) => void;
   onNearby: () => void;
   onAttach: () => void;
+  onShoot: () => void;
   onClearAttach: () => void;
   onSubmit: () => void;
 }
@@ -37,6 +38,7 @@ export function AskComposer({
   onSuggest,
   onNearby,
   onAttach,
+  onShoot,
   onClearAttach,
   onSubmit,
 }: Props) {
@@ -107,6 +109,16 @@ export function AskComposer({
         />
         <View style={styles.actions}>
           <View style={styles.actionsLeft}>
+            <Pressable
+              testID="travel-shoot"
+              accessibilityLabel="사진 촬영"
+              style={styles.attachButton}
+              hitSlop={4}
+              onPress={onShoot}
+              disabled={disabled}
+            >
+              <Icon name="camera" size={17} color={colors.accent} strokeWidth={2} />
+            </Pressable>
             <Pressable
               testID="travel-attach"
               accessibilityLabel="사진 올리기"

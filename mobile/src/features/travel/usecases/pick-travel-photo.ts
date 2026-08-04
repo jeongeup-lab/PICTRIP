@@ -20,3 +20,15 @@ export async function pickTravelPhoto(): Promise<PhotoUpload | null> {
   const asset = result.canceled ? null : result.assets[0];
   return asset ? toPhotoUpload(asset) : null;
 }
+
+export async function shootTravelPhoto(): Promise<PhotoUpload | null> {
+  const permission = await ImagePicker.requestCameraPermissionsAsync();
+  if (!permission.granted) throw new Error("camera permission denied");
+  const result = await ImagePicker.launchCameraAsync({
+    mediaTypes: ["images"],
+    quality: 0.8,
+    exif: false,
+  });
+  const asset = result.canceled ? null : result.assets[0];
+  return asset ? toPhotoUpload(asset) : null;
+}
