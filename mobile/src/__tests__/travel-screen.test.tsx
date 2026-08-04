@@ -539,6 +539,9 @@ describe("TravelScreen photo-first start", () => {
     const tree = await mount();
 
     expect(tree.root.findAllByProps({ testID: "travel-start-photo" }).length).toBeGreaterThan(0);
+    expect(tree.root.findByProps({ testID: "travel-greeting" }).props.pointerEvents).toBe(
+      "box-none",
+    );
   });
 
   it("takes the start actions out of reach once the conversation begins", async () => {
@@ -546,6 +549,7 @@ describe("TravelScreen photo-first start", () => {
     const tree = await mount();
 
     const greeting = tree.root.findByProps({ testID: "travel-greeting" });
+    expect(greeting.props.pointerEvents).toBe("none");
     expect(greeting.props.importantForAccessibility).toBe("no-hide-descendants");
     expect(greeting.props.accessibilityElementsHidden).toBe(true);
   });
