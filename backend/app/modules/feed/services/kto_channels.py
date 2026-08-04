@@ -288,7 +288,7 @@ async def load_kto_channel_cached(redis: Redis, kto: KtoClient, key: str) -> lis
 
 
 _FESTIVAL_POOL_KEY = "festival:pool:v2"
-_FESTIVAL_POOL_TTL = 86_400
+_FESTIVAL_POOL_TTL = 2 * 86_400
 
 
 def _cached_end_date(row: ChannelCardRow, *, cached_on: date) -> date | None:

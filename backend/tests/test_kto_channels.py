@@ -646,3 +646,18 @@ async def test_a_festival_that_already_ended_is_dropped_from_the_stale_pool(
     assert [c.content_id for c in served] == ["long"]
     assert served[0].dday == "D-27"
     assert served[0].line.startswith("8월 10일까지")
+
+
+async def test_the_festival_cache_outlives_a_full_day_so_stale_can_cover_it(
+    redis_client_fake, monkeypatch
+) -> None:
+    from app.modules.feed.services import kto_channels
+
+    monkeypatch.setattr(kto_channels, "_today", lambda: TODAY)
+    kto = AsyncMock(spec=KtoClient)
+    kto.call = AsyncMock(return_value=FESTIVAL_POOL_ITEMS)
+    await kto_channels.load_festival_pool(redis_client_fake, kto)
+
+    ttl = await redis_client_fake.ttl(kto_channels._FESTIVAL_POOL_KEY)
+
+    assert ttl > 86_400
