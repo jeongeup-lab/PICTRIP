@@ -56,9 +56,17 @@ async def resolve_region_scope(session: AsyncSession, *, hints: list[str]) -> Re
         (token for token, resolved in sorted(mapping.items()) if resolved.narrowed), None
     )
     return RegionScope(
-        prefixes=sorted({resolved.prefix for resolved in mapping.values()}),
+        prefixes=_drop_covered({resolved.prefix for resolved in mapping.values()}),
         sido_prefixes=sorted({resolved.sido for resolved in mapping.values()}),
         narrowed_hint=narrowed,
+    )
+
+
+def _drop_covered(prefixes: set[str]) -> list[str]:
+    return sorted(
+        prefix
+        for prefix in prefixes
+        if not any(other.startswith(f"{prefix} ") for other in prefixes)
     )
 
 
