@@ -2918,3 +2918,39 @@ def test_indoor_chip_is_offered_when_some_result_is_indoor() -> None:
     )
 
     assert "실내만" in [chip.label for chip in chips]
+
+
+@pytest.mark.integration
+async def test_a_festival_with_crowd_data_keeps_the_crowd_chip(
+    db_session, client, seeded_festivals, monkeypatch
+) -> None:
+    await db_session.execute(
+        text(
+            "INSERT INTO spot_concentration (content_id, concentration_rate, base_ymd, raw_name) "
+            "VALUES ('f1', 55.00, DATE '2026-07-01', 'f1') ON CONFLICT DO NOTHING"
+        )
+    )
+    await db_session.flush()
+    monkeypatch.setattr(
+        ask_service.feed_services,
+        "load_festival_pool",
+        _festival_pool(
+            [
+                _festival_card("f1", title="봉화축제", region_label="경상북도 봉화군", dday="D-2"),
+                _festival_card("f2", title="영주축제", region_label="경상북도 영주시", dday="D-5"),
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        intent_service, "extract_intent", _fake_intent(QueryIntent(festivalOnly=True))
+    )
+    _override_with_kto(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "지금 열리는 축제"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    crowd = {spot["contentId"]: spot["hasCrowd"] for spot in res.json()["data"]["spots"]}
+    assert crowd["f1"] is True
+    assert crowd["f2"] is False
