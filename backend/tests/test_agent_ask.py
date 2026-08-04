@@ -3120,3 +3120,57 @@ def test_zero_chips_skip_near_when_the_request_carried_no_coords() -> None:
 
     assert [chip.label for chip in without] == ["계곡 조건 풀기"]
     assert "내 근처 조건 풀기" in [chip.label for chip in with_coords]
+
+
+def test_zero_chips_skip_region_when_the_hint_never_resolved() -> None:
+    intent = QueryIntent(categoryKeywords=["계곡"], regionHints=["없는지역"])
+
+    unresolved = suggest_service.derive_for_zero(intent, has_coords=False, region_applied=False)
+    resolved = suggest_service.derive_for_zero(intent, has_coords=False, region_applied=True)
+
+    assert [chip.label for chip in unresolved] == ["계곡 조건 풀기"]
+    assert "지역 넓히기" in [chip.label for chip in resolved]
+
+
+@pytest.mark.integration
+async def test_a_zero_turn_does_not_claim_a_near_condition_it_never_applied(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["존재하지않는유형"], nearMe=True)
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "근처 존재하지않는유형"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["spots"] == []
+    answer = "".join(segment["text"] for segment in data["answer"])
+    assert "내 근처" not in answer
+    assert "내 근처 조건 풀기" not in [chip["label"] for chip in data["refinements"]]
+
+
+@pytest.mark.integration
+async def test_a_zero_turn_does_not_claim_a_region_the_search_never_used(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["존재하지않는유형"], regionHints=["없는지역이름"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "없는지역이름 존재하지않는유형"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["spots"] == []
+    answer = "".join(segment["text"] for segment in data["answer"])
+    assert "없는지역이름" not in answer
+    assert "지역 넓히기" not in [chip["label"] for chip in data["refinements"]]
