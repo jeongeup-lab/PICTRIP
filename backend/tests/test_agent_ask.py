@@ -3174,3 +3174,76 @@ async def test_a_zero_turn_does_not_claim_a_region_the_search_never_used(
     answer = "".join(segment["text"] for segment in data["answer"])
     assert "없는지역이름" not in answer
     assert "지역 넓히기" not in [chip["label"] for chip in data["refinements"]]
+
+
+@pytest.mark.integration
+async def test_a_zero_photo_turn_lists_only_the_axes_the_photo_search_applies(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(
+            categoryKeywords=["박물관"],
+            indoorOnly=True,
+            crowdPreference="quiet",
+            regionHints=["제주"],
+        )
+
+    async def fake_embed(*, image_bytes, image_mime):
+        return [0.1] * 512
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    monkeypatch.setattr(photo_service, "embed_photo", fake_embed)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            files={"photo": ("a.jpg", b"x", "image/jpeg")},
+            data={"question": "제주 실내 박물관처럼"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    answer = "".join(segment["text"] for segment in res.json()["data"]["answer"])
+    assert "제주" in answer
+    assert "박물관" not in answer
+    assert "실내" not in answer
+    assert "한적" not in answer
+
+
+@pytest.mark.integration
+async def test_a_zero_photo_turn_blames_the_vector_match_not_the_distance_sort(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(regionHints=["제주"], nearMe=True)
+
+    async def fake_embed(*, image_bytes, image_mime):
+        return [0.1] * 512
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    monkeypatch.setattr(photo_service, "embed_photo", fake_embed)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            files={"photo": ("a.jpg", b"x", "image/jpeg")},
+            data={"question": "제주 근처 이런 분위기", "lat": str(LAT), "lng": str(LNG)},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    steps = res.json()["data"]["steps"]
+    photo_steps = [step for step in steps if step["tool"] == "photo_match"]
+    assert photo_steps[-1]["badge"] == "0곳"
+
+
+def test_zero_chips_do_not_offer_a_drop_that_lands_on_a_named_place_alone() -> None:
+    intent = QueryIntent(
+        categoryKeywords=["계곡"],
+        regionHints=["없는지역"],
+        namedPlaces=[ExtractedPlace(name="어떤장소", nameKo="어떤장소")],
+    )
+
+    unresolved = suggest_service.derive_for_zero(intent, has_coords=False, region_applied=False)
+
+    assert [chip.label for chip in unresolved] == []
