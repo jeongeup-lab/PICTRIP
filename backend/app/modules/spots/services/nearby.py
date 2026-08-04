@@ -134,7 +134,7 @@ def _dist_expr(lat: float, lng: float) -> ColumnElement[float]:
     )
 
 
-def _base_select(dist: ColumnElement[float], category: NearbyCategory | None):  # type: ignore[no-untyped-def]
+def _base_select(dist: ColumnElement[float], predicate: ColumnElement[bool]):  # type: ignore[no-untyped-def]
     inner = (
         select(
             Spot.content_id.label("content_id"),
@@ -160,9 +160,7 @@ def _base_select(dist: ColumnElement[float], category: NearbyCategory | None):  
             Spot.mapy.isnot(None),
         )
     )
-    if category is not None:
-        return inner.where(category_predicate(category))
-    return inner.where(all_categories_predicate())
+    return inner.where(predicate)
 
 
 def _materialize(result: object) -> list[NearbySpotRow]:
@@ -186,6 +184,14 @@ def _materialize(result: object) -> list[NearbySpotRow]:
     return rows
 
 
+def _predicate_for(category: NearbyCategory | None, travel_only: bool) -> ColumnElement[bool]:
+    if travel_only:
+        return travel_category_predicate()
+    if category is not None:
+        return category_predicate(category)
+    return all_categories_predicate()
+
+
 async def find_nearby_spots(
     session: AsyncSession,
     *,
@@ -193,11 +199,12 @@ async def find_nearby_spots(
     lng: float,
     radius: int,
     category: NearbyCategory | None,
+    travel_only: bool = False,
 ) -> list[NearbySpotRow]:
     dlat = radius / 111_320.0
     dlng = radius / (111_320.0 * max(math.cos(math.radians(lat)), 0.01))
 
-    inner = _base_select(_dist_expr(lat, lng), category).where(
+    inner = _base_select(_dist_expr(lat, lng), _predicate_for(category, travel_only)).where(
         Spot.mapy.between(lat - dlat, lat + dlat),
         Spot.mapx.between(lng - dlng, lng + dlng),
     )
@@ -220,7 +227,7 @@ async def find_nearby_spots_bbox(
     center_lat = (min_lat + max_lat) / 2
     center_lng = (min_lng + max_lng) / 2
 
-    inner = _base_select(_dist_expr(center_lat, center_lng), category).where(
+    inner = _base_select(_dist_expr(center_lat, center_lng), _predicate_for(category, False)).where(
         Spot.mapy.between(min_lat, max_lat),
         Spot.mapx.between(min_lng, max_lng),
     )

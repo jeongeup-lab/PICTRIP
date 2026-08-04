@@ -17,6 +17,7 @@ def derive(
     has_coords: bool,
     result_count: int,
     axes: frozenset[DropAxis] = ALL_AXES,
+    indoor_available: bool = True,
 ) -> list[Suggestion]:
     if intent.festivalOnly:
         return []
@@ -30,7 +31,7 @@ def derive(
             chips.append(
                 Suggestion(label="유명한 곳으로", patch=RefinePatch(crowdPreference="popular"))
             )
-    if "indoor" in axes and not intent.indoorOnly:
+    if "indoor" in axes and not intent.indoorOnly and indoor_available:
         chips.append(Suggestion(label="실내만", patch=RefinePatch(indoorOnly=True)))
     if "near" in axes and has_coords and not intent.nearMe:
         chips.append(Suggestion(label="가까운 순으로", patch=RefinePatch(nearMe=True)))

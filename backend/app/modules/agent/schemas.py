@@ -133,6 +133,7 @@ class AgentSpotCard(BaseModel):
     tag: str | None = None
     lat: float | None = None
     lng: float | None = None
+    hasCrowd: bool = False
 
 
 class AskResponse(BaseModel):

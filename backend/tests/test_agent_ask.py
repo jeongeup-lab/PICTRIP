@@ -1477,7 +1477,6 @@ async def test_refine_request_skips_the_llm_and_keeps_prior_axes(
     assert [chip["label"] for chip in data["refinements"]] == [
         "조건 하나 풀기",
         "유명한 곳으로",
-        "실내만",
     ]
     assert data["refinements"][0]["patch"]["drop"] == "crowd"
 
@@ -2903,3 +2902,19 @@ async def test_a_sigungu_whose_only_match_lacks_coords_still_widens_for_near_me(
     data = res.json()["data"]
     assert {spot["contentId"] for spot in data["spots"]} == {"v1", "v2", "v3"}
     assert any("넓힘" in step["label"] for step in data["steps"])
+
+
+def test_indoor_chip_is_withheld_when_no_result_is_indoor() -> None:
+    chips = suggest_service.derive(
+        QueryIntent(), has_coords=False, result_count=20, indoor_available=False
+    )
+
+    assert "실내만" not in [chip.label for chip in chips]
+
+
+def test_indoor_chip_is_offered_when_some_result_is_indoor() -> None:
+    chips = suggest_service.derive(
+        QueryIntent(), has_coords=False, result_count=20, indoor_available=True
+    )
+
+    assert "실내만" in [chip.label for chip in chips]
