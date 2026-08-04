@@ -269,13 +269,13 @@ export default function TravelScreen() {
         <Animated.View
           testID="travel-greeting"
           style={[styles.greeting, { opacity: greetFade }]}
-          pointerEvents="box-none"
+          pointerEvents={empty ? "box-none" : "none"}
           accessibilityElementsHidden={!empty}
           importantForAccessibility={empty ? "auto" : "no-hide-descendants"}
         >
           <Mascot floating={empty} />
           <Text style={styles.greetingText}>오늘,{"\n"}어디로 갈까요</Text>
-          <View style={styles.startActions} pointerEvents={empty ? "auto" : "none"}>
+          <View style={styles.startActions}>
             <StartActions
               onPickPhoto={() => void onAttach()}
               onAskLocation={() => void askLocation()}
