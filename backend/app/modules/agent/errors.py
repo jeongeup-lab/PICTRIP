@@ -15,6 +15,12 @@ class AgentNoResults(AppError):
     message = "조건에 맞는 곳을 찾지 못했어요. 조건을 조금 넓혀 보세요."
 
 
+class AgentFestivalUnavailable(AppError):
+    code = "AGENT_FESTIVAL_UNAVAILABLE"
+    http_status = 422
+    message = "축제 정보를 가져오지 못했어요. 잠시 후 다시 시도해 주세요."
+
+
 class AgentOutOfScope(AppError):
     code = "AGENT_OUT_OF_SCOPE"
     http_status = 422

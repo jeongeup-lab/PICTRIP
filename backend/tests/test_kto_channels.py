@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import asdict
 from datetime import date, timedelta
@@ -18,6 +19,7 @@ from app.modules.feed.services.kto_channels import (
     fetch_snap_cards,
     load_kto_channel_cached,
 )
+from app.web.errors import KtoApiUnavailable
 
 TODAY = date(2026, 7, 12)
 
@@ -510,3 +512,77 @@ async def test_festa_channel_keeps_its_ninety_day_window_and_page_size() -> None
     assert api.params[0]["eventStartDate"] == "20260413"
     assert api.params[0]["numOfRows"] == 100
     assert len(api.params) == 1
+
+
+async def test_festival_pool_serves_yesterdays_cards_when_kto_is_down(
+    redis_client_fake, monkeypatch
+) -> None:
+    from app.modules.feed.services import kto_channels
+
+    monkeypatch.setattr(kto_channels, "_today", lambda: TODAY - timedelta(days=1))
+    kto = AsyncMock(spec=KtoClient)
+    kto.call = AsyncMock(return_value=FESTIVAL_POOL_ITEMS)
+    yesterday = await kto_channels.load_festival_pool(redis_client_fake, kto)
+    assert yesterday
+
+    monkeypatch.setattr(kto_channels, "_today", lambda: TODAY)
+    kto.call = AsyncMock(side_effect=KtoApiUnavailable())
+
+    served = await kto_channels.load_festival_pool(redis_client_fake, kto)
+
+    assert [card.content_id for card in served] == [card.content_id for card in yesterday]
+
+
+async def test_festival_pool_reraises_when_kto_is_down_and_nothing_is_cached(
+    redis_client_fake, monkeypatch
+) -> None:
+    from app.modules.feed.services import kto_channels
+
+    monkeypatch.setattr(kto_channels, "_today", lambda: TODAY)
+    kto = AsyncMock(spec=KtoClient)
+    kto.call = AsyncMock(side_effect=KtoApiUnavailable())
+
+    with pytest.raises(KtoApiUnavailable):
+        await kto_channels.load_festival_pool(redis_client_fake, kto)
+
+
+async def test_festival_pool_fetch_timeout_falls_back_to_the_stale_cache(
+    redis_client_fake, monkeypatch
+) -> None:
+    from app.modules.feed.services import kto_channels
+
+    monkeypatch.setattr(kto_channels, "_today", lambda: TODAY - timedelta(days=1))
+    kto = AsyncMock(spec=KtoClient)
+    kto.call = AsyncMock(return_value=FESTIVAL_POOL_ITEMS)
+    yesterday = await kto_channels.load_festival_pool(redis_client_fake, kto)
+
+    monkeypatch.setattr(kto_channels, "_today", lambda: TODAY)
+
+    async def never(*args: object, **kwargs: object) -> list[ChannelCardRow]:
+        await asyncio.sleep(30)
+        return []
+
+    monkeypatch.setattr(kto_channels, "fetch_festival_pool_cards", never)
+
+    served = await kto_channels.load_festival_pool(redis_client_fake, kto, fetch_timeout=0.01)
+
+    assert [card.content_id for card in served] == [card.content_id for card in yesterday]
+
+
+async def test_festival_pool_fetch_timeout_surfaces_when_nothing_is_cached(
+    redis_client_fake, monkeypatch
+) -> None:
+    from app.modules.feed.services import kto_channels
+
+    monkeypatch.setattr(kto_channels, "_today", lambda: TODAY)
+
+    async def never(*args: object, **kwargs: object) -> list[ChannelCardRow]:
+        await asyncio.sleep(30)
+        return []
+
+    monkeypatch.setattr(kto_channels, "fetch_festival_pool_cards", never)
+
+    with pytest.raises(TimeoutError):
+        await kto_channels.load_festival_pool(
+            redis_client_fake, AsyncMock(spec=KtoClient), fetch_timeout=0.01
+        )

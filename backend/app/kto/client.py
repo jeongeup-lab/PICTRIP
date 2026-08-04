@@ -82,7 +82,11 @@ class KtoClient:
             resp.raise_for_status()
         except httpx.HTTPError as e:
             logger.warning(
-                "kto.call.failed", service=service.value, operation=operation, error=str(e)
+                "kto.call.failed",
+                service=service.value,
+                operation=operation,
+                error_type=type(e).__name__,
+                error=str(e),
             )
             raise KtoApiUnavailable() from e
 

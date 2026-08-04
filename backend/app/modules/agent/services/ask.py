@@ -9,7 +9,11 @@ from app.core.logging import get_logger
 from app.kto.client import KtoClient
 from app.kto.display import t1_display_url
 from app.modules.agent import repositories
-from app.modules.agent.errors import AgentNoResults, AgentOutOfScope
+from app.modules.agent.errors import (
+    AgentFestivalUnavailable,
+    AgentNoResults,
+    AgentOutOfScope,
+)
 from app.modules.agent.repositories import CandidateRow
 from app.modules.agent.schemas import (
     MAX_HINT_TOKENS,
@@ -40,6 +44,7 @@ from app.web.errors import AppError, ValidationFailed
 logger = get_logger(__name__)
 
 INDOOR_RETRY_LABEL = "실내로만 다시 조회"
+FESTIVAL_FETCH_BUDGET_SECONDS = 4.0
 ANCHOR_RADIUS_M = 3000
 ANCHOR_CATEGORIES: dict[str, NearbyCategory] = {
     "food": NearbyCategory.food,
@@ -486,7 +491,13 @@ async def _ask_festivals(
 ) -> AskResponse:
     if kto is None:
         raise AgentNoResults()
-    pool = await feed_services.load_festival_pool(redis, kto)
+    try:
+        pool = await feed_services.load_festival_pool(
+            redis, kto, fetch_timeout=FESTIVAL_FETCH_BUDGET_SECONDS
+        )
+    except (AppError, TimeoutError) as exc:
+        logger.warning("agent.festival.unavailable", error_type=type(exc).__name__)
+        raise AgentFestivalUnavailable() from exc
     openable = await _openable_ids(session, pool)
     nationwide = _keep(pool, openable)
     fallback: str | None = None
