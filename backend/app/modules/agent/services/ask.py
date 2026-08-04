@@ -202,7 +202,7 @@ async def _ask_with_photo(
         return _zero_response(
             steps,
             intent,
-            has_coords=lat is not None and lng is not None,
+            has_coords=lat is not None and lng is not None and bool(rows),
             region_hints=list(prefixes),
             keywords=list(intent.categoryKeywords),
             axes=PHOTO_AXES,
