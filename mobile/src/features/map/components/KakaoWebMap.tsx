@@ -16,8 +16,15 @@ const ERROR_MESSAGES: Record<string, string> = {
   "init-failed": "지도를 표시할 수 없어요",
 };
 
+export interface FitBounds {
+  sw: LatLng;
+  ne: LatLng;
+  pad?: { top?: number; right?: number; bottom?: number; left?: number };
+}
+
 interface Props {
   center: LatLng | null;
+  fit?: FitBounds | null;
   pins: NearbySpot[];
   selectedId?: string | null;
   userLocation: LatLng | null;
@@ -30,6 +37,7 @@ interface Props {
 
 export function KakaoWebMap({
   center,
+  fit = null,
   pins,
   selectedId = null,
   userLocation,
@@ -51,6 +59,9 @@ export function KakaoWebMap({
   useEffect(() => {
     if (ready.current && center) send({ cmd: "setCenter", lat: center.lat, lng: center.lng });
   }, [center]);
+  useEffect(() => {
+    if (ready.current && fit) send({ cmd: "fitBounds", ...fit });
+  }, [fit]);
   useEffect(() => {
     if (ready.current)
       send({
@@ -86,6 +97,7 @@ export function KakaoWebMap({
         ready.current = true;
         setLoadError(null);
         if (center) send({ cmd: "setCenter", lat: center.lat, lng: center.lng });
+        if (fit) send({ cmd: "fitBounds", ...fit });
         send({
           cmd: "setPins",
           spots: pins.map((p) => ({
