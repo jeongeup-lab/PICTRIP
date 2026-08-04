@@ -95,3 +95,18 @@ describe("anchorChips", () => {
     expect(composerChips(null, {}).map((chip) => chip.label)).not.toContain("오늘 붐벼?");
   });
 });
+
+describe("근처 볼거리 경로", () => {
+  it("앵커가 아니라 intent 로 보낸다 — 3km 반경에 갇히지 않는다", () => {
+    const chip = idleChips(true).find((c) => c.label === "근처 볼거리");
+
+    expect(chip?.kind).toBe("intent");
+    if (chip?.kind === "intent") expect(chip.intent.nearMe).toBe(true);
+  });
+
+  it("맛집·카페만 앵커다 — 여행 후보 풀에 FD 가 없어서다", () => {
+    const anchors = idleChips(true).filter((c) => c.kind === "anchor");
+
+    expect(anchors.map((c) => c.label)).toEqual(["근처 맛집", "근처 카페"]);
+  });
+});

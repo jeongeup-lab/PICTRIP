@@ -33,9 +33,15 @@ export const FESTIVAL_CHIP: Chip = {
   intent: { categoryKeywords: [], regionHints: [], festivalOnly: true },
 };
 
+export const NEARBY_ATTRACTION_CHIP: Chip = {
+  kind: "intent",
+  label: "근처 볼거리",
+  intent: { categoryKeywords: [], regionHints: [], nearMe: true },
+};
+
 const NEARBY_IDLE_CHIPS: Chip[] = [
   { kind: "anchor", label: "근처 맛집", action: "food" },
-  { kind: "anchor", label: "근처 볼거리", action: "nearby" },
+  NEARBY_ATTRACTION_CHIP,
   { kind: "anchor", label: "근처 카페", action: "cafe" },
 ];
 
