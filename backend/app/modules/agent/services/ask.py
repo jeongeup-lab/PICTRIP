@@ -192,6 +192,7 @@ async def _ask_with_photo(
         steps.append(AskStep(tool="nearby", label="현재 위치에서 가까운 순", badge=_count(ordered)))
 
     if not ordered:
+        steps[-1] = steps[-1].model_copy(update={"badge": _count(ordered)})
         return _zero_response(
             steps, intent, has_coords=lat is not None and lng is not None, axes=PHOTO_AXES
         )

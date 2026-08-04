@@ -35,7 +35,7 @@ def _category_noun(intent: QueryIntent) -> str:
 def releasable_axes(
     intent: QueryIntent, axes: frozenset[DropAxis] = ALL_AXES, *, has_coords: bool
 ) -> list[DropAxis]:
-    engaged = _engaged(intent)
+    engaged = _engaged(intent, has_coords=has_coords)
     return [
         axis
         for axis in _DROP_ORDER
@@ -93,11 +93,11 @@ def _releasable_axis(
     return next(iter(releasable_axes(intent, axes, has_coords=has_coords)), None)
 
 
-def _engaged(intent: QueryIntent) -> dict[DropAxis, bool]:
+def _engaged(intent: QueryIntent, *, has_coords: bool) -> dict[DropAxis, bool]:
     return {
         "crowd": intent.crowdPreference != "any",
         "indoor": intent.indoorOnly,
         "category": bool(intent.categoryKeywords or intent.moodHints),
-        "near": intent.nearMe,
+        "near": intent.nearMe and has_coords,
         "region": bool(intent.regionHints),
     }

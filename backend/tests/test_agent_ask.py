@@ -582,7 +582,7 @@ async def test_a_photo_that_matches_nothing_answers_with_zero_not_an_error(
     async def fake_intent(question: str) -> QueryIntent:
         return QueryIntent(regionHints=["제주"])
 
-    async def fake_embed(*, image_bytes, image_mime):  # type: ignore[no-untyped-def]
+    async def fake_embed(*, image_bytes, image_mime):
         return [0.1] * 512
 
     monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
@@ -602,6 +602,7 @@ async def test_a_photo_that_matches_nothing_answers_with_zero_not_an_error(
     assert data["spots"] == []
     assert "0곳" in "".join(segment["text"] for segment in data["answer"])
     assert [chip["label"] for chip in data["refinements"]] == ["지역 넓히기"]
+    assert data["steps"][-1]["badge"] == "0곳"
 
 
 @pytest.mark.integration
@@ -3109,3 +3110,13 @@ def test_zero_chips_stay_within_the_dock_budget() -> None:
     )
 
     assert len(suggest_service.derive_for_zero(intent, has_coords=True)) == 3
+
+
+def test_zero_chips_skip_near_when_the_request_carried_no_coords() -> None:
+    intent = QueryIntent(categoryKeywords=["계곡"], nearMe=True)
+
+    without = suggest_service.derive_for_zero(intent, has_coords=False)
+    with_coords = suggest_service.derive_for_zero(intent, has_coords=True)
+
+    assert [chip.label for chip in without] == ["계곡 조건 풀기"]
+    assert "내 근처 조건 풀기" in [chip.label for chip in with_coords]
