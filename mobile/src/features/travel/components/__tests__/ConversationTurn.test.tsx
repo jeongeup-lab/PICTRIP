@@ -63,6 +63,7 @@ function mount(t: Turn, anchorId: string | null = null, onGrow = noop) {
         turn={t}
         anchorId={anchorId}
         onSpotPress={noop}
+        onSpotAnchor={noop}
         onRetry={noop}
         onGrow={onGrow}
       />,
@@ -154,6 +155,17 @@ describe("ConversationTurn once the answer lands", () => {
     const rail = tree.root.findByType(FlatList);
     expect(rail.props.data).toHaveLength(20);
     expect(texts(tree).join("")).not.toContain("전체");
+  });
+
+  it("keeps the card tap on the detail route and puts anchoring on its own button", () => {
+    const tree = mount(turn());
+    const card = tree.root.findByType(SpotCard);
+
+    expect(card.props.onPress).toBeDefined();
+    expect(card.props.onAnchor).toBeDefined();
+    expect(
+      tree.root.findAllByProps({ testID: "travel-spot-anchor-126508" }).length,
+    ).toBeGreaterThan(0);
   });
 
   it("marks the anchored card selected and dims the rest", () => {

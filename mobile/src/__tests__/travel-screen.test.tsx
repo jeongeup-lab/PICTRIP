@@ -407,20 +407,37 @@ describe("TravelScreen anchored follow-ups", () => {
     useConversation.setState({ turns: [spotAnsweredTurn], busy: false });
   });
 
-  it("selects a card on first tap and swaps the composer rail to anchor chips", async () => {
+  it("anchors from its own button and swaps the composer rail to anchor chips", async () => {
     const tree = await mount();
     expect(pressable(tree, "travel-chip-근처 맛집")).toBeUndefined();
 
-    await press(tree, "travel-spot-126508");
+    await press(tree, "travel-spot-anchor-126508");
 
     expect(tree.root.findAllByProps({ testID: "travel-anchor-banner" }).length).toBeGreaterThan(0);
     expect(pressable(tree, "travel-chip-근처 맛집")).toBeDefined();
     expect(pressable(tree, "travel-chip-실내만")).toBeUndefined();
   });
 
+  it("never anchors from a card tap", async () => {
+    const tree = await mount();
+
+    await press(tree, "travel-spot-126508");
+
+    expect(tree.root.findAllByProps({ testID: "travel-anchor-banner" })).toHaveLength(0);
+    expect(pressable(tree, "travel-chip-근처 맛집")).toBeUndefined();
+  });
+
+  it("releases the anchor when its button is pressed again", async () => {
+    const tree = await mount();
+    await press(tree, "travel-spot-anchor-126508");
+    await press(tree, "travel-spot-anchor-126508");
+
+    expect(tree.root.findAllByProps({ testID: "travel-anchor-banner" })).toHaveLength(0);
+  });
+
   it("sends an anchor chip as contentId + action, labeled with the spot title", async () => {
     const tree = await mount();
-    await press(tree, "travel-spot-126508");
+    await press(tree, "travel-spot-anchor-126508");
     await press(tree, "travel-chip-근처 맛집");
 
     expect(askAgentMock).toHaveBeenCalledTimes(1);
@@ -434,19 +451,28 @@ describe("TravelScreen anchored follow-ups", () => {
     expect(turns[turns.length - 1].anchor).toEqual({ contentId: "126508", action: "food" });
   });
 
-  it("opens the spot detail when the selected card is tapped again", async () => {
+  it("opens the spot detail on the first card tap", async () => {
     const { router } = jest.requireMock("expo-router") as { router: { push: jest.Mock } };
     const tree = await mount();
-    await press(tree, "travel-spot-126508");
-    expect(router.push).not.toHaveBeenCalled();
 
     await press(tree, "travel-spot-126508");
+
+    expect(router.push).toHaveBeenCalledWith("/spots/126508");
+  });
+
+  it("still opens the detail while a card is anchored", async () => {
+    const { router } = jest.requireMock("expo-router") as { router: { push: jest.Mock } };
+    const tree = await mount();
+    await press(tree, "travel-spot-anchor-126508");
+
+    await press(tree, "travel-spot-126508");
+
     expect(router.push).toHaveBeenCalledWith("/spots/126508");
   });
 
   it("returns to refine chips when the anchor is cleared", async () => {
     const tree = await mount();
-    await press(tree, "travel-spot-126508");
+    await press(tree, "travel-spot-anchor-126508");
     await press(tree, "travel-anchor-clear");
 
     expect(pressable(tree, "travel-chip-근처 맛집")).toBeUndefined();
@@ -455,7 +481,7 @@ describe("TravelScreen anchored follow-ups", () => {
 
   it("drops the anchor as soon as the user types a free-text question", async () => {
     const tree = await mount();
-    await press(tree, "travel-spot-126508");
+    await press(tree, "travel-spot-anchor-126508");
     expect(pressable(tree, "travel-chip-근처 맛집")).toBeDefined();
 
     const input = tree.root.findByProps({ testID: "travel-input" });

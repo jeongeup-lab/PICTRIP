@@ -167,16 +167,13 @@ export default function TravelScreen() {
     setAnchorSpot(null);
   }, [clearTurns]);
 
-  const onSpotPress = useCallback(
-    (spot: TravelSpot) => {
-      if (anchorSpot?.contentId === spot.contentId) {
-        router.push(`/spots/${spot.contentId}`);
-        return;
-      }
-      setAnchorSpot(spot);
-    },
-    [anchorSpot],
-  );
+  const onSpotPress = useCallback((spot: TravelSpot) => {
+    router.push(`/spots/${spot.contentId}`);
+  }, []);
+
+  const onSpotAnchor = useCallback((spot: TravelSpot) => {
+    setAnchorSpot((current) => (current?.contentId === spot.contentId ? null : spot));
+  }, []);
 
   const onRetry = useCallback(
     (turn: Turn) => {
@@ -251,6 +248,7 @@ export default function TravelScreen() {
                 turn={turn}
                 anchorId={anchorSpot?.contentId ?? null}
                 onSpotPress={onSpotPress}
+                onSpotAnchor={onSpotAnchor}
                 onRetry={onRetry}
                 onGrow={scrollToEnd}
               />
