@@ -14,15 +14,11 @@ const answer: AgentAnswer = {
 beforeEach(() => useConversation.getState().clear());
 
 describe("conversation store", () => {
-  it("stays busy from the ask until playback ends, not until the response lands", () => {
+  it("releases the dock the moment the response lands", () => {
     useConversation.getState().start({ id: "t1", question: "계곡", request: "계곡", photo: null });
     expect(useConversation.getState().busy).toBe(true);
 
     useConversation.getState().resolve("t1", answer);
-    expect(useConversation.getState().busy).toBe(true);
-    expect(useConversation.getState().turns[0].status).toBe("playing");
-
-    useConversation.getState().finishPlayback("t1");
     expect(useConversation.getState().busy).toBe(false);
     expect(useConversation.getState().turns[0].status).toBe("done");
   });
@@ -79,7 +75,7 @@ describe("conversation store", () => {
     useConversation
       .getState()
       .start({ id: "t1", question: "첫 질문", request: "첫 질문", photo: null });
-    useConversation.getState().finishPlayback("t1");
+    useConversation.getState().resolve("t1", answer);
     useConversation
       .getState()
       .start({ id: "t2", question: "둘째 질문", request: "둘째 질문", photo: null });

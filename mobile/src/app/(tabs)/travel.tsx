@@ -46,7 +46,6 @@ export default function TravelScreen() {
   const retryTurn = useConversation((s) => s.retry);
   const resolveTurn = useConversation((s) => s.resolve);
   const failTurn = useConversation((s) => s.fail);
-  const finishPlayback = useConversation((s) => s.finishPlayback);
   const clearTurns = useConversation((s) => s.clear);
 
   const { coords } = useNearbyCoords();
@@ -252,7 +251,6 @@ export default function TravelScreen() {
                 turn={turn}
                 anchorId={anchorSpot?.contentId ?? null}
                 onSpotPress={onSpotPress}
-                onPlaybackEnd={finishPlayback}
                 onRetry={onRetry}
                 onGrow={scrollToEnd}
               />

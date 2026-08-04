@@ -7,7 +7,7 @@ import type {
   RefinePatch,
 } from "@/features/travel/api";
 
-export type TurnStatus = "pending" | "playing" | "done" | "failed";
+export type TurnStatus = "pending" | "done" | "failed";
 
 export interface Turn {
   id: string;
@@ -37,7 +37,6 @@ interface ConversationState {
   retry: (id: string) => void;
   resolve: (id: string, answer: AgentAnswer) => void;
   fail: (id: string, errorMessage: string) => void;
-  finishPlayback: (id: string) => void;
   clear: () => void;
 }
 
@@ -73,10 +72,8 @@ export const useConversation = create<ConversationState>((set) => ({
       turns: patch(s.turns, id, { status: "pending", errorMessage: null }),
     })),
   resolve: (id, answer) =>
-    set((s) => ({ turns: patch(s.turns, id, { status: "playing", answer }) })),
+    set((s) => ({ busy: false, turns: patch(s.turns, id, { status: "done", answer }) })),
   fail: (id, errorMessage) =>
     set((s) => ({ busy: false, turns: patch(s.turns, id, { status: "failed", errorMessage }) })),
-  finishPlayback: (id) =>
-    set((s) => ({ busy: false, turns: patch(s.turns, id, { status: "done" }) })),
   clear: () => set({ turns: [], busy: false }),
 }));
