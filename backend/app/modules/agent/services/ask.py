@@ -159,7 +159,12 @@ async def _ask_with_photo(
 
     scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
     prefixes = scope.prefixes or pre_ota_region_prefixes
-    rows = await photo_service.match_vector(session, vector, region_prefixes=prefixes)
+    try:
+        rows = await photo_service.match_vector(session, vector, region_prefixes=prefixes)
+    except AgentNoResults:
+        if not scope.widenable:
+            raise
+        rows = []
     steps.append(
         AskStep(
             tool="photo_match",
@@ -168,7 +173,7 @@ async def _ask_with_photo(
         )
     )
     widened: retrieve.RegionScope | None = None
-    if not rows and scope.widenable:
+    if not rows:
         prefixes = scope.sido_prefixes
         rows = await photo_service.match_vector(session, vector, region_prefixes=prefixes)
         widened = scope
