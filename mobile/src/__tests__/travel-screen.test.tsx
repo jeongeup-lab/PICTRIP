@@ -402,6 +402,59 @@ describe("TravelScreen chip source", () => {
   });
 });
 
+describe("TravelScreen zero-result turn", () => {
+  const zeroTurn: Turn = {
+    ...answeredTurn,
+    id: "seed-zero",
+    question: "제주 실내 박물관",
+    request: "제주 실내 박물관",
+    answer: {
+      ...ANSWER,
+      answer: [
+        { text: "제주 + 실내 조건으로는 ", emphasis: false },
+        { text: "0곳", emphasis: true },
+        { text: "이에요. 조건 하나를 풀면 찾을 수 있어요.", emphasis: false },
+      ],
+      spots: [],
+      totalCount: 0,
+      refinements: [
+        { label: "실내 조건 풀기", patch: { drop: "indoor" } },
+        { label: "지역 넓히기", patch: { drop: "region" } },
+      ],
+    },
+  };
+
+  it("renders the zero answer as a normal turn, not an error", async () => {
+    useConversation.setState({ turns: [zeroTurn], busy: false });
+    const tree = await mount();
+
+    expect(tree.root.findAllByProps({ testID: "turn-seed-zero" }).length).toBeGreaterThan(0);
+    expect(pressable(tree, "turn-retry-seed-zero")).toBeUndefined();
+  });
+
+  it("surfaces the drop chips so the turn is not a dead end", async () => {
+    useConversation.setState({ turns: [zeroTurn], busy: false });
+    const tree = await mount();
+
+    expect(pressable(tree, "travel-chip-실내 조건 풀기")).toBeDefined();
+    expect(pressable(tree, "travel-chip-지역 넓히기")).toBeDefined();
+  });
+
+  it("sends the drop patch with the intent the zero turn handed back", async () => {
+    useConversation.setState({ turns: [zeroTurn], busy: false });
+    const tree = await mount();
+
+    await act(async () => {
+      pressable(tree, "travel-chip-실내 조건 풀기")!.props.onPress();
+    });
+
+    expect(askAgentMock).toHaveBeenCalledTimes(1);
+    const input = askAgentMock.mock.calls[0][0];
+    expect(input.intent).toEqual(INTENT);
+    expect(input.patch).toEqual({ drop: "indoor" });
+  });
+});
+
 describe("TravelScreen anchored follow-ups", () => {
   const spot = {
     contentId: "126508",
