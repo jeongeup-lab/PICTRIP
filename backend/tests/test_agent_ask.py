@@ -3503,3 +3503,26 @@ async def test_a_photo_that_matched_nothing_does_not_blame_the_near_filter(
     labels = [chip["label"] for chip in data["refinements"]]
     assert "내 근처 조건 풀기" not in labels
     assert "내 근처" not in "".join(segment["text"] for segment in data["answer"])
+
+
+@pytest.mark.integration
+async def test_a_title_search_that_found_nothing_does_not_blame_the_near_filter(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["존재하지않는유형"], nearMe=True)
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={"question": "근처 존재하지않는유형", "lat": LAT, "lng": LNG},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    data = res.json()["data"]
+    assert data["spots"] == []
+    assert "내 근처 조건 풀기" not in [chip["label"] for chip in data["refinements"]]
+    assert "내 근처" not in "".join(segment["text"] for segment in data["answer"])
