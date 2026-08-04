@@ -519,6 +519,80 @@ describe("TravelScreen anchored follow-ups", () => {
   });
 });
 
+describe("TravelScreen map", () => {
+  const pinned = [
+    {
+      contentId: "126508",
+      title: "무릉계곡",
+      regionLabel: "제주 제주시",
+      imageUrl: null,
+      tag: null,
+      lat: 33.5,
+      lng: 126.5,
+    },
+    {
+      contentId: "126509",
+      title: "천지연",
+      regionLabel: "제주 서귀포시",
+      imageUrl: null,
+      tag: null,
+      lat: 33.25,
+      lng: 126.56,
+    },
+  ];
+  const mapTurn: Turn = {
+    ...answeredTurn,
+    id: "seed-map",
+    question: "제주에서 한적한 곳",
+    answer: { ...ANSWER, spots: pinned },
+  };
+
+  const openMap = async (tree: Awaited<ReturnType<typeof mount>>) => {
+    await act(async () => {
+      tree.root.findByProps({ testID: "travel-turn-map" }).props.onPress();
+    });
+  };
+
+  it("keeps the map sheet closed until the turn map is tapped", async () => {
+    useConversation.setState({ turns: [mapTurn], busy: false });
+    const tree = await mount();
+
+    expect(tree.root.findAllByProps({ testID: "travel-map-sheet" })).toHaveLength(0);
+  });
+
+  it("opens the sheet with a card per pinned result", async () => {
+    useConversation.setState({ turns: [mapTurn], busy: false });
+    const tree = await mount();
+
+    await openMap(tree);
+
+    expect(tree.root.findAllByProps({ testID: "travel-map-sheet" }).length).toBeGreaterThan(0);
+    expect(tree.root.findAllByProps({ testID: "travel-map-card-126508" }).length).toBeGreaterThan(
+      0,
+    );
+    expect(tree.root.findAllByProps({ testID: "travel-map-card-126509" }).length).toBeGreaterThan(
+      0,
+    );
+  });
+
+  it("closes the sheet from its own button", async () => {
+    useConversation.setState({ turns: [mapTurn], busy: false });
+    const tree = await mount();
+    await openMap(tree);
+
+    await press(tree, "travel-map-close");
+
+    expect(tree.root.findAllByProps({ testID: "travel-map-sheet" })).toHaveLength(0);
+  });
+
+  it("offers no map when the answer carries no coordinates", async () => {
+    useConversation.setState({ turns: [answeredTurn], busy: false });
+    const tree = await mount();
+
+    expect(tree.root.findAllByProps({ testID: "travel-turn-map" })).toHaveLength(0);
+  });
+});
+
 describe("TravelScreen retry", () => {
   it("resends intent and patch when a failed refine turn is retried", async () => {
     useConversation.setState({ turns: [answeredTurn, failedRefineTurn], busy: false });
