@@ -1766,6 +1766,34 @@ async def test_a_narrowed_scope_reports_the_sido_it_can_widen_to() -> None:
     assert scope.widenable is True
 
 
+async def test_a_sido_prefix_cannot_swallow_the_sigungu_it_contains() -> None:
+    session = _RegionSession(
+        {
+            "경상북도": [_RegionRow("경상북도", None, 1)],
+            "경주시": [_RegionRow("경상북도", "경주시", 2)],
+        }
+    )
+
+    scope = await retrieve.resolve_region_scope(session, hints=["경상북도 경주시"])
+
+    assert scope.prefixes == ["경상북도 경주시"]
+    assert scope.sido_prefixes == ["경상북도"]
+    assert scope.widenable is True
+
+
+async def test_two_unrelated_regions_both_survive() -> None:
+    session = _RegionSession(
+        {
+            "부산": [_RegionRow("부산광역시", None, 1)],
+            "제주": [_RegionRow("제주특별자치도", None, 1)],
+        }
+    )
+
+    scope = await retrieve.resolve_region_scope(session, hints=["부산", "제주"])
+
+    assert scope.prefixes == ["부산광역시", "제주특별자치도"]
+
+
 async def test_a_sido_scope_is_not_widenable() -> None:
     session = _RegionSession({"제주": [_RegionRow("제주특별자치도", None, 1)]})
 
