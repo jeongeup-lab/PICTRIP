@@ -93,7 +93,7 @@ class Settings(BaseSettings):
         return self
 
     KTO_SERVICE_KEY: str = ""
-    KTO_BASE_URL_KOR: str = "http://apis.data.go.kr/B551011/KorService2"
+    KTO_BASE_URL_KOR: str = "https://apis.data.go.kr/B551011/KorService2"
     KTO_BASE_URL_TARRLTE: str = "https://apis.data.go.kr/B551011/TarRlteTarService1"
     KTO_BASE_URL_CNCTR: str = "https://apis.data.go.kr/B551011/TatsCnctrRateService"
     KTO_BASE_URL_PET: str = "https://apis.data.go.kr/B551011/KorPetTourService2"
