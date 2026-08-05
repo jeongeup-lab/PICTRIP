@@ -11,6 +11,7 @@ from app.core.redis import get_redis
 from app.kto.client import get_kto
 from app.main import app
 from app.modules.agent.repositories import CandidateRow
+from app.modules.agent.schemas import QueryIntent
 from app.modules.agent.services import ask as ask_service
 from app.modules.spots.services import NearbyCategory, NearbySpotRow
 
@@ -393,3 +394,57 @@ async def test_a_coords_anchor_measures_from_my_location(db_session, client, anc
     data = res.json()["data"]
     assert data["spots"]
     assert data["tagBasis"] == "내 위치에서 직선거리"
+
+
+@pytest.mark.integration
+async def test_a_question_about_a_previous_spot_pivots_to_the_anchor_search(
+    db_session, client, anchor_seeded, monkeypatch
+) -> None:
+    from app.modules.agent.services import intent as intent_service
+
+    async def fake_intent(question, *, prior=None, prior_spots=None):  # type: ignore[no-untyped-def]
+        return QueryIntent(categoryKeywords=["카페"], originPlace="앵커스팟")
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={
+                "question": "거기 근처 카페는?",
+                "context": {"spots": [{"contentId": "a1", "title": "앵커스팟"}]},
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert "카페" in "".join(segment["text"] for segment in data["answer"])
+    assert data["tagBasis"].endswith("에서 직선거리")
+
+
+@pytest.mark.integration
+async def test_an_origin_the_context_never_carried_is_ignored(
+    db_session, client, anchor_seeded, monkeypatch
+) -> None:
+    from app.modules.agent.services import intent as intent_service
+
+    async def fake_intent(question, *, prior=None, prior_spots=None):  # type: ignore[no-untyped-def]
+        return QueryIntent(categoryKeywords=["카페"], originPlace="없는이름")
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={
+                "question": "거기 근처 카페는?",
+                "context": {"spots": [{"contentId": "a1", "title": "앵커스팟"}]},
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    basis = (res.json().get("data") or {}).get("tagBasis") or ""
+    assert not basis.endswith("에서 직선거리")

@@ -18,6 +18,7 @@ MAX_MOOD_HINTS = len(get_args(Mood))
 MAX_TEXT_CHARS = 80
 MAX_HINT_TOKENS = 4
 MAX_CONTEXT_SPOTS = 8
+MAX_TITLE_CHARS = 255
 
 IntentText = Annotated[str, StringConstraints(max_length=MAX_TEXT_CHARS)]
 
@@ -68,6 +69,7 @@ class QueryIntent(BaseModel):
     crowdPreference: CrowdPreference = "any"
     moodHints: list[Mood] = Field(default_factory=list, max_length=MAX_MOOD_HINTS)
     festivalOnly: bool = False
+    originPlace: Annotated[str, StringConstraints(max_length=MAX_TITLE_CHARS)] | None = None
     indoorOnly: bool = False
     nearMe: bool = False
     outOfScope: bool = False
@@ -103,7 +105,7 @@ class AskAnchor(BaseModel):
 
 class AskContextSpot(BaseModel):
     contentId: Annotated[str, StringConstraints(min_length=1, max_length=32)]
-    title: IntentText
+    title: Annotated[str, StringConstraints(min_length=1, max_length=MAX_TITLE_CHARS)]
 
 
 class AskContext(BaseModel):

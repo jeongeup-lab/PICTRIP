@@ -50,6 +50,7 @@ const turn = (over: Partial<Turn> = {}): Turn => ({
   intent: null,
   patch: null,
   anchor: null,
+  context: null,
   ...over,
 });
 

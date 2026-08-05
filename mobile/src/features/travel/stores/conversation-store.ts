@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type {
   AgentAnswer,
   AskAnchor,
+  AskContext,
   PhotoUpload,
   QueryIntent,
   RefinePatch,
@@ -17,6 +18,7 @@ export interface Turn {
   intent: QueryIntent | null;
   patch: RefinePatch | null;
   anchor: AskAnchor | null;
+  context: AskContext | null;
   status: TurnStatus;
   answer: AgentAnswer | null;
   errorMessage: string | null;
@@ -34,6 +36,7 @@ interface ConversationState {
     intent?: QueryIntent | null;
     patch?: RefinePatch | null;
     anchor?: AskAnchor | null;
+    context?: AskContext | null;
   }) => void;
   retry: (id: string) => void;
   resolve: (id: string, answer: AgentAnswer) => void;
@@ -49,7 +52,16 @@ export const useConversation = create<ConversationState>((set) => ({
   turns: [],
   busy: false,
   activeId: null,
-  start: ({ id, question, request, photo, intent = null, patch = null, anchor = null }) =>
+  start: ({
+    id,
+    question,
+    request,
+    photo,
+    intent = null,
+    patch = null,
+    anchor = null,
+    context = null,
+  }) =>
     set((s) => ({
       busy: true,
       activeId: id,
@@ -63,6 +75,7 @@ export const useConversation = create<ConversationState>((set) => ({
           intent,
           patch,
           anchor,
+          context,
           status: "pending",
           answer: null,
           errorMessage: null,

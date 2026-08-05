@@ -60,6 +60,7 @@ const answeredTurn: Turn = {
   intent: null,
   patch: null,
   anchor: null,
+  context: null,
 };
 
 const NEWER_INTENT: QueryIntent = {
@@ -86,6 +87,7 @@ const newerAnsweredTurn: Turn = {
   intent: null,
   patch: null,
   anchor: null,
+  context: null,
 };
 
 const legacyAnsweredTurn: Turn = {
@@ -99,6 +101,7 @@ const legacyAnsweredTurn: Turn = {
   intent: null,
   patch: null,
   anchor: null,
+  context: null,
 };
 
 const relabeledTurn: Turn = {
@@ -122,6 +125,7 @@ const failedRefineTurn: Turn = {
   intent: INTENT,
   patch: { indoorOnly: true },
   anchor: null,
+  context: null,
 };
 
 let mounted: renderer.ReactTestRenderer | null = null;
@@ -678,6 +682,39 @@ describe("TravelScreen follow-up context", () => {
     const sent = askAgentMock.mock.calls[0][0];
     expect(sent.question).toBe("거기 근처 카페는?");
     expect(sent.context.intent).toEqual(INTENT);
+  });
+
+  it("keeps the context on the turn so a retry resends it", async () => {
+    useConversation.setState({ turns: [answeredTurn], busy: false });
+    const tree = await mount();
+
+    const input = tree.root.findByProps({ testID: "travel-input" });
+    await act(async () => input.props.onChangeText("거기 근처 카페는?"));
+    await press(tree, "travel-send");
+
+    const turns = useConversation.getState().turns;
+    expect(turns[turns.length - 1].context?.intent).toEqual(INTENT);
+  });
+
+  it("resends the context when a failed follow-up is retried", async () => {
+    const failed: Turn = {
+      ...answeredTurn,
+      id: "seed-failed",
+      question: "거기 근처 카페는?",
+      request: "거기 근처 카페는?",
+      status: "failed",
+      answer: null,
+      errorMessage: "실패",
+      context: { intent: INTENT, spots: [{ contentId: "a", title: "무릉계곡" }] },
+    };
+    useConversation.setState({ turns: [failed], busy: false, activeId: null });
+    const tree = await mount();
+
+    await press(tree, "turn-retry-seed-failed");
+
+    expect(askAgentMock.mock.calls[0][0].context?.spots).toEqual([
+      { contentId: "a", title: "무릉계곡" },
+    ]);
   });
 
   it("sends no context on the very first question", async () => {

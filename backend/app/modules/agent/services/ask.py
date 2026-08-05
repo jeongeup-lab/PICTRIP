@@ -18,6 +18,7 @@ from app.modules.agent.repositories import CandidateRow, VectorMatchRow
 from app.modules.agent.schemas import (
     MAX_HINT_TOKENS,
     AgentSpotCard,
+    AnchorAction,
     AnswerSegment,
     AskAnchor,
     AskContext,
@@ -58,6 +59,14 @@ ANCHOR_CATEGORIES: dict[str, NearbyCategory] = {
     "nearby": NearbyCategory.attraction,
 }
 ANCHOR_NOUNS: dict[str, str] = {"food": "맛집", "cafe": "카페", "nearby": "볼거리"}
+ORIGIN_ACTION_WORDS: tuple[tuple[str, AnchorAction], ...] = (
+    ("카페", "cafe"),
+    ("커피", "cafe"),
+    ("맛집", "food"),
+    ("음식", "food"),
+    ("식당", "food"),
+    ("먹을", "food"),
+)
 PHOTO_AXES: frozenset[DropAxis] = frozenset({"near", "region"})
 TITLE_AXES: frozenset[DropAxis] = frozenset({"category", "near", "region"})
 MIN_HINT_TOKEN_CHARS = 2
@@ -419,6 +428,10 @@ async def _ask_with_question(
         )
     if intent.outOfScope:
         raise AgentOutOfScope()
+
+    pivot = _origin_anchor(intent, context)
+    if pivot is not None:
+        return await _ask_with_anchor(session, pivot, lat=lat, lng=lng)
 
     if intent.festivalOnly:
         return await _ask_festivals(
@@ -959,3 +972,21 @@ def _prior(context: AskContext | None) -> tuple[QueryIntent | None, list[str]]:
     if context is None:
         return None, []
     return context.intent, [spot.title for spot in context.spots]
+
+
+def _origin_anchor(intent: QueryIntent, context: AskContext | None) -> AskAnchor | None:
+    if intent.originPlace is None or context is None:
+        return None
+    wanted = intent.originPlace.strip()
+    match = next((spot for spot in context.spots if spot.title.strip() == wanted), None)
+    if match is None:
+        return None
+    return AskAnchor(contentId=match.contentId, action=_origin_action(intent))
+
+
+def _origin_action(intent: QueryIntent) -> AnchorAction:
+    haystack = " ".join(intent.categoryKeywords)
+    return next(
+        (action for word, action in ORIGIN_ACTION_WORDS if word in haystack),
+        "nearby",
+    )
