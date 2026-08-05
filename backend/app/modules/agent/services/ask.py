@@ -278,7 +278,13 @@ def _photo_card(
 
 
 async def _ask_with_anchor(
-    session: AsyncSession, anchor: AskAnchor, *, lat: float | None, lng: float | None
+    session: AsyncSession,
+    anchor: AskAnchor,
+    *,
+    lat: float | None,
+    lng: float | None,
+    prior_steps: list[AskStep] | None = None,
+    carried_intent: QueryIntent | None = None,
 ) -> AskResponse:
     row: CandidateRow | None = None
     if anchor.contentId is not None:
@@ -315,7 +321,10 @@ async def _ask_with_anchor(
         session,
         [_anchor_card(near, has_crowd=_has_crowd(rated.get(near.content_id))) for near in kept],
     )
-    steps = [AskStep(tool="nearby", label=f"{origin} 주변 {noun} 조회", badge=f"{len(spots)}곳")]
+    steps = [*(prior_steps or [])]
+    steps.append(
+        AskStep(tool="nearby", label=f"{origin} 주변 {noun} 조회", badge=f"{len(spots)}곳")
+    )
     answer = [
         AnswerSegment(text=f"{origin} 주변 {noun} "),
         AnswerSegment(text=f"{len(spots)}곳", emphasis=True),
@@ -332,7 +341,7 @@ async def _ask_with_anchor(
         answer=answer,
         spots=spots,
         totalCount=len(spots),
-        intent=QueryIntent(),
+        intent=carried_intent or QueryIntent(),
         tagBasis=f"{origin}에서 직선거리",
         refinements=[],
     )
@@ -431,7 +440,14 @@ async def _ask_with_question(
 
     pivot = _origin_anchor(intent, context)
     if pivot is not None:
-        return await _ask_with_anchor(session, pivot, lat=lat, lng=lng)
+        return await _ask_with_anchor(
+            session,
+            pivot,
+            lat=lat,
+            lng=lng,
+            prior_steps=steps,
+            carried_intent=intent,
+        )
 
     if intent.festivalOnly:
         return await _ask_festivals(
