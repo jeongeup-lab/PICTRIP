@@ -1,4 +1,4 @@
-from app.modules.agent.services.blurb import MAX_BLURB_CHARS, excerpt
+from app.modules.agent.services.blurb import excerpt
 
 
 def test_an_empty_overview_yields_nothing() -> None:
@@ -17,15 +17,10 @@ def test_only_the_first_sentence_survives() -> None:
     assert excerpt(overview) == "우도 동쪽의 백사장이다."
 
 
-def test_a_long_first_sentence_is_cut_with_an_ellipsis() -> None:
+def test_a_long_first_sentence_is_handed_over_whole_for_the_card_to_clamp() -> None:
     overview = "가" * 200
 
-    result = excerpt(overview)
-
-    assert result is not None
-    assert result.endswith("…")
-    assert len(result) == MAX_BLURB_CHARS + 1
-    assert overview.startswith(result[:-1])
+    assert excerpt(overview) == overview
 
 
 def test_the_kept_text_is_a_verbatim_prefix_never_a_rewrite() -> None:
@@ -34,7 +29,16 @@ def test_the_kept_text_is_a_verbatim_prefix_never_a_rewrite() -> None:
     result = excerpt(overview)
 
     assert result is not None
-    assert overview.startswith(result.rstrip("…"))
+    assert overview.startswith(result)
+
+
+def test_the_blurb_adds_no_character_the_overview_did_not_have() -> None:
+    overview = "우도 동쪽의 백사장이다. 여름에는 개장한다."
+
+    result = excerpt(overview)
+
+    assert result is not None
+    assert set(result) <= set(overview)
 
 
 def test_markup_means_no_blurb_rather_than_an_altered_one() -> None:
