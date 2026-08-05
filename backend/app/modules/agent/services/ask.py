@@ -575,7 +575,7 @@ async def _ask_with_question(
     spots = await _with_blurbs(
         session, [_card(row, intent=intent, lat=lat, lng=lng, near=near) for row in top]
     )
-    tag_basis = _tag_basis(top, near=near)
+    tag_basis = _tag_basis(top, spots, near=near)
     logger.info(
         "agent.ask.done",
         candidates=len(candidates),
@@ -919,7 +919,7 @@ def _crowd_basis(rows: list[CandidateRow]) -> str | None:
     return f"혼잡도 {day.month}/{day.day} 예측 기준"
 
 
-def _tag_basis(rows: list[CandidateRow], *, near: bool) -> str | None:
-    if near:
+def _tag_basis(rows: list[CandidateRow], spots: list[AgentSpotCard], *, near: bool) -> str | None:
+    if near and spots and all((spot.tag or "").endswith("km") for spot in spots):
         return "현재 위치에서 직선거리"
     return _crowd_basis(rows)

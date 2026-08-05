@@ -165,10 +165,14 @@ async def _release_refresh_lock(redis: Redis, content_id: str, token: str | None
         logger.warning("spot.detail.refresh_unlock_failed", content_id=content_id, error=str(exc))
 
 
-def _is_fresh(cached_at: datetime, modified_time: datetime | None) -> bool:
+def is_detail_fresh(cached_at: datetime, modified_time: datetime | None) -> bool:
     return (datetime.now(UTC) - cached_at) < _DETAIL_TTL and (
         modified_time is None or cached_at >= modified_time
     )
+
+
+def _is_fresh(cached_at: datetime, modified_time: datetime | None) -> bool:
+    return is_detail_fresh(cached_at, modified_time)
 
 
 async def _load_detail_images(session: AsyncSession, content_id: str) -> list[SpotImageRow]:
