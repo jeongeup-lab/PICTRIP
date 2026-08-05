@@ -20,6 +20,7 @@ from app.modules.agent.schemas import (
     AgentSpotCard,
     AnswerSegment,
     AskAnchor,
+    AskContext,
     AskResponse,
     AskStep,
     DropAxis,
@@ -47,6 +48,7 @@ logger = get_logger(__name__)
 
 INDOOR_RETRY_LABEL = "실내로만 다시 조회"
 PHOTO_BASIS = "사진과의 CLIP 벡터 유사도"
+CONTEXT_INTENT_LABEL = "앞 대화까지 보고 조건 추출"
 NEAR_PROBE_LABEL = "근처 조건 없이 다시 재보기"
 FESTIVAL_FETCH_BUDGET_SECONDS = 4.0
 ANCHOR_RADIUS_M = 3000
@@ -90,6 +92,7 @@ async def ask(
     intent: QueryIntent | None = None,
     patch: RefinePatch | None = None,
     anchor: AskAnchor | None = None,
+    context: AskContext | None = None,
     pre_ota_region_prefixes: list[str] | None = None,
     legacy_client: bool = False,
 ) -> AskResponse:
@@ -122,6 +125,7 @@ async def ask(
         lng=lng,
         intent=intent,
         patch=patch,
+        context=context,
         pre_ota_region_prefixes=pre_ota_region_prefixes or [],
         legacy_client=legacy_client,
     )
@@ -392,6 +396,7 @@ async def _ask_with_question(
     lng: float | None,
     intent: QueryIntent | None,
     patch: RefinePatch | None,
+    context: AskContext | None,
     pre_ota_region_prefixes: list[str],
     legacy_client: bool,
 ) -> AskResponse:
@@ -399,8 +404,19 @@ async def _ask_with_question(
     if intent is not None:
         intent = refine_service.apply_patch(intent, patch)
     else:
-        intent = await intent_service.extract_intent(question)
-        steps.append(AskStep(tool="intent", label="질문에서 지역·조건 추출", badge="Gemini"))
+        prior, prior_spots = _prior(context)
+        intent = (
+            await intent_service.extract_intent(question, prior=prior, prior_spots=prior_spots)
+            if prior is not None or prior_spots
+            else await intent_service.extract_intent(question)
+        )
+        steps.append(
+            AskStep(
+                tool="intent",
+                label=CONTEXT_INTENT_LABEL if prior or prior_spots else "질문에서 지역·조건 추출",
+                badge="Gemini",
+            )
+        )
     if intent.outOfScope:
         raise AgentOutOfScope()
 
@@ -937,3 +953,9 @@ def _tag_basis(rows: list[CandidateRow], spots: list[AgentSpotCard], *, near: bo
     if any(_is_crowd_tag(spot.tag) for spot in spots):
         return _crowd_basis(rows)
     return None
+
+
+def _prior(context: AskContext | None) -> tuple[QueryIntent | None, list[str]]:
+    if context is None:
+        return None, []
+    return context.intent, [spot.title for spot in context.spots]

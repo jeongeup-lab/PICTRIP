@@ -41,6 +41,15 @@ _SYSTEM_PROMPT = """\
 - outOfScope: 대한민국 밖의 여행지를 묻는 질문이면 true (예: "파리 가볼 만한 곳"). 국내 질문이면 false.
 - outOfScope가 true면 나머지 배열은 모두 비운다.
 - 추측으로 조건을 만들어내지 않는다. 질문에 없으면 비운다.
+
+이어지는 질문이면 직전 대화가 함께 주어진다. 그때는 아래를 지킨다.
+- 직전 조건은 사용자가 바꾸지 않는 한 그대로 유지한다. "더 한적한 곳" 은 직전
+  지역·유형을 그대로 두고 crowdPreference 만 quiet 로 바꾸는 것이다.
+- 사용자가 새 지역이나 새 유형을 말하면 그 축만 갈아끼운다. 나머지는 유지한다.
+- "거기" · "그 중에" · "셋 중에" 처럼 앞 결과를 가리키면 직전 결과 목록에서
+  해당 장소를 찾아 namedPlaces 에 그 이름을 넣는다. 어느 것인지 특정할 수
+  없으면 넣지 않는다.
+- 화제가 완전히 바뀌면 직전 조건을 버린다.
 """
 
 _RESPONSE_SCHEMA: dict[str, Any] = {
@@ -89,10 +98,26 @@ _RESPONSE_SCHEMA: dict[str, Any] = {
 _MOOD_CODES: tuple[Mood, ...] = get_args(Mood)
 
 
-async def extract_intent(question: str) -> QueryIntent:
+def _context_block(prior: QueryIntent | None, spots: list[str]) -> str:
+    lines: list[str] = []
+    if prior is not None:
+        lines.append(f"직전 조건: {prior.model_dump_json(exclude_defaults=True)}")
+    if spots:
+        lines.append("직전 결과: " + " · ".join(spots))
+    return "\n".join(lines)
+
+
+async def extract_intent(
+    question: str,
+    *,
+    prior: QueryIntent | None = None,
+    prior_spots: list[str] | None = None,
+) -> QueryIntent:
+    block = _context_block(prior, prior_spots or [])
+    asked = question.strip()[:MAX_QUESTION_CHARS]
     data = await llm.get_client().generate_json(
         system=_SYSTEM_PROMPT,
-        user_text=question.strip()[:MAX_QUESTION_CHARS],
+        user_text=f"{block}\n\n이번 질문: {asked}" if block else asked,
         response_schema=_RESPONSE_SCHEMA,
     )
     if not isinstance(data, dict):
@@ -110,6 +135,7 @@ async def extract_intent(question: str) -> QueryIntent:
     )
     logger.info(
         "agent.intent.done",
+        with_context=bool(block),
         categories=len(intent.categoryKeywords),
         regions=len(intent.regionHints),
         named=len(intent.namedPlaces),

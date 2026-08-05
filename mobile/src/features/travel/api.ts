@@ -87,12 +87,23 @@ export interface Coords {
   lng: number;
 }
 
+export interface AskContextSpot {
+  contentId: string;
+  title: string;
+}
+
+export interface AskContext {
+  intent?: QueryIntent | null;
+  spots: AskContextSpot[];
+}
+
 export interface AskInput {
   question?: string;
   photo?: PhotoUpload | null;
   intent?: QueryIntent | null;
   patch?: RefinePatch | null;
   anchor?: AskAnchor | null;
+  context?: AskContext | null;
   coords?: Coords | null;
 }
 
@@ -105,6 +116,7 @@ function askForm(input: AskInput, photo: PhotoUpload): FormData {
   if (input.intent) form.append("intent", JSON.stringify(input.intent));
   if (input.patch) form.append("patch", JSON.stringify(input.patch));
   if (input.anchor) form.append("anchor", JSON.stringify(input.anchor));
+  if (input.context) form.append("context", JSON.stringify(input.context));
   if (input.coords) {
     form.append("lat", String(input.coords.lat));
     form.append("lng", String(input.coords.lng));
@@ -118,6 +130,7 @@ function askBody(input: AskInput): Record<string, unknown> {
   if (input.intent) body.intent = input.intent;
   if (input.patch) body.patch = input.patch;
   if (input.anchor) body.anchor = input.anchor;
+  if (input.context) body.context = input.context;
   if (input.coords) {
     body.lat = input.coords.lat;
     body.lng = input.coords.lng;

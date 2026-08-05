@@ -17,6 +17,7 @@ MAX_NAMED_PLACES = 10
 MAX_MOOD_HINTS = len(get_args(Mood))
 MAX_TEXT_CHARS = 80
 MAX_HINT_TOKENS = 4
+MAX_CONTEXT_SPOTS = 8
 
 IntentText = Annotated[str, StringConstraints(max_length=MAX_TEXT_CHARS)]
 
@@ -100,6 +101,16 @@ class AskAnchor(BaseModel):
     action: AnchorAction
 
 
+class AskContextSpot(BaseModel):
+    contentId: Annotated[str, StringConstraints(min_length=1, max_length=32)]
+    title: IntentText
+
+
+class AskContext(BaseModel):
+    intent: QueryIntent | None = None
+    spots: list[AskContextSpot] = Field(default_factory=list, max_length=MAX_CONTEXT_SPOTS)
+
+
 class AskRequest(BaseModel):
     question: str | None = None
     lat: float | None = Field(None, ge=-90.0, le=90.0)
@@ -107,6 +118,7 @@ class AskRequest(BaseModel):
     intent: QueryIntent | None = None
     patch: RefinePatch | None = None
     anchor: AskAnchor | None = None
+    context: AskContext | None = None
     region: str | None = None
 
     @property
