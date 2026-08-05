@@ -46,6 +46,7 @@ from app.web.errors import AppError, ValidationFailed
 logger = get_logger(__name__)
 
 INDOOR_RETRY_LABEL = "실내로만 다시 조회"
+PHOTO_BASIS = "사진과의 CLIP 벡터 유사도"
 NEAR_PROBE_LABEL = "근처 조건 없이 다시 재보기"
 FESTIVAL_FETCH_BUDGET_SECONDS = 4.0
 ANCHOR_RADIUS_M = 3000
@@ -231,7 +232,7 @@ async def _ask_with_photo(
         spots=spots,
         totalCount=len(spots),
         intent=intent,
-        tagBasis="현재 위치에서 직선거리" if near else "사진과의 CLIP 벡터 유사도",
+        tagBasis=_tag_basis(top, spots, near=near),
         refinements=suggest_service.derive(
             intent,
             has_coords=lat is not None and lng is not None,
@@ -931,6 +932,8 @@ def _is_crowd_tag(tag: str | None) -> bool:
 def _tag_basis(rows: list[CandidateRow], spots: list[AgentSpotCard], *, near: bool) -> str | None:
     if near and spots and all((spot.tag or "").endswith("km") for spot in spots):
         return "현재 위치에서 직선거리"
+    if any((spot.tag or "").startswith("유사도 ") for spot in spots):
+        return PHOTO_BASIS
     if any(_is_crowd_tag(spot.tag) for spot in spots):
         return _crowd_basis(rows)
     return None
