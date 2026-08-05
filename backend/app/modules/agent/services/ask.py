@@ -44,6 +44,7 @@ from app.web.errors import AppError, ValidationFailed
 logger = get_logger(__name__)
 
 INDOOR_RETRY_LABEL = "실내로만 다시 조회"
+NEAR_PROBE_LABEL = "근처 조건 없이 다시 재보기"
 FESTIVAL_FETCH_BUDGET_SECONDS = 4.0
 ANCHOR_RADIUS_M = 3000
 ANCHOR_CATEGORIES: dict[str, NearbyCategory] = {
@@ -484,8 +485,9 @@ async def _ask_with_question(
             )
     else:
         indoor_only = intent.indoorOnly
+        searched_codes = codes
 
-        candidates = await search(codes, prefixes)
+        candidates = await search(searched_codes, prefixes)
         steps.append(
             AskStep(
                 tool="category_search",
@@ -506,7 +508,8 @@ async def _ask_with_question(
                 )
             )
         if not candidates and indoor_only and codes:
-            candidates = await search([], prefixes)
+            searched_codes = []
+            candidates = await search(searched_codes, prefixes)
             intent = intent.model_copy(update={"categoryKeywords": []})
             steps.append(
                 AskStep(
@@ -525,7 +528,7 @@ async def _ask_with_question(
         pool = retrieve.filter_by_crowd(pool, intent.crowdPreference)
         steps.append(AskStep(tool="concentration", label="혼잡도로 추림", badge=_count(pool)))
 
-    if near and lat is not None and lng is not None:
+    if near and lat is not None and lng is not None and pool:
         pool = retrieve.sort_by_distance(pool, lat=lat, lng=lng)
         steps.append(AskStep(tool="nearby", label="현재 위치에서 가까운 순", badge=_count(pool)))
 
@@ -534,7 +537,16 @@ async def _ask_with_question(
         if near and title_only:
             near_is_a_cause = bool(candidates)
         elif near and not place_only and not candidates:
-            near_is_a_cause = bool(await search(codes, prefixes, with_near=False))
+            without_near = await search(searched_codes, prefixes, with_near=False)
+            near_is_a_cause = bool(without_near)
+            if near_is_a_cause:
+                steps.append(
+                    AskStep(
+                        tool="nearby",
+                        label=NEAR_PROBE_LABEL,
+                        badge=_count(without_near),
+                    )
+                )
         return _zero_response(
             steps,
             intent,
