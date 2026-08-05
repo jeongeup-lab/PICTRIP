@@ -289,6 +289,7 @@ SELECT spots.content_id,
        spots.first_image_url AS image_url,
        spots.cpyrht_div_cd,
        sc.concentration_rate,
+       sc.base_ymd,
        COALESCE(spots.lcls_systm2 = ANY(CAST(:indoor_l2 AS text[]))
                 OR spots.lcls_systm3 = ANY(CAST(:indoor_l3 AS text[])), FALSE) AS indoor,
        ARRAY(
@@ -340,6 +341,7 @@ async def load_candidates_by_ids(
             concentration_rate=(
                 float(row.concentration_rate) if row.concentration_rate is not None else None
             ),
+            base_ymd=row.base_ymd,
             indoor=bool(row.indoor),
             mood_ids=tuple(int(mood_id) for mood_id in row.mood_ids),
         )
