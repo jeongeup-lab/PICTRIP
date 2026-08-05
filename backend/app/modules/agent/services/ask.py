@@ -518,7 +518,7 @@ async def _ask_with_question(
                     badge=_count(candidates),
                 )
             )
-        if mood_ids:
+        if mood_ids and candidates:
             steps.append(
                 AskStep(tool="mood_search", label="분위기로 추림", badge=_count(candidates))
             )

@@ -3656,3 +3656,23 @@ async def test_the_near_probe_reuses_the_codes_the_indoor_fallback_settled_on(
         app.dependency_overrides.clear()
 
     assert seen[-1] == seen[-2] == []
+
+
+@pytest.mark.integration
+async def test_a_mood_step_that_filtered_nothing_is_not_a_second_culprit(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(moodHints=["lake"], crowdPreference="quiet")
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "한적한 호수"})
+    finally:
+        app.dependency_overrides.clear()
+
+    data = res.json()["data"]
+    assert data["spots"] == []
+    assert [step["tool"] for step in data["steps"] if step["tool"] == "mood_search"] == []
+    assert len([step for step in data["steps"] if step["badge"] == "0곳"]) == 1
