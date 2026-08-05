@@ -68,7 +68,7 @@
 
 | 요소 | 값 |
 |---|---|
-| 크기 | 대화 결과 레일 158×206, radius 16 |
+| 크기 | 대화 결과 레일 168×224 (이미지 150 + 소개 40 + 앵커 34), radius 16 |
 | 이미지 | `cover`, 배경 `skeleton`, 로드 실패 시 opacity 0 |
 | scrim | `linear-gradient(180deg, rgba(20,18,22,.16) 0%, transparent 32%, transparent 46%, rgba(16,14,18,.80) 100%)` + inset 1px `line` |
 | 상태 태그 | 좌상단 9/9, h24, radius 999, 배경 `control` + blur 8, 11/800 `onImage` |
