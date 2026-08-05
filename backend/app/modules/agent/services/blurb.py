@@ -6,22 +6,21 @@ MAX_BLURB_CHARS = 62
 ELLIPSIS = "…"
 
 _MARKUP = re.compile(r"[<>]")
-_WHITESPACE = re.compile(r"\s+")
 _SENTENCE_END = re.compile(r"[.!?。](?=\s|$)")
 
 
 def excerpt(overview: str | None) -> str | None:
     if not overview or _MARKUP.search(overview):
         return None
-    cleaned = _WHITESPACE.sub(" ", overview).strip()
-    if not cleaned:
+    original = overview.strip()
+    if not original:
         return None
-    sentence = _first_sentence(cleaned)
+    sentence = _first_sentence(original)
     if len(sentence) <= MAX_BLURB_CHARS:
         return sentence
-    return cleaned[:MAX_BLURB_CHARS].rstrip() + ELLIPSIS
+    return original[:MAX_BLURB_CHARS] + ELLIPSIS
 
 
-def _first_sentence(cleaned: str) -> str:
-    match = _SENTENCE_END.search(cleaned)
-    return cleaned[: match.end()] if match else cleaned
+def _first_sentence(original: str) -> str:
+    match = _SENTENCE_END.search(original)
+    return original[: match.end()] if match else original
