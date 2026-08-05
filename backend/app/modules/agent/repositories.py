@@ -345,19 +345,3 @@ async def load_candidates_by_ids(
         )
         for row in result
     }
-
-
-_OVERVIEW_SQL = """
-SELECT content_id, overview
-FROM spot_details
-WHERE content_id = ANY(CAST(:ids AS text[]))
-  AND overview IS NOT NULL
-  AND overview <> ''
-"""
-
-
-async def load_overviews(session: AsyncSession, content_ids: list[str]) -> dict[str, str]:
-    if not content_ids:
-        return {}
-    rows = await session.execute(text(_OVERVIEW_SQL), {"ids": content_ids})
-    return {row.content_id: row.overview for row in rows}

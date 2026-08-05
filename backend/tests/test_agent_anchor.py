@@ -358,3 +358,38 @@ async def test_asking_my_own_coords_whether_they_are_busy_is_rejected(
 
     assert res.status_code == 422
     assert res.json()["error"]["code"] == "VALIDATION_FAILED"
+
+
+@pytest.mark.integration
+async def test_an_anchor_answer_says_what_its_distances_are_measured_from(
+    db_session, client, anchor_seeded
+) -> None:
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask", json={"anchor": {"contentId": "a1", "action": "food"}}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["spots"]
+    assert data["tagBasis"].endswith("에서 직선거리")
+
+
+@pytest.mark.integration
+async def test_a_coords_anchor_measures_from_my_location(db_session, client, anchor_seeded) -> None:
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={"anchor": {"action": "cafe"}, "lat": ANCHOR_LAT, "lng": ANCHOR_LNG},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["spots"]
+    assert data["tagBasis"] == "내 위치에서 직선거리"
