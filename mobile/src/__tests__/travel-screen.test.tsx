@@ -666,6 +666,31 @@ describe("TravelScreen photo answer", () => {
   });
 });
 
+describe("TravelScreen follow-up context", () => {
+  it("carries the previous answer with a typed follow-up", async () => {
+    useConversation.setState({ turns: [answeredTurn], busy: false });
+    const tree = await mount();
+
+    const input = tree.root.findByProps({ testID: "travel-input" });
+    await act(async () => input.props.onChangeText("거기 근처 카페는?"));
+    await press(tree, "travel-send");
+
+    const sent = askAgentMock.mock.calls[0][0];
+    expect(sent.question).toBe("거기 근처 카페는?");
+    expect(sent.context.intent).toEqual(INTENT);
+  });
+
+  it("sends no context on the very first question", async () => {
+    const tree = await mount();
+
+    const input = tree.root.findByProps({ testID: "travel-input" });
+    await act(async () => input.props.onChangeText("제주 계곡"));
+    await press(tree, "travel-send");
+
+    expect(askAgentMock.mock.calls[0][0].context).toBeNull();
+  });
+});
+
 describe("TravelScreen map", () => {
   const pinned = [
     {

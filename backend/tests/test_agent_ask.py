@@ -3919,3 +3919,101 @@ def test_a_similarity_only_batch_names_the_photo_comparison_not_the_crowd() -> N
     cards = [AgentSpotCard(contentId="a", title="t", regionLabel="r", tag="유사도 84%")]
 
     assert ask_service._tag_basis(rows, cards, near=False) == ask_service.PHOTO_BASIS
+
+
+@pytest.mark.integration
+async def test_a_follow_up_hands_the_previous_turn_to_the_extractor(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    seen: dict[str, object] = {}
+
+    async def fake_intent(question, *, prior=None, prior_spots=None):  # type: ignore[no-untyped-def]
+        seen["prior"] = prior
+        seen["spots"] = prior_spots
+        return QueryIntent(categoryKeywords=["계곡"], regionHints=["제주"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        await client.post(
+            "/v1/agent/ask",
+            json={
+                "question": "거기 근처 카페는?",
+                "context": {
+                    "intent": {"categoryKeywords": ["해수욕장"], "regionHints": ["제주"]},
+                    "spots": [{"contentId": "v1", "title": "하고수동해수욕장"}],
+                },
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    prior = seen["prior"]
+    assert prior is not None and prior.categoryKeywords == ["해수욕장"]
+    assert seen["spots"] == ["하고수동해수욕장"]
+
+
+@pytest.mark.integration
+async def test_a_first_question_reaches_the_extractor_without_context(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "계곡"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    labels = [step["label"] for step in res.json()["data"]["steps"]]
+    assert ask_service.CONTEXT_INTENT_LABEL not in labels
+
+
+@pytest.mark.integration
+async def test_a_context_carrying_turn_says_so_in_the_funnel(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question, *, prior=None, prior_spots=None):  # type: ignore[no-untyped-def]
+        return QueryIntent(categoryKeywords=["계곡"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={
+                "question": "더 한적한 곳",
+                "context": {"spots": [{"contentId": "v1", "title": "무릉계곡"}]},
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    labels = [step["label"] for step in res.json()["data"]["steps"]]
+    assert ask_service.CONTEXT_INTENT_LABEL in labels
+
+
+@pytest.mark.integration
+async def test_a_prepared_intent_still_skips_the_extractor_even_with_context(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def boom(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise AssertionError("extractor must not run when intent is prepared")
+
+    monkeypatch.setattr(intent_service, "extract_intent", boom)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={
+                "intent": {"categoryKeywords": ["계곡"], "regionHints": []},
+                "context": {"spots": [{"contentId": "v1", "title": "무릉계곡"}]},
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200

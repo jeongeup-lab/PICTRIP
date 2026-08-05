@@ -27,6 +27,7 @@ import {
 } from "@/features/travel/lib/agent-errors";
 import { composeQuestion, anchorQuestion, MY_LOCATION } from "@/features/travel/lib/question";
 import { composerChips, NEARBY_CHIP, type Chip } from "@/features/travel/lib/chips";
+import { contextFrom } from "@/features/travel/lib/conversation-context";
 import { pickTravelPhoto, shootTravelPhoto } from "@/features/travel/usecases/pick-travel-photo";
 import { placed, type PlacedSpot } from "@/features/travel/lib/spot-geo";
 import type { AskInput, PhotoUpload, TravelSpot } from "@/features/travel/api";
@@ -100,9 +101,9 @@ export default function TravelScreen() {
       setPhoto(null);
       setAnchorSpot(null);
       scrollToEnd();
-      run(id, { question: request, photo: attached });
+      run(id, { question: request, photo: attached, context: contextFrom(lastAnswered?.answer) });
     },
-    [busy, startTurn, scrollToEnd, run],
+    [busy, startTurn, scrollToEnd, run, lastAnswered],
   );
 
   const refineFrom = useCallback(
