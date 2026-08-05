@@ -3782,3 +3782,54 @@ async def test_loading_candidates_by_id_carries_the_crowd_base_day(db_session, s
     rows = await repositories.load_candidates_by_ids(db_session, ["v1"])
 
     assert rows["v1"].base_ymd is not None
+
+
+def test_a_mixed_crowd_batch_does_not_claim_a_single_day() -> None:
+    from dataclasses import replace
+    from datetime import date
+
+    rows = [
+        replace(_row("a", rate=10.0), base_ymd=date(2026, 8, 3)),
+        replace(_row("b", rate=20.0), base_ymd=date(2026, 7, 20)),
+    ]
+
+    assert ask_service._crowd_basis(rows) == "혼잡도 예측 기준"
+
+
+def test_one_shared_day_is_named_outright() -> None:
+    from dataclasses import replace
+    from datetime import date
+
+    rows = [
+        replace(_row("a", rate=10.0), base_ymd=date(2026, 8, 3)),
+        replace(_row("b", rate=20.0), base_ymd=date(2026, 8, 3)),
+    ]
+
+    assert ask_service._crowd_basis(rows) == "혼잡도 8/3 예측 기준"
+
+
+@pytest.mark.integration
+async def test_a_stale_overview_never_reaches_the_card(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    await db_session.execute(
+        text(
+            "INSERT INTO spot_details (content_id, content_type_id, overview, cached_at) "
+            "VALUES ('v1', 12, '오래된 소개다.', now() - interval '10 days')"
+        )
+    )
+    await db_session.execute(text("UPDATE spots SET modified_time = now() WHERE content_id = 'v1'"))
+    await db_session.flush()
+
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "계곡"})
+    finally:
+        app.dependency_overrides.clear()
+
+    spots = {spot["contentId"]: spot for spot in res.json()["data"]["spots"]}
+    assert spots["v1"]["blurb"] is None

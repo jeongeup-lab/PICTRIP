@@ -71,6 +71,23 @@ async def load_overview_map(
     return {row.content_id: row.overview for row in result}
 
 
+async def load_fresh_overview_map(
+    session: AsyncSession,
+    content_ids: Sequence[str],
+) -> dict[str, str | None]:
+    if not content_ids:
+        return {}
+    result = await session.execute(
+        select(SpotDetail.content_id, SpotDetail.overview)
+        .join(Spot, Spot.content_id == SpotDetail.content_id)
+        .where(
+            SpotDetail.content_id.in_(content_ids),
+            (Spot.modified_time.is_(None)) | (Spot.modified_time <= SpotDetail.cached_at),
+        )
+    )
+    return {row.content_id: row.overview for row in result}
+
+
 async def load_spot_cards_by_ids(
     session: AsyncSession,
     content_ids: list[str],

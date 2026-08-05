@@ -39,7 +39,7 @@ from app.modules.spots.services import (
     NearbySpotRow,
     find_nearby_spots,
     load_active_spot_cards_by_ids,
-    load_overview_map,
+    load_fresh_overview_map,
 )
 from app.web.errors import AppError, ValidationFailed
 
@@ -900,7 +900,7 @@ def _zero_response(
 
 
 async def _with_blurbs(session: AsyncSession, spots: list[AgentSpotCard]) -> list[AgentSpotCard]:
-    overviews = await load_overview_map(session, [spot.contentId for spot in spots])
+    overviews = await load_fresh_overview_map(session, [spot.contentId for spot in spots])
     if not overviews:
         return spots
     return [
@@ -910,11 +910,13 @@ async def _with_blurbs(session: AsyncSession, spots: list[AgentSpotCard]) -> lis
 
 
 def _crowd_basis(rows: list[CandidateRow]) -> str | None:
-    days = [row.base_ymd for row in rows if row.base_ymd is not None]
+    days = {row.base_ymd for row in rows if row.base_ymd is not None}
     if not days:
         return None
-    latest = max(days)
-    return f"혼잡도 {latest.month}/{latest.day} 예측 기준"
+    if len(days) > 1:
+        return "혼잡도 예측 기준"
+    day = days.pop()
+    return f"혼잡도 {day.month}/{day.day} 예측 기준"
 
 
 def _tag_basis(rows: list[CandidateRow], *, near: bool) -> str | None:
