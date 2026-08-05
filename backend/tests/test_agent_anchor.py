@@ -423,7 +423,7 @@ async def test_a_question_about_a_previous_spot_pivots_to_the_anchor_search(
     assert "카페" in "".join(segment["text"] for segment in data["answer"])
     assert data["tagBasis"].endswith("에서 직선거리")
     assert data["intent"]["categoryKeywords"] == ["카페"]
-    assert [step["tool"] for step in data["steps"]][0] == "intent"
+    assert data["steps"][0]["tool"] == "intent"
 
 
 @pytest.mark.integration
