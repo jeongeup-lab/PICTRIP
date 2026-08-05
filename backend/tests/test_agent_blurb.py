@@ -36,5 +36,12 @@ def test_the_kept_text_is_a_verbatim_prefix_never_a_rewrite() -> None:
     assert overview.startswith(result.rstrip("…"))
 
 
-def test_markup_and_stray_whitespace_are_flattened() -> None:
-    assert excerpt("<b>우도</b>\n\n  동쪽의   백사장이다.") == "우도 동쪽의 백사장이다."
+def test_markup_means_no_blurb_rather_than_an_altered_one() -> None:
+    assert excerpt("<b>우도</b> 동쪽의 백사장이다.") is None
+    assert excerpt("우도 동쪽의 백사장이다.<br>여름에는 개장한다.") is None
+
+
+def test_line_breaks_collapse_without_changing_a_single_word() -> None:
+    result = excerpt("우도\n\n  동쪽의   백사장이다.")
+
+    assert result == "우도 동쪽의 백사장이다."
