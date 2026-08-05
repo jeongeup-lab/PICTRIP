@@ -3775,3 +3775,10 @@ async def test_a_basis_line_never_names_the_agency_that_lives_on_the_legal_page(
         app.dependency_overrides.clear()
 
     assert "한국관광공사" not in (res.json()["data"]["tagBasis"] or "")
+
+
+@pytest.mark.integration
+async def test_loading_candidates_by_id_carries_the_crowd_base_day(db_session, seeded) -> None:
+    rows = await repositories.load_candidates_by_ids(db_session, ["v1"])
+
+    assert rows["v1"].base_ymd is not None
