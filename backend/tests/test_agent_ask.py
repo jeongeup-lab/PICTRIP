@@ -3883,3 +3883,39 @@ async def test_an_expired_overview_cache_never_reaches_the_card(
 
     spots = {spot["contentId"]: spot for spot in res.json()["data"]["spots"]}
     assert spots["v1"]["blurb"] is None
+
+
+def test_no_crowd_tag_means_no_crowd_basis() -> None:
+    from dataclasses import replace
+    from datetime import date
+
+    rows = [replace(_row("a", rate=10.0), base_ymd=date(2026, 8, 3))]
+    cards = [
+        AgentSpotCard(contentId="a", title="t", regionLabel="r", tag=None),
+        AgentSpotCard(contentId="b", title="t", regionLabel="r", tag="3.2km"),
+    ]
+
+    assert ask_service._tag_basis(rows, cards, near=True) is None
+
+
+def test_a_visible_crowd_tag_brings_the_crowd_basis_back() -> None:
+    from dataclasses import replace
+    from datetime import date
+
+    rows = [replace(_row("a", rate=10.0), base_ymd=date(2026, 8, 3))]
+    cards = [
+        AgentSpotCard(contentId="a", title="t", regionLabel="r", tag="하위 8%"),
+        AgentSpotCard(contentId="b", title="t", regionLabel="r", tag="3.2km"),
+    ]
+
+    assert ask_service._tag_basis(rows, cards, near=True) == "혼잡도 8/3 예측 기준"
+
+
+def test_a_similarity_only_batch_claims_no_crowd_basis() -> None:
+    from dataclasses import replace
+    from datetime import date
+
+    rows = [replace(_row("a", rate=10.0), base_ymd=date(2026, 8, 3))]
+    cards = [AgentSpotCard(contentId="a", title="t", regionLabel="r", tag="유사도 84%")]
+
+    assert ask_service._tag_basis(rows, cards, near=False) is None
