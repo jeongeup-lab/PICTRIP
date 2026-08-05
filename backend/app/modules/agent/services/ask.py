@@ -39,6 +39,7 @@ from app.modules.spots.services import (
     NearbySpotRow,
     find_nearby_spots,
     load_active_spot_cards_by_ids,
+    load_overview_map,
 )
 from app.web.errors import AppError, ValidationFailed
 
@@ -318,6 +319,7 @@ async def _ask_with_anchor(
         spots=spots,
         totalCount=len(spots),
         intent=QueryIntent(),
+        tagBasis=f"{origin}에서 직선거리",
         refinements=[],
     )
 
@@ -898,7 +900,7 @@ def _zero_response(
 
 
 async def _with_blurbs(session: AsyncSession, spots: list[AgentSpotCard]) -> list[AgentSpotCard]:
-    overviews = await repositories.load_overviews(session, [spot.contentId for spot in spots])
+    overviews = await load_overview_map(session, [spot.contentId for spot in spots])
     if not overviews:
         return spots
     return [
