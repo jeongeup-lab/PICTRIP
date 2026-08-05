@@ -919,7 +919,18 @@ def _crowd_basis(rows: list[CandidateRow]) -> str | None:
     return f"혼잡도 {day.month}/{day.day} 예측 기준"
 
 
+CROWD_LABELS = frozenset({"한산", "보통", "붐빔"})
+
+
+def _is_crowd_tag(tag: str | None) -> bool:
+    if tag is None:
+        return False
+    return tag in CROWD_LABELS or tag.startswith("하위 ")
+
+
 def _tag_basis(rows: list[CandidateRow], spots: list[AgentSpotCard], *, near: bool) -> str | None:
     if near and spots and all((spot.tag or "").endswith("km") for spot in spots):
         return "현재 위치에서 직선거리"
-    return _crowd_basis(rows)
+    if any(_is_crowd_tag(spot.tag) for spot in spots):
+        return _crowd_basis(rows)
+    return None
