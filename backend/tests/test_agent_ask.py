@@ -28,6 +28,7 @@ from app.modules.agent.schemas import (
     MAX_NAMED_PLACES,
     MAX_REGION_HINTS,
     MAX_TEXT_CHARS,
+    AgentSpotCard,
     ExtractedPlace,
     Mood,
     QueryIntent,
@@ -3819,6 +3820,55 @@ async def test_a_stale_overview_never_reaches_the_card(
         )
     )
     await db_session.execute(text("UPDATE spots SET modified_time = now() WHERE content_id = 'v1'"))
+    await db_session.flush()
+
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "계곡"})
+    finally:
+        app.dependency_overrides.clear()
+
+    spots = {spot["contentId"]: spot for spot in res.json()["data"]["spots"]}
+    assert spots["v1"]["blurb"] is None
+
+
+def test_a_mixed_tag_batch_does_not_claim_every_card_is_a_distance() -> None:
+    from dataclasses import replace
+    from datetime import date
+
+    rows = [replace(_row("a", rate=10.0), base_ymd=date(2026, 8, 3))]
+    mixed = [
+        AgentSpotCard(contentId="a", title="t", regionLabel="r", tag="3.2km"),
+        AgentSpotCard(contentId="b", title="t", regionLabel="r", tag="한산"),
+    ]
+
+    assert ask_service._tag_basis(rows, mixed, near=True) == "혼잡도 8/3 예측 기준"
+
+
+def test_an_all_distance_batch_says_so() -> None:
+    cards = [
+        AgentSpotCard(contentId="a", title="t", regionLabel="r", tag="3.2km"),
+        AgentSpotCard(contentId="b", title="t", regionLabel="r", tag="0.4km"),
+    ]
+
+    assert ask_service._tag_basis([], cards, near=True) == "현재 위치에서 직선거리"
+
+
+@pytest.mark.integration
+async def test_an_expired_overview_cache_never_reaches_the_card(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    await db_session.execute(
+        text(
+            "INSERT INTO spot_details (content_id, content_type_id, overview, cached_at) "
+            "VALUES ('v1', 12, '아주 오래된 소개다.', now() - interval '200 days')"
+        )
+    )
+    await db_session.execute(text("UPDATE spots SET modified_time = NULL WHERE content_id = 'v1'"))
     await db_session.flush()
 
     async def fake_intent(question: str) -> QueryIntent:
