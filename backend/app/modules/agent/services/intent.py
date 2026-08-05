@@ -12,6 +12,7 @@ from app.modules.agent.schemas import (
     MAX_NAMED_PLACES,
     MAX_REGION_HINTS,
     MAX_TEXT_CHARS,
+    MAX_TITLE_CHARS,
     CrowdPreference,
     ExtractedPlace,
     Mood,
@@ -46,9 +47,10 @@ _SYSTEM_PROMPT = """\
 - 직전 조건은 사용자가 바꾸지 않는 한 그대로 유지한다. "더 한적한 곳" 은 직전
   지역·유형을 그대로 두고 crowdPreference 만 quiet 로 바꾸는 것이다.
 - 사용자가 새 지역이나 새 유형을 말하면 그 축만 갈아끼운다. 나머지는 유지한다.
-- "거기" · "그 중에" · "셋 중에" 처럼 앞 결과를 가리키면 직전 결과 목록에서
-  해당 장소를 찾아 namedPlaces 에 그 이름을 넣는다. 어느 것인지 특정할 수
-  없으면 넣지 않는다.
+- "거기 근처" · "그 옆에" 처럼 앞 결과 한 곳을 중심으로 주변을 물으면
+  originPlace 에 직전 결과 목록의 그 이름을 그대로 넣는다. 어느 것인지 특정할
+  수 없으면 비운다. originPlace 를 채웠으면 그 장소는 namedPlaces 에 넣지
+  않는다 — 찾는 대상이 아니라 기준점이기 때문이다.
 - 화제가 완전히 바뀌면 직전 조건을 버린다.
 """
 
@@ -79,6 +81,7 @@ _RESPONSE_SCHEMA: dict[str, Any] = {
             "items": {"type": "STRING", "enum": list(get_args(Mood))},
         },
         "festivalOnly": {"type": "BOOLEAN"},
+        "originPlace": {"type": "STRING", "nullable": True},
         "indoorOnly": {"type": "BOOLEAN"},
         "nearMe": {"type": "BOOLEAN"},
         "outOfScope": {"type": "BOOLEAN"},
@@ -129,6 +132,7 @@ async def extract_intent(
         crowdPreference=_crowd(data.get("crowdPreference")),
         moodHints=_moods(data.get("moodHints")),
         festivalOnly=bool(data.get("festivalOnly")),
+        originPlace=_text(data.get("originPlace")),
         indoorOnly=bool(data.get("indoorOnly")),
         nearMe=bool(data.get("nearMe")),
         outOfScope=bool(data.get("outOfScope")),
@@ -197,3 +201,10 @@ def _crowd(raw: Any) -> CrowdPreference:
     if raw == "popular":
         return "popular"
     return "any"
+
+
+def _text(raw: Any) -> str | None:
+    if not isinstance(raw, str):
+        return None
+    cleaned = raw.strip()[:MAX_TITLE_CHARS]
+    return cleaned or None

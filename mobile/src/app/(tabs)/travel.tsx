@@ -96,12 +96,13 @@ export default function TravelScreen() {
       const request = text.trim();
       nextId.current += 1;
       const id = `turn-${nextId.current}`;
-      startTurn({ id, question, request, photo: attached });
+      const context = contextFrom(lastAnswered?.answer);
+      startTurn({ id, question, request, photo: attached, context });
       setDraft("");
       setPhoto(null);
       setAnchorSpot(null);
       scrollToEnd();
-      run(id, { question: request, photo: attached, context: contextFrom(lastAnswered?.answer) });
+      run(id, { question: request, photo: attached, context });
     },
     [busy, startTurn, scrollToEnd, run, lastAnswered],
   );
@@ -195,6 +196,7 @@ export default function TravelScreen() {
         intent: turn.intent,
         patch: turn.patch,
         anchor: turn.anchor,
+        context: turn.context,
       });
     },
     [busy, retryTurn, run],
