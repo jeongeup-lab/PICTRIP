@@ -119,6 +119,12 @@ export function ConversationTurn({
             )}
           />
 
+          {answer.tagBasis ? (
+            <Text style={styles.basis} testID={`turn-basis-${turn.id}`}>
+              {answer.tagBasis}
+            </Text>
+          ) : null}
+
           <View style={styles.foot}>
             <Text style={styles.hint}>
               카드를 탭하면 상세, 여기 기준으로를 누르면 이 장소로 이어서 물어봐요
@@ -175,5 +181,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: 16,
   },
+  basis: { marginTop: 9, fontSize: 11, letterSpacing: -0.1, color: colors.ter },
   hint: { flex: 1, fontSize: 11.5, color: colors.ter },
 });

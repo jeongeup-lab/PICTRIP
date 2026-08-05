@@ -3676,3 +3676,102 @@ async def test_a_mood_step_that_filtered_nothing_is_not_a_second_culprit(
     assert data["spots"] == []
     assert [step["tool"] for step in data["steps"] if step["tool"] == "mood_search"] == []
     assert len([step for step in data["steps"] if step["badge"] == "0곳"]) == 1
+
+
+@pytest.mark.integration
+async def test_a_card_carries_the_first_sentence_of_its_overview(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    await db_session.execute(
+        text(
+            "INSERT INTO spot_details (content_id, content_type_id, overview) "
+            "VALUES ('v1', 12, '우도 동쪽의 백사장이다. 여름에는 해수욕장으로 개장한다.')"
+        )
+    )
+    await db_session.flush()
+
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "계곡"})
+    finally:
+        app.dependency_overrides.clear()
+
+    spots = {spot["contentId"]: spot for spot in res.json()["data"]["spots"]}
+    assert spots["v1"]["blurb"] == "우도 동쪽의 백사장이다."
+
+
+@pytest.mark.integration
+async def test_a_card_without_an_overview_carries_no_blurb(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "계곡"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert all(spot["blurb"] is None for spot in res.json()["data"]["spots"])
+
+
+@pytest.mark.integration
+async def test_a_crowd_tagged_answer_says_which_day_the_prediction_is_from(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"], crowdPreference="quiet")
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "한적한 계곡"})
+    finally:
+        app.dependency_overrides.clear()
+
+    basis = res.json()["data"]["tagBasis"]
+    assert basis is not None
+    assert basis.startswith("혼잡도 ")
+    assert basis.endswith("예측 기준")
+
+
+@pytest.mark.integration
+async def test_a_distance_tagged_answer_says_the_distance_is_straight_line(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"], nearMe=True)
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask", json={"question": "근처 계곡", "lat": LAT, "lng": LNG}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.json()["data"]["tagBasis"] == "현재 위치에서 직선거리"
+
+
+@pytest.mark.integration
+async def test_a_basis_line_never_names_the_agency_that_lives_on_the_legal_page(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"], crowdPreference="quiet")
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "한적한 계곡"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert "한국관광공사" not in (res.json()["data"]["tagBasis"] or "")

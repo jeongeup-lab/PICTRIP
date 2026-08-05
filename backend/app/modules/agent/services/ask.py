@@ -26,6 +26,7 @@ from app.modules.agent.schemas import (
     QueryIntent,
     RefinePatch,
 )
+from app.modules.agent.services import blurb as blurb_service
 from app.modules.agent.services import intent as intent_service
 from app.modules.agent.services import photo as photo_service
 from app.modules.agent.services import refine as refine_service
@@ -211,7 +212,10 @@ async def _ask_with_photo(
         )
 
     top = ordered[: retrieve.RESULT_LIMIT]
-    spots = [_photo_card(row, similarity=similarity, lat=lat, lng=lng, near=near) for row in top]
+    spots = await _with_blurbs(
+        session,
+        [_photo_card(row, similarity=similarity, lat=lat, lng=lng, near=near) for row in top],
+    )
     answer = [
         AnswerSegment(text="사진과 닮은 곳으로 "),
         AnswerSegment(text=f"{len(top)}곳", emphasis=True),
@@ -226,6 +230,7 @@ async def _ask_with_photo(
         spots=spots,
         totalCount=len(spots),
         intent=intent,
+        tagBasis="현재 위치에서 직선거리" if near else "사진과의 CLIP 벡터 유사도",
         refinements=suggest_service.derive(
             intent,
             has_coords=lat is not None and lng is not None,
@@ -291,7 +296,10 @@ async def _ask_with_anchor(
     if not kept:
         raise AgentNoResults()
     rated = await repositories.load_candidates_by_ids(session, [n.content_id for n in kept])
-    spots = [_anchor_card(near, has_crowd=_has_crowd(rated.get(near.content_id))) for near in kept]
+    spots = await _with_blurbs(
+        session,
+        [_anchor_card(near, has_crowd=_has_crowd(rated.get(near.content_id))) for near in kept],
+    )
     steps = [AskStep(tool="nearby", label=f"{origin} 주변 {noun} 조회", badge=f"{len(spots)}곳")]
     answer = [
         AnswerSegment(text=f"{origin} 주변 {noun} "),
@@ -562,7 +570,10 @@ async def _ask_with_question(
         )
 
     top = merged[: retrieve.RESULT_LIMIT]
-    spots = [_card(row, intent=intent, lat=lat, lng=lng, near=near) for row in top]
+    spots = await _with_blurbs(
+        session, [_card(row, intent=intent, lat=lat, lng=lng, near=near) for row in top]
+    )
+    tag_basis = _tag_basis(top, near=near)
     logger.info(
         "agent.ask.done",
         candidates=len(candidates),
@@ -578,6 +589,7 @@ async def _ask_with_question(
         spots=spots,
         totalCount=len(spots),
         intent=intent,
+        tagBasis=tag_basis,
         refinements=suggest_service.derive(
             intent,
             has_coords=lat is not None and lng is not None,
@@ -883,3 +895,27 @@ def _zero_response(
         intent=searched,
         refinements=refinements,
     )
+
+
+async def _with_blurbs(session: AsyncSession, spots: list[AgentSpotCard]) -> list[AgentSpotCard]:
+    overviews = await repositories.load_overviews(session, [spot.contentId for spot in spots])
+    if not overviews:
+        return spots
+    return [
+        spot.model_copy(update={"blurb": blurb_service.excerpt(overviews.get(spot.contentId))})
+        for spot in spots
+    ]
+
+
+def _crowd_basis(rows: list[CandidateRow]) -> str | None:
+    days = [row.base_ymd for row in rows if row.base_ymd is not None]
+    if not days:
+        return None
+    latest = max(days)
+    return f"혼잡도 {latest.month}/{latest.day} 예측 기준"
+
+
+def _tag_basis(rows: list[CandidateRow], *, near: bool) -> str | None:
+    if near:
+        return "현재 위치에서 직선거리"
+    return _crowd_basis(rows)
