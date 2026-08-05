@@ -3598,3 +3598,61 @@ async def test_a_photo_that_matched_nothing_leaves_one_culprit_in_the_funnel(
     steps = res.json()["data"]["steps"]
     assert [step["tool"] for step in steps if step["tool"] == "nearby"] == []
     assert len([step for step in steps if step["badge"] == "0곳"]) == 1
+
+
+@pytest.mark.integration
+async def test_a_near_only_zero_leaves_one_culprit_and_shows_what_releasing_gives(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    await db_session.execute(text("UPDATE spots SET mapx = NULL, mapy = NULL"))
+    await db_session.flush()
+
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"], nearMe=True)
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask", json={"question": "근처 계곡", "lat": LAT, "lng": LNG}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    data = res.json()["data"]
+    assert data["spots"] == []
+    assert len([step for step in data["steps"] if step["badge"] == "0곳"]) == 1
+    probe = [step for step in data["steps"] if step["label"] == ask_service.NEAR_PROBE_LABEL]
+    assert probe and probe[0]["badge"] != "0곳"
+    assert "내 근처 조건 풀기" in [chip["label"] for chip in data["refinements"]]
+
+
+@pytest.mark.integration
+async def test_the_near_probe_reuses_the_codes_the_indoor_fallback_settled_on(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    await db_session.execute(text("UPDATE spots SET mapx = NULL, mapy = NULL"))
+    await db_session.flush()
+
+    seen: list[list[str]] = []
+    real_search = retrieve.search_candidates
+
+    async def spy(session, **kwargs):  # type: ignore[no-untyped-def]
+        seen.append(list(kwargs["codes"]))
+        return await real_search(session, **kwargs)
+
+    monkeypatch.setattr(retrieve, "search_candidates", spy)
+
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"], indoorOnly=True, nearMe=True)
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        await client.post(
+            "/v1/agent/ask", json={"question": "근처 실내 계곡", "lat": LAT, "lng": LNG}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert seen[-1] == seen[-2] == []
