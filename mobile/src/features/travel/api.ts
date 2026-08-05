@@ -62,6 +62,7 @@ export interface TravelSpot {
   lat: number | null;
   lng: number | null;
   hasCrowd?: boolean;
+  blurb?: string | null;
 }
 
 export interface AgentAnswer {
@@ -70,6 +71,7 @@ export interface AgentAnswer {
   spots: TravelSpot[];
   totalCount: number;
   intent: QueryIntent;
+  tagBasis?: string | null;
   suggestions: string[];
   refinements?: Suggestion[];
 }

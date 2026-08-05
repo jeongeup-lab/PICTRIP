@@ -134,6 +134,7 @@ class AgentSpotCard(BaseModel):
     lat: float | None = None
     lng: float | None = None
     hasCrowd: bool = False
+    blurb: str | None = None
 
 
 class AskResponse(BaseModel):
@@ -143,6 +144,7 @@ class AskResponse(BaseModel):
     totalCount: int
     intent: QueryIntent
     refinements: list[Suggestion]
+    tagBasis: str | None = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property

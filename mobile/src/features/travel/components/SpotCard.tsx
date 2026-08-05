@@ -8,9 +8,11 @@ import { prefetchSpot } from "@/features/spots/queries";
 import type { TravelSpot } from "@/features/travel/api";
 import { colors } from "@/constants/theme";
 
-export const RAIL_CARD_WIDTH = 158;
-export const RAIL_CARD_HEIGHT = 206;
-export const MEDIA_HEIGHT = 172;
+export const RAIL_CARD_WIDTH = 168;
+export const MEDIA_HEIGHT = 150;
+export const BLURB_HEIGHT = 40;
+export const ANCHOR_HEIGHT = 34;
+export const RAIL_CARD_HEIGHT = MEDIA_HEIGHT + BLURB_HEIGHT + ANCHOR_HEIGHT;
 
 export const ANCHOR_ACTION_LABEL = "여기 기준으로";
 
@@ -39,56 +41,66 @@ export function SpotCard({
     <View style={[styles.card, style, dimmed && styles.dimmed]}>
       <Pressable
         testID={`travel-spot-${spot.contentId}`}
-        style={({ pressed }) => [styles.media, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.tapArea, pressed && styles.pressed]}
         onPressIn={() => prefetchSpot(spot)}
         onPress={onPress ?? (() => router.push(`/spots/${spot.contentId}`))}
       >
-        <RemoteImage uri={spot.imageUrl} style={StyleSheet.absoluteFill} />
-        <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
-          <Defs>
-            <LinearGradient id="travelCardScrim" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor="#141216" stopOpacity={0.16} />
-              <Stop offset="0.32" stopColor="#141216" stopOpacity={0} />
-              <Stop offset="0.46" stopColor="#100E12" stopOpacity={0} />
-              <Stop offset="1" stopColor="#100E12" stopOpacity={0.8} />
-            </LinearGradient>
-          </Defs>
-          <Rect x="0" y="0" width="100%" height="100%" fill="url(#travelCardScrim)" />
-        </Svg>
-        <View style={styles.hairline} pointerEvents="none" />
+        <View style={styles.media}>
+          <RemoteImage uri={spot.imageUrl} style={StyleSheet.absoluteFill} />
+          <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
+            <Defs>
+              <LinearGradient id="travelCardScrim" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor="#141216" stopOpacity={0.16} />
+                <Stop offset="0.32" stopColor="#141216" stopOpacity={0} />
+                <Stop offset="0.46" stopColor="#100E12" stopOpacity={0} />
+                <Stop offset="1" stopColor="#100E12" stopOpacity={0.8} />
+              </LinearGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height="100%" fill="url(#travelCardScrim)" />
+          </Svg>
+          <View style={styles.hairline} pointerEvents="none" />
 
-        {spot.tag ? (
-          <View style={styles.tag}>
-            <Text style={styles.tagText}>{spot.tag}</Text>
+          {spot.tag ? (
+            <View style={styles.tag}>
+              <Text style={styles.tagText}>{spot.tag}</Text>
+            </View>
+          ) : null}
+
+          <Pressable
+            testID={`travel-spot-save-${spot.contentId}`}
+            accessibilityLabel="저장"
+            style={[styles.fav, saved && styles.favOn]}
+            hitSlop={8}
+            onPress={(e) => {
+              e.stopPropagation();
+              onSaveToggle?.(!saved);
+              void toggle();
+            }}
+          >
+            <Icon
+              name={saved ? "heart-fill" : "heart"}
+              size={14}
+              color={colors.onImage}
+              strokeWidth={1.9}
+            />
+          </Pressable>
+
+          <View style={styles.caption}>
+            <Text style={styles.title} numberOfLines={1}>
+              {spot.title}
+            </Text>
+            <Text style={styles.region} numberOfLines={1}>
+              {spot.regionLabel}
+            </Text>
           </View>
-        ) : null}
+        </View>
 
-        <Pressable
-          testID={`travel-spot-save-${spot.contentId}`}
-          accessibilityLabel="저장"
-          style={[styles.fav, saved && styles.favOn]}
-          hitSlop={8}
-          onPress={(e) => {
-            e.stopPropagation();
-            onSaveToggle?.(!saved);
-            void toggle();
-          }}
-        >
-          <Icon
-            name={saved ? "heart-fill" : "heart"}
-            size={14}
-            color={colors.onImage}
-            strokeWidth={1.9}
-          />
-        </Pressable>
-
-        <View style={styles.caption}>
-          <Text style={styles.title} numberOfLines={1}>
-            {spot.title}
-          </Text>
-          <Text style={styles.region} numberOfLines={1}>
-            {spot.regionLabel}
-          </Text>
+        <View style={styles.blurb}>
+          {spot.blurb ? (
+            <Text style={styles.blurbText} numberOfLines={2}>
+              {spot.blurb}
+            </Text>
+          ) : null}
         </View>
       </Pressable>
 
@@ -128,9 +140,19 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: colors.skeleton,
   },
+  tapArea: { height: MEDIA_HEIGHT + BLURB_HEIGHT },
   media: { height: MEDIA_HEIGHT },
+  blurb: {
+    height: BLURB_HEIGHT,
+    justifyContent: "center",
+    paddingHorizontal: 11,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+    backgroundColor: colors.bg,
+  },
+  blurbText: { fontSize: 11, lineHeight: 15, letterSpacing: -0.1, color: colors.sec },
   anchor: {
-    flex: 1,
+    height: ANCHOR_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

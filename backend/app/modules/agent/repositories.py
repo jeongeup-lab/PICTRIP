@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from datetime import date
 from typing import Literal
 
 from sqlalchemy import text
@@ -124,6 +125,7 @@ class CandidateRow:
     image_url: str | None
     cpyrht_div_cd: str | None
     concentration_rate: float | None
+    base_ymd: date | None = None
     percentile: int | None = None
     indoor: bool = False
     mood_ids: tuple[int, ...] = ()
@@ -143,6 +145,7 @@ WITH scored AS (
            spots.first_image_url AS image_url,
            spots.cpyrht_div_cd,
            sc.concentration_rate,
+           sc.base_ymd,
            COALESCE(spots.lcls_systm2 = ANY(CAST(:indoor_l2 AS text[]))
                     OR spots.lcls_systm3 = ANY(CAST(:indoor_l3 AS text[])), FALSE) AS indoor,
            {percentile} AS percentile
@@ -267,6 +270,7 @@ async def find_candidates(
             concentration_rate=(
                 float(row.concentration_rate) if row.concentration_rate is not None else None
             ),
+            base_ymd=row.base_ymd,
             percentile=int(row.percentile) if row.percentile is not None else None,
             indoor=bool(row.indoor),
         )
@@ -341,3 +345,19 @@ async def load_candidates_by_ids(
         )
         for row in result
     }
+
+
+_OVERVIEW_SQL = """
+SELECT content_id, overview
+FROM spot_details
+WHERE content_id = ANY(CAST(:ids AS text[]))
+  AND overview IS NOT NULL
+  AND overview <> ''
+"""
+
+
+async def load_overviews(session: AsyncSession, content_ids: list[str]) -> dict[str, str]:
+    if not content_ids:
+        return {}
+    rows = await session.execute(text(_OVERVIEW_SQL), {"ids": content_ids})
+    return {row.content_id: row.overview for row in rows}

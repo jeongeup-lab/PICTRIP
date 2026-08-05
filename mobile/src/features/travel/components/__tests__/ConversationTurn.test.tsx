@@ -141,6 +141,25 @@ describe("ConversationTurn once the answer lands", () => {
     expect(texts(tree).join("")).toBe(before);
   });
 
+  it("says what the card tags are measured against", () => {
+    const tree = mount(turn({ answer: { ...answer, tagBasis: "혼잡도 8/3 예측 기준" } }));
+
+    expect(texts(tree)).toContain("혼잡도 8/3 예측 기준");
+  });
+
+  it("stays silent when the server names no basis", () => {
+    const tree = mount(turn());
+
+    expect(tree.root.findAllByProps({ testID: "turn-basis-t1" })).toHaveLength(0);
+  });
+
+  it("carries the overview excerpt down to the card", () => {
+    const withBlurb = { ...answer.spots[0], blurb: "우도 동쪽의 백사장이다." };
+    const tree = mount(turn({ answer: { ...answer, spots: [withBlurb] } }));
+
+    expect(texts(tree)).toContain("우도 동쪽의 백사장이다.");
+  });
+
   it("offers no feedback control that goes nowhere", () => {
     const tree = mount(turn());
     expect(tree.root.findAllByProps({ testID: "turn-vote-t1" })).toHaveLength(0);
