@@ -22,12 +22,19 @@ function Harness({ onReady }: { onReady: (api: UseSaveOptimistic) => void }) {
   return <Text>{String(api.saved)}</Text>;
 }
 
-async function mount(): Promise<{ api: () => UseSaveOptimistic }> {
+async function mount(): Promise<{ api: () => UseSaveOptimistic; rerender: () => Promise<void> }> {
   let last: UseSaveOptimistic;
+  let tree: renderer.ReactTestRenderer;
+  const onReady = (a: UseSaveOptimistic) => (last = a);
   await act(async () => {
-    renderer.create(<Harness onReady={(a) => (last = a)} />);
+    tree = renderer.create(<Harness onReady={onReady} />);
   });
-  return { api: () => last! };
+  return {
+    api: () => last!,
+    rerender: async () => {
+      await act(async () => tree!.update(<Harness onReady={onReady} />));
+    },
+  };
 }
 
 describe("useSaveOptimistic", () => {
@@ -79,6 +86,22 @@ describe("useSaveOptimistic", () => {
       result = await api().toggle();
     });
     expect(result).toBeNull();
+    expect(api().saved).toBe(false);
+  });
+
+  it("follows the server again once it catches up, so another screen's unsave lands", async () => {
+    requireAuth.mockResolvedValue(true);
+    const { api, rerender } = await mount();
+    await act(async () => {
+      await api().toggle();
+    });
+    expect(api().saved).toBe(true);
+
+    (useIsSaved as jest.Mock).mockReturnValue(true);
+    await rerender();
+    (useIsSaved as jest.Mock).mockReturnValue(false);
+    await rerender();
+
     expect(api().saved).toBe(false);
   });
 

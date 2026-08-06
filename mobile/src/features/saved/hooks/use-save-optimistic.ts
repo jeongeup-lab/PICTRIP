@@ -11,6 +11,7 @@ export function useSaveOptimistic(contentId: string): UseSaveOptimistic {
   const requireAuth = useAuthGate();
   const persisted = useIsSaved(contentId);
   const [optimistic, setOptimistic] = useState<boolean | null>(null);
+  if (optimistic === persisted) setOptimistic(null);
   const saved = optimistic ?? persisted;
   const saveMut = useSaveMutation();
   const unsaveMut = useUnsaveMutation();
@@ -24,7 +25,7 @@ export function useSaveOptimistic(contentId: string): UseSaveOptimistic {
       else await unsaveMut.mutateAsync(contentId);
       return next;
     } catch {
-      setOptimistic(!next);
+      setOptimistic(null);
       return null;
     }
   };
