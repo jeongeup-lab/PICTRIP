@@ -10,6 +10,8 @@ CrowdPreference = Literal["quiet", "any", "popular"]
 Mood = Literal["sea", "mountain", "lake", "island", "hanok", "night", "street"]
 DropAxis = Literal["crowd", "indoor", "near", "region", "category"]
 AnchorAction = Literal["food", "cafe", "nearby", "crowd"]
+TaskKind = Literal["search", "detail", "smalltalk", "unsupported"]
+DetailField = Literal["hours", "closed", "parking", "contact", "fee", "overview"]
 
 MAX_KEYWORDS = 20
 MAX_REGION_HINTS = 20
@@ -19,6 +21,7 @@ MAX_TEXT_CHARS = 80
 MAX_HINT_TOKENS = 4
 MAX_CONTEXT_SPOTS = 8
 MAX_TITLE_CHARS = 255
+MAX_DETAIL_FIELDS = 6
 
 IntentText = Annotated[str, StringConstraints(max_length=MAX_TEXT_CHARS)]
 
@@ -32,6 +35,7 @@ ToolName = Literal[
     "title_search",
     "concentration",
     "nearby",
+    "spot_detail",
 ]
 
 
@@ -63,6 +67,9 @@ class ResolvedPlace(BaseModel):
 
 
 class QueryIntent(BaseModel):
+    task: TaskKind = "search"
+    targetPlace: Annotated[str, StringConstraints(max_length=MAX_TITLE_CHARS)] | None = None
+    detailFields: list[DetailField] = Field(default_factory=list, max_length=MAX_DETAIL_FIELDS)
     categoryKeywords: list[IntentText] = Field(default_factory=list, max_length=MAX_KEYWORDS)
     regionHints: list[IntentText] = Field(default_factory=list, max_length=MAX_REGION_HINTS)
     namedPlaces: list[ExtractedPlace] = Field(default_factory=list, max_length=MAX_NAMED_PLACES)
@@ -110,6 +117,7 @@ class AskContextSpot(BaseModel):
 
 class AskContext(BaseModel):
     intent: QueryIntent | None = None
+    focusContentId: Annotated[str, StringConstraints(min_length=1, max_length=32)] | None = None
     spots: list[AskContextSpot] = Field(default_factory=list, max_length=MAX_CONTEXT_SPOTS)
 
 

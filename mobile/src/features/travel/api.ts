@@ -11,7 +11,10 @@ export interface ExtractedPlace {
   regionHint?: string | null;
 }
 
+export type TaskKind = "search" | "detail" | "smalltalk" | "unsupported";
+
 export interface QueryIntent {
+  task?: TaskKind;
   categoryKeywords: string[];
   regionHints: string[];
   namedPlaces?: ExtractedPlace[];
@@ -95,6 +98,7 @@ export interface AskContextSpot {
 export interface AskContext {
   intent?: QueryIntent | null;
   spots: AskContextSpot[];
+  focusContentId?: string;
 }
 
 export interface AskInput {

@@ -28,6 +28,7 @@ from app.modules.agent.schemas import (
     QueryIntent,
     RefinePatch,
 )
+from app.modules.agent.services import detail as detail_service
 from app.modules.agent.services import intent as intent_service
 from app.modules.agent.services import photo as photo_service
 from app.modules.agent.services import refine as refine_service
@@ -47,6 +48,10 @@ logger = get_logger(__name__)
 
 INDOOR_RETRY_LABEL = "실내로만 다시 조회"
 BLANK_ANSWER = "어디로 갈지 한 줄만 알려주세요. 지역 · 분위기 · 사진 아무거나 좋아요."
+UNSUPPORTED_ANSWER = (
+    "그건 아직 못 해요. 지역·분위기로 여행지를 찾거나, "
+    "카드를 골라 이용시간·주차 같은 걸 물어봐 주세요."
+)
 PHOTO_BASIS = "사진 유사도 기준"
 CONTEXT_INTENT_LABEL = "앞 대화까지 보고 조건 추출"
 NEAR_PROBE_LABEL = "근처 조건 없이 다시 재보기"
@@ -431,8 +436,16 @@ async def _ask_with_question(
         )
     if intent.outOfScope:
         raise AgentOutOfScope()
-    if _asks_for_nothing(intent, prefixes=pre_ota_region_prefixes):
-        return _blank_response(steps, intent, legacy_client=legacy_client)
+    if intent.task == "unsupported":
+        return _talk_response(steps, intent, UNSUPPORTED_ANSWER, legacy_client=legacy_client)
+    if intent.task == "detail":
+        target = detail_target(intent, context=context)
+        if target is not None:
+            return await detail_service.answer_about_spot(
+                session, redis, kto, content_id=target, intent=intent, steps=steps
+            )
+    if intent.task == "smalltalk" or _asks_for_nothing(intent, prefixes=pre_ota_region_prefixes):
+        return _talk_response(steps, intent, BLANK_ANSWER, legacy_client=legacy_client)
 
     pivot = _origin_anchor(intent, context)
     if pivot is not None:
@@ -943,15 +956,32 @@ def _asks_for_nothing(intent: QueryIntent, *, prefixes: list[str]) -> bool:
     )
 
 
-def _blank_response(
-    steps: list[AskStep], intent: QueryIntent, *, legacy_client: bool
+def detail_target(intent: QueryIntent, context: AskContext | None) -> str | None:
+    if context is None:
+        return None
+    if context.focusContentId is not None:
+        return context.focusContentId
+    wanted = (intent.targetPlace or "").strip()
+    if not wanted:
+        return context.spots[0].contentId if len(context.spots) == 1 else None
+    exact = [spot for spot in context.spots if spot.title.strip() == wanted]
+    if exact:
+        return exact[0].contentId
+    overlapping = [
+        spot for spot in context.spots if wanted in spot.title or spot.title.strip() in wanted
+    ]
+    return overlapping[0].contentId if len(overlapping) == 1 else None
+
+
+def _talk_response(
+    steps: list[AskStep], intent: QueryIntent, sentence: str, *, legacy_client: bool
 ) -> AskResponse:
     if legacy_client:
         raise AgentNoResults()
-    logger.info("agent.ask.blank")
+    logger.info("agent.ask.talk", task=intent.task)
     return AskResponse(
         steps=steps,
-        answer=[AnswerSegment(text=BLANK_ANSWER)],
+        answer=[AnswerSegment(text=sentence)],
         spots=[],
         totalCount=0,
         intent=intent,

@@ -14,9 +14,11 @@ from app.modules.agent.schemas import (
     MAX_TEXT_CHARS,
     MAX_TITLE_CHARS,
     CrowdPreference,
+    DetailField,
     ExtractedPlace,
     Mood,
     QueryIntent,
+    TaskKind,
 )
 
 logger = get_logger(__name__)
@@ -24,8 +26,19 @@ logger = get_logger(__name__)
 MAX_QUESTION_CHARS = 500
 
 _SYSTEM_PROMPT = """\
-너는 한국 여행지 검색 질문을 구조화하는 도우미다.
-사용자의 한 줄 질문을 아래 규칙대로 JSON으로 변환한다. 장소를 추천하지 말고, 질문에 담긴 조건만 뽑는다.
+너는 한국 여행 앱의 대화를 구조화하는 도우미다.
+사용자의 한 줄 입력을 아래 규칙대로 JSON으로 변환한다. 장소를 추천하지 말고, 입력에 담긴 것만 뽑는다.
+
+먼저 task 를 고른다.
+- search: 조건에 맞는 여행지를 찾아달라는 말 (예: "제주 한적한 바다", "비 오는 날 실내").
+- detail: 이미 이야기한 특정 장소 하나에 대해 사실을 묻는 말
+  (예: "영업시간 몇시야", "쉬는 날 있어", "주차 되나", "입장료 얼마", "어떤 곳이야").
+  직전 결과나 지금 고른 장소가 있어야 성립한다. targetPlace 에 그 장소 이름을 그대로 넣고,
+  detailFields 에 묻는 것을 고른다 — hours(영업·이용시간) · closed(휴무일) · parking(주차) ·
+  contact(전화·문의) · fee(요금·입장료) · overview(어떤 곳인지).
+- smalltalk: 인사·감탄·맞장구처럼 찾아달라는 요구가 없는 말 (예: "안녕", "고마워", "ㅇㅇ").
+- unsupported: 이 앱이 못 하는 요구 — 일정·코스 짜기, 예약, 길찾기·교통편, 날씨, 숙소 예약.
+task 가 search 가 아니면 아래 조건 필드는 모두 비운다. 애매하면 search 로 둔다.
 
 규칙:
 - categoryKeywords: 찾는 장소의 종류를 한국어 명사로. 한국관광공사 분류 체계에 나올 법한 일반명사를 쓴다
@@ -57,6 +70,15 @@ _SYSTEM_PROMPT = """\
 _RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "OBJECT",
     "properties": {
+        "task": {
+            "type": "STRING",
+            "enum": ["search", "detail", "smalltalk", "unsupported"],
+        },
+        "targetPlace": {"type": "STRING", "nullable": True},
+        "detailFields": {
+            "type": "ARRAY",
+            "items": {"type": "STRING", "enum": list(get_args(DetailField))},
+        },
         "categoryKeywords": {"type": "ARRAY", "items": {"type": "STRING"}},
         "regionHints": {"type": "ARRAY", "items": {"type": "STRING"}},
         "namedPlaces": {
@@ -87,6 +109,7 @@ _RESPONSE_SCHEMA: dict[str, Any] = {
         "outOfScope": {"type": "BOOLEAN"},
     },
     "required": [
+        "task",
         "categoryKeywords",
         "regionHints",
         "crowdPreference",
@@ -99,6 +122,8 @@ _RESPONSE_SCHEMA: dict[str, Any] = {
 }
 
 _MOOD_CODES: tuple[Mood, ...] = get_args(Mood)
+_TASKS: tuple[TaskKind, ...] = get_args(TaskKind)
+_DETAIL_FIELDS: tuple[DetailField, ...] = get_args(DetailField)
 
 
 def _context_block(prior: QueryIntent | None, spots: list[str]) -> str:
@@ -126,6 +151,9 @@ async def extract_intent(
     if not isinstance(data, dict):
         raise AgentIntentUnavailable()
     intent = QueryIntent(
+        task=_task(data.get("task")),
+        targetPlace=_text(data.get("targetPlace")),
+        detailFields=_detail_fields(data.get("detailFields")),
         categoryKeywords=_strings(data.get("categoryKeywords"))[:MAX_KEYWORDS],
         regionHints=_strings(data.get("regionHints"))[:MAX_REGION_HINTS],
         namedPlaces=_places(data.get("namedPlaces"))[:MAX_NAMED_PLACES],
@@ -146,6 +174,7 @@ async def extract_intent(
         crowd=intent.crowdPreference,
         moods=len(intent.moodHints),
         out_of_scope=intent.outOfScope,
+        task=intent.task,
     )
     return intent
 
@@ -191,6 +220,20 @@ def _moods(raw: Any) -> list[Mood]:
     picked: list[Mood] = []
     for item in raw:
         if item in _MOOD_CODES and item not in picked:
+            picked.append(item)
+    return picked
+
+
+def _task(raw: Any) -> TaskKind:
+    return raw if raw in _TASKS else "search"
+
+
+def _detail_fields(raw: Any) -> list[DetailField]:
+    if not isinstance(raw, list):
+        return []
+    picked: list[DetailField] = []
+    for item in raw:
+        if item in _DETAIL_FIELDS and item not in picked:
             picked.append(item)
     return picked
 

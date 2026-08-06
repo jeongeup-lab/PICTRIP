@@ -57,3 +57,21 @@ describe("contextFrom", () => {
     expect(context?.intent).not.toBeNull();
   });
 });
+
+describe("contextFrom with a focused card", () => {
+  it("carries the anchored card so a typed follow-up keeps it", () => {
+    expect(contextFrom(answer(), "b")?.focusContentId).toBe("b");
+  });
+
+  it("leaves the focus out when no card is anchored", () => {
+    expect(contextFrom(answer())?.focusContentId).toBeUndefined();
+  });
+
+  it("carries the focus even when the previous turn found nothing", () => {
+    expect(contextFrom(answer({ spots: [] }), "b")?.focusContentId).toBe("b");
+  });
+
+  it("makes a context out of a focus alone when there is no previous answer", () => {
+    expect(contextFrom(null, "b")?.focusContentId).toBe("b");
+  });
+});

@@ -244,6 +244,7 @@ def _extract_intro(content_type_id: int, intro_data: dict[str, Any] | None) -> S
     if content_type_id == 39:
         return SpotIntroRow(
             usetime=g("opentimefood"),
+            usefee=None,
             restdate=g("restdatefood"),
             parking=g("parkingfood"),
             infocenter=g("infocenterfood"),
@@ -252,6 +253,7 @@ def _extract_intro(content_type_id: int, intro_data: dict[str, Any] | None) -> S
         )
     return SpotIntroRow(
         usetime=g("usetime", "usetimeculture", "usetimeleports"),
+        usefee=g("usefee", "usefeeculture", "usefeeleports"),
         restdate=g("restdate", "restdateculture", "restdateleports"),
         parking=g("parking", "parkingculture", "parkingleports"),
         infocenter=g("infocenter", "infocenterculture", "infocenterleports"),
