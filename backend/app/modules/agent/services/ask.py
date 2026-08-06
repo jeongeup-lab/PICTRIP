@@ -48,6 +48,11 @@ logger = get_logger(__name__)
 
 INDOOR_RETRY_LABEL = "실내로만 다시 조회"
 BLANK_ANSWER = "어디로 갈지 한 줄만 알려주세요. 지역 · 분위기 · 사진 아무거나 좋아요."
+NO_AXIS_ANSWER = "어느 지역으로 찾아볼까요? 지역이나 분위기를 알려주시면 바로 찾아드릴게요."
+FOOD_NEEDS_ORIGIN_ANSWER = (
+    "맛집·카페는 장소를 하나 골라 주시면 그 주변으로 찾아드려요. "
+    "카드를 한 번 탭하거나 위치를 켜 주세요."
+)
 UNSUPPORTED_ANSWER = (
     "그건 아직 못 해요. 지역·분위기로 여행지를 찾거나, "
     "카드를 골라 이용시간·주차 같은 걸 물어봐 주세요."
@@ -467,8 +472,11 @@ async def _ask_with_question(
             return await detail_service.answer_about_spot(
                 session, redis, kto, content_id=target, intent=intent, steps=steps
             )
-    if intent.task == "smalltalk" or _asks_for_nothing(intent, prefixes=pre_ota_region_prefixes):
+    if intent.task == "smalltalk":
         return _talk_response(steps, intent, BLANK_ANSWER, legacy_client=legacy_client)
+    if _asks_for_nothing(intent, prefixes=pre_ota_region_prefixes):
+        sentence = NO_AXIS_ANSWER if question.strip() else BLANK_ANSWER
+        return _talk_response(steps, intent, sentence, legacy_client=legacy_client)
 
     pivot = _origin_anchor(intent, context)
     if pivot is not None:
@@ -501,6 +509,18 @@ async def _ask_with_question(
     keywords = _keywords(intent)
     category = await retrieve.resolve_category_scope(session, keywords)
     codes = category.codes
+    eating = retrieve.food_action(codes)
+    if eating is not None:
+        if lat is not None and lng is not None:
+            return await _ask_with_anchor(
+                session,
+                AskAnchor(action=eating),
+                lat=lat,
+                lng=lng,
+                prior_steps=steps,
+                carried_intent=intent,
+            )
+        return _talk_response(steps, intent, FOOD_NEEDS_ORIGIN_ANSWER, legacy_client=legacy_client)
     mood_ids = await repositories.find_mood_ids(session, list(intent.moodHints))
     scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
     prefixes = scope.prefixes or pre_ota_region_prefixes
@@ -1083,11 +1103,16 @@ def _origin_anchor(intent: QueryIntent, context: AskContext | None) -> AskAnchor
         match = next((spot for spot in context.spots if spot.title.strip() == wanted), None)
         if match is not None:
             return AskAnchor(contentId=match.contentId, action=_origin_action(intent))
-    if intent.regionHints:
+    if _named_a_new_region(intent, context):
         return None
     if context.focusContentId is not None and (intent.aroundOrigin or intent.nearMe):
         return AskAnchor(contentId=context.focusContentId, action=_origin_action(intent))
     return None
+
+
+def _named_a_new_region(intent: QueryIntent, context: AskContext) -> bool:
+    carried = list(context.intent.regionHints) if context.intent else []
+    return bool(intent.regionHints) and list(intent.regionHints) != carried
 
 
 def _origin_action(intent: QueryIntent) -> AnchorAction:

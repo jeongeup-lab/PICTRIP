@@ -1210,7 +1210,7 @@ async def test_a_question_with_no_condition_asks_for_one_instead_of_dumping_the_
     assert res.status_code == 200
     body = res.json()["data"]
     assert body["spots"] == []
-    assert "".join(part["text"] for part in body["answer"]) == ask_service.BLANK_ANSWER
+    assert "".join(part["text"] for part in body["answer"]) == ask_service.NO_AXIS_ANSWER
 
 
 @pytest.mark.integration
@@ -3833,10 +3833,10 @@ async def test_a_question_with_no_condition_never_searches() -> None:
     assert answer.spots == []
 
 
-async def test_a_question_with_no_condition_asks_for_one() -> None:
+async def test_a_typed_question_with_no_condition_asks_for_a_region() -> None:
     answer = await _ask_blank()
 
-    assert "".join(segment.text for segment in answer.answer) == ask_service.BLANK_ANSWER
+    assert "".join(segment.text for segment in answer.answer) == ask_service.NO_AXIS_ANSWER
 
 
 async def test_a_legacy_client_gets_an_error_instead_of_a_blank_turn() -> None:

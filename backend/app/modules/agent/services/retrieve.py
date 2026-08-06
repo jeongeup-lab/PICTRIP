@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 from app.core.db import AsyncSession
 from app.kto.display import t1_display_url
@@ -26,6 +27,18 @@ CALM_RATE = 30.0
 class CategoryScope:
     codes: list[str]
     matched: list[str]
+
+
+CAFE_CODES = ("FD05", "FD030100")
+FOOD_PREFIX = "FD"
+
+
+def food_action(codes: list[str]) -> Literal["food", "cafe"] | None:
+    if not codes or not all(code.startswith(FOOD_PREFIX) for code in codes):
+        return None
+    if all(code.startswith(CAFE_CODES) for code in codes):
+        return "cafe"
+    return "food"
 
 
 async def resolve_category_scope(session: AsyncSession, keywords: list[str]) -> CategoryScope:
