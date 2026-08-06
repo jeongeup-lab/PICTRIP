@@ -913,7 +913,7 @@ def _zero_answer(intent: QueryIntent, *, axes: frozenset[DropAxis]) -> list[Answ
         AnswerSegment(text="0곳", emphasis=True),
         AnswerSegment(text="이에요."),
     ]
-    segments.append(AnswerSegment(text=" 조건 하나를 풀면 찾을 수 있어요."))
+    segments.append(AnswerSegment(text=" 조건을 조금 바꿔서 다시 물어봐 주세요."))
     return segments
 
 
@@ -931,9 +931,9 @@ def _zero_response(
         intent, has_coords=has_coords, region_hints=region_hints, keywords=keywords
     )
     refinements = suggest_service.derive_for_zero(searched, has_coords=has_coords, axes=axes)
-    if not refinements or legacy_client:
-        raise AgentNoResults()
     conditions = _applied_conditions(searched, axes=axes)
+    if not conditions or legacy_client:
+        raise AgentNoResults()
     logger.info("agent.ask.zero", conditions=len(conditions), releasable=len(refinements))
     return AskResponse(
         steps=steps,
