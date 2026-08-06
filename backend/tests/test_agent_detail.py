@@ -217,3 +217,46 @@ async def test_a_marked_up_value_reaches_the_sentence_clean(monkeypatch) -> None
     text = _text(answer)
     assert "<br>" not in text
     assert "가능 요금(무료)" in text
+
+
+def test_food_codes_are_recognised_as_a_food_scope() -> None:
+    from app.modules.agent.services import retrieve
+
+    assert retrieve.food_action(["FD010100", "FD020100"]) == "food"
+    assert retrieve.food_action(["FD050100"]) == "cafe"
+    assert retrieve.food_action(["FD030100"]) == "cafe"
+    assert retrieve.food_action(["VE060100"]) is None
+    assert retrieve.food_action(["FD010100", "VE060100"]) is None
+    assert retrieve.food_action([]) is None
+
+
+async def test_a_food_search_without_a_place_says_how_to_get_one(monkeypatch) -> None:
+    from app.modules.agent.services import retrieve
+
+    async def fake_scope(session, keywords):  # type: ignore[no-untyped-def]
+        return retrieve.CategoryScope(codes=["FD010100"], matched=list(keywords))
+
+    monkeypatch.setattr(retrieve, "resolve_category_scope", fake_scope)
+    intent = QueryIntent(categoryKeywords=["맛집"], regionHints=["부산"])
+
+    answer = await _ask("부산 맛집", intent=intent, row=None, monkeypatch=monkeypatch)
+
+    assert answer.spots == []
+    assert _text(answer) == ask_service.FOOD_NEEDS_ORIGIN_ANSWER
+
+
+async def test_a_question_that_wants_a_search_but_named_no_axis_asks_for_one(monkeypatch) -> None:
+    answer = await _ask(
+        "아이랑 갈 만한 곳", intent=QueryIntent(), row=None, monkeypatch=monkeypatch
+    )
+
+    assert _text(answer) == ask_service.NO_AXIS_ANSWER
+    assert _text(answer) != ask_service.BLANK_ANSWER
+
+
+async def test_pure_smalltalk_keeps_the_plain_greeting(monkeypatch) -> None:
+    answer = await _ask(
+        "안녕", intent=QueryIntent(task="smalltalk"), row=None, monkeypatch=monkeypatch
+    )
+
+    assert _text(answer) == ask_service.BLANK_ANSWER

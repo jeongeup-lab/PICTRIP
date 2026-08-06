@@ -516,17 +516,34 @@ def test_pointing_without_a_focused_card_stays_a_search() -> None:
     assert ask_service._origin_anchor(QueryIntent(aroundOrigin=True), context) is None
 
 
-def test_naming_a_region_beats_a_stale_anchor() -> None:
+def test_naming_a_new_region_beats_a_stale_anchor() -> None:
     from app.modules.agent.schemas import AskContext, AskContextSpot, QueryIntent
     from app.modules.agent.services import ask as ask_service
 
     context = AskContext(
+        intent=QueryIntent(regionHints=["통영"]),
         spots=[AskContextSpot(contentId="126198", title="통영 세병관")],
         focusContentId="126198",
     )
     intent = QueryIntent(aroundOrigin=True, regionHints=["부산"], categoryKeywords=["카페"])
 
     assert ask_service._origin_anchor(intent, context) is None
+
+
+def test_a_region_carried_from_the_previous_turn_does_not_block_the_pivot() -> None:
+    from app.modules.agent.schemas import AskContext, AskContextSpot, QueryIntent
+    from app.modules.agent.services import ask as ask_service
+
+    context = AskContext(
+        intent=QueryIntent(regionHints=["통영"]),
+        spots=[AskContextSpot(contentId="126198", title="통영 세병관")],
+        focusContentId="126198",
+    )
+    intent = QueryIntent(aroundOrigin=True, regionHints=["통영"], categoryKeywords=["카페"])
+
+    pivot = ask_service._origin_anchor(intent, context)
+
+    assert pivot is not None and pivot.action == "cafe"
 
 
 def test_naming_the_origin_still_pivots_even_with_a_region() -> None:
