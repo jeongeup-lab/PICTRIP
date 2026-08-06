@@ -286,6 +286,14 @@ describe("ConversationTurn once the answer lands", () => {
     expect(cards[1].props.dimmed).toBe(true);
   });
 
+  it("leaves a turn alone when the anchor belongs to another turn", () => {
+    const tree = mount(turn(), "999999");
+    const cards = tree.root.findAllByType(SpotCard);
+
+    expect(cards.every((c) => c.props.dimmed === false)).toBe(true);
+    expect(cards.every((c) => c.props.selected === false)).toBe(true);
+  });
+
   it("keeps follow-up chips out of the answer block", () => {
     const tree = mount(turn());
     expect(tree.root.findAllByProps({ testID: "answer-suggestion-실내만" })).toHaveLength(0);
