@@ -98,7 +98,7 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 |---|---|---|
 | `steps[]` | `{tool, label, badge}` | 서버가 **실제로 실행한** 툴 순서. `badge`는 그 단계 후 잔여 건수(`128곳`) 또는 근거 표시(`Gemini` · `pgvector`) |
 | `answer[]` | `{text, emphasis}` | 문장 조각. `emphasis=true`는 `accentText` 800으로 렌더 (HTML을 보내지 않는다) |
-| `spots[]` | `{contentId, title, regionLabel, imageUrl, tag, lat, lng, categoryGroup, hasCrowd}` | 상위 20곳 — 대화 레일이 전부 그린다. `tag`는 카드 좌상단 배지(`하위 8%` · `4.2km` · `유사도 86%`). `categoryGroup`은 `lcls_systm*`에서 파생한 지도 핀 글리프 키(`food`·`cafe`·`attraction`·`leisure`·`shopping`, 없으면 `null`). `anchor.action=crowd`는 빈 배열 |
+| `spots[]` | `{contentId, title, regionLabel, imageUrl, tag, lat, lng, categoryGroup, hasCrowd}` | 상위 20곳 — 대화 레일이 전부 그린다. `tag`는 카드 좌상단 배지(`하위 8%` · `4.2km` · `유사도 86%`). `categoryGroup`은 `lcls_systm*`에서 파생한 지도 핀 글리프 키(`food`·`cafe`·`attraction`·`leisure`·`shopping`, 없으면 `null`). 여행 후보 풀은 전시·공연장(`VE06`·`VE07`)을 담지만 지도 탭 필터용 `derive_category`는 그 둘을 빼므로, 에이전트는 `repositories.category_group`으로 되메워 `실내만` 결과의 핀이 통째로 흰 점이 되지 않게 한다. `anchor.action=crowd`는 빈 배열 |
 | `totalCount` | int | `spots[]` 길이 |
 | `intent` | `QueryIntent` | 서버가 **실제로 적용한** 의도. 다음 턴이 그대로 되돌려 보낸다 |
 | `refinements[]` | `{label, patch}` | 후속 제안 칩 최대 3개. `label`은 상태 전환 문구(`사람 적은 곳만`), `patch`는 그 칩이 바꿀 축 |
@@ -175,6 +175,20 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 정렬하거나 거르면 진짜 가까운/한적한/그 지역의 곳이 잘려나간다. 거리·집중률 정렬은 `ORDER BY`로 내려가고
 `LIMIT`은 그 뒤에 붙는다. 혼잡도 백분위도 `cume_dist()` 윈도로 **필터를 만족하는
 전체 집합** 기준으로 계산한다 — 잘린 400개 안의 상대 순위가 아니다.
+
+**조건이 하나도 없으면 검색하지 않는다.** 의도 추출 결과의 모든 축(카테고리 ·
+지역 · 장소명 · 분위기 · 실내 · 근처 · 축제 · 혼잡도 선호)이 비면 `spots: []` +
+`어디로 갈지 한 줄만 알려주세요…` 한 줄을 내려보낸다. 이전에는 코드·지역 절이
+모두 빠진 채로 전국을 `ORDER BY content_id`로 훑어 **`안녕`이 매번 같은 20곳을
+받았다** — 어떤 질문에도 대응하지 않는 목록이라 답이 아니다. 구버전 앱
+(`region` 필드를 보내는 클라이언트)에는 `AGENT_NO_RESULTS`로 내려간다.
+
+**답변 문장은 실제로 질의에 닿은 조건만 말한다.** `조건에 맞는 곳으로 N곳`
+고정 문구를 `통영 + 계곡 조건으로 N곳`으로 바꿨다. 이름을 붙이는 근거는
+`searched_intent` — SQL에 닿지 않은 축은 문장에서도 빠진다. `강남역 계곡`처럼
+지역 힌트가 해석되지 않아 전국을 훑은 턴이 `강남역 조건으로`라고 말하면
+사용자는 자기 조건이 먹힌 줄로 읽는다. 조건이 하나도 이름 붙지 않는 턴
+(장소명만 있는 질의)은 기존 문구를 그대로 쓴다.
 
 **후속 칩은 문장이 아니라 intent를 되돌려 보낸다.** 응답의 `intent`에 `patch`를
 얹어 다시 보내면 서버가 `apply_patch` 후 곧장 조회한다 — Gemini 왕복이 없다.

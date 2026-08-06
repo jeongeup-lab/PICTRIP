@@ -46,6 +46,7 @@ from app.web.errors import AppError, ValidationFailed
 logger = get_logger(__name__)
 
 INDOOR_RETRY_LABEL = "실내로만 다시 조회"
+BLANK_ANSWER = "어디로 갈지 한 줄만 알려주세요. 지역 · 분위기 · 사진 아무거나 좋아요."
 PHOTO_BASIS = "사진 유사도 기준"
 CONTEXT_INTENT_LABEL = "앞 대화까지 보고 조건 추출"
 NEAR_PROBE_LABEL = "근처 조건 없이 다시 재보기"
@@ -430,6 +431,8 @@ async def _ask_with_question(
         )
     if intent.outOfScope:
         raise AgentOutOfScope()
+    if _asks_for_nothing(intent, prefixes=pre_ota_region_prefixes):
+        return _blank_response(steps, intent, legacy_client=legacy_client)
 
     pivot = _origin_anchor(intent, context)
     if pivot is not None:
@@ -620,10 +623,20 @@ async def _ask_with_question(
         results=len(top),
         crowd=intent.crowdPreference,
     )
+    spoken = searched_intent(
+        intent,
+        has_coords=lat is not None and lng is not None,
+        region_hints=list(prefixes),
+        keywords=[
+            keyword
+            for keyword in intent.categoryKeywords
+            if title_only or keyword in category.matched
+        ],
+    )
     return AskResponse(
         steps=steps,
         answer=_answer(
-            top, intent=intent, near=near, lat=lat, lng=lng, region_widened=region_widened
+            top, intent=spoken, near=near, lat=lat, lng=lng, region_widened=region_widened
         ),
         spots=spots,
         totalCount=len(spots),
@@ -816,6 +829,13 @@ def _card(
     return retrieve.to_card(row, tag=retrieve.crowd_label(row))
 
 
+def _answer_opening(intent: QueryIntent) -> str:
+    conditions = _applied_conditions(intent, axes=suggest_service.ALL_AXES)
+    if not conditions:
+        return "조건에 맞는 곳으로 "
+    return f"{' + '.join(conditions)} 조건으로 "
+
+
 def _answer(
     top: list[CandidateRow],
     *,
@@ -825,7 +845,7 @@ def _answer(
     lng: float | None,
     region_widened: retrieve.RegionScope | None = None,
 ) -> list[AnswerSegment]:
-    segments = [AnswerSegment(text="조건에 맞는 곳으로 ")]
+    segments = [AnswerSegment(text=_answer_opening(intent))]
     segments.append(AnswerSegment(text=f"{len(top)}곳", emphasis=True))
     segments.append(AnswerSegment(text=" 추렸어요"))
 
@@ -906,6 +926,37 @@ def _zero_answer(intent: QueryIntent, *, axes: frozenset[DropAxis]) -> list[Answ
     ]
     segments.append(AnswerSegment(text=" 조건을 조금 바꿔서 다시 물어봐 주세요."))
     return segments
+
+
+def _asks_for_nothing(intent: QueryIntent, *, prefixes: list[str]) -> bool:
+    return not (
+        intent.categoryKeywords
+        or intent.regionHints
+        or intent.namedPlaces
+        or intent.moodHints
+        or intent.indoorOnly
+        or intent.nearMe
+        or intent.festivalOnly
+        or intent.originPlace
+        or intent.crowdPreference != "any"
+        or prefixes
+    )
+
+
+def _blank_response(
+    steps: list[AskStep], intent: QueryIntent, *, legacy_client: bool
+) -> AskResponse:
+    if legacy_client:
+        raise AgentNoResults()
+    logger.info("agent.ask.blank")
+    return AskResponse(
+        steps=steps,
+        answer=[AnswerSegment(text=BLANK_ANSWER)],
+        spots=[],
+        totalCount=0,
+        intent=intent,
+        refinements=[],
+    )
 
 
 def _zero_response(

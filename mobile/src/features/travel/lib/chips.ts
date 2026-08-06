@@ -66,14 +66,34 @@ export function refineChips(refinements: Suggestion[] | null | undefined): Chip[
   return (refinements ?? []).map((s) => ({ kind: "refine", label: s.label, patch: s.patch }));
 }
 
+type ChipAnswer = Pick<AgentAnswer, "totalCount" | "refinements"> & {
+  intent?: QueryIntent | null;
+};
+
+export function askedForNothing(intent: QueryIntent | null | undefined): boolean {
+  if (!intent) return false;
+  return !(
+    intent.categoryKeywords.length > 0 ||
+    intent.regionHints.length > 0 ||
+    (intent.namedPlaces?.length ?? 0) > 0 ||
+    (intent.moodHints?.length ?? 0) > 0 ||
+    intent.indoorOnly === true ||
+    intent.nearMe === true ||
+    intent.festivalOnly === true ||
+    (intent.crowdPreference !== undefined && intent.crowdPreference !== "any")
+  );
+}
+
 export function composerChips(
-  answer: Pick<AgentAnswer, "totalCount" | "refinements"> | null | undefined,
+  answer: ChipAnswer | null | undefined,
   anchor: { hasCrowd?: boolean } | null = null,
   hasCoords: boolean = false,
 ): Chip[] {
   if (anchor) return anchorChips(anchor.hasCrowd === true);
   const refine = refineChips(answer?.refinements);
   if (refine.length > 0) return refine;
-  if (answer && answer.totalCount === 0) return [];
+  if (answer && answer.totalCount === 0) {
+    return askedForNothing(answer.intent) ? idleChips(hasCoords) : [];
+  }
   return idleChips(hasCoords);
 }

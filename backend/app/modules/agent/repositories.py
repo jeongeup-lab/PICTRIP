@@ -14,6 +14,13 @@ INDOOR_L2 = ("VE06", "VE07")
 INDOOR_L3 = ("VE020400", "VE120300")
 
 
+def category_group(l1: str | None, l2: str | None, l3: str | None) -> str | None:
+    derived = derive_category(l1, l2, l3)
+    if derived is not None:
+        return derived
+    return "attraction" if l2 in INDOOR_L2 else None
+
+
 @dataclass(frozen=True)
 class VectorMatchRow:
     content_id: str
@@ -277,7 +284,7 @@ async def find_candidates(
             base_ymd=row.base_ymd,
             percentile=int(row.percentile) if row.percentile is not None else None,
             indoor=bool(row.indoor),
-            category_group=derive_category(row.lcls_systm1, row.lcls_systm2, row.lcls_systm3),
+            category_group=category_group(row.lcls_systm1, row.lcls_systm2, row.lcls_systm3),
         )
         for row in result
     ]
@@ -352,7 +359,7 @@ async def load_candidates_by_ids(
             base_ymd=row.base_ymd,
             indoor=bool(row.indoor),
             mood_ids=tuple(int(mood_id) for mood_id in row.mood_ids),
-            category_group=derive_category(row.lcls_systm1, row.lcls_systm2, row.lcls_systm3),
+            category_group=category_group(row.lcls_systm1, row.lcls_systm2, row.lcls_systm3),
         )
         for row in result
     }
