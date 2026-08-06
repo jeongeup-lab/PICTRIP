@@ -43,6 +43,7 @@ export function ConversationTurn({
   const answer = turn.answer;
   const steps = waiting ? pendingSteps(turn) : (answer?.steps ?? []);
   const mappable = useMemo(() => placed(answer?.spots ?? []), [answer]);
+  const anchored = (answer?.spots ?? []).some((s) => s.contentId === anchorId);
 
   useEffect(() => {
     Animated.timing(rise, {
@@ -108,7 +109,7 @@ export function ConversationTurn({
             <TurnMap
               spots={mappable}
               live={live}
-              selectedId={anchorId}
+              selectedId={anchored ? anchorId : null}
               onOpen={() => onOpenMap(turn)}
             />
           ) : null}
@@ -122,8 +123,8 @@ export function ConversationTurn({
             renderItem={({ item }) => (
               <SpotCard
                 spot={item}
-                selected={item.contentId === anchorId}
-                dimmed={anchorId !== null && item.contentId !== anchorId}
+                selected={anchored && item.contentId === anchorId}
+                dimmed={anchored && item.contentId !== anchorId}
                 onPress={() => onSpotTap(item)}
                 onDetail={() => onSpotDetail(item)}
                 onSaveToggle={onSaveToggle}
