@@ -60,9 +60,9 @@ task 가 search 가 아니면 아래 조건 필드는 모두 비운다. 애매�
 - 직전 조건은 사용자가 바꾸지 않는 한 그대로 유지한다. "더 한적한 곳" 은 직전
   지역·유형을 그대로 두고 crowdPreference 만 quiet 로 바꾸는 것이다.
 - 사용자가 새 지역이나 새 유형을 말하면 그 축만 갈아끼운다. 나머지는 유지한다.
-- "거기 근처" · "그 옆에" 처럼 앞 결과 한 곳을 중심으로 주변을 물으면
-  originPlace 에 직전 결과 목록의 그 이름을 그대로 넣는다. 어느 것인지 특정할
-  수 없으면 비운다. originPlace 를 채웠으면 그 장소는 namedPlaces 에 넣지
+- "거기 근처" · "그 옆에" · "여기 근처" 처럼 앞 결과 한 곳을 중심으로 주변을 물으면
+  aroundOrigin 을 true 로 둔다. 그 위에서 어느 곳인지 이름으로 특정할 수 있으면
+  originPlace 에 직전 결과 목록의 그 이름을 그대로 넣고, 특정할 수 없으면 비운다. originPlace 를 채웠으면 그 장소는 namedPlaces 에 넣지
   않는다 — 찾는 대상이 아니라 기준점이기 때문이다.
 - 화제가 완전히 바뀌면 직전 조건을 버린다.
 """
@@ -104,6 +104,7 @@ _RESPONSE_SCHEMA: dict[str, Any] = {
         },
         "festivalOnly": {"type": "BOOLEAN"},
         "originPlace": {"type": "STRING", "nullable": True},
+        "aroundOrigin": {"type": "BOOLEAN"},
         "indoorOnly": {"type": "BOOLEAN"},
         "nearMe": {"type": "BOOLEAN"},
         "outOfScope": {"type": "BOOLEAN"},
@@ -161,6 +162,7 @@ async def extract_intent(
         moodHints=_moods(data.get("moodHints")),
         festivalOnly=bool(data.get("festivalOnly")),
         originPlace=_text(data.get("originPlace")),
+        aroundOrigin=bool(data.get("aroundOrigin")),
         indoorOnly=bool(data.get("indoorOnly")),
         nearMe=bool(data.get("nearMe")),
         outOfScope=bool(data.get("outOfScope")),

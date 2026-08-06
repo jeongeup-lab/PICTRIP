@@ -1083,7 +1083,9 @@ def _origin_anchor(intent: QueryIntent, context: AskContext | None) -> AskAnchor
         match = next((spot for spot in context.spots if spot.title.strip() == wanted), None)
         if match is not None:
             return AskAnchor(contentId=match.contentId, action=_origin_action(intent))
-    if context.focusContentId is not None and intent.nearMe:
+    if intent.regionHints:
+        return None
+    if context.focusContentId is not None and (intent.aroundOrigin or intent.nearMe):
         return AskAnchor(contentId=context.focusContentId, action=_origin_action(intent))
     return None
 
