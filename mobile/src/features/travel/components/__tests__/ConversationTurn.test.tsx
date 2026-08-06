@@ -63,6 +63,7 @@ function mount(
   onGrow = noop,
   onOpenMap = noop,
   onSpotTap: (spot: { contentId: string }) => void = noop,
+  onSpotDetail: (spot: { contentId: string }) => void = noop,
 ) {
   let tree: renderer.ReactTestRenderer;
   act(() => {
@@ -72,6 +73,7 @@ function mount(
         anchorId={anchorId}
         live
         onSpotTap={onSpotTap}
+        onSpotDetail={onSpotDetail}
         onOpenMap={onOpenMap}
         onRetry={noop}
         onGrow={onGrow}
@@ -204,6 +206,7 @@ describe("ConversationTurn once the answer lands", () => {
           anchorId={null}
           live={false}
           onSpotTap={noop}
+          onSpotDetail={noop}
           onOpenMap={noop}
           onRetry={noop}
           onGrow={noop}
@@ -258,6 +261,16 @@ describe("ConversationTurn once the answer lands", () => {
 
     expect(onSpotTap).toHaveBeenCalledWith(answer.spots[0]);
     expect(tree.root.findAllByProps({ testID: "travel-spot-anchor-126508" })).toHaveLength(0);
+  });
+
+  it("gives screen readers a detail action — a double tap never reaches onDouble there", () => {
+    const onSpotDetail = jest.fn();
+    const tree = mount(turn(), null, noop, noop, noop, onSpotDetail);
+    const card = tree.root.findByType(SpotCard);
+
+    act(() => card.props.onDetail());
+
+    expect(onSpotDetail).toHaveBeenCalledWith(answer.spots[0]);
   });
 
   it("marks the anchored card selected and dims the rest", () => {

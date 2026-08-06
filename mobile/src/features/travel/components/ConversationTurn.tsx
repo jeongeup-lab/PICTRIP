@@ -20,6 +20,7 @@ interface Props {
   anchorId: string | null;
   live: boolean;
   onSpotTap: (spot: TravelSpot) => void;
+  onSpotDetail: (spot: TravelSpot) => void;
   onOpenMap: (turn: Turn) => void;
   onRetry: (turn: Turn) => void;
   onGrow: () => void;
@@ -30,6 +31,7 @@ export function ConversationTurn({
   anchorId,
   live,
   onSpotTap,
+  onSpotDetail,
   onOpenMap,
   onRetry,
   onGrow,
@@ -121,6 +123,7 @@ export function ConversationTurn({
                 selected={item.contentId === anchorId}
                 dimmed={anchorId !== null && item.contentId !== anchorId}
                 onPress={() => onSpotTap(item)}
+                onDetail={() => onSpotDetail(item)}
               />
             )}
           />

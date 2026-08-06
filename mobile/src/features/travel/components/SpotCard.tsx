@@ -13,16 +13,27 @@ export const MEDIA_HEIGHT = 150;
 export const BLURB_HEIGHT = 40;
 export const RAIL_CARD_HEIGHT = MEDIA_HEIGHT + BLURB_HEIGHT;
 
+export const DETAIL_ACTION = "detail";
+
 interface Props {
   spot: TravelSpot;
   style?: StyleProp<ViewStyle>;
   onSaveToggle?: (saved: boolean) => void;
   onPress?: () => void;
+  onDetail?: () => void;
   selected?: boolean;
   dimmed?: boolean;
 }
 
-export function SpotCard({ spot, style, onSaveToggle, onPress, selected, dimmed }: Props) {
+export function SpotCard({
+  spot,
+  style,
+  onSaveToggle,
+  onPress,
+  onDetail,
+  selected,
+  dimmed,
+}: Props) {
   const { saved, toggle } = useSaveOptimistic(spot.contentId);
 
   return (
@@ -32,6 +43,16 @@ export function SpotCard({ spot, style, onSaveToggle, onPress, selected, dimmed 
         style={({ pressed }) => [styles.tapArea, pressed && styles.pressed]}
         onPressIn={() => prefetchSpot(spot)}
         onPress={onPress ?? (() => router.push(`/spots/${spot.contentId}`))}
+        accessibilityRole="button"
+        accessibilityHint={onDetail ? "이 장소 기준으로 이어서 물어요" : undefined}
+        accessibilityActions={onDetail ? [{ name: DETAIL_ACTION, label: "상세 보기" }] : undefined}
+        onAccessibilityAction={
+          onDetail
+            ? (event) => {
+                if (event.nativeEvent.actionName === DETAIL_ACTION) onDetail();
+              }
+            : undefined
+        }
       >
         <View style={styles.media}>
           <RemoteImage uri={spot.imageUrl} style={StyleSheet.absoluteFill} />
