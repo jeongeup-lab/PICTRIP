@@ -9,7 +9,7 @@ export const ATTACH_HEADLINE = "이 사진 같은 분위기로 찾아요";
 
 export const ATTACH_NOTICE = "사진은 저장하지 않아요";
 
-export const ASK_PLACEHOLDER = "예: 부산에서 야경 좋은 곳";
+export const ASK_PLACEHOLDER = "어디로 갈지 말해보세요";
 
 export const ATTACHED_PLACEHOLDER = "지역이나 조건을 덧붙여 보세요";
 
