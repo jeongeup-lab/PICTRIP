@@ -18,8 +18,8 @@ const RISE_MS = 320;
 interface Props {
   turn: Turn;
   anchorId: string | null;
-  onSpotPress: (spot: TravelSpot) => void;
-  onSpotAnchor: (spot: TravelSpot) => void;
+  live: boolean;
+  onSpotTap: (spot: TravelSpot) => void;
   onOpenMap: (turn: Turn) => void;
   onRetry: (turn: Turn) => void;
   onGrow: () => void;
@@ -28,8 +28,8 @@ interface Props {
 export function ConversationTurn({
   turn,
   anchorId,
-  onSpotPress,
-  onSpotAnchor,
+  live,
+  onSpotTap,
   onOpenMap,
   onRetry,
   onGrow,
@@ -100,7 +100,14 @@ export function ConversationTurn({
 
       {answer && answer.spots.length > 0 ? (
         <>
-          {mappable.length > 0 ? <TurnMap spots={mappable} onOpen={() => onOpenMap(turn)} /> : null}
+          {mappable.length > 0 ? (
+            <TurnMap
+              spots={mappable}
+              live={live}
+              selectedId={anchorId}
+              onOpen={() => onOpenMap(turn)}
+            />
+          ) : null}
 
           <FlatList
             horizontal
@@ -113,8 +120,7 @@ export function ConversationTurn({
                 spot={item}
                 selected={item.contentId === anchorId}
                 dimmed={anchorId !== null && item.contentId !== anchorId}
-                onPress={() => onSpotPress(item)}
-                onAnchor={() => onSpotAnchor(item)}
+                onPress={() => onSpotTap(item)}
               />
             )}
           />
@@ -127,7 +133,7 @@ export function ConversationTurn({
 
           <View style={styles.foot}>
             <Text style={styles.hint}>
-              카드를 탭하면 상세, 여기 기준으로를 누르면 이 장소로 이어서 물어봐요
+              카드를 한 번 탭하면 이 장소 기준으로 이어서 묻고, 두 번 탭하면 상세로 가요
             </Text>
           </View>
         </>

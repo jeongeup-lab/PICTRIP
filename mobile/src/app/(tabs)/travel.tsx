@@ -16,10 +16,11 @@ import { ConversationTurn } from "@/features/travel/components/ConversationTurn"
 import { Mascot } from "@/features/travel/components/Mascot";
 import { StartActions } from "@/features/travel/components/StartActions";
 import { TravelToast } from "@/features/travel/components/TravelToast";
-import { TravelMapSheet } from "@/features/travel/components/TravelMapSheet";
 import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
+import { useCardTap } from "@/features/travel/hooks/use-card-tap";
 import { useAskAgentMutation } from "@/features/travel/queries";
 import { useConversation, type Turn } from "@/features/travel/stores/conversation-store";
+import { useTravelMap } from "@/features/travel/stores/map-store";
 import {
   agentErrorMessage,
   PHOTO_PICK_FAILED,
@@ -29,7 +30,7 @@ import { composeQuestion, anchorQuestion, MY_LOCATION } from "@/features/travel/
 import { composerChips, NEARBY_CHIP, type Chip } from "@/features/travel/lib/chips";
 import { contextFrom } from "@/features/travel/lib/conversation-context";
 import { pickTravelPhoto, shootTravelPhoto } from "@/features/travel/usecases/pick-travel-photo";
-import { placed, type PlacedSpot } from "@/features/travel/lib/spot-geo";
+import { placed } from "@/features/travel/lib/spot-geo";
 import type { AskInput, PhotoUpload, TravelSpot } from "@/features/travel/api";
 import { colors, spacing } from "@/constants/theme";
 
@@ -43,7 +44,6 @@ export default function TravelScreen() {
   const [photo, setPhoto] = useState<PhotoUpload | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [anchorSpot, setAnchorSpot] = useState<TravelSpot | null>(null);
-  const [mapTurn, setMapTurn] = useState<{ spots: PlacedSpot[]; question: string } | null>(null);
 
   const turns = useConversation((s) => s.turns);
   const busy = useConversation((s) => s.busy);
@@ -52,6 +52,7 @@ export default function TravelScreen() {
   const resolveTurn = useConversation((s) => s.resolve);
   const failTurn = useConversation((s) => s.fail);
   const clearTurns = useConversation((s) => s.clear);
+  const openMap = useTravelMap((s) => s.open);
 
   const { coords, askable: locationAskable, ask: askLocation } = useNearbyCoords();
   const ask = useAskAgentMutation();
@@ -74,6 +75,8 @@ export default function TravelScreen() {
   }, []);
 
   const lastAnswered = [...turns].reverse().find((t) => t.status === "done" && t.answer);
+  const liveMapTurnId =
+    [...turns].reverse().find((t) => placed(t.answer?.spots ?? []).length > 0)?.id ?? null;
 
   const run = useCallback(
     (id: string, input: Omit<AskInput, "coords">) => {
@@ -173,18 +176,25 @@ export default function TravelScreen() {
     setAnchorSpot(null);
   }, [clearTurns]);
 
-  const onSpotPress = useCallback((spot: TravelSpot) => {
+  const onSpotDetail = useCallback((spot: TravelSpot) => {
     router.push(`/spots/${spot.contentId}`);
   }, []);
 
-  const onOpenMap = useCallback((turn: Turn) => {
-    const spots = placed(turn.answer?.spots ?? []);
-    if (spots.length > 0) setMapTurn({ spots, question: turn.question });
-  }, []);
+  const onOpenMap = useCallback(
+    (turn: Turn) => {
+      const spots = placed(turn.answer?.spots ?? []);
+      if (spots.length === 0) return;
+      openMap(spots, turn.question);
+      router.push("/travel-map");
+    },
+    [openMap],
+  );
 
   const onSpotAnchor = useCallback((spot: TravelSpot) => {
     setAnchorSpot((current) => (current?.contentId === spot.contentId ? null : spot));
   }, []);
+
+  const onSpotTap = useCardTap(onSpotAnchor, onSpotDetail);
 
   const onRetry = useCallback(
     (turn: Turn) => {
@@ -231,7 +241,9 @@ export default function TravelScreen() {
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.bar}>
-        <Text style={styles.wordmark}>PICTRIP</Text>
+        <Text style={styles.wordmark} pointerEvents="none">
+          PICTRIP
+        </Text>
         {empty ? null : (
           <Pressable
             testID="travel-new-chat"
@@ -259,8 +271,8 @@ export default function TravelScreen() {
                 key={turn.id}
                 turn={turn}
                 anchorId={anchorSpot?.contentId ?? null}
-                onSpotPress={onSpotPress}
-                onSpotAnchor={onSpotAnchor}
+                live={turn.id === liveMapTurnId}
+                onSpotTap={onSpotTap}
                 onOpenMap={onOpenMap}
                 onRetry={onRetry}
                 onGrow={scrollToEnd}
@@ -280,7 +292,6 @@ export default function TravelScreen() {
           <Text style={styles.greetingText}>오늘,{"\n"}어디로 갈까요</Text>
           <View style={styles.startActions}>
             <StartActions
-              onPickPhoto={() => void onAttach()}
               onAskLocation={() => void askLocation()}
               locationAskable={locationAskable}
             />
@@ -307,14 +318,6 @@ export default function TravelScreen() {
         />
       </KeyboardAvoidingView>
 
-      {mapTurn ? (
-        <TravelMapSheet
-          spots={mapTurn.spots}
-          question={mapTurn.question}
-          onClose={() => setMapTurn(null)}
-        />
-      ) : null}
-
       <TravelToast message={toast} bottom={TOAST_BOTTOM} onHide={() => setToast(null)} />
     </SafeAreaView>
   );
@@ -325,14 +328,23 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
     minHeight: 32,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
   },
-  wordmark: { fontSize: 20, fontWeight: "800", letterSpacing: -0.5, color: colors.ink },
+  wordmark: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    textAlign: "center",
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    color: colors.ink,
+  },
   newChat: {
     height: 32,
     paddingHorizontal: 13,

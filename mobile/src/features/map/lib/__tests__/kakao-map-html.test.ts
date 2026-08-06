@@ -1,4 +1,4 @@
-import { buildKakaoMapHtml } from "@/features/map/lib/kakao-map-html";
+import { buildKakaoMapHtml, PIN_ACCENT } from "@/features/map/lib/kakao-map-html";
 
 describe("buildKakaoMapHtml", () => {
   const html = buildKakaoMapHtml("TESTKEY123");
@@ -35,6 +35,21 @@ describe("buildKakaoMapHtml", () => {
     expect(locked).toContain("setDraggable(false)");
     expect(locked).not.toContain("center_changed");
   });
+  it("paints every pin accent red when the caller asks for it", () => {
+    const accent = buildKakaoMapHtml("TESTKEY123", false, false, PIN_ACCENT);
+
+    expect(accent).toContain("background:#E60023");
+    expect(accent).toContain('class="tear" viewBox="0 0 24 24" fill="#E60023"');
+    expect(accent).toContain('circle cx="12" cy="10.5" r="2.6" fill="#FFFFFF"');
+  });
+
+  it("keeps the ink pin as the default", () => {
+    const html = buildKakaoMapHtml("TESTKEY123");
+
+    expect(html).toContain("background:#171719");
+    expect(html).toContain('class="tear" viewBox="0 0 24 24" fill="#171719"');
+  });
+
   it("tints the generic pin dot with the accent color only when accentDot is set", () => {
     expect(buildKakaoMapHtml("TESTKEY123", false, true)).toContain('var DOT = "#E60023"');
     expect(buildKakaoMapHtml("TESTKEY123", false)).toContain('var DOT = "#fff"');

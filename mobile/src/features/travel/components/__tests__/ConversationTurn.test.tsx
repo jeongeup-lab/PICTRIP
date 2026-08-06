@@ -3,6 +3,7 @@ import { FlatList, Text } from "react-native";
 import { ConversationTurn } from "@/features/travel/components/ConversationTurn";
 import { SpotCard } from "@/features/travel/components/SpotCard";
 import { StepList } from "@/features/travel/components/StepList";
+import { KakaoWebMap } from "@/features/map/components/KakaoWebMap";
 import type { Turn } from "@/features/travel/stores/conversation-store";
 
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
@@ -56,15 +57,21 @@ const turn = (over: Partial<Turn> = {}): Turn => ({
 
 const noop = () => undefined;
 
-function mount(t: Turn, anchorId: string | null = null, onGrow = noop, onOpenMap = noop) {
+function mount(
+  t: Turn,
+  anchorId: string | null = null,
+  onGrow = noop,
+  onOpenMap = noop,
+  onSpotTap: (spot: { contentId: string }) => void = noop,
+) {
   let tree: renderer.ReactTestRenderer;
   act(() => {
     tree = renderer.create(
       <ConversationTurn
         turn={t}
         anchorId={anchorId}
-        onSpotPress={noop}
-        onSpotAnchor={noop}
+        live
+        onSpotTap={onSpotTap}
         onOpenMap={onOpenMap}
         onRetry={noop}
         onGrow={onGrow}
@@ -180,6 +187,42 @@ describe("ConversationTurn once the answer lands", () => {
     expect(tree.root.findAllByProps({ testID: "travel-turn-map" })).toHaveLength(0);
   });
 
+  it("draws a real Kakao map for the live turn and only the summary bar for older ones", () => {
+    const mapped = turn({
+      answer: { ...answer, spots: [{ ...answer.spots[0], lat: 33.5, lng: 126.5 }] },
+    });
+
+    const live = mount(mapped);
+    expect(live.root.findAllByType(KakaoWebMap)).toHaveLength(1);
+    expect(live.root.findByType(KakaoWebMap).props.accentPins).toBe(true);
+
+    let older: renderer.ReactTestRenderer;
+    act(() => {
+      older = renderer.create(
+        <ConversationTurn
+          turn={mapped}
+          anchorId={null}
+          live={false}
+          onSpotTap={noop}
+          onOpenMap={noop}
+          onRetry={noop}
+          onGrow={noop}
+        />,
+      );
+    });
+    expect(older!.root.findAllByType(KakaoWebMap)).toHaveLength(0);
+    expect(older!.root.findAllByProps({ testID: "travel-turn-map" }).length).toBeGreaterThan(0);
+  });
+
+  it("marks the anchored spot as the selected pin", () => {
+    const mapped = turn({
+      answer: { ...answer, spots: [{ ...answer.spots[0], lat: 33.5, lng: 126.5 }] },
+    });
+    const tree = mount(mapped, "126508");
+
+    expect(tree.root.findByType(KakaoWebMap).props.selectedId).toBe("126508");
+  });
+
   it("hands the whole turn to the map opener", () => {
     const onOpenMap = jest.fn();
     const mapped = turn({
@@ -206,15 +249,15 @@ describe("ConversationTurn once the answer lands", () => {
     expect(texts(tree).join("")).not.toContain("전체");
   });
 
-  it("keeps the card tap on the detail route and puts anchoring on its own button", () => {
-    const tree = mount(turn());
+  it("routes every card tap through one handler, with no separate anchor button", () => {
+    const onSpotTap = jest.fn();
+    const tree = mount(turn(), null, noop, noop, onSpotTap);
     const card = tree.root.findByType(SpotCard);
 
-    expect(card.props.onPress).toBeDefined();
-    expect(card.props.onAnchor).toBeDefined();
-    expect(
-      tree.root.findAllByProps({ testID: "travel-spot-anchor-126508" }).length,
-    ).toBeGreaterThan(0);
+    act(() => card.props.onPress());
+
+    expect(onSpotTap).toHaveBeenCalledWith(answer.spots[0]);
+    expect(tree.root.findAllByProps({ testID: "travel-spot-anchor-126508" })).toHaveLength(0);
   });
 
   it("marks the anchored card selected and dims the rest", () => {
