@@ -451,3 +451,40 @@ async def test_an_origin_the_context_never_carried_is_ignored(
 
     basis = (res.json().get("data") or {}).get("tagBasis") or ""
     assert basis != "직선거리 기준"
+
+
+def test_an_anchor_with_nothing_nearby_is_an_answer_not_an_error() -> None:
+    from app.modules.agent.services import ask as ask_service
+
+    answer = ask_service.empty_anchor_response("그리스신화박물관", "food", prior_steps=[])
+
+    assert answer.spots == []
+    assert answer.totalCount == 0
+    assert "그리스신화박물관" in "".join(part.text for part in answer.answer)
+    assert "맛집" in "".join(part.text for part in answer.answer)
+
+
+def test_a_focused_card_pivots_a_nearby_question_without_naming_it() -> None:
+    from app.modules.agent.schemas import AskContext, AskContextSpot, QueryIntent
+    from app.modules.agent.services import ask as ask_service
+
+    context = AskContext(
+        spots=[AskContextSpot(contentId="126198", title="통영 세병관")],
+        focusContentId="126198",
+    )
+    intent = QueryIntent(nearMe=True, categoryKeywords=["카페"])
+
+    pivot = ask_service._origin_anchor(intent, context)
+
+    assert pivot is not None
+    assert pivot.contentId == "126198"
+    assert pivot.action == "cafe"
+
+
+def test_a_nearby_question_without_a_focused_card_stays_a_search() -> None:
+    from app.modules.agent.schemas import AskContext, AskContextSpot, QueryIntent
+    from app.modules.agent.services import ask as ask_service
+
+    context = AskContext(spots=[AskContextSpot(contentId="126198", title="통영 세병관")])
+
+    assert ask_service._origin_anchor(QueryIntent(nearMe=True), context) is None

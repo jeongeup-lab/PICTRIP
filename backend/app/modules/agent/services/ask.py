@@ -316,7 +316,7 @@ async def _ask_with_anchor(
     kept = [near for near in found if row is None or near.content_id != row.content_id]
     kept = kept[: retrieve.RESULT_LIMIT]
     if not kept:
-        raise AgentNoResults()
+        return empty_anchor_response(origin, anchor.action, prior_steps=prior_steps or [])
     rated = await repositories.load_candidates_by_ids(session, [n.content_id for n in kept])
     spots = [_anchor_card(near, has_crowd=_has_crowd(rated.get(near.content_id))) for near in kept]
     steps = [*(prior_steps or [])]
@@ -341,6 +341,29 @@ async def _ask_with_anchor(
         totalCount=len(spots),
         intent=carried_intent or QueryIntent(),
         tagBasis="직선거리 기준",
+        refinements=[],
+    )
+
+
+def empty_anchor_response(
+    origin: str, action: AnchorAction, *, prior_steps: list[AskStep]
+) -> AskResponse:
+    noun = ANCHOR_NOUNS[action]
+    steps = [
+        *prior_steps,
+        AskStep(tool="nearby", label=f"{origin} 주변 {noun} 조회", badge="0곳"),
+    ]
+    logger.info("agent.anchor.empty", action=action)
+    return AskResponse(
+        steps=steps,
+        answer=[
+            AnswerSegment(text=f"{origin} 주변 "),
+            AnswerSegment(text=f"{ANCHOR_RADIUS_M // 1000}km", emphasis=True),
+            AnswerSegment(text=f" 안에는 {noun}이 없어요. 다른 곳을 골라 보세요."),
+        ],
+        spots=[],
+        totalCount=0,
+        intent=QueryIntent(),
         refinements=[],
     )
 
@@ -1053,13 +1076,16 @@ def _prior(context: AskContext | None) -> tuple[QueryIntent | None, list[str]]:
 
 
 def _origin_anchor(intent: QueryIntent, context: AskContext | None) -> AskAnchor | None:
-    if intent.originPlace is None or context is None:
+    if context is None:
         return None
-    wanted = intent.originPlace.strip()
-    match = next((spot for spot in context.spots if spot.title.strip() == wanted), None)
-    if match is None:
-        return None
-    return AskAnchor(contentId=match.contentId, action=_origin_action(intent))
+    if intent.originPlace is not None:
+        wanted = intent.originPlace.strip()
+        match = next((spot for spot in context.spots if spot.title.strip() == wanted), None)
+        if match is not None:
+            return AskAnchor(contentId=match.contentId, action=_origin_action(intent))
+    if context.focusContentId is not None and intent.nearMe:
+        return AskAnchor(contentId=context.focusContentId, action=_origin_action(intent))
+    return None
 
 
 def _origin_action(intent: QueryIntent) -> AnchorAction:

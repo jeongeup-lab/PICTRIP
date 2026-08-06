@@ -188,3 +188,32 @@ def test_a_target_that_matches_nothing_does_not_pin_the_wrong_card() -> None:
 
     assert ask_service.detail_target(intent, context=AskContext(spots=[SEBYEONGGWAN, other]))
     assert ask_service.detail_target(intent, context=AskContext(spots=[other])) is None
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("가능<br>요금(무료)", "가능 요금(무료)"),
+        ("09:00~18:00<br/>동절기 17:00", "09:00~18:00 동절기 17:00"),
+        ("주차 <b>가능</b>", "주차 가능"),
+        ("&lt;주의&gt; 유료", "<주의> 유료"),
+        ("평상시", "평상시"),
+    ],
+)
+def test_a_fact_value_never_shows_markup(raw, expected) -> None:
+    assert detail_service.plain(raw) == expected
+
+
+async def test_a_marked_up_value_reaches_the_sentence_clean(monkeypatch) -> None:
+    intent = QueryIntent(task="detail", targetPlace="통영 세병관", detailFields=["parking"])
+
+    answer = await _ask(
+        "주차 되나?",
+        intent=intent,
+        row=_detail(parking="가능<br>요금(무료)"),
+        monkeypatch=monkeypatch,
+    )
+
+    text = _text(answer)
+    assert "<br>" not in text
+    assert "가능 요금(무료)" in text

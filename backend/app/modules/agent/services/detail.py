@@ -17,6 +17,7 @@ from app.modules.agent.schemas import (
 )
 from app.modules.spots.services import load_spot_detail
 from app.modules.spots.services.rows import SpotDetailRow, SpotIntroRow
+from app.modules.spots.text import to_plain_text
 from app.web.errors import AppError
 
 logger = get_logger(__name__)
@@ -62,6 +63,10 @@ def ends_with_consonant(text: str) -> bool:
     return False
 
 
+def plain(value: str) -> str:
+    return to_plain_text(value)
+
+
 def fact_sentence(noun: str, value: str) -> str:
     topic = "은" if ends_with_consonant(noun) else "는"
     copula = "이에요" if ends_with_consonant(value) else "예요"
@@ -95,7 +100,8 @@ def _sentence(row: SpotDetailRow, field: DetailField) -> list[AnswerSegment]:
         if not row.overview:
             return [AnswerSegment(text=f"{noun} {UNKNOWN_HINT}.")]
         return [AnswerSegment(text=row.overview)]
-    value = field_value(row.intro, row.tel, field)
+    raw = field_value(row.intro, row.tel, field)
+    value = plain(raw) if raw else None
     if not value:
         return [AnswerSegment(text=f"{noun} {UNKNOWN_HINT}.")]
     sentence = fact_sentence(noun, value)
