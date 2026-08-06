@@ -1,3 +1,4 @@
+import type { QueryIntent } from "@/features/travel/api";
 import {
   ANCHOR_CHIPS,
   composerChips,
@@ -5,6 +6,8 @@ import {
   NEARBY_CHIP,
   refineChips,
 } from "@/features/travel/lib/chips";
+
+const EMPTY_INTENT: QueryIntent = { categoryKeywords: [], regionHints: [] };
 
 describe("idleChips", () => {
   it("거리 칩은 더 이상 칩 레일에 있지 않다", () => {
@@ -72,6 +75,22 @@ describe("composerChips", () => {
   });
 
   it("0곳 턴에서 풀 조건이 없으면 칩을 아예 안 낸다", () => {
+    const answer = {
+      totalCount: 0,
+      refinements: [],
+      intent: { categoryKeywords: ["계곡"], regionHints: ["제주"] },
+    };
+
+    expect(composerChips(answer)).toEqual([]);
+  });
+
+  it("조건이 하나도 없는 0곳 턴은 초기 칩으로 되돌아간다", () => {
+    const answer = { totalCount: 0, refinements: [], intent: EMPTY_INTENT };
+
+    expect(composerChips(answer)).toEqual(idleChips());
+  });
+
+  it("intent 를 안 주는 구버전 응답은 0곳 턴을 그대로 비운다", () => {
     expect(composerChips({ totalCount: 0, refinements: [] })).toEqual([]);
   });
 

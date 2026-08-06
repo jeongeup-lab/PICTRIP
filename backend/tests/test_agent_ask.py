@@ -19,7 +19,7 @@ from app.core.redis import get_redis
 from app.kto.client import get_kto
 from app.main import app
 from app.modules.agent import llm, repositories
-from app.modules.agent.errors import AgentIntentUnavailable
+from app.modules.agent.errors import AgentIntentUnavailable, AgentNoResults
 from app.modules.agent.repositories import CandidateRow, VectorMatchRow
 from app.modules.agent.routes import MAX_BODY_BYTES
 from app.modules.agent.schemas import (
@@ -29,6 +29,7 @@ from app.modules.agent.schemas import (
     MAX_REGION_HINTS,
     MAX_TEXT_CHARS,
     AgentSpotCard,
+    AskResponse,
     ExtractedPlace,
     Mood,
     QueryIntent,
@@ -135,6 +136,30 @@ def test_answer_emphasises_the_result_count() -> None:
 
     assert [s.text for s in segments if s.emphasis] == ["4곳"]
     assert "이번 주말" not in "".join(s.text for s in segments)
+
+
+def test_an_answer_names_the_conditions_it_searched() -> None:
+    segments = ask_service._answer(
+        _pool()[:4],
+        intent=QueryIntent(regionHints=["통영"], categoryKeywords=["계곡"]),
+        near=False,
+        lat=None,
+        lng=None,
+    )
+
+    assert "".join(s.text for s in segments).startswith("통영 + 계곡 조건으로 4곳 추렸어요")
+
+
+def test_an_answer_with_no_nameable_condition_keeps_the_plain_opening() -> None:
+    segments = ask_service._answer(
+        _pool()[:4],
+        intent=QueryIntent(namedPlaces=[ExtractedPlace(name="감천문화마을")]),
+        near=False,
+        lat=None,
+        lng=None,
+    )
+
+    assert "".join(s.text for s in segments).startswith("조건에 맞는 곳으로 4곳 추렸어요")
 
 
 def _override(db_session: AsyncSession) -> None:
@@ -672,6 +697,25 @@ async def test_unmatched_category_keyword_falls_back_to_title_search(
 
 
 @pytest.mark.integration
+async def test_an_answer_does_not_claim_a_region_the_query_never_narrowed_to(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["계곡"], regionHints=["강남역"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"question": "강남역 계곡"})
+    finally:
+        app.dependency_overrides.clear()
+
+    data = res.json()["data"]
+    assert data["spots"]
+    assert "강남역" not in "".join(part["text"] for part in data["answer"])
+
+
+@pytest.mark.integration
 async def test_unmatched_keyword_with_no_title_hit_does_not_widen_to_everything(
     db_session, client, seeded, monkeypatch
 ) -> None:
@@ -1150,7 +1194,7 @@ async def test_photo_turn_stays_exempt_from_the_out_of_scope_guard(
 
 
 @pytest.mark.integration
-async def test_vague_domestic_question_still_returns_spots(
+async def test_a_question_with_no_condition_asks_for_one_instead_of_dumping_the_country(
     db_session, client, seeded, monkeypatch
 ) -> None:
     async def fake_intent(question: str) -> QueryIntent:
@@ -1164,7 +1208,9 @@ async def test_vague_domestic_question_still_returns_spots(
         app.dependency_overrides.clear()
 
     assert res.status_code == 200
-    assert res.json()["data"]["spots"]
+    body = res.json()["data"]
+    assert body["spots"] == []
+    assert "".join(part["text"] for part in body["answer"]) == ask_service.BLANK_ANSWER
 
 
 @pytest.mark.integration
@@ -3714,6 +3760,68 @@ def test_a_card_carries_the_category_the_map_pin_draws() -> None:
 
 def test_a_card_with_no_derivable_category_leaves_the_pin_generic() -> None:
     assert retrieve.to_card(_row("a", rate=None), tag=None).categoryGroup is None
+
+
+def test_an_indoor_venue_in_the_travel_pool_still_gets_a_pin_category() -> None:
+    assert repositories.category_group("VE", "VE06", None) == "attraction"
+
+
+def test_category_group_defers_to_the_shared_mapping_for_food_codes() -> None:
+    assert repositories.category_group("FD", "FD05", "FD050100") == "cafe"
+
+
+def test_category_group_leaves_an_unknown_branch_generic() -> None:
+    assert repositories.category_group("XX", None, None) is None
+
+
+class _ExplodingSession:
+    async def execute(self, *args: object, **kwargs: object) -> object:
+        raise AssertionError("a question with no condition must not reach the database")
+
+
+async def _ask_blank(*, legacy_client: bool = False) -> AskResponse:
+    return await ask_service.ask(
+        _ExplodingSession(),  # type: ignore[arg-type]
+        FakeRedis(),
+        None,
+        question="안녕",
+        lat=None,
+        lng=None,
+        image_bytes=None,
+        image_mime=None,
+        intent=QueryIntent(),
+        legacy_client=legacy_client,
+    )
+
+
+async def test_a_question_with_no_condition_never_searches() -> None:
+    answer = await _ask_blank()
+
+    assert answer.totalCount == 0
+    assert answer.spots == []
+
+
+async def test_a_question_with_no_condition_asks_for_one() -> None:
+    answer = await _ask_blank()
+
+    assert "".join(segment.text for segment in answer.answer) == ask_service.BLANK_ANSWER
+
+
+async def test_a_legacy_client_gets_an_error_instead_of_a_blank_turn() -> None:
+    with pytest.raises(AgentNoResults):
+        await _ask_blank(legacy_client=True)
+
+
+def test_a_single_axis_is_enough_to_search() -> None:
+    assert not ask_service._asks_for_nothing(QueryIntent(nearMe=True), prefixes=[])
+
+
+def test_a_crowd_preference_alone_is_enough_to_search() -> None:
+    assert not ask_service._asks_for_nothing(QueryIntent(crowdPreference="quiet"), prefixes=[])
+
+
+def test_a_pre_ota_region_alone_is_enough_to_search() -> None:
+    assert not ask_service._asks_for_nothing(QueryIntent(), prefixes=["제주"])
 
 
 def test_a_similarity_only_batch_names_the_photo_comparison_not_the_crowd() -> None:
