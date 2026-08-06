@@ -1,4 +1,10 @@
-import type { AnchorAction, QueryIntent, RefinePatch, Suggestion } from "@/features/travel/api";
+import type {
+  AgentAnswer,
+  AnchorAction,
+  QueryIntent,
+  RefinePatch,
+  Suggestion,
+} from "@/features/travel/api";
 
 export type Chip =
   | { kind: "question"; label: string; question: string }
@@ -61,11 +67,13 @@ export function refineChips(refinements: Suggestion[] | null | undefined): Chip[
 }
 
 export function composerChips(
-  refinements: Suggestion[] | null | undefined,
+  answer: Pick<AgentAnswer, "totalCount" | "refinements"> | null | undefined,
   anchor: { hasCrowd?: boolean } | null = null,
   hasCoords: boolean = false,
 ): Chip[] {
   if (anchor) return anchorChips(anchor.hasCrowd === true);
-  const refine = refineChips(refinements);
-  return refine.length > 0 ? refine : idleChips(hasCoords);
+  const refine = refineChips(answer?.refinements);
+  if (refine.length > 0) return refine;
+  if (answer && answer.totalCount === 0) return [];
+  return idleChips(hasCoords);
 }

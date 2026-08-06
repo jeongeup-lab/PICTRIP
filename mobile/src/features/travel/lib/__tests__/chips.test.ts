@@ -58,20 +58,37 @@ describe("refineChips", () => {
 
 describe("composerChips", () => {
   it("제안이 있으면 refine 칩을 쓴다", () => {
-    const chips = composerChips([{ label: "가까운 순으로", patch: { nearMe: true } }]);
+    const chips = composerChips({
+      totalCount: 12,
+      refinements: [{ label: "가까운 순으로", patch: { nearMe: true } }],
+    });
 
     expect(chips).toEqual([{ kind: "refine", label: "가까운 순으로", patch: { nearMe: true } }]);
   });
 
-  it("제안이 비면 초기 칩으로 되돌아간다", () => {
-    expect(composerChips([])).toEqual(idleChips());
+  it("결과가 있는 턴에서 제안이 비면 초기 칩으로 되돌아간다", () => {
+    expect(composerChips({ totalCount: 12, refinements: [] })).toEqual(idleChips());
     expect(composerChips(undefined)).toEqual(idleChips());
   });
 
-  it("카드가 선택되면 제안 대신 앵커 칩을 쓴다", () => {
-    const chips = composerChips([{ label: "실내만", patch: { indoorOnly: true } }], {
-      hasCrowd: true,
+  it("0곳 턴에서 풀 조건이 없으면 칩을 아예 안 낸다", () => {
+    expect(composerChips({ totalCount: 0, refinements: [] })).toEqual([]);
+  });
+
+  it("0곳 턴에도 지역 넓히기가 오면 그 칩만 낸다", () => {
+    const chips = composerChips({
+      totalCount: 0,
+      refinements: [{ label: "지역 넓히기", patch: { drop: "region" } }],
     });
+
+    expect(chips).toEqual([{ kind: "refine", label: "지역 넓히기", patch: { drop: "region" } }]);
+  });
+
+  it("카드가 선택되면 제안 대신 앵커 칩을 쓴다", () => {
+    const chips = composerChips(
+      { totalCount: 12, refinements: [{ label: "실내만", patch: { indoorOnly: true } }] },
+      { hasCrowd: true },
+    );
 
     expect(chips).toEqual(ANCHOR_CHIPS);
     expect(chips.every((c) => c.kind === "anchor")).toBe(true);

@@ -236,7 +236,7 @@ export default function TravelScreen() {
 
   const onShoot = useCallback(() => attachFrom(shootTravelPhoto, PHOTO_SHOOT_FAILED), [attachFrom]);
 
-  const chips = composerChips(lastAnswered?.answer?.refinements, anchorSpot, coords !== null);
+  const chips = composerChips(lastAnswered?.answer, anchorSpot, coords !== null);
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -273,6 +273,7 @@ export default function TravelScreen() {
                 anchorId={anchorSpot?.contentId ?? null}
                 live={turn.id === liveMapTurnId}
                 onSpotTap={onSpotTap}
+                onSpotDetail={onSpotDetail}
                 onOpenMap={onOpenMap}
                 onRetry={onRetry}
                 onGrow={scrollToEnd}
