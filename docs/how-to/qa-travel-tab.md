@@ -99,7 +99,7 @@ cd mobile
 npm test -- --runInBand src/__tests__/travel-screen.test.tsx src/features/travel
 npm run lint
 npm run typecheck
-npx prettier --check src/__tests__/travel-screen.test.tsx src/app/(tabs)/travel.tsx src/features/saved/hooks/use-save-optimistic.ts src/features/saved/hooks/__tests__/use-save-optimistic.test.tsx src/features/travel
+npx prettier --check src/__tests__/travel-screen.test.tsx "src/app/(tabs)/travel.tsx" src/features/saved/hooks/use-save-optimistic.ts src/features/saved/hooks/__tests__/use-save-optimistic.test.tsx src/features/travel
 ```
 
 사진 업로드 계약을 변경했다면 백엔드 경계 테스트도 실행한다.
@@ -113,7 +113,7 @@ uv run pytest tests/test_agent_ask.py tests/test_agent_anchor.py
 
 ## 출시 판정
 
-- P0 40건은 두 OS에서 모두 통과해야 한다.
+- P0 39건은 두 OS에서 모두 통과해야 한다.
 - 자동화 명령은 모두 종료 코드 0이어야 한다.
 - 사진 비영속성, 잘못된 장소 추천, 중복 요청, 상세 진입 불가, 저장 상태 불일치는
   건수와 관계없이 출시를 차단한다.
