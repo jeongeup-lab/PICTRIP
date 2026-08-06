@@ -40,7 +40,7 @@ export function pinsFrom(spots: PlacedSpot[]): NearbySpot[] {
     mapy: lat,
     category: null,
     dist: null,
-    categoryGroup: null,
+    categoryGroup: spot.categoryGroup ?? null,
     regionName: null,
     sigunguName: null,
     overview: null,

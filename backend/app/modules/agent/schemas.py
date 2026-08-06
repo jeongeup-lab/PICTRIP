@@ -147,6 +147,7 @@ class AgentSpotCard(BaseModel):
     tag: str | None = None
     lat: float | None = None
     lng: float | None = None
+    categoryGroup: str | None = None
     hasCrowd: bool = False
 
 

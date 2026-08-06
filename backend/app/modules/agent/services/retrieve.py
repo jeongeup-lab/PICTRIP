@@ -257,5 +257,6 @@ def to_card(row: CandidateRow, *, tag: str | None) -> AgentSpotCard:
         tag=tag,
         lat=row.lat,
         lng=row.lng,
+        categoryGroup=row.category_group,
         hasCrowd=row.concentration_rate is not None,
     )

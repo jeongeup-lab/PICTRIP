@@ -61,6 +61,7 @@ export interface TravelSpot {
   tag: string | null;
   lat: number | null;
   lng: number | null;
+  categoryGroup?: string | null;
   hasCrowd?: boolean;
 }
 
