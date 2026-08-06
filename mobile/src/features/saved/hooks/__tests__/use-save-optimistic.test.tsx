@@ -31,63 +31,68 @@ async function mount(): Promise<{ api: () => UseSaveOptimistic }> {
 }
 
 describe("useSaveOptimistic", () => {
-  const saveMutate = jest.fn();
-  const unsaveMutate = jest.fn();
+  const saveMutateAsync = jest.fn();
+  const unsaveMutateAsync = jest.fn();
   const requireAuth = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
     (useAuthGate as jest.Mock).mockReturnValue(requireAuth);
     (useIsSaved as jest.Mock).mockReturnValue(false);
-    (useSaveMutation as jest.Mock).mockReturnValue({ mutate: saveMutate });
-    (useUnsaveMutation as jest.Mock).mockReturnValue({ mutate: unsaveMutate });
+    saveMutateAsync.mockResolvedValue(undefined);
+    unsaveMutateAsync.mockResolvedValue(undefined);
+    (useSaveMutation as jest.Mock).mockReturnValue({ mutateAsync: saveMutateAsync });
+    (useUnsaveMutation as jest.Mock).mockReturnValue({ mutateAsync: unsaveMutateAsync });
   });
 
-  it("auth-gates BEFORE optimistic flip — no phantom heart for guests", async () => {
+  it("returns null without changing state for a guest", async () => {
     requireAuth.mockResolvedValue(false);
     const { api } = await mount();
+    let result: boolean | null | undefined;
     await act(async () => {
-      await api().toggle();
+      result = await api().toggle();
     });
     expect(requireAuth).toHaveBeenCalledWith("save");
+    expect(result).toBeNull();
     expect(api().saved).toBe(false);
-    expect(saveMutate).not.toHaveBeenCalled();
+    expect(saveMutateAsync).not.toHaveBeenCalled();
   });
 
-  it("flips optimistically and fires save when authed", async () => {
+  it("returns true after save succeeds", async () => {
     requireAuth.mockResolvedValue(true);
     const { api } = await mount();
+    let result: boolean | null | undefined;
     await act(async () => {
-      await api().toggle();
+      result = await api().toggle();
     });
+    expect(result).toBe(true);
     expect(api().saved).toBe(true);
-    expect(saveMutate).toHaveBeenCalledWith(
-      ID,
-      expect.objectContaining({ onError: expect.any(Function) }),
-    );
+    expect(saveMutateAsync).toHaveBeenCalledWith(ID);
   });
 
-  it("rolls back the optimistic flip when the mutation errors", async () => {
+  it("rolls back and returns null when save fails", async () => {
     requireAuth.mockResolvedValue(true);
+    saveMutateAsync.mockRejectedValue(new Error("save failed"));
     const { api } = await mount();
+    let result: boolean | null | undefined;
     await act(async () => {
-      await api().toggle();
+      result = await api().toggle();
     });
-    expect(api().saved).toBe(true);
-    const opts = saveMutate.mock.calls[0][1];
-    act(() => opts.onError());
+    expect(result).toBeNull();
     expect(api().saved).toBe(false);
   });
 
-  it("uses unsave when already saved", async () => {
+  it("returns false after unsave succeeds", async () => {
     requireAuth.mockResolvedValue(true);
     (useIsSaved as jest.Mock).mockReturnValue(true);
     const { api } = await mount();
+    let result: boolean | null | undefined;
     await act(async () => {
-      await api().toggle();
+      result = await api().toggle();
     });
+    expect(result).toBe(false);
     expect(api().saved).toBe(false);
-    expect(unsaveMutate).toHaveBeenCalledWith(ID, expect.any(Object));
-    expect(saveMutate).not.toHaveBeenCalled();
+    expect(unsaveMutateAsync).toHaveBeenCalledWith(ID);
+    expect(saveMutateAsync).not.toHaveBeenCalled();
   });
 });

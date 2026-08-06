@@ -23,20 +23,27 @@ export function useNearbyCoords(): UseNearbyCoords {
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const status = await getPermissionStatus();
-      if (!alive) return;
-      if (status !== "granted") {
-        setAskable(status === "undetermined");
-        setPhase("unavailable");
-        return;
-      }
-      const fix = await getCurrentCoords();
-      if (!alive) return;
-      if (fix) {
-        setCoords(fix);
-        setPhase("ready");
-      } else {
-        setPhase("unavailable");
+      try {
+        const status = await getPermissionStatus();
+        if (!alive) return;
+        if (status !== "granted") {
+          setAskable(status === "undetermined");
+          setPhase("unavailable");
+          return;
+        }
+        const fix = await getCurrentCoords();
+        if (!alive) return;
+        if (fix) {
+          setCoords(fix);
+          setPhase("ready");
+        } else {
+          setPhase("unavailable");
+        }
+      } catch {
+        if (alive) {
+          setAskable(false);
+          setPhase("unavailable");
+        }
       }
     })();
     return () => {
@@ -46,19 +53,24 @@ export function useNearbyCoords(): UseNearbyCoords {
 
   const ask = useCallback(async () => {
     setAskable(false);
-    const status = await requestPermission();
-    if (status !== "granted") {
+    try {
+      const status = await requestPermission();
+      if (status !== "granted") {
+        setPhase("unavailable");
+        return false;
+      }
+      const fix = await getCurrentCoords();
+      if (!fix) {
+        setPhase("unavailable");
+        return false;
+      }
+      setCoords(fix);
+      setPhase("ready");
+      return true;
+    } catch {
       setPhase("unavailable");
       return false;
     }
-    const fix = await getCurrentCoords();
-    if (!fix) {
-      setPhase("unavailable");
-      return false;
-    }
-    setCoords(fix);
-    setPhase("ready");
-    return true;
   }, []);
 
   return { coords, phase, askable, ask };

@@ -24,6 +24,7 @@ interface Props {
   onOpenMap: (turn: Turn) => void;
   onRetry: (turn: Turn) => void;
   onGrow: () => void;
+  onSaveToggle: (saved: boolean) => void;
 }
 
 export function ConversationTurn({
@@ -35,6 +36,7 @@ export function ConversationTurn({
   onOpenMap,
   onRetry,
   onGrow,
+  onSaveToggle,
 }: Props) {
   const rise = useMemo(() => new Animated.Value(0), []);
   const waiting = turn.status === "pending";
@@ -124,6 +126,7 @@ export function ConversationTurn({
                 dimmed={anchorId !== null && item.contentId !== anchorId}
                 onPress={() => onSpotTap(item)}
                 onDetail={() => onSpotDetail(item)}
+                onSaveToggle={onSaveToggle}
               />
             )}
           />

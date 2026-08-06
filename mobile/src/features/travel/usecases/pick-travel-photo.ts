@@ -6,8 +6,10 @@ const FALLBACK_MIME = "image/jpeg";
 const FALLBACK_NAME = "travel-photo.jpg";
 
 export function toPhotoUpload(asset: ImagePicker.ImagePickerAsset): PhotoUpload {
-  const type =
-    asset.mimeType && ALLOWED_MIMES.includes(asset.mimeType) ? asset.mimeType : FALLBACK_MIME;
+  if (asset.mimeType && !ALLOWED_MIMES.includes(asset.mimeType)) {
+    throw new Error(`Unsupported image MIME type: ${asset.mimeType}`);
+  }
+  const type = asset.mimeType || FALLBACK_MIME;
   return { uri: asset.uri, name: asset.fileName ?? FALLBACK_NAME, type };
 }
 
