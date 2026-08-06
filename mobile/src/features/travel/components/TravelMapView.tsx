@@ -10,11 +10,12 @@ import {
   center,
   pinsFrom,
   spatialSummary,
+  summaryLine,
   type PlacedSpot,
 } from "@/features/travel/lib/spot-geo";
 import { colors, spacing } from "@/constants/theme";
 
-const CARD_WIDTH = 232;
+const CARD_WIDTH = 248;
 const CARD_GAP = 11;
 
 interface Props {
@@ -38,7 +39,7 @@ export function TravelMapView({ spots, question, selectedId, onSelect, onClose }
     const picked = spots.find((s) => s.spot.contentId === selectedId);
     return picked ? { lat: picked.lat, lng: picked.lng } : center(spots);
   }, [spots, selectedId]);
-  const summary = useMemo(() => spatialSummary(spots), [spots]);
+  const summary = useMemo(() => summaryLine(spatialSummary(spots)), [spots]);
 
   const select = useCallback(
     (contentId: string) => {
@@ -57,7 +58,6 @@ export function TravelMapView({ spots, question, selectedId, onSelect, onClose }
         pins={pins}
         selectedId={selectedId}
         userLocation={null}
-        accentPins
         onPinTap={select}
       />
 
@@ -121,11 +121,13 @@ export function TravelMapView({ spots, question, selectedId, onSelect, onClose }
               </View>
               <Pressable
                 testID={`travel-map-detail-${item.spot.contentId}`}
+                accessibilityRole="button"
                 accessibilityLabel="상세 보기"
                 hitSlop={8}
+                style={({ pressed }) => [styles.detail, pressed && styles.detailPressed]}
                 onPress={() => router.push(`/spots/${item.spot.contentId}`)}
               >
-                <Icon name="chevron-right" size={16} color={colors.ter} strokeWidth={2.1} />
+                <Text style={styles.detailText}>상세</Text>
               </Pressable>
             </Pressable>
           )}
@@ -187,6 +189,15 @@ const styles = StyleSheet.create({
   cardSelected: { borderColor: colors.accent, borderWidth: 2 },
   thumb: { width: 52, height: 52, borderRadius: 9, backgroundColor: colors.skeleton },
   copy: { flex: 1, minWidth: 0 },
+  detail: {
+    alignSelf: "stretch",
+    justifyContent: "center",
+    paddingLeft: 10,
+    borderLeftWidth: 1,
+    borderLeftColor: colors.line,
+  },
+  detailPressed: { opacity: 0.55 },
+  detailText: { fontSize: 12, fontWeight: "800", letterSpacing: -0.2, color: colors.accentText },
   title: { fontSize: 13, fontWeight: "800", letterSpacing: -0.3, color: colors.ink },
   region: { marginTop: 2, fontSize: 11, color: colors.ter },
   tag: {

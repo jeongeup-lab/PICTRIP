@@ -8,11 +8,12 @@ import {
   miniFitSpots,
   pinsFrom,
   spatialSummary,
+  summaryLine,
   type PlacedSpot,
 } from "@/features/travel/lib/spot-geo";
 import { colors } from "@/constants/theme";
 
-export const OPEN_MAP_LABEL = "지도에서 보기";
+export const OPEN_MAP_LABEL = "지도 열기";
 
 const MAP_HEIGHT = 200;
 const FIT_PAD = { top: 18, right: 18, bottom: 18, left: 18 };
@@ -35,7 +36,7 @@ export function TurnMap({ spots, live, selectedId = null, onOpen }: Props) {
     const picked = spots.find((s) => s.spot.contentId === selectedId);
     return picked ? { lat: picked.lat, lng: picked.lng } : center(framed);
   }, [spots, framed, selectedId]);
-  const summary = useMemo(() => spatialSummary(spots), [spots]);
+  const summary = useMemo(() => summaryLine(spatialSummary(spots)), [spots]);
 
   if (spots.length === 0) return null;
 
@@ -56,18 +57,19 @@ export function TurnMap({ spots, live, selectedId = null, onOpen }: Props) {
             selectedId={selectedId}
             userLocation={null}
             interactive={false}
-            accentPins
             onPinTap={() => undefined}
           />
         </View>
       ) : null}
 
       <View style={[styles.bar, live && styles.barUnderMap]}>
-        <Text style={styles.summary} numberOfLines={1}>
+        <Text style={styles.summary} numberOfLines={2}>
           {summary ?? `지도에 ${spots.length}곳`}
         </Text>
-        <Text style={styles.open}>{OPEN_MAP_LABEL}</Text>
-        <Icon name="chevron-right" size={13} color={colors.accentText} strokeWidth={2.2} />
+        <View style={styles.open}>
+          <Icon name="map-pin" size={13} color={colors.accentText} strokeWidth={2.2} />
+          <Text style={styles.openText}>{OPEN_MAP_LABEL}</Text>
+        </View>
       </View>
     </Pressable>
   );
@@ -93,6 +95,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   barUnderMap: { borderTopWidth: 1, borderTopColor: colors.line },
-  summary: { flex: 1, fontSize: 12.5, fontWeight: "600", letterSpacing: -0.2, color: colors.sec },
-  open: { fontSize: 12, fontWeight: "800", letterSpacing: -0.2, color: colors.accentText },
+  summary: {
+    flex: 1,
+    fontSize: 12.5,
+    fontWeight: "600",
+    lineHeight: 17,
+    letterSpacing: -0.2,
+    color: colors.sec,
+  },
+  open: { flexDirection: "row", alignItems: "center", gap: 4 },
+  openText: { fontSize: 12, fontWeight: "800", letterSpacing: -0.2, color: colors.accentText },
 });

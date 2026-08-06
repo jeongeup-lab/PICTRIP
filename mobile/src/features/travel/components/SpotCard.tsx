@@ -10,8 +10,7 @@ import { colors } from "@/constants/theme";
 
 export const RAIL_CARD_WIDTH = 168;
 export const MEDIA_HEIGHT = 150;
-export const BLURB_HEIGHT = 40;
-export const RAIL_CARD_HEIGHT = MEDIA_HEIGHT + BLURB_HEIGHT;
+export const RAIL_CARD_HEIGHT = MEDIA_HEIGHT;
 
 export const DETAIL_ACTION = "detail";
 
@@ -84,14 +83,6 @@ export function SpotCard({
             </Text>
           </View>
         </View>
-
-        <View style={styles.blurb}>
-          {spot.blurb ? (
-            <Text style={styles.blurbText} numberOfLines={2}>
-              {spot.blurb}
-            </Text>
-          ) : null}
-        </View>
       </Pressable>
 
       <Pressable
@@ -127,17 +118,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: colors.skeleton,
   },
-  tapArea: { height: MEDIA_HEIGHT + BLURB_HEIGHT },
+  tapArea: { height: MEDIA_HEIGHT },
   media: { height: MEDIA_HEIGHT },
-  blurb: {
-    height: BLURB_HEIGHT,
-    justifyContent: "center",
-    paddingHorizontal: 11,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-    backgroundColor: colors.bg,
-  },
-  blurbText: { fontSize: 11, lineHeight: 15, letterSpacing: -0.1, color: colors.sec },
   pressed: { opacity: 0.9, transform: [{ scale: 0.975 }] },
   dimmed: { opacity: 0.55 },
   selectedRing: {

@@ -376,7 +376,7 @@ async def test_an_anchor_answer_says_what_its_distances_are_measured_from(
     assert res.status_code == 200
     data = res.json()["data"]
     assert data["spots"]
-    assert data["tagBasis"].endswith("에서 직선거리")
+    assert data["tagBasis"] == "직선거리 기준"
 
 
 @pytest.mark.integration
@@ -393,7 +393,8 @@ async def test_a_coords_anchor_measures_from_my_location(db_session, client, anc
     assert res.status_code == 200
     data = res.json()["data"]
     assert data["spots"]
-    assert data["tagBasis"] == "내 위치에서 직선거리"
+    assert "내 위치" in "".join(segment["text"] for segment in data["answer"])
+    assert data["tagBasis"] == "직선거리 기준"
 
 
 @pytest.mark.integration
@@ -421,7 +422,7 @@ async def test_a_question_about_a_previous_spot_pivots_to_the_anchor_search(
     assert res.status_code == 200
     data = res.json()["data"]
     assert "카페" in "".join(segment["text"] for segment in data["answer"])
-    assert data["tagBasis"].endswith("에서 직선거리")
+    assert data["tagBasis"] == "직선거리 기준"
     assert data["intent"]["categoryKeywords"] == ["카페"]
     assert data["steps"][0]["tool"] == "intent"
 
@@ -449,4 +450,4 @@ async def test_an_origin_the_context_never_carried_is_ignored(
         app.dependency_overrides.clear()
 
     basis = (res.json().get("data") or {}).get("tagBasis") or ""
-    assert not basis.endswith("에서 직선거리")
+    assert basis != "직선거리 기준"

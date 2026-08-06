@@ -3570,49 +3570,6 @@ async def test_a_mood_step_that_filtered_nothing_is_not_a_second_culprit(
 
 
 @pytest.mark.integration
-async def test_a_card_carries_the_first_sentence_of_its_overview(
-    db_session, client, seeded, monkeypatch
-) -> None:
-    await db_session.execute(
-        text(
-            "INSERT INTO spot_details (content_id, content_type_id, overview) "
-            "VALUES ('v1', 12, '우도 동쪽의 백사장이다. 여름에는 해수욕장으로 개장한다.')"
-        )
-    )
-    await db_session.flush()
-
-    async def fake_intent(question: str) -> QueryIntent:
-        return QueryIntent(categoryKeywords=["계곡"])
-
-    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
-    _override(db_session)
-    try:
-        res = await client.post("/v1/agent/ask", json={"question": "계곡"})
-    finally:
-        app.dependency_overrides.clear()
-
-    spots = {spot["contentId"]: spot for spot in res.json()["data"]["spots"]}
-    assert spots["v1"]["blurb"] == "우도 동쪽의 백사장이다."
-
-
-@pytest.mark.integration
-async def test_a_card_without_an_overview_carries_no_blurb(
-    db_session, client, seeded, monkeypatch
-) -> None:
-    async def fake_intent(question: str) -> QueryIntent:
-        return QueryIntent(categoryKeywords=["계곡"])
-
-    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
-    _override(db_session)
-    try:
-        res = await client.post("/v1/agent/ask", json={"question": "계곡"})
-    finally:
-        app.dependency_overrides.clear()
-
-    assert all(spot["blurb"] is None for spot in res.json()["data"]["spots"])
-
-
-@pytest.mark.integration
 async def test_a_crowd_tagged_answer_says_which_day_the_prediction_is_from(
     db_session, client, seeded, monkeypatch
 ) -> None:
@@ -3648,7 +3605,7 @@ async def test_a_distance_tagged_answer_says_the_distance_is_straight_line(
     finally:
         app.dependency_overrides.clear()
 
-    assert res.json()["data"]["tagBasis"] == "현재 위치에서 직선거리"
+    assert res.json()["data"]["tagBasis"] == "직선거리 기준"
 
 
 @pytest.mark.integration
@@ -3699,33 +3656,6 @@ def test_one_shared_day_is_named_outright() -> None:
     assert ask_service._crowd_basis(rows) == "혼잡도 8/3 예측 기준"
 
 
-@pytest.mark.integration
-async def test_a_stale_overview_never_reaches_the_card(
-    db_session, client, seeded, monkeypatch
-) -> None:
-    await db_session.execute(
-        text(
-            "INSERT INTO spot_details (content_id, content_type_id, overview, cached_at) "
-            "VALUES ('v1', 12, '오래된 소개다.', now() - interval '10 days')"
-        )
-    )
-    await db_session.execute(text("UPDATE spots SET modified_time = now() WHERE content_id = 'v1'"))
-    await db_session.flush()
-
-    async def fake_intent(question: str) -> QueryIntent:
-        return QueryIntent(categoryKeywords=["계곡"])
-
-    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
-    _override(db_session)
-    try:
-        res = await client.post("/v1/agent/ask", json={"question": "계곡"})
-    finally:
-        app.dependency_overrides.clear()
-
-    spots = {spot["contentId"]: spot for spot in res.json()["data"]["spots"]}
-    assert spots["v1"]["blurb"] is None
-
-
 def test_a_mixed_tag_batch_does_not_claim_every_card_is_a_distance() -> None:
     from dataclasses import replace
     from datetime import date
@@ -3745,34 +3675,7 @@ def test_an_all_distance_batch_says_so() -> None:
         AgentSpotCard(contentId="b", title="t", regionLabel="r", tag="0.4km"),
     ]
 
-    assert ask_service._tag_basis([], cards, near=True) == "현재 위치에서 직선거리"
-
-
-@pytest.mark.integration
-async def test_an_expired_overview_cache_never_reaches_the_card(
-    db_session, client, seeded, monkeypatch
-) -> None:
-    await db_session.execute(
-        text(
-            "INSERT INTO spot_details (content_id, content_type_id, overview, cached_at) "
-            "VALUES ('v1', 12, '아주 오래된 소개다.', now() - interval '200 days')"
-        )
-    )
-    await db_session.execute(text("UPDATE spots SET modified_time = NULL WHERE content_id = 'v1'"))
-    await db_session.flush()
-
-    async def fake_intent(question: str) -> QueryIntent:
-        return QueryIntent(categoryKeywords=["계곡"])
-
-    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
-    _override(db_session)
-    try:
-        res = await client.post("/v1/agent/ask", json={"question": "계곡"})
-    finally:
-        app.dependency_overrides.clear()
-
-    spots = {spot["contentId"]: spot for spot in res.json()["data"]["spots"]}
-    assert spots["v1"]["blurb"] is None
+    assert ask_service._tag_basis([], cards, near=True) == "직선거리 기준"
 
 
 def test_no_crowd_tag_means_no_crowd_basis() -> None:

@@ -5,9 +5,13 @@ import type { PhotoUpload } from "@/features/travel/api";
 import { NEARBY_CHIP, type Chip } from "@/features/travel/lib/chips";
 import { colors, spacing } from "@/constants/theme";
 
-export const ATTACH_NOTICE = "서버에 저장하지 않고 비교 후 폐기해요";
+export const ATTACH_HEADLINE = "이 사진 같은 분위기로 찾아요";
 
-export const ASK_PLACEHOLDER = "사진을 올리거나 물어보세요";
+export const ATTACH_NOTICE = "사진은 저장하지 않아요";
+
+export const ASK_PLACEHOLDER = "예: 부산에서 야경 좋은 곳";
+
+export const ATTACHED_PLACEHOLDER = "지역이나 조건을 덧붙여 보세요";
 
 interface Props {
   value: string;
@@ -69,7 +73,7 @@ export function AskComposer({
         <View style={styles.attach} testID="travel-attach-banner">
           <Image source={{ uri: photo.uri }} style={styles.attachThumb} contentFit="cover" />
           <View style={styles.attachCopy}>
-            <Text style={styles.attachTitle}>사진 1장 첨부됨</Text>
+            <Text style={styles.attachTitle}>{ATTACH_HEADLINE}</Text>
             <Text style={styles.attachNote}>{ATTACH_NOTICE}</Text>
           </View>
           <Pressable
@@ -108,7 +112,7 @@ export function AskComposer({
           style={styles.input}
           value={value}
           onChangeText={onChange}
-          placeholder={photo ? "사진에 덧붙일 말 (선택)" : ASK_PLACEHOLDER}
+          placeholder={photo ? ATTACHED_PLACEHOLDER : ASK_PLACEHOLDER}
           placeholderTextColor={colors.ter}
           returnKeyType="send"
           onSubmitEditing={onSubmit}

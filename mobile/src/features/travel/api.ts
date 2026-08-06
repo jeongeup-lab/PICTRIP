@@ -62,7 +62,6 @@ export interface TravelSpot {
   lat: number | null;
   lng: number | null;
   hasCrowd?: boolean;
-  blurb?: string | null;
 }
 
 export interface AgentAnswer {

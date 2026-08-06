@@ -28,7 +28,6 @@ from app.modules.agent.schemas import (
     QueryIntent,
     RefinePatch,
 )
-from app.modules.agent.services import blurb as blurb_service
 from app.modules.agent.services import intent as intent_service
 from app.modules.agent.services import photo as photo_service
 from app.modules.agent.services import refine as refine_service
@@ -41,14 +40,13 @@ from app.modules.spots.services import (
     NearbySpotRow,
     find_nearby_spots,
     load_active_spot_cards_by_ids,
-    load_fresh_overview_map,
 )
 from app.web.errors import AppError, ValidationFailed
 
 logger = get_logger(__name__)
 
 INDOOR_RETRY_LABEL = "실내로만 다시 조회"
-PHOTO_BASIS = "사진과의 CLIP 벡터 유사도"
+PHOTO_BASIS = "사진 유사도 기준"
 CONTEXT_INTENT_LABEL = "앞 대화까지 보고 조건 추출"
 NEAR_PROBE_LABEL = "근처 조건 없이 다시 재보기"
 FESTIVAL_FETCH_BUDGET_SECONDS = 4.0
@@ -227,10 +225,7 @@ async def _ask_with_photo(
         )
 
     top = ordered[: retrieve.RESULT_LIMIT]
-    spots = await _with_blurbs(
-        session,
-        [_photo_card(row, similarity=similarity, lat=lat, lng=lng, near=near) for row in top],
-    )
+    spots = [_photo_card(row, similarity=similarity, lat=lat, lng=lng, near=near) for row in top]
     answer = [
         AnswerSegment(text="사진과 닮은 곳으로 "),
         AnswerSegment(text=f"{len(top)}곳", emphasis=True),
@@ -317,10 +312,7 @@ async def _ask_with_anchor(
     if not kept:
         raise AgentNoResults()
     rated = await repositories.load_candidates_by_ids(session, [n.content_id for n in kept])
-    spots = await _with_blurbs(
-        session,
-        [_anchor_card(near, has_crowd=_has_crowd(rated.get(near.content_id))) for near in kept],
-    )
+    spots = [_anchor_card(near, has_crowd=_has_crowd(rated.get(near.content_id))) for near in kept]
     steps = [*(prior_steps or [])]
     steps.append(
         AskStep(tool="nearby", label=f"{origin} 주변 {noun} 조회", badge=f"{len(spots)}곳")
@@ -342,7 +334,7 @@ async def _ask_with_anchor(
         spots=spots,
         totalCount=len(spots),
         intent=carried_intent or QueryIntent(),
-        tagBasis=f"{origin}에서 직선거리",
+        tagBasis="직선거리 기준",
         refinements=[],
     )
 
@@ -618,9 +610,7 @@ async def _ask_with_question(
         )
 
     top = merged[: retrieve.RESULT_LIMIT]
-    spots = await _with_blurbs(
-        session, [_card(row, intent=intent, lat=lat, lng=lng, near=near) for row in top]
-    )
+    spots = [_card(row, intent=intent, lat=lat, lng=lng, near=near) for row in top]
     tag_basis = _tag_basis(top, spots, near=near)
     logger.info(
         "agent.ask.done",
@@ -945,16 +935,6 @@ def _zero_response(
     )
 
 
-async def _with_blurbs(session: AsyncSession, spots: list[AgentSpotCard]) -> list[AgentSpotCard]:
-    overviews = await load_fresh_overview_map(session, [spot.contentId for spot in spots])
-    if not overviews:
-        return spots
-    return [
-        spot.model_copy(update={"blurb": blurb_service.excerpt(overviews.get(spot.contentId))})
-        for spot in spots
-    ]
-
-
 def _crowd_basis(rows: list[CandidateRow]) -> str | None:
     days = {row.base_ymd for row in rows if row.base_ymd is not None}
     if not days:
@@ -976,7 +956,7 @@ def _is_crowd_tag(tag: str | None) -> bool:
 
 def _tag_basis(rows: list[CandidateRow], spots: list[AgentSpotCard], *, near: bool) -> str | None:
     if near and spots and all((spot.tag or "").endswith("km") for spot in spots):
-        return "현재 위치에서 직선거리"
+        return "직선거리 기준"
     if any((spot.tag or "").startswith("유사도 ") for spot in spots):
         return PHOTO_BASIS
     if any(_is_crowd_tag(spot.tag) for spot in spots):
