@@ -4,7 +4,7 @@ import { useIsSaved, useSaveMutation, useUnsaveMutation } from "@/features/saved
 
 export interface UseSaveOptimistic {
   saved: boolean;
-  toggle: () => Promise<void>;
+  toggle: () => Promise<boolean | null>;
 }
 
 export function useSaveOptimistic(contentId: string): UseSaveOptimistic {
@@ -15,13 +15,18 @@ export function useSaveOptimistic(contentId: string): UseSaveOptimistic {
   const saveMut = useSaveMutation();
   const unsaveMut = useUnsaveMutation();
 
-  const toggle = async () => {
-    if (!(await requireAuth("save"))) return;
+  const toggle = async (): Promise<boolean | null> => {
+    if (!(await requireAuth("save"))) return null;
     const next = !saved;
     setOptimistic(next);
-    const rollback = () => setOptimistic(!next);
-    if (next) saveMut.mutate(contentId, { onError: rollback });
-    else unsaveMut.mutate(contentId, { onError: rollback });
+    try {
+      if (next) await saveMut.mutateAsync(contentId);
+      else await unsaveMut.mutateAsync(contentId);
+      return next;
+    } catch {
+      setOptimistic(!next);
+      return null;
+    }
   };
 
   return { saved, toggle };

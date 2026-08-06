@@ -77,6 +77,7 @@ function mount(
         onOpenMap={onOpenMap}
         onRetry={noop}
         onGrow={onGrow}
+        onSaveToggle={noop}
       />,
     );
   });
@@ -210,6 +211,7 @@ describe("ConversationTurn once the answer lands", () => {
           onOpenMap={noop}
           onRetry={noop}
           onGrow={noop}
+          onSaveToggle={noop}
         />,
       );
     });

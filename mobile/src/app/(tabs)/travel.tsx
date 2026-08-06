@@ -10,7 +10,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, type Href } from "expo-router";
 import { AskComposer } from "@/features/travel/components/AskComposer";
 import { ConversationTurn } from "@/features/travel/components/ConversationTurn";
 import { Mascot } from "@/features/travel/components/Mascot";
@@ -34,6 +34,8 @@ import { placed } from "@/features/travel/lib/spot-geo";
 import type { AskInput, PhotoUpload, TravelSpot } from "@/features/travel/api";
 import { colors, spacing } from "@/constants/theme";
 
+const SAVE_COMPLETE = "여행지를 저장했어요";
+const UNSAVE_COMPLETE = "여행지 저장을 해제했어요";
 const TOAST_BOTTOM = 150;
 const GREETING_FADE_MS = 180;
 
@@ -185,7 +187,7 @@ export default function TravelScreen() {
       const spots = placed(turn.answer?.spots ?? []);
       if (spots.length === 0) return;
       openMap(spots, turn.question);
-      router.push("/travel-map");
+      router.push("/travel-map" as Href);
     },
     [openMap],
   );
@@ -232,6 +234,10 @@ export default function TravelScreen() {
     [],
   );
 
+  const onSaveToggle = useCallback((saved: boolean) => {
+    setToast(saved ? SAVE_COMPLETE : UNSAVE_COMPLETE);
+  }, []);
+
   const onAttach = useCallback(() => attachFrom(pickTravelPhoto, PHOTO_PICK_FAILED), [attachFrom]);
 
   const onShoot = useCallback(() => attachFrom(shootTravelPhoto, PHOTO_SHOOT_FAILED), [attachFrom]);
@@ -277,6 +283,7 @@ export default function TravelScreen() {
                 onOpenMap={onOpenMap}
                 onRetry={onRetry}
                 onGrow={scrollToEnd}
+                onSaveToggle={onSaveToggle}
               />
             ))}
           </View>

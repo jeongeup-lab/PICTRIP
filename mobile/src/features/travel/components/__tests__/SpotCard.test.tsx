@@ -4,9 +4,14 @@ import type { TravelSpot } from "@/features/travel/api";
 
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
 jest.mock("@/features/saved/hooks/use-save-optimistic", () => ({
-  useSaveOptimistic: () => ({ saved: false, toggle: jest.fn() }),
+  useSaveOptimistic: jest.fn(),
 }));
 jest.mock("@/features/spots/queries", () => ({ prefetchSpot: jest.fn() }));
+
+const { useSaveOptimistic } = jest.requireMock("@/features/saved/hooks/use-save-optimistic") as {
+  useSaveOptimistic: jest.Mock;
+};
+const toggle = jest.fn();
 
 const spot: TravelSpot = {
   contentId: "126508",
@@ -31,6 +36,12 @@ function cardPressable(tree: renderer.ReactTestRenderer) {
 }
 
 describe("SpotCard 접근성", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    toggle.mockResolvedValue(true);
+    useSaveOptimistic.mockReturnValue({ saved: false, toggle });
+  });
+
   it("스크린 리더에 상세 보기 액션을 준다 — 두 번 탭이 한 번으로 합쳐지기 때문", () => {
     const onDetail = jest.fn();
     const tree = mount({ onPress: () => undefined, onDetail });
@@ -63,5 +74,40 @@ describe("SpotCard 접근성", () => {
 
     expect(pressable.props.accessibilityActions).toBeUndefined();
     expect(pressable.props.accessibilityHint).toBeUndefined();
+  });
+});
+
+describe("SpotCard 저장", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useSaveOptimistic.mockReturnValue({ saved: false, toggle });
+  });
+
+  it.each([true, false])("notifies the committed saved state %s", async (result) => {
+    toggle.mockResolvedValueOnce(result);
+    const onSaveToggle = jest.fn();
+    const tree = mount({ onSaveToggle });
+    const save = tree.root
+      .findAllByProps({ testID: "travel-spot-save-126508" })
+      .find((node) => typeof node.props.onPress === "function")!;
+    const stopPropagation = jest.fn();
+
+    await act(async () => save.props.onPress({ stopPropagation }));
+
+    expect(stopPropagation).toHaveBeenCalledTimes(1);
+    expect(onSaveToggle).toHaveBeenCalledWith(result);
+  });
+
+  it("does not report a save result when auth or mutation fails", async () => {
+    toggle.mockResolvedValueOnce(null);
+    const onSaveToggle = jest.fn();
+    const tree = mount({ onSaveToggle });
+    const save = tree.root
+      .findAllByProps({ testID: "travel-spot-save-126508" })
+      .find((node) => typeof node.props.onPress === "function")!;
+
+    await act(async () => save.props.onPress({ stopPropagation: jest.fn() }));
+
+    expect(onSaveToggle).not.toHaveBeenCalled();
   });
 });

@@ -67,6 +67,12 @@ describe("askAgent", () => {
     expect(form.get("question")).toBe("계곡");
   });
 
+  it("omits the question part from a photo-only request", async () => {
+    await askAgent({ photo });
+    const form = seen!.data as FormData;
+    expect(form.has("question")).toBe(false);
+  });
+
   it("refine 요청은 intent와 patch를 함께 보낸다", async () => {
     await askAgent({ intent, patch });
     expect(jsonBody(seen)).toEqual({ intent, patch });

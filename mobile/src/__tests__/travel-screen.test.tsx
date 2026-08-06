@@ -6,6 +6,7 @@ import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
 import { useConversation, type Turn } from "@/features/travel/stores/conversation-store";
 import { useTravelMap } from "@/features/travel/stores/map-store";
 import { DOUBLE_TAP_MS } from "@/features/travel/hooks/use-card-tap";
+import { PHOTO_PICK_FAILED, PHOTO_SHOOT_FAILED } from "@/features/travel/lib/agent-errors";
 
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
 jest.mock("react-native-safe-area-context", () => ({
@@ -18,7 +19,7 @@ jest.mock("@/features/travel/usecases/pick-travel-photo", () => ({
 }));
 jest.mock("@/features/travel/api", () => ({ askAgent: jest.fn() }));
 jest.mock("@/features/saved/hooks/use-save-optimistic", () => ({
-  useSaveOptimistic: () => ({ saved: false, toggle: jest.fn() }),
+  useSaveOptimistic: jest.fn(),
 }));
 jest.mock("@/features/spots/queries", () => ({ prefetchSpot: jest.fn() }));
 
@@ -30,8 +31,13 @@ const { pickTravelPhoto, shootTravelPhoto } = jest.requireMock(
 };
 const askAgentMock = askAgent as jest.Mock;
 const useNearbyCoordsMock = useNearbyCoords as jest.Mock;
+const { useSaveOptimistic } = jest.requireMock("@/features/saved/hooks/use-save-optimistic") as {
+  useSaveOptimistic: jest.Mock;
+};
+const toggleSave = jest.fn();
 
 const COORDS = { lat: 37.5665, lng: 126.978 };
+const PHOTO = { uri: "file:///a.jpg", name: "a.jpg", type: "image/jpeg" };
 
 const INTENT: QueryIntent = {
   categoryKeywords: ["계곡"],
@@ -130,6 +136,14 @@ const failedRefineTurn: Turn = {
   context: null,
 };
 
+const photoAnsweredTurn: Turn = {
+  ...answeredTurn,
+  id: "seed-photo",
+  question: "이 사진 같은 분위기의 여행지",
+  request: "",
+  photo: PHOTO,
+};
+
 let mounted: renderer.ReactTestRenderer | null = null;
 let client: QueryClient;
 
@@ -142,6 +156,8 @@ beforeEach(() => {
     askable: false,
     ask: jest.fn(),
   });
+  toggleSave.mockResolvedValue(true);
+  useSaveOptimistic.mockReturnValue({ saved: false, toggle: toggleSave });
   askAgentMock.mockResolvedValue(ANSWER);
   client = new QueryClient({
     defaultOptions: {
@@ -192,6 +208,12 @@ async function settleTap() {
   await act(async () => {
     jest.advanceTimersByTime(DOUBLE_TAP_MS + 20);
   });
+}
+
+async function pressSave(tree: renderer.ReactTestRenderer, contentId: string) {
+  const node = pressable(tree, `travel-spot-save-${contentId}`);
+  if (!node) throw new Error(`no save button for ${contentId}`);
+  await act(async () => node.props.onPress({ stopPropagation: jest.fn() }));
 }
 
 describe("TravelScreen empty state", () => {
@@ -316,14 +338,45 @@ describe("TravelScreen photo attach", () => {
     expect(askAgentMock.mock.calls[0][0].photo).toEqual(shot);
   });
 
-  it("카메라를 열지 못해도 앨범 첨부는 건드리지 않는다", async () => {
+  it("카메라를 열지 못하면 입력을 유지하고 오류 토스트를 보여준다", async () => {
     shootTravelPhoto.mockRejectedValueOnce(new Error("denied"));
     const tree = await mount();
+    const input = tree.root.findByProps({ testID: "travel-input" });
+    await act(async () => input.props.onChangeText("제주 바다 같은 곳"));
 
     await press(tree, "travel-shoot");
 
     expect(askAgentMock).not.toHaveBeenCalled();
+    expect(tree.root.findByProps({ testID: "travel-input" }).props.value).toBe("제주 바다 같은 곳");
+    expect(JSON.stringify(tree.toJSON())).toContain(PHOTO_SHOOT_FAILED);
     expect(tree.root.findByProps({ testID: "travel-attach" })).toBeTruthy();
+  });
+
+  it("only attaches a selected photo until the user sends it", async () => {
+    pickTravelPhoto.mockResolvedValueOnce(PHOTO);
+    const tree = await mount();
+    await press(tree, "travel-attach");
+
+    expect(askAgentMock).not.toHaveBeenCalled();
+    expect(tree.root.findAllByProps({ testID: "travel-attach-banner" }).length).toBeGreaterThan(0);
+
+    await press(tree, "travel-send");
+    expect(askAgentMock).toHaveBeenCalledTimes(1);
+    expect(askAgentMock.mock.calls[0][0].question).toBe("");
+    expect(askAgentMock.mock.calls[0][0].photo).toEqual(PHOTO);
+  });
+
+  it("keeps the draft and shows the shared toast when picking from plus rejects", async () => {
+    pickTravelPhoto.mockRejectedValueOnce(new Error("picker failed"));
+    const tree = await mount();
+    const input = tree.root.findByProps({ testID: "travel-input" });
+    await act(async () => input.props.onChangeText("제주 바다 같은 곳"));
+
+    await press(tree, "travel-attach");
+
+    expect(askAgentMock).not.toHaveBeenCalled();
+    expect(tree.root.findByProps({ testID: "travel-input" }).props.value).toBe("제주 바다 같은 곳");
+    expect(JSON.stringify(tree.toJSON())).toContain(PHOTO_PICK_FAILED);
   });
 });
 
@@ -370,6 +423,18 @@ describe("TravelScreen refine chips", () => {
     expect(turns[1].question).toBe("실내만");
     expect(turns[1].intent).toEqual(INTENT);
     expect(turns[1].patch).toEqual({ indoorOnly: true });
+  });
+
+  it("keeps the source photo while sending intent and patch without a question", async () => {
+    useConversation.setState({ turns: [photoAnsweredTurn], busy: false });
+    const tree = await mount();
+    await press(tree, "travel-chip-실내만");
+
+    const input = askAgentMock.mock.calls[0][0];
+    expect(input.photo).toEqual(PHOTO);
+    expect(input.intent).toEqual(INTENT);
+    expect(input.patch).toEqual({ indoorOnly: true });
+    expect(input.question).toBeFalsy();
   });
 });
 
@@ -848,6 +913,30 @@ describe("TravelScreen retry", () => {
     expect(useConversation.getState().turns).toHaveLength(2);
   });
 
+  it("retries a photo refine with the same payload in the original turn", async () => {
+    const failedPhotoRefine: Turn = {
+      ...failedRefineTurn,
+      id: "seed-photo-failed",
+      photo: PHOTO,
+    };
+    useConversation.setState({ turns: [photoAnsweredTurn, failedPhotoRefine], busy: false });
+    const tree = await mount();
+    await press(tree, "turn-retry-seed-photo-failed");
+
+    expect(askAgentMock.mock.calls[0][0]).toEqual({
+      question: "",
+      photo: PHOTO,
+      intent: INTENT,
+      patch: { indoorOnly: true },
+      anchor: null,
+      context: null,
+      coords: COORDS,
+    });
+    const turns = useConversation.getState().turns;
+    expect(turns).toHaveLength(2);
+    expect(turns[1].id).toBe("seed-photo-failed");
+  });
+
   it("resends the original text when a failed plain question turn is retried", async () => {
     useConversation.setState({
       turns: [{ ...answeredTurn, status: "failed", answer: null, errorMessage: "실패" }],
@@ -861,5 +950,52 @@ describe("TravelScreen retry", () => {
     expect(input.question).toBe("여름에 시원한 계곡");
     expect(input.intent).toBeFalsy();
     expect(input.patch).toBeFalsy();
+  });
+});
+
+describe("TravelScreen save toast", () => {
+  const conversationTurn: Turn = {
+    ...answeredTurn,
+    id: "save-turn",
+    answer: {
+      ...ANSWER,
+      spots: [
+        {
+          contentId: "conversation-1",
+          title: "대화 여행지",
+          regionLabel: "부산",
+          imageUrl: null,
+          tag: null,
+          lat: null,
+          lng: null,
+        },
+      ],
+    },
+  };
+
+  it("shows a saved toast from a conversation card after the mutation succeeds", async () => {
+    useConversation.setState({ turns: [conversationTurn], busy: false });
+    toggleSave.mockResolvedValueOnce(true);
+    const tree = await mount();
+    await pressSave(tree, "conversation-1");
+    expect(JSON.stringify(tree.toJSON())).toContain("여행지를 저장했어요");
+  });
+
+  it("shows an unsaved toast from a conversation card after the mutation succeeds", async () => {
+    useConversation.setState({ turns: [conversationTurn], busy: false });
+    toggleSave.mockResolvedValueOnce(false);
+    const tree = await mount();
+    await pressSave(tree, "conversation-1");
+    expect(JSON.stringify(tree.toJSON())).toContain("여행지 저장을 해제했어요");
+  });
+
+  it.each(["guest", "error"])("shows no save toast when toggle returns null for %s", async () => {
+    useConversation.setState({ turns: [conversationTurn], busy: false });
+    toggleSave.mockResolvedValueOnce(null);
+    const tree = await mount();
+    await pressSave(tree, "conversation-1");
+    const rendered = JSON.stringify(tree.toJSON());
+    expect(rendered).not.toContain("여행지를 저장했어요");
+    expect(rendered).not.toContain("여행지 저장을 해제했어요");
   });
 });

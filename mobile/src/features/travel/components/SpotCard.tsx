@@ -80,10 +80,10 @@ export function SpotCard({
             accessibilityLabel="저장"
             style={[styles.fav, saved && styles.favOn]}
             hitSlop={8}
-            onPress={(e) => {
+            onPress={async (e) => {
               e.stopPropagation();
-              onSaveToggle?.(!saved);
-              void toggle();
+              const result = await toggle();
+              if (result !== null) onSaveToggle?.(result);
             }}
           >
             <Icon
