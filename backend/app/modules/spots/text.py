@@ -5,6 +5,8 @@ import re
 
 _ANCHOR_HREF_RE = re.compile(r"""<a\b[^>]*?\bhref\s*=\s*["']([^"']+)["']""", re.IGNORECASE)
 _TAG_RE = re.compile(r"<[^>]+>")
+_BREAK_RE = re.compile(r"<br\s*/?>|</(?:p|div|li)>", re.IGNORECASE)
+_SPACE_RE = re.compile(r"\s+")
 
 
 def clean_homepage(raw: str | None) -> str | None:
@@ -20,6 +22,12 @@ def clean_homepage(raw: str | None) -> str | None:
             return href
     stripped = html.unescape(_TAG_RE.sub("", text_value)).strip()
     return stripped or None
+
+
+def to_plain_text(raw: str) -> str:
+    spaced = _BREAK_RE.sub(" ", raw)
+    stripped = html.unescape(_TAG_RE.sub("", spaced))
+    return _SPACE_RE.sub(" ", stripped).strip()
 
 
 def clean_scalar(value: object) -> str | None:
