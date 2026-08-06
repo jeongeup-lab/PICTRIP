@@ -391,6 +391,11 @@ describe("TravelScreen photo attach", () => {
     );
   });
 
+  it("does not spell out a sample question in the placeholder", () => {
+    expect(ASK_PLACEHOLDER).not.toContain("예:");
+    expect(ASK_PLACEHOLDER).not.toContain("부산");
+  });
+
   it("keeps the draft and shows the shared toast when picking from plus rejects", async () => {
     pickTravelPhoto.mockRejectedValueOnce(new Error("picker failed"));
     const tree = await mount();
