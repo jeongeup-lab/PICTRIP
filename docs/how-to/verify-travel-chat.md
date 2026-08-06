@@ -6,13 +6,17 @@
 `qa-travel-tab`이 **화면**을 본다면 이 문서는 **대답**을 본다. 같은 질문에
 같은 종류의 답이 오는지, 검색이 돌지 말아야 할 자리에 돌지 않는지가 범위다.
 
+골든셋은 두 층이다 — **단발 케이스**(요청 하나)와 **멀티턴 대화**(직전 응답을
+그대로 다음 턴 `context` 로 물린다). 앵커·조건 유지처럼 턴을 넘어야 보이는
+버그는 단발로는 잡히지 않는다.
+
 ## 전제
 
 - 실행 대상 API가 Gemini 키와 실데이터를 갖고 있어야 한다. 프롬프트 변경은
   단위 테스트로 잡히지 않으므로 **모의 응답으로는 의미가 없다**.
 - 로컬에서 돌릴 때는 `.env`에 `GEMINI_API_KEY`와 조회용 DB를 채운 뒤
   `uvicorn app.main:app --port 8099`로 띄운다.
-- 케이스 하나가 Gemini 왕복 1회다. 143개면 약 15분, `agent_ask` 레이트리밋
+- 턴 하나가 Gemini 왕복 1회다. 220턴이면 약 20분, `agent_ask` 레이트리밋
   (20회/분)에 걸리지 않도록 러너가 3.5초 간격으로 던진다.
 
 ## 실행
@@ -22,6 +26,9 @@ cd backend
 uv run python scripts/travel_golden_set.py                      # 전체
 uv run python scripts/travel_golden_set.py --only D             # 그룹 하나
 uv run python scripts/travel_golden_set.py --only 상세          # 이름으로도 된다
+uv run python scripts/travel_golden_set.py --only L             # 정상 멀티턴만
+uv run python scripts/travel_golden_set.py --only M             # 지저분 멀티턴만
+uv run python scripts/travel_golden_set.py --only L8            # 대화 하나만
 uv run python scripts/travel_golden_set.py --base-url https://api.pictrip.org
 uv run python scripts/travel_golden_set.py --list               # 케이스 목록
 ```
@@ -53,6 +60,17 @@ uv run python scripts/travel_golden_set.py --list               # 케이스 목�
 | G 방어 | 21 | 이모지·4개 국어·초장문·인젝션·역할 탈취·JSON/SQL/HTML 주입·좌표 범위 |
 | H 앵커 | 8 | Gemini 없이 도는 직송 경로 + 잘못된 입력 |
 | I 칩 | 9 | intent·patch 왕복이 문장을 합성하지 않고 동작한다 |
+
+### 멀티턴 (20개 대화 · 77턴)
+
+`L1~L10` 은 또박또박한 대화, `M1~M10` 은 실제 사용자에 가까운 지저분한 대화다 —
+오타·줄임말·한 문장 끊어 보내기·말 바꾸기·딴소리·반말 존댓말 혼용·지시어 남발·
+영타. 턴마다 직전 응답의 `intent` 와 결과 카드 8개가 그대로 실리고, `anchors=N`
+이 붙은 턴은 그 카드를 앵커로 잡는다. 앵커는 앱의 `anchorSpot` 처럼 **다음
+턴까지 유지된다** — 0곳 턴이 끼어도 잃지 않는다.
+
+여기서만 잡히는 것: 카드를 고른 뒤 `여기 근처 카페` 가 주변 조회로 가는가,
+8턴 뒤에도 조건이 남는가, 못 하는 요구가 껴도 대화가 이어지는가.
 
 지역 표기는 특히 촘촘히 본다 — `regions` 에는 `강원특별자치도`·`제주특별자치도`
 처럼 적혀 있어 `강원도`·`제주도`·`서울시`·`전라북도` 가 조용히 전국 검색으로

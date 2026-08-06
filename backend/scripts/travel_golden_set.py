@@ -174,7 +174,14 @@ CASES: list[Case] = [
     find("B25", "섬", "울릉도 가볼 만한 곳", expect_spots="any"),
     find("B26", "4축 결합", "제주에서 비 와도 갈 만한 한적한 박물관", expect_spots="any"),
     find("B27", "계절", "가을 단풍 명소", expect_spots="some"),
-    find("B28", "동반자", "아이랑 갈 만한 곳", expect_spots="some"),
+    find(
+        "B28",
+        "동반자",
+        "아이랑 갈 만한 곳",
+        expect_spots="some",
+        pending=True,
+        note="동반자를 담을 축이 없어 되묻기로 간다 — 20곳 랜덤보다는 낫다",
+    ),
     find("B29", "부정형", "바다 말고 산", expect_spots="some"),
     case(
         "B30",
@@ -684,7 +691,14 @@ MESSY_FLOWS: list[Flow] = [
             Step("검색", "속초 볼거리", expect_spots="some"),
             Step("지시어", "그거", expect_spots="any"),
             Step("지시어 2", "거기 말고", expect_spots="any"),
-            Step("지시어 3", "그 옆에", anchors=0, expect_spots="any"),
+            Step(
+                "지시어 3",
+                "그 옆에",
+                anchors=0,
+                expect_tools=("nearby",),
+                pending=True,
+                note="지시어만으로는 앵커 피벗이 안 걸린다 (nearMe 미검출)",
+            ),
         ),
     ),
     Flow(
@@ -886,9 +900,9 @@ async def run_flows(client: httpx.AsyncClient, only: str | None) -> list[Result]
             results.append(result)
             answer = body.get("data") or answer
             mark = "PASS" if result.ok else ("GAP " if step.pending else "FAIL")
-            pinned = f" @{focus}" if focus else ""
+            shown = f" @{focus}" if focus else ""
             print(
-                f"  {current.cid:<6} {mark} {step.label}{pinned}"
+                f"  {current.cid:<6} {mark} {step.label}{shown}"
                 f" | tools={'>'.join(result.tools) or '-'}"
                 f" | n={result.count} | {result.answer[:56]}",
                 flush=True,

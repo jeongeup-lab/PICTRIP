@@ -142,7 +142,7 @@ async def answer_about_spot(
             defer_refresh=kto is None,
         )
     except AppError as exc:
-        logger.warning("agent.detail.unavailable", code=exc.code)
+        logger.warning("agent.detail.unavailable", code=exc.code, content_id=content_id)
         raise AgentNoResults() from exc
 
     fields = _asked(intent)
