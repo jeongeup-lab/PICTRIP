@@ -105,15 +105,14 @@ export default function TravelScreen() {
       const request = text.trim();
       nextId.current += 1;
       const id = `turn-${nextId.current}`;
-      const context = contextFrom(lastAnswered?.answer);
+      const context = contextFrom(lastAnswered?.answer, anchorSpot?.contentId ?? null);
       startTurn({ id, question, request, photo: attached, context });
       setDraft("");
       setPhoto(null);
-      setAnchorSpot(null);
       scrollToEnd();
       run(id, { question: request, photo: attached, context });
     },
-    [busy, startTurn, scrollToEnd, run, lastAnswered],
+    [busy, startTurn, scrollToEnd, run, lastAnswered, anchorSpot],
   );
 
   const refineFrom = useCallback(
@@ -219,10 +218,7 @@ export default function TravelScreen() {
     [busy, retryTurn, run],
   );
 
-  const onChangeDraft = useCallback((text: string) => {
-    setDraft(text);
-    if (text.trim().length > 0) setAnchorSpot(null);
-  }, []);
+  const onChangeDraft = useCallback((text: string) => setDraft(text), []);
 
   const attachFrom = useCallback(
     async (source: () => Promise<PhotoUpload | null>, failure: string) => {

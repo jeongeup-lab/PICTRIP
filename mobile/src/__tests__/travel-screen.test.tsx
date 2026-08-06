@@ -683,17 +683,28 @@ describe("TravelScreen anchored follow-ups", () => {
     expect(pressable(tree, "travel-chip-실내만")).toBeDefined();
   });
 
-  it("drops the anchor as soon as the user types a free-text question", async () => {
+  it("keeps the anchored card while the user types a free-text question", async () => {
     const tree = await mount();
     await press(tree, "travel-spot-126508");
     await settleTap();
-    expect(pressable(tree, "travel-chip-근처 맛집")).toBeDefined();
 
     const input = tree.root.findByProps({ testID: "travel-input" });
     await act(async () => input.props.onChangeText("주차 가능해?"));
 
-    expect(tree.root.findAllByProps({ testID: "travel-anchor-banner" })).toHaveLength(0);
-    expect(pressable(tree, "travel-chip-근처 맛집")).toBeUndefined();
+    expect(tree.root.findAllByProps({ testID: "travel-anchor-banner" }).length).toBeGreaterThan(0);
+  });
+
+  it("sends the anchored card with a typed follow-up so the server can answer about it", async () => {
+    const tree = await mount();
+    await press(tree, "travel-spot-126508");
+    await settleTap();
+
+    const input = tree.root.findByProps({ testID: "travel-input" });
+    await act(async () => input.props.onChangeText("주차 가능해?"));
+    await press(tree, "travel-send");
+
+    const turns = useConversation.getState().turns;
+    expect(turns[turns.length - 1].context?.focusContentId).toBe("126508");
   });
 
   it("resends the anchor when a failed anchor turn is retried", async () => {

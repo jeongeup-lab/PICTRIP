@@ -98,6 +98,7 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 |---|---|---|
 | `steps[]` | `{tool, label, badge}` | 서버가 **실제로 실행한** 툴 순서. `badge`는 그 단계 후 잔여 건수(`128곳`) 또는 근거 표시(`Gemini` · `pgvector`) |
 | `answer[]` | `{text, emphasis}` | 문장 조각. `emphasis=true`는 `accentText` 800으로 렌더 (HTML을 보내지 않는다) |
+| `context.focusContentId` | 대화 레일에서 앵커로 잡은 카드. 자유문에 함께 실린다 — `detail` 턴의 1순위 대상이다 |
 | `spots[]` | `{contentId, title, regionLabel, imageUrl, tag, lat, lng, categoryGroup, hasCrowd}` | 상위 20곳 — 대화 레일이 전부 그린다. `tag`는 카드 좌상단 배지(`하위 8%` · `4.2km` · `유사도 86%`). `categoryGroup`은 `lcls_systm*`에서 파생한 지도 핀 글리프 키(`food`·`cafe`·`attraction`·`leisure`·`shopping`, 없으면 `null`). 여행 후보 풀은 전시·공연장(`VE06`·`VE07`)을 담지만 지도 탭 필터용 `derive_category`는 그 둘을 빼므로, 에이전트는 `repositories.category_group`으로 되메워 `실내만` 결과의 핀이 통째로 흰 점이 되지 않게 한다. `anchor.action=crowd`는 빈 배열 |
 | `totalCount` | int | `spots[]` 길이 |
 | `intent` | `QueryIntent` | 서버가 **실제로 적용한** 의도. 다음 턴이 그대로 되돌려 보낸다 |
@@ -175,6 +176,23 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 정렬하거나 거르면 진짜 가까운/한적한/그 지역의 곳이 잘려나간다. 거리·집중률 정렬은 `ORDER BY`로 내려가고
 `LIMIT`은 그 뒤에 붙는다. 혼잡도 백분위도 `cume_dist()` 윈도로 **필터를 만족하는
 전체 집합** 기준으로 계산한다 — 잘린 400개 안의 상대 순위가 아니다.
+
+**의도 추출이 먼저 고르는 것은 조건이 아니라 `task` 다.** `search`(기본) ·
+`detail` · `smalltalk` · `unsupported` 네 가지이며 같은 Gemini 호출 한 번에서
+나온다 — 라우팅용 왕복을 따로 두지 않는다([ADR 0014](../adr/0014-travel-tab-answers-not-only-searches.md)).
+`detail` 이면 `targetPlace` 와 `detailFields`(`hours`·`closed`·`parking`·
+`contact`·`fee`·`overview`)가 함께 온다. `search` 가 아니면 조건 필드는 비운다.
+
+**`detail` 턴은 검색이 아니라 상세로 답한다.** 대상은 `context.focusContentId`
+(카드 앵커) → 직전 결과 제목 일치 → 결과가 하나뿐이면 그것 순으로 정한다.
+어느 것도 못 잡으면 조용히 `search` 로 떨어진다. 값은 `spot_details` 에서 읽어
+**원문 그대로** 싣고, 없으면 `정보가 아직 없어요` 라고 말한다 — 지어내지 않는다.
+`spot_detail` step 하나가 붙고 `spots` 에는 그 한 곳만 담긴다. 캐시가 없으면
+KTO 라이브 조회 1회가 붙는데, 이는 **상세 화면을 여는 것과 같은 비용**이다.
+활성 스팟 50,577곳 중 상세가 적재된 곳은 1,680곳(3.3%)뿐이라 미스가 흔하다.
+
+**`unsupported` 는 못 한다고 말한다.** 일정·코스 짜기, 예약, 길찾기, 날씨는
+목록을 던지지 않고 할 수 있는 일을 되짚어 준다.
 
 **조건이 하나도 없으면 검색하지 않는다.** 의도 추출 결과의 모든 축(카테고리 ·
 지역 · 장소명 · 분위기 · 실내 · 근처 · 축제 · 혼잡도 선호)이 비면 `spots: []` +

@@ -1843,6 +1843,38 @@ async def test_a_sido_token_outranks_a_same_named_sigungu() -> None:
     assert mapping["제주"].narrowed is False
 
 
+async def test_the_everyday_spelling_of_a_sido_still_resolves() -> None:
+    session = _RegionSession({"제주": [_RegionRow("제주특별자치도", None, 1)]})
+
+    mapping = await map_region_tokens_to_prefixes(session, {"제주도"})
+
+    assert mapping["제주도"].prefix == "제주특별자치도"
+
+
+async def test_a_renamed_province_resolves_from_its_old_name() -> None:
+    session = _RegionSession({"강원": [_RegionRow("강원특별자치도", None, 1)]})
+
+    mapping = await map_region_tokens_to_prefixes(session, {"강원도"})
+
+    assert mapping["강원도"].prefix == "강원특별자치도"
+
+
+async def test_a_metropolitan_city_resolves_from_the_short_city_spelling() -> None:
+    session = _RegionSession({"서울": [_RegionRow("서울특별시", None, 1)]})
+
+    mapping = await map_region_tokens_to_prefixes(session, {"서울시"})
+
+    assert mapping["서울시"].prefix == "서울특별시"
+
+
+async def test_an_ambiguous_city_spelling_is_left_alone() -> None:
+    session = _RegionSession({"광주시": [_RegionRow("경기도", "광주시", 2)]})
+
+    mapping = await map_region_tokens_to_prefixes(session, {"광주시"})
+
+    assert mapping["광주시"].prefix == "경기도 광주시"
+
+
 async def test_an_ambiguous_sigungu_token_resolves_to_nothing() -> None:
     session = _RegionSession(
         {"중구": [_RegionRow("서울특별시", "중구", 2), _RegionRow("부산광역시", "중구", 2)]}

@@ -32,6 +32,7 @@ class SpotImageRow:
 @dataclass
 class SpotIntroRow:
     usetime: str | None = None
+    usefee: str | None = None
     restdate: str | None = None
     parking: str | None = None
     infocenter: str | None = None

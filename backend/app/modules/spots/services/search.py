@@ -106,7 +106,8 @@ async def map_region_tokens_to_sido(session: AsyncSession, tokens: set[str]) -> 
         cleaned = token.strip()
         if len(cleaned) < 2:
             continue
-        rows = (await session.execute(text(_REGION_TOKEN_SQL), {"tok": cleaned})).all()
+        lookup = canonical_region_token(cleaned)
+        rows = (await session.execute(text(_REGION_TOKEN_SQL), {"tok": lookup})).all()
         if len(rows) == 1:
             mapping[cleaned] = rows[0].ldong_regn_nm
     return mapping
@@ -124,6 +125,24 @@ class RegionPrefix:
 
 _SIDO_TIER = 1
 _SIGUNGU_TIER = 2
+
+SIDO_SPELLINGS: dict[str, str] = {
+    "강원도": "강원",
+    "제주도": "제주",
+    "전라북도": "전북",
+    "서울시": "서울",
+    "부산시": "부산",
+    "대구시": "대구",
+    "인천시": "인천",
+    "대전시": "대전",
+    "울산시": "울산",
+    "세종시": "세종",
+}
+
+
+def canonical_region_token(token: str) -> str:
+    return SIDO_SPELLINGS.get(token, token)
+
 
 _REGION_PREFIX_SQL = """
     SELECT r.ldong_regn_nm AS sido, CAST(NULL AS varchar) AS sigungu, 1 AS tier
@@ -145,7 +164,8 @@ async def map_region_tokens_to_prefixes(
         cleaned = token.strip()
         if len(cleaned) < 2:
             continue
-        rows = (await session.execute(text(_REGION_PREFIX_SQL), {"tok": cleaned})).all()
+        lookup = canonical_region_token(cleaned)
+        rows = (await session.execute(text(_REGION_PREFIX_SQL), {"tok": lookup})).all()
         if (resolved := _pick_region_prefix(rows)) is not None:
             mapping[cleaned] = resolved
     return mapping

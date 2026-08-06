@@ -32,6 +32,7 @@ class SpotImageOut(BaseModel):
 
 class SpotIntro(BaseModel):
     usetime: str | None = None
+    usefee: str | None = None
     restdate: str | None = None
     parking: str | None = None
     infocenter: str | None = None
