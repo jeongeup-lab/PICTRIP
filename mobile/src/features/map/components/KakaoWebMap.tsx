@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
-import { buildKakaoMapHtml, PIN_ACCENT, PIN_INK } from "@/features/map/lib/kakao-map-html";
+import { buildKakaoMapHtml } from "@/features/map/lib/kakao-map-html";
 import { KAKAO_JS_KEY } from "@/constants/env";
 import type { Bounds, LatLng } from "@/features/map/lib/geo";
 import type { NearbySpot } from "@/lib/api-types";
@@ -33,7 +33,6 @@ interface Props {
   onViewportChange?: (center: LatLng, bounds: Bounds) => void;
   interactive?: boolean;
   accentDot?: boolean;
-  accentPins?: boolean;
 }
 
 export function KakaoWebMap({
@@ -47,7 +46,6 @@ export function KakaoWebMap({
   onViewportChange,
   interactive = true,
   accentDot = false,
-  accentPins = false,
 }: Props) {
   const ref = useRef<WebView<object>>(null);
   const ready = useRef(false);
@@ -152,12 +150,7 @@ export function KakaoWebMap({
         style={styles.web}
         originWhitelist={["https://*", "http://*"]}
         source={{
-          html: buildKakaoMapHtml(
-            KAKAO_JS_KEY,
-            interactive,
-            accentDot,
-            accentPins ? PIN_ACCENT : PIN_INK,
-          ),
+          html: buildKakaoMapHtml(KAKAO_JS_KEY, interactive, accentDot),
           baseUrl: KAKAO_WEB_ORIGIN,
         }}
         onMessage={onMessage}

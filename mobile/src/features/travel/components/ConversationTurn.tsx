@@ -15,10 +15,13 @@ import { colors, spacing } from "@/constants/theme";
 
 const RISE_MS = 320;
 
+export const TAP_HINT = "한 번 탭 = 이어서 묻기 · 두 번 탭 = 상세";
+
 interface Props {
   turn: Turn;
   anchorId: string | null;
   live: boolean;
+  showTapHint: boolean;
   onSpotTap: (spot: TravelSpot) => void;
   onSpotDetail: (spot: TravelSpot) => void;
   onOpenMap: (turn: Turn) => void;
@@ -31,6 +34,7 @@ export function ConversationTurn({
   turn,
   anchorId,
   live,
+  showTapHint,
   onSpotTap,
   onSpotDetail,
   onOpenMap,
@@ -115,6 +119,17 @@ export function ConversationTurn({
             />
           ) : null}
 
+          {answer.tagBasis || showTapHint ? (
+            <View style={styles.railHead}>
+              {answer.tagBasis ? (
+                <Text style={styles.basis} testID={`turn-basis-${turn.id}`}>
+                  {answer.tagBasis}
+                </Text>
+              ) : null}
+              {showTapHint ? <Text style={styles.hint}>{TAP_HINT}</Text> : null}
+            </View>
+          ) : null}
+
           <FlatList
             horizontal
             data={answer.spots}
@@ -132,18 +147,6 @@ export function ConversationTurn({
               />
             )}
           />
-
-          {answer.tagBasis ? (
-            <Text style={styles.basis} testID={`turn-basis-${turn.id}`}>
-              {answer.tagBasis}
-            </Text>
-          ) : null}
-
-          <View style={styles.foot}>
-            <Text style={styles.hint}>
-              카드를 한 번 탭하면 이 장소 기준으로 이어서 묻고, 두 번 탭하면 상세로 가요
-            </Text>
-          </View>
         </>
       ) : null}
     </Animated.View>
@@ -189,12 +192,7 @@ const styles = StyleSheet.create({
   retryPressed: { backgroundColor: colors.fill },
   retryText: { fontSize: 13, fontWeight: "700", color: colors.sec },
   rail: { gap: 11, paddingTop: 14 },
-  foot: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 16,
-  },
-  basis: { marginTop: 9, fontSize: 11, letterSpacing: -0.1, color: colors.ter },
-  hint: { flex: 1, fontSize: 11.5, color: colors.ter },
+  railHead: { marginTop: 13, gap: 3 },
+  basis: { fontSize: 11, letterSpacing: -0.1, color: colors.ter },
+  hint: { fontSize: 11.5, letterSpacing: -0.1, color: colors.ter },
 });

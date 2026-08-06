@@ -7,7 +7,6 @@ from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.spots.models import LclsSystmCode, Region, Sigungu, Spot, SpotDetail
-from app.modules.spots.services.detail import is_detail_fresh
 from app.modules.spots.services.nearby import NearbyCategory, category_predicate, derive_category
 from app.modules.spots.services.rows import SpotCardRow
 
@@ -70,29 +69,6 @@ async def load_overview_map(
         )
     )
     return {row.content_id: row.overview for row in result}
-
-
-async def load_fresh_overview_map(
-    session: AsyncSession,
-    content_ids: Sequence[str],
-) -> dict[str, str | None]:
-    if not content_ids:
-        return {}
-    result = await session.execute(
-        select(
-            SpotDetail.content_id,
-            SpotDetail.overview,
-            SpotDetail.cached_at,
-            Spot.modified_time,
-        )
-        .join(Spot, Spot.content_id == SpotDetail.content_id)
-        .where(SpotDetail.content_id.in_(content_ids))
-    )
-    return {
-        row.content_id: row.overview
-        for row in result
-        if is_detail_fresh(row.cached_at, row.modified_time)
-    }
 
 
 async def load_spot_cards_by_ids(

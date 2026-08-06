@@ -5,7 +5,6 @@ import type { PhotoUpload, TravelSpot } from "@/features/travel/api";
 import { colors } from "@/constants/theme";
 
 export const MINE_LABEL = "올린 사진";
-export const DISCARD_NOTE = "원본은 비교 후 바로 폐기했어요";
 
 interface Props {
   photo: PhotoUpload;
@@ -38,8 +37,6 @@ export function PhotoCompare({ photo, match }: Props) {
           </Text>
         </View>
       </View>
-
-      <Text style={styles.note}>{DISCARD_NOTE}</Text>
     </View>
   );
 }
@@ -67,5 +64,4 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   linkText: { fontSize: 12, fontWeight: "800", color: colors.accentText },
-  note: { marginTop: 10, fontSize: 11.5, color: colors.ter },
 });

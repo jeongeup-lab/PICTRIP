@@ -148,7 +148,6 @@ class AgentSpotCard(BaseModel):
     lat: float | None = None
     lng: float | None = None
     hasCrowd: bool = False
-    blurb: str | None = None
 
 
 class AskResponse(BaseModel):

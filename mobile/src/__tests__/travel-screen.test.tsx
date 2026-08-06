@@ -7,6 +7,12 @@ import { useConversation, type Turn } from "@/features/travel/stores/conversatio
 import { useTravelMap } from "@/features/travel/stores/map-store";
 import { DOUBLE_TAP_MS } from "@/features/travel/hooks/use-card-tap";
 import { PHOTO_PICK_FAILED, PHOTO_SHOOT_FAILED } from "@/features/travel/lib/agent-errors";
+import {
+  ASK_PLACEHOLDER,
+  ATTACHED_PLACEHOLDER,
+  ATTACH_HEADLINE,
+  ATTACH_NOTICE,
+} from "@/features/travel/components/AskComposer";
 
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
 jest.mock("react-native-safe-area-context", () => ({
@@ -364,6 +370,25 @@ describe("TravelScreen photo attach", () => {
     expect(askAgentMock).toHaveBeenCalledTimes(1);
     expect(askAgentMock.mock.calls[0][0].question).toBe("");
     expect(askAgentMock.mock.calls[0][0].photo).toEqual(PHOTO);
+  });
+
+  it("tells the user what sending the photo will do instead of restating the attachment", async () => {
+    pickTravelPhoto.mockResolvedValueOnce(PHOTO);
+    const tree = await mount();
+
+    expect(tree.root.findByProps({ testID: "travel-input" }).props.placeholder).toBe(
+      ASK_PLACEHOLDER,
+    );
+
+    await press(tree, "travel-attach");
+
+    const dock = JSON.stringify(tree.toJSON());
+    expect(dock).toContain(ATTACH_HEADLINE);
+    expect(dock).toContain(ATTACH_NOTICE);
+    expect(dock).not.toContain("폐기");
+    expect(tree.root.findByProps({ testID: "travel-input" }).props.placeholder).toBe(
+      ATTACHED_PLACEHOLDER,
+    );
   });
 
   it("keeps the draft and shows the shared toast when picking from plus rejects", async () => {

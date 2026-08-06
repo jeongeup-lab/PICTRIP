@@ -13,6 +13,11 @@ export interface RegionGroup {
   count: number;
 }
 
+export interface SpatialSummary {
+  places: string;
+  spread: string | null;
+}
+
 const EARTH_RADIUS_KM = 6371;
 const MIN_SPAN_DEG = 0.02;
 const MAX_NAMED_GROUPS = 2;
@@ -123,21 +128,28 @@ function widen(values: number[]): { min: number; max: number } {
   return { min: mid - MIN_SPAN_DEG / 2, max: mid + MIN_SPAN_DEG / 2 };
 }
 
-export function spatialSummary(spots: PlacedSpot[]): string | null {
+export function spatialSummary(spots: PlacedSpot[]): SpatialSummary | null {
   if (spots.length < 2) return null;
   const groups = regionGroups(spots);
   if (groups.length === 0) return null;
   const spread = spreadKm(spots);
-  const tail =
-    spread >= SPREAD_MENTION_KM ? ` 가장 먼 두 곳은 ${Math.round(spread)}km 떨어져요.` : "";
+  return {
+    places: placesLabel(groups),
+    spread: spread >= SPREAD_MENTION_KM ? `최대 ${Math.round(spread)}km` : null,
+  };
+}
 
-  if (groups.length === 1) return `모두 ${groups[0].label}에 있어요.${tail}`;
+function placesLabel(groups: RegionGroup[]): string {
+  if (groups.length === 1) return `모두 ${groups[0].label}`;
   const named = groups
     .slice(0, MAX_NAMED_GROUPS)
     .map((g) => `${g.label} ${g.count}곳`)
     .join(" · ");
   const rest = groups.length - MAX_NAMED_GROUPS;
-  return rest > 0
-    ? `${named} 등 ${groups.length}곳으로 나뉘어요.${tail}`
-    : `${named}이에요.${tail}`;
+  return rest > 0 ? `${named} · +${rest}` : named;
+}
+
+export function summaryLine(summary: SpatialSummary | null): string | null {
+  if (summary === null) return null;
+  return summary.spread === null ? summary.places : `${summary.places} · ${summary.spread}`;
 }

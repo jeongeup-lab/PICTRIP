@@ -58,10 +58,9 @@ describe("TravelMapView", () => {
     expect(StyleSheet.flatten(top.props.style).paddingTop).toBeGreaterThanOrEqual(59);
   });
 
-  it("pins the results in accent red", () => {
+  it("hands every result to the map as a pin", () => {
     const map = mount().root.findByType(KakaoWebMap);
 
-    expect(map.props.accentPins).toBe(true);
     expect(map.props.pins.map((p: { contentId: string }) => p.contentId)).toEqual([
       "126508",
       "126509",
@@ -93,6 +92,14 @@ describe("TravelMapView", () => {
 
     expect(router.push).toHaveBeenCalledWith("/spots/126508");
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("spells out the detail control instead of leaning on a bare chevron", () => {
+    const detail = mount().root.findByProps({ testID: "travel-map-detail-126508" });
+
+    expect(detail.props.accessibilityRole).toBe("button");
+    expect(detail.props.accessibilityLabel).toBe("상세 보기");
+    expect(JSON.stringify(mount().toJSON())).toContain("상세");
   });
 
   it("closes from its own button", () => {

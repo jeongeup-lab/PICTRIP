@@ -1,6 +1,6 @@
 import renderer, { act } from "react-test-renderer";
 import { FlatList, Text } from "react-native";
-import { ConversationTurn } from "@/features/travel/components/ConversationTurn";
+import { ConversationTurn, TAP_HINT } from "@/features/travel/components/ConversationTurn";
 import { SpotCard } from "@/features/travel/components/SpotCard";
 import { StepList } from "@/features/travel/components/StepList";
 import { KakaoWebMap } from "@/features/map/components/KakaoWebMap";
@@ -64,6 +64,7 @@ function mount(
   onOpenMap = noop,
   onSpotTap: (spot: { contentId: string }) => void = noop,
   onSpotDetail: (spot: { contentId: string }) => void = noop,
+  showTapHint = false,
 ) {
   let tree: renderer.ReactTestRenderer;
   act(() => {
@@ -72,6 +73,7 @@ function mount(
         turn={t}
         anchorId={anchorId}
         live
+        showTapHint={showTapHint}
         onSpotTap={onSpotTap}
         onSpotDetail={onSpotDetail}
         onOpenMap={onOpenMap}
@@ -164,11 +166,9 @@ describe("ConversationTurn once the answer lands", () => {
     expect(tree.root.findAllByProps({ testID: "turn-basis-t1" })).toHaveLength(0);
   });
 
-  it("carries the overview excerpt down to the card", () => {
-    const withBlurb = { ...answer.spots[0], blurb: "우도 동쪽의 백사장이다." };
-    const tree = mount(turn({ answer: { ...answer, spots: [withBlurb] } }));
-
-    expect(texts(tree)).toContain("우도 동쪽의 백사장이다.");
+  it("teaches the card tap grammar once and then stops", () => {
+    expect(texts(mount(turn(), null, noop, noop, noop, noop, true))).toContain(TAP_HINT);
+    expect(texts(mount(turn()))).not.toContain(TAP_HINT);
   });
 
   it("offers no feedback control that goes nowhere", () => {
@@ -197,7 +197,6 @@ describe("ConversationTurn once the answer lands", () => {
 
     const live = mount(mapped);
     expect(live.root.findAllByType(KakaoWebMap)).toHaveLength(1);
-    expect(live.root.findByType(KakaoWebMap).props.accentPins).toBe(true);
 
     let older: renderer.ReactTestRenderer;
     act(() => {
@@ -206,6 +205,7 @@ describe("ConversationTurn once the answer lands", () => {
           turn={mapped}
           anchorId={null}
           live={false}
+          showTapHint={false}
           onSpotTap={noop}
           onSpotDetail={noop}
           onOpenMap={noop}

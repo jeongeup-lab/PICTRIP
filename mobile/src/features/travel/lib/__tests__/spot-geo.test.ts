@@ -7,6 +7,7 @@ import {
   regionGroups,
   spatialSummary,
   spreadKm,
+  summaryLine,
 } from "@/features/travel/lib/spot-geo";
 import type { TravelSpot } from "@/features/travel/api";
 
@@ -133,7 +134,7 @@ describe("spatialSummary", () => {
       ]),
     );
 
-    expect(summary).toBe("모두 제주시에 있어요.");
+    expect(summary).toEqual({ places: "모두 제주시", spread: null });
   });
 
   it("names two areas with their counts", () => {
@@ -145,7 +146,8 @@ describe("spatialSummary", () => {
       ]),
     );
 
-    expect(summary).toBe("제주시 2곳 · 서귀포시 1곳이에요. 가장 먼 두 곳은 29km 떨어져요.");
+    expect(summary).toEqual({ places: "제주시 2곳 · 서귀포시 1곳", spread: "최대 29km" });
+    expect(summaryLine(summary)).toBe("제주시 2곳 · 서귀포시 1곳 · 최대 29km");
   });
 
   it("mentions the spread only when the spots are genuinely far apart", () => {
@@ -156,7 +158,8 @@ describe("spatialSummary", () => {
       ]),
     );
 
-    expect(summary).toBe("제주시 1곳 · 서귀포시 1곳이에요.");
+    expect(summary).toEqual({ places: "제주시 1곳 · 서귀포시 1곳", spread: null });
+    expect(summaryLine(summary)).toBe("제주시 1곳 · 서귀포시 1곳");
   });
 
   it("falls back to a count when the spots scatter across many areas", () => {
@@ -168,8 +171,8 @@ describe("spatialSummary", () => {
       ]),
     );
 
-    expect(summary).toContain("등 3곳으로 나뉘어요.");
-    expect(summary).toContain("km 떨어져요.");
+    expect(summary?.places).toBe("강릉시 1곳 · 해운대구 1곳 · +1");
+    expect(summary?.spread).toMatch(/^최대 \d+km$/);
   });
 });
 

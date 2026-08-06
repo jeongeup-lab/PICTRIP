@@ -46,6 +46,7 @@ export default function TravelScreen() {
   const [photo, setPhoto] = useState<PhotoUpload | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [anchorSpot, setAnchorSpot] = useState<TravelSpot | null>(null);
+  const [everAnchored, setEverAnchored] = useState(false);
 
   const turns = useConversation((s) => s.turns);
   const busy = useConversation((s) => s.busy);
@@ -79,6 +80,7 @@ export default function TravelScreen() {
   const lastAnswered = [...turns].reverse().find((t) => t.status === "done" && t.answer);
   const liveMapTurnId =
     [...turns].reverse().find((t) => placed(t.answer?.spots ?? []).length > 0)?.id ?? null;
+  const tapHintTurnId = turns.find((t) => (t.answer?.spots.length ?? 0) > 0)?.id ?? null;
 
   const run = useCallback(
     (id: string, input: Omit<AskInput, "coords">) => {
@@ -193,6 +195,7 @@ export default function TravelScreen() {
   );
 
   const onSpotAnchor = useCallback((spot: TravelSpot) => {
+    setEverAnchored(true);
     setAnchorSpot((current) => (current?.contentId === spot.contentId ? null : spot));
   }, []);
 
@@ -278,6 +281,7 @@ export default function TravelScreen() {
                 turn={turn}
                 anchorId={anchorSpot?.contentId ?? null}
                 live={turn.id === liveMapTurnId}
+                showTapHint={!everAnchored && turn.id === tapHintTurnId}
                 onSpotTap={onSpotTap}
                 onSpotDetail={onSpotDetail}
                 onOpenMap={onOpenMap}
