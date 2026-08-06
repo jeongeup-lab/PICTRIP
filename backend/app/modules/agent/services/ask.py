@@ -509,7 +509,7 @@ async def _ask_with_question(
     keywords = _keywords(intent)
     category = await retrieve.resolve_category_scope(session, keywords)
     codes = category.codes
-    eating = retrieve.food_action(codes)
+    eating = retrieve.food_action(codes) or retrieve.food_word(keywords)
     if eating is not None:
         if lat is not None and lng is not None:
             return await _ask_with_anchor(
