@@ -8,7 +8,7 @@ from typing import Literal
 from sqlalchemy import text
 
 from app.core.db import AsyncSession
-from app.modules.spots.services import travel_category_sql
+from app.modules.spots.services import derive_category, travel_category_sql
 
 INDOOR_L2 = ("VE06", "VE07")
 INDOOR_L3 = ("VE020400", "VE120300")
@@ -129,6 +129,7 @@ class CandidateRow:
     percentile: int | None = None
     indoor: bool = False
     mood_ids: tuple[int, ...] = ()
+    category_group: str | None = None
 
 
 CandidateOrder = Literal["id", "rate_asc", "rate_desc", "distance"]
@@ -144,6 +145,9 @@ WITH scored AS (
            spots.mapx AS lng,
            spots.first_image_url AS image_url,
            spots.cpyrht_div_cd,
+           spots.lcls_systm1,
+           spots.lcls_systm2,
+           spots.lcls_systm3,
            sc.concentration_rate,
            sc.base_ymd,
            COALESCE(spots.lcls_systm2 = ANY(CAST(:indoor_l2 AS text[]))
@@ -273,6 +277,7 @@ async def find_candidates(
             base_ymd=row.base_ymd,
             percentile=int(row.percentile) if row.percentile is not None else None,
             indoor=bool(row.indoor),
+            category_group=derive_category(row.lcls_systm1, row.lcls_systm2, row.lcls_systm3),
         )
         for row in result
     ]
@@ -288,6 +293,9 @@ SELECT spots.content_id,
        spots.mapx AS lng,
        spots.first_image_url AS image_url,
        spots.cpyrht_div_cd,
+       spots.lcls_systm1,
+       spots.lcls_systm2,
+       spots.lcls_systm3,
        sc.concentration_rate,
        sc.base_ymd,
        COALESCE(spots.lcls_systm2 = ANY(CAST(:indoor_l2 AS text[]))
@@ -344,6 +352,7 @@ async def load_candidates_by_ids(
             base_ymd=row.base_ymd,
             indoor=bool(row.indoor),
             mood_ids=tuple(int(mood_id) for mood_id in row.mood_ids),
+            category_group=derive_category(row.lcls_systm1, row.lcls_systm2, row.lcls_systm3),
         )
         for row in result
     }

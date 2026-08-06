@@ -154,6 +154,10 @@
   읽는다. 두 색은 `buildKakaoMapHtml` 이 HTML 에 함께 굽고 `pinEl()` 의 `sel`
   분기가 고른다. **색을 prop 으로 넘기면 안 된다** — `source.html` 이 바뀌어
   WebView 와 Kakao SDK 가 통째로 리마운트된다.
+- **결과 핀은 카테고리 글리프를 단다.** 서버가 `spots[].categoryGroup` 을 주고
+  (`lcls_systm*` → `derive_category`), `pinsFrom()` 이 그대로 통과시킨다. 지도
+  탭 핀과 같은 글리프 집합이라 두 화면에서 핀 하나가 같은 뜻을 갖는다. 서버가
+  분류를 못 하면(`null`) 흰 점 폴백이다 — 지도 탭도 같다.
 - **`지도 열기` 는 모달이 아니라 라우트다**(`/travel-map`). 모달 안에서는
   상세로 가려면 모달을 닫아야 해서 **뒤로 가기가 지도가 아니라 대화로**
   떨어졌고, `SafeAreaView` 인셋이 첫 프레임에 0이라 닫기 버튼이 노치에 잘렸다.

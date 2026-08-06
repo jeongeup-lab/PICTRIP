@@ -43,6 +43,16 @@ describe("pinsFrom", () => {
     expect(pin.contentId).toBe("c1");
     expect(pin.title).toBe("무릉계곡");
   });
+
+  it("carries the category through so the pin can draw its glyph", () => {
+    const [pin] = pinsFrom(placed([spot({ categoryGroup: "cafe" })]));
+
+    expect(pin.categoryGroup).toBe("cafe");
+  });
+
+  it("falls back to a plain pin when the server names no category", () => {
+    expect(pinsFrom(placed([spot()]))[0].categoryGroup).toBeNull();
+  });
 });
 
 describe("miniFitSpots", () => {

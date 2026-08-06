@@ -382,6 +382,7 @@ def _anchor_card(row: NearbySpotRow, *, has_crowd: bool) -> AgentSpotCard:
         tag=_meters_label(row.dist) if row.dist is not None else None,
         lat=row.mapy,
         lng=row.mapx,
+        categoryGroup=row.category_group,
         hasCrowd=has_crowd,
     )
 

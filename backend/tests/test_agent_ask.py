@@ -3704,6 +3704,18 @@ def test_a_visible_crowd_tag_brings_the_crowd_basis_back() -> None:
     assert ask_service._tag_basis(rows, cards, near=True) == "혼잡도 8/3 예측 기준"
 
 
+def test_a_card_carries_the_category_the_map_pin_draws() -> None:
+    from dataclasses import replace
+
+    card = retrieve.to_card(replace(_row("a", rate=None), category_group="cafe"), tag=None)
+
+    assert card.categoryGroup == "cafe"
+
+
+def test_a_card_with_no_derivable_category_leaves_the_pin_generic() -> None:
+    assert retrieve.to_card(_row("a", rate=None), tag=None).categoryGroup is None
+
+
 def test_a_similarity_only_batch_names_the_photo_comparison_not_the_crowd() -> None:
     from dataclasses import replace
     from datetime import date
