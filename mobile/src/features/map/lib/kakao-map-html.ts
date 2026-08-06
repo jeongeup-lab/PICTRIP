@@ -1,8 +1,17 @@
 import { SEOUL_CITY_HALL } from "@/constants/map";
 
-export function buildKakaoMapHtml(jsKey: string, interactive = true, accentDot = false): string {
+export const PIN_INK = "#171719";
+export const PIN_ACCENT = "#E60023";
+
+export function buildKakaoMapHtml(
+  jsKey: string,
+  interactive = true,
+  accentDot = false,
+  pinColor: string = PIN_INK,
+): string {
   const { lat, lng } = SEOUL_CITY_HALL;
   const dotColor = accentDot ? "#E60023" : "#fff";
+  const coreColor = pinColor === PIN_ACCENT ? "#FFFFFF" : PIN_ACCENT;
   const gestures = interactive
     ? `kakao.maps.event.addListener(map,'idle',function(){
          var c=map.getCenter(), b=map.getBounds(), sw=b.getSouthWest(), ne=b.getNorthEast();
@@ -16,7 +25,7 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true, accentDot =
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <style>
   html,body,#map{margin:0;padding:0;width:100%;height:100%;overflow:hidden}
-  .pin{width:28px;height:28px;background:#171719;border:2px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 1px 3px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center}
+  .pin{width:28px;height:28px;background:${pinColor};border:2px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 1px 3px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center}
   .pin .g{transform:rotate(45deg);width:15px;height:15px;display:flex;align-items:center;justify-content:center}
   .pin svg{width:15px;height:15px;display:block}
   .sel{position:relative;width:34px;height:34px;display:block}
@@ -55,7 +64,7 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true, accentDot =
     var el = document.createElement('div');
     if(sel){
       el.className='sel';
-      el.innerHTML = '<svg class="tear" viewBox="0 0 24 24" fill="#171719"><path d="M12 22s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11z"></path><circle cx="12" cy="10.5" r="2.6" fill="#E60023"></circle></svg><span class="lab">'+esc(s.title)+'</span>';
+      el.innerHTML = '<svg class="tear" viewBox="0 0 24 24" fill="${pinColor}"><path d="M12 22s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11z"></path><circle cx="12" cy="10.5" r="2.6" fill="${coreColor}"></circle></svg><span class="lab">'+esc(s.title)+'</span>';
     } else {
       el.className='pin';
       el.innerHTML = '<span class="g">'+glyphSvg(s.categoryGroup)+'</span>';

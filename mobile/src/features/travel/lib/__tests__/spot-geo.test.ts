@@ -1,7 +1,9 @@
 import {
   bounds,
+  center,
+  miniFitSpots,
+  pinsFrom,
   placed,
-  previewPoints,
   regionGroups,
   spatialSummary,
   spreadKm,
@@ -31,44 +33,56 @@ describe("placed", () => {
   });
 });
 
-describe("previewPoints", () => {
-  const box = { width: 100, height: 100, padding: 10 };
+describe("pinsFrom", () => {
+  it("hands the map lng as mapx and lat as mapy", () => {
+    const [pin] = pinsFrom(placed([spot({ lat: 33.5, lng: 126.5 })]));
 
-  it("keeps every point inside the padded box", () => {
-    const points = previewPoints(
-      placed([
-        spot({ contentId: "a", lat: 33.2, lng: 126.2 }),
-        spot({ contentId: "b", lat: 33.6, lng: 126.9 }),
-        spot({ contentId: "c", lat: 33.4, lng: 126.5 }),
-      ]),
-      box,
-    );
+    expect(pin.mapx).toBe(126.5);
+    expect(pin.mapy).toBe(33.5);
+    expect(pin.contentId).toBe("c1");
+    expect(pin.title).toBe("무릉계곡");
+  });
+});
 
-    points.forEach((p) => {
-      expect(p.x).toBeGreaterThanOrEqual(10);
-      expect(p.x).toBeLessThanOrEqual(90);
-      expect(p.y).toBeGreaterThanOrEqual(10);
-      expect(p.y).toBeLessThanOrEqual(90);
-    });
+describe("miniFitSpots", () => {
+  it("frames every spot when they fit the mini map", () => {
+    const rows = placed([
+      spot({ contentId: "a", regionLabel: "충남 태안군", lat: 36.5, lng: 126.3 }),
+      spot({ contentId: "b", regionLabel: "부산 해운대구", lat: 35.16, lng: 129.16 }),
+    ]);
+
+    expect(miniFitSpots(rows)).toEqual(rows);
   });
 
-  it("puts the northern spot above the southern one", () => {
-    const [north, south] = previewPoints(
-      placed([
-        spot({ contentId: "n", lat: 33.9, lng: 126.5 }),
-        spot({ contentId: "s", lat: 33.1, lng: 126.5 }),
-      ]),
-      box,
-    );
+  it("falls back to the busiest area when the results span the country", () => {
+    const rows = placed([
+      spot({ contentId: "a", regionLabel: "강원 고성군", lat: 38.4, lng: 128.46 }),
+      spot({ contentId: "b", regionLabel: "강원 고성군", lat: 38.35, lng: 128.47 }),
+      spot({ contentId: "c", regionLabel: "제주 제주시", lat: 33.5, lng: 126.5 }),
+    ]);
 
-    expect(north.y).toBeLessThan(south.y);
+    expect(miniFitSpots(rows).map((r) => r.spot.contentId)).toEqual(["a", "b"]);
   });
 
-  it("centers a single spot instead of dividing by a zero span", () => {
-    const [only] = previewPoints(placed([spot()]), box);
+  it("has nothing to frame for an empty answer", () => {
+    expect(miniFitSpots([])).toEqual([]);
+  });
+});
 
-    expect(only.x).toBeCloseTo(50);
-    expect(only.y).toBeCloseTo(50);
+describe("center", () => {
+  it("averages the pinned spots", () => {
+    const middle = center(
+      placed([
+        spot({ contentId: "a", lat: 33.0, lng: 126.0 }),
+        spot({ contentId: "b", lat: 34.0, lng: 127.0 }),
+      ]),
+    );
+
+    expect(middle).toEqual({ lat: 33.5, lng: 126.5 });
+  });
+
+  it("is null with nothing to center on", () => {
+    expect(center([])).toBeNull();
   });
 });
 
@@ -208,5 +222,13 @@ describe("bounds", () => {
 
   it("is null when nothing can be pinned", () => {
     expect(bounds([])).toBeNull();
+  });
+
+  it("widens a single spot into a box the map can zoom to", () => {
+    const box = bounds(placed([spot({ lat: 33.5, lng: 126.5 })]))!;
+
+    expect(box.ne.lat - box.sw.lat).toBeCloseTo(0.02);
+    expect(box.ne.lng - box.sw.lng).toBeCloseTo(0.02);
+    expect((box.ne.lat + box.sw.lat) / 2).toBeCloseTo(33.5);
   });
 });

@@ -1,16 +1,11 @@
 import type { LatLng } from "@/features/map/lib/geo";
 import type { TravelSpot } from "@/features/travel/api";
+import type { NearbySpot } from "@/lib/api-types";
 
 export interface PlacedSpot {
   spot: TravelSpot;
   lat: number;
   lng: number;
-}
-
-export interface PreviewPoint {
-  contentId: string;
-  x: number;
-  y: number;
 }
 
 export interface RegionGroup {
@@ -19,9 +14,10 @@ export interface RegionGroup {
 }
 
 const EARTH_RADIUS_KM = 6371;
-const SINGLE_SPAN_DEG = 0.02;
+const MIN_SPAN_DEG = 0.02;
 const MAX_NAMED_GROUPS = 2;
 const SPREAD_MENTION_KM = 20;
+const MINI_FIT_LAT_DEG = 2.5;
 
 export function placed(spots: TravelSpot[]): PlacedSpot[] {
   return spots.flatMap((spot) =>
@@ -29,25 +25,45 @@ export function placed(spots: TravelSpot[]): PlacedSpot[] {
   );
 }
 
-export function previewPoints(
-  spots: PlacedSpot[],
-  { width, height, padding }: { width: number; height: number; padding: number },
-): PreviewPoint[] {
-  if (spots.length === 0) return [];
-  const lats = spots.map((s) => s.lat);
-  const lngs = spots.map((s) => s.lng);
-  const spanLat = Math.max(Math.max(...lats) - Math.min(...lats), SINGLE_SPAN_DEG);
-  const spanLng = Math.max(Math.max(...lngs) - Math.min(...lngs), SINGLE_SPAN_DEG);
-  const midLat = (Math.max(...lats) + Math.min(...lats)) / 2;
-  const midLng = (Math.max(...lngs) + Math.min(...lngs)) / 2;
-  const inner = { w: width - padding * 2, h: height - padding * 2 };
-  const place = (ratio: number, span: number, offset: number) =>
-    padding + span * Math.min(1, Math.max(0, ratio)) + offset;
-  return spots.map((s) => ({
-    contentId: s.spot.contentId,
-    x: place(0.5 + (s.lng - midLng) / spanLng, inner.w, 0),
-    y: place(0.5 - (s.lat - midLat) / spanLat, inner.h, 0),
+export function pinsFrom(spots: PlacedSpot[]): NearbySpot[] {
+  return spots.map(({ spot, lat, lng }) => ({
+    contentId: spot.contentId,
+    title: spot.title,
+    firstImageUrl: spot.imageUrl,
+    addr1: spot.regionLabel,
+    mapx: lng,
+    mapy: lat,
+    category: null,
+    dist: null,
+    categoryGroup: null,
+    regionName: null,
+    sigunguName: null,
+    overview: null,
   }));
+}
+
+export function miniFitSpots(spots: PlacedSpot[]): PlacedSpot[] {
+  if (spots.length === 0) return spots;
+  const lats = spots.map((s) => s.lat);
+  if (Math.max(...lats) - Math.min(...lats) <= MINI_FIT_LAT_DEG) return spots;
+  return largestCluster(spots);
+}
+
+function largestCluster(spots: PlacedSpot[]): PlacedSpot[] {
+  const buckets = new Map<string, PlacedSpot[]>();
+  spots.forEach((s) => {
+    const key = s.spot.regionLabel.trim().replace(/\s+/g, " ");
+    buckets.set(key, [...(buckets.get(key) ?? []), s]);
+  });
+  return [...buckets.values()].sort((a, b) => b.length - a.length)[0] ?? spots;
+}
+
+export function center(spots: PlacedSpot[]): LatLng | null {
+  if (spots.length === 0) return null;
+  return {
+    lat: spots.reduce((sum, s) => sum + s.lat, 0) / spots.length,
+    lng: spots.reduce((sum, s) => sum + s.lng, 0) / spots.length,
+  };
 }
 
 export function distanceKm(a: PlacedSpot, b: PlacedSpot): number {
@@ -94,12 +110,17 @@ function areaLabel(regionLabel: string): string {
 
 export function bounds(spots: PlacedSpot[]): { sw: LatLng; ne: LatLng } | null {
   if (spots.length === 0) return null;
-  const lats = spots.map((s) => s.lat);
-  const lngs = spots.map((s) => s.lng);
-  return {
-    sw: { lat: Math.min(...lats), lng: Math.min(...lngs) },
-    ne: { lat: Math.max(...lats), lng: Math.max(...lngs) },
-  };
+  const lat = widen(spots.map((s) => s.lat));
+  const lng = widen(spots.map((s) => s.lng));
+  return { sw: { lat: lat.min, lng: lng.min }, ne: { lat: lat.max, lng: lng.max } };
+}
+
+function widen(values: number[]): { min: number; max: number } {
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  if (max - min >= MIN_SPAN_DEG) return { min, max };
+  const mid = (min + max) / 2;
+  return { min: mid - MIN_SPAN_DEG / 2, max: mid + MIN_SPAN_DEG / 2 };
 }
 
 export function spatialSummary(spots: PlacedSpot[]): string | null {

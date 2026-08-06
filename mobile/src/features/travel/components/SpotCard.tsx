@@ -11,30 +11,18 @@ import { colors } from "@/constants/theme";
 export const RAIL_CARD_WIDTH = 168;
 export const MEDIA_HEIGHT = 150;
 export const BLURB_HEIGHT = 40;
-export const ANCHOR_HEIGHT = 34;
-export const RAIL_CARD_HEIGHT = MEDIA_HEIGHT + BLURB_HEIGHT + ANCHOR_HEIGHT;
-
-export const ANCHOR_ACTION_LABEL = "여기 기준으로";
+export const RAIL_CARD_HEIGHT = MEDIA_HEIGHT + BLURB_HEIGHT;
 
 interface Props {
   spot: TravelSpot;
   style?: StyleProp<ViewStyle>;
   onSaveToggle?: (saved: boolean) => void;
   onPress?: () => void;
-  onAnchor?: () => void;
   selected?: boolean;
   dimmed?: boolean;
 }
 
-export function SpotCard({
-  spot,
-  style,
-  onSaveToggle,
-  onPress,
-  onAnchor,
-  selected,
-  dimmed,
-}: Props) {
+export function SpotCard({ spot, style, onSaveToggle, onPress, selected, dimmed }: Props) {
   const { saved, toggle } = useSaveOptimistic(spot.contentId);
 
   return (
@@ -104,29 +92,6 @@ export function SpotCard({
         </View>
       </Pressable>
 
-      {onAnchor ? (
-        <Pressable
-          testID={`travel-spot-anchor-${spot.contentId}`}
-          accessibilityRole="button"
-          style={({ pressed }) => [
-            styles.anchor,
-            selected && styles.anchorOn,
-            pressed && styles.anchorPressed,
-          ]}
-          onPress={onAnchor}
-        >
-          <Icon
-            name="location"
-            size={12}
-            color={selected ? colors.accentText : colors.sec}
-            strokeWidth={2.1}
-          />
-          <Text style={[styles.anchorText, selected && styles.anchorTextOn]}>
-            {ANCHOR_ACTION_LABEL}
-          </Text>
-        </Pressable>
-      ) : null}
-
       {selected ? <View style={styles.selectedRing} pointerEvents="none" /> : null}
     </View>
   );
@@ -151,20 +116,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   blurbText: { fontSize: 11, lineHeight: 15, letterSpacing: -0.1, color: colors.sec },
-  anchor: {
-    height: ANCHOR_HEIGHT,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-    backgroundColor: colors.inset,
-  },
-  anchorOn: { backgroundColor: colors.accentFill },
-  anchorPressed: { backgroundColor: colors.fill },
-  anchorText: { fontSize: 11.5, fontWeight: "800", letterSpacing: -0.2, color: colors.sec },
-  anchorTextOn: { color: colors.accentText },
   pressed: { opacity: 0.9, transform: [{ scale: 0.975 }] },
   dimmed: { opacity: 0.55 },
   selectedRing: {

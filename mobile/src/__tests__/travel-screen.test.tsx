@@ -4,6 +4,8 @@ import TravelScreen from "@/app/(tabs)/travel";
 import { askAgent, type AgentAnswer, type QueryIntent } from "@/features/travel/api";
 import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
 import { useConversation, type Turn } from "@/features/travel/stores/conversation-store";
+import { useTravelMap } from "@/features/travel/stores/map-store";
+import { DOUBLE_TAP_MS } from "@/features/travel/hooks/use-card-tap";
 
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
 jest.mock("react-native-safe-area-context", () => ({
@@ -184,6 +186,12 @@ async function press(tree: renderer.ReactTestRenderer, testID: string) {
   const node = pressable(tree, testID);
   if (!node) throw new Error(`no pressable with testID ${testID}`);
   await act(async () => node.props.onPress());
+}
+
+async function settleTap() {
+  await act(async () => {
+    jest.advanceTimersByTime(DOUBLE_TAP_MS + 20);
+  });
 }
 
 describe("TravelScreen empty state", () => {
@@ -476,40 +484,56 @@ describe("TravelScreen anchored follow-ups", () => {
   };
 
   beforeEach(() => {
+    jest.useFakeTimers();
     useConversation.setState({ turns: [spotAnsweredTurn], busy: false });
   });
 
-  it("anchors from its own button and swaps the composer rail to anchor chips", async () => {
+  afterEach(() => jest.useRealTimers());
+
+  it("anchors from a single card tap and swaps the composer rail to anchor chips", async () => {
     const tree = await mount();
     expect(pressable(tree, "travel-chip-근처 맛집")).toBeUndefined();
 
-    await press(tree, "travel-spot-anchor-126508");
+    await press(tree, "travel-spot-126508");
+    await settleTap();
 
     expect(tree.root.findAllByProps({ testID: "travel-anchor-banner" }).length).toBeGreaterThan(0);
     expect(pressable(tree, "travel-chip-근처 맛집")).toBeDefined();
     expect(pressable(tree, "travel-chip-실내만")).toBeUndefined();
   });
 
-  it("never anchors from a card tap", async () => {
+  it("has no separate anchor button on the card any more", async () => {
+    const tree = await mount();
+
+    expect(tree.root.findAllByProps({ testID: "travel-spot-anchor-126508" })).toHaveLength(0);
+  });
+
+  it("never anchors when the card is tapped twice", async () => {
+    const { router } = jest.requireMock("expo-router") as { router: { push: jest.Mock } };
     const tree = await mount();
 
     await press(tree, "travel-spot-126508");
+    await press(tree, "travel-spot-126508");
+    await settleTap();
 
+    expect(router.push).toHaveBeenCalledWith("/spots/126508");
     expect(tree.root.findAllByProps({ testID: "travel-anchor-banner" })).toHaveLength(0);
-    expect(pressable(tree, "travel-chip-근처 맛집")).toBeUndefined();
   });
 
-  it("releases the anchor when its button is pressed again", async () => {
+  it("releases the anchor when the card is tapped once again", async () => {
     const tree = await mount();
-    await press(tree, "travel-spot-anchor-126508");
-    await press(tree, "travel-spot-anchor-126508");
+    await press(tree, "travel-spot-126508");
+    await settleTap();
+    await press(tree, "travel-spot-126508");
+    await settleTap();
 
     expect(tree.root.findAllByProps({ testID: "travel-anchor-banner" })).toHaveLength(0);
   });
 
   it("sends an anchor chip as contentId + action, labeled with the spot title", async () => {
     const tree = await mount();
-    await press(tree, "travel-spot-anchor-126508");
+    await press(tree, "travel-spot-126508");
+    await settleTap();
     await press(tree, "travel-chip-근처 맛집");
 
     expect(askAgentMock).toHaveBeenCalledTimes(1);
@@ -523,10 +547,11 @@ describe("TravelScreen anchored follow-ups", () => {
     expect(turns[turns.length - 1].anchor).toEqual({ contentId: "126508", action: "food" });
   });
 
-  it("opens the spot detail on the first card tap", async () => {
+  it("opens the spot detail on a double tap", async () => {
     const { router } = jest.requireMock("expo-router") as { router: { push: jest.Mock } };
     const tree = await mount();
 
+    await press(tree, "travel-spot-126508");
     await press(tree, "travel-spot-126508");
 
     expect(router.push).toHaveBeenCalledWith("/spots/126508");
@@ -535,8 +560,10 @@ describe("TravelScreen anchored follow-ups", () => {
   it("still opens the detail while a card is anchored", async () => {
     const { router } = jest.requireMock("expo-router") as { router: { push: jest.Mock } };
     const tree = await mount();
-    await press(tree, "travel-spot-anchor-126508");
+    await press(tree, "travel-spot-126508");
+    await settleTap();
 
+    await press(tree, "travel-spot-126508");
     await press(tree, "travel-spot-126508");
 
     expect(router.push).toHaveBeenCalledWith("/spots/126508");
@@ -544,7 +571,8 @@ describe("TravelScreen anchored follow-ups", () => {
 
   it("returns to refine chips when the anchor is cleared", async () => {
     const tree = await mount();
-    await press(tree, "travel-spot-anchor-126508");
+    await press(tree, "travel-spot-126508");
+    await settleTap();
     await press(tree, "travel-anchor-clear");
 
     expect(pressable(tree, "travel-chip-근처 맛집")).toBeUndefined();
@@ -553,7 +581,8 @@ describe("TravelScreen anchored follow-ups", () => {
 
   it("drops the anchor as soon as the user types a free-text question", async () => {
     const tree = await mount();
-    await press(tree, "travel-spot-anchor-126508");
+    await press(tree, "travel-spot-126508");
+    await settleTap();
     expect(pressable(tree, "travel-chip-근처 맛집")).toBeDefined();
 
     const input = tree.root.findByProps({ testID: "travel-input" });
@@ -591,14 +620,15 @@ describe("TravelScreen anchored follow-ups", () => {
   });
 });
 
-describe("TravelScreen photo-first start", () => {
-  it("puts a photo call to action on the empty screen", async () => {
+describe("TravelScreen empty-screen start", () => {
+  it("keeps the empty screen to the greeting — no photo call to action", async () => {
     const tree = await mount();
 
-    expect(tree.root.findAllByProps({ testID: "travel-start-photo" }).length).toBeGreaterThan(0);
+    expect(tree.root.findAllByProps({ testID: "travel-start-photo" })).toHaveLength(0);
     expect(tree.root.findByProps({ testID: "travel-greeting" }).props.pointerEvents).toBe(
       "box-none",
     );
+    expect(tree.root.findAllByProps({ testID: "travel-attach" }).length).toBeGreaterThan(0);
   });
 
   it("takes the start actions out of reach once the conversation begins", async () => {
@@ -762,36 +792,38 @@ describe("TravelScreen map", () => {
     });
   };
 
-  it("keeps the map sheet closed until the turn map is tapped", async () => {
-    useConversation.setState({ turns: [mapTurn], busy: false });
-    const tree = await mount();
+  beforeEach(() => useTravelMap.getState().clear());
 
-    expect(tree.root.findAllByProps({ testID: "travel-map-sheet" })).toHaveLength(0);
+  it("leaves the map route alone until the turn map is tapped", async () => {
+    const { router } = jest.requireMock("expo-router") as { router: { push: jest.Mock } };
+    useConversation.setState({ turns: [mapTurn], busy: false });
+    await mount();
+
+    expect(router.push).not.toHaveBeenCalled();
+    expect(useTravelMap.getState().spots).toHaveLength(0);
   });
 
-  it("opens the sheet with a card per pinned result", async () => {
+  it("pushes the map screen with the pinned results of that turn", async () => {
+    const { router } = jest.requireMock("expo-router") as { router: { push: jest.Mock } };
     useConversation.setState({ turns: [mapTurn], busy: false });
     const tree = await mount();
 
     await openMap(tree);
 
-    expect(tree.root.findAllByProps({ testID: "travel-map-sheet" }).length).toBeGreaterThan(0);
-    expect(tree.root.findAllByProps({ testID: "travel-map-card-126508" }).length).toBeGreaterThan(
-      0,
-    );
-    expect(tree.root.findAllByProps({ testID: "travel-map-card-126509" }).length).toBeGreaterThan(
-      0,
-    );
+    expect(router.push).toHaveBeenCalledWith("/travel-map");
+    const state = useTravelMap.getState();
+    expect(state.spots.map((s) => s.spot.contentId)).toEqual(["126508", "126509"]);
+    expect(state.question).toBe("제주에서 한적한 곳");
+    expect(state.selectedId).toBe("126508");
   });
 
-  it("closes the sheet from its own button", async () => {
+  it("keeps the map on the stack instead of a modal over the chat", async () => {
     useConversation.setState({ turns: [mapTurn], busy: false });
     const tree = await mount();
+
     await openMap(tree);
 
-    await press(tree, "travel-map-close");
-
-    expect(tree.root.findAllByProps({ testID: "travel-map-sheet" })).toHaveLength(0);
+    expect(tree.root.findAllByProps({ testID: "travel-map-screen" })).toHaveLength(0);
   });
 
   it("offers no map when the answer carries no coordinates", async () => {
