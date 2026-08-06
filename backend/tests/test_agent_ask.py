@@ -328,7 +328,7 @@ async def test_nothing_matching_answers_with_zero_and_a_way_out(
     assert data["totalCount"] == 0
     answer = "".join(segment["text"] for segment in data["answer"])
     assert "0곳" in answer
-    assert [chip["label"] for chip in data["refinements"]] == ["박물관 조건 풀기", "지역 넓히기"]
+    assert [chip["label"] for chip in data["refinements"]] == ["지역 넓히기"]
 
 
 @pytest.mark.integration
@@ -367,7 +367,7 @@ async def test_a_zero_turn_offers_only_conditions_that_are_still_applied(
     assert data["intent"]["indoorOnly"] is True
     assert data["intent"]["categoryKeywords"] == []
     labels = [chip["label"] for chip in data["refinements"]]
-    assert labels == ["실내 조건 풀기", "지역 넓히기"]
+    assert labels == ["지역 넓히기"]
     assert not any("박물관" in label for label in labels)
 
 
@@ -1550,11 +1550,7 @@ async def test_refine_request_skips_the_llm_and_keeps_prior_axes(
     assert data["intent"]["regionHints"] == ["부산"]
     assert [step["tool"] for step in data["steps"]] == ["category_search", "concentration"]
     assert [spot["contentId"] for spot in data["spots"]] == ["v1", "v2", "v3"]
-    assert [chip["label"] for chip in data["refinements"]] == [
-        "조건 하나 풀기",
-        "유명한 곳으로",
-    ]
-    assert data["refinements"][0]["patch"]["drop"] == "crowd"
+    assert [chip["label"] for chip in data["refinements"]] == ["유명한 곳으로"]
 
 
 @pytest.mark.integration
@@ -1620,8 +1616,7 @@ async def test_photo_refine_reads_the_multipart_intent_and_skips_the_llm(
     assert [step["tool"] for step in data["steps"]] == ["photo_match"]
     assert [spot["contentId"] for spot in data["spots"]] == ["j1"]
     assert data["intent"]["regionHints"] == ["제주"]
-    assert [chip["label"] for chip in data["refinements"]] == ["조건 하나 풀기"]
-    assert data["refinements"][0]["patch"]["drop"] == "region"
+    assert data["refinements"] == []
 
 
 @pytest.mark.integration
@@ -1647,7 +1642,7 @@ async def test_suggestions_stay_plain_labels_of_the_refinements(
 
 
 @pytest.mark.integration
-async def test_release_chip_stays_out_of_the_legacy_suggestions(
+async def test_a_result_turn_carries_no_condition_release_chip(
     db_session, client, seeded, monkeypatch
 ) -> None:
     monkeypatch.setattr(intent_service, "extract_intent", _forbidden_intent([]))
@@ -1665,13 +1660,8 @@ async def test_release_chip_stays_out_of_the_legacy_suggestions(
 
     assert res.status_code == 200
     data = res.json()["data"]
-    released = [chip for chip in data["refinements"] if chip["patch"]["drop"] is not None]
-    assert len(released) == 1
-    assert data["suggestions"] == [
-        chip["label"] for chip in data["refinements"] if chip["patch"]["drop"] is None
-    ]
-    assert released[0]["label"] not in data["suggestions"]
-    assert len(data["suggestions"]) == len(data["refinements"]) - 1
+    assert [chip for chip in data["refinements"] if chip["patch"]["drop"] is not None] == []
+    assert data["suggestions"] == [chip["label"] for chip in data["refinements"]]
 
 
 @pytest.mark.integration
@@ -1695,7 +1685,11 @@ async def test_photo_suggestions_stay_plain_labels_of_the_refinements(
         res = await client.post(
             "/v1/agent/ask",
             files={"photo": ("a.jpg", b"x", "image/jpeg")},
-            data={"intent": json.dumps({"regionHints": ["제주"]})},
+            data={
+                "intent": json.dumps({"regionHints": ["제주"]}),
+                "lat": str(LAT),
+                "lng": str(LNG),
+            },
         )
     finally:
         app.dependency_overrides.clear()
@@ -1704,10 +1698,7 @@ async def test_photo_suggestions_stay_plain_labels_of_the_refinements(
     data = res.json()["data"]
     assert data["refinements"]
     assert all(isinstance(label, str) for label in data["suggestions"])
-    assert data["suggestions"] == [
-        chip["label"] for chip in data["refinements"] if chip["patch"]["drop"] is None
-    ]
-    assert [chip["label"] for chip in data["refinements"] if chip["patch"]["drop"] is not None]
+    assert data["suggestions"] == [chip["label"] for chip in data["refinements"]]
 
 
 @pytest.mark.integration
@@ -2181,77 +2172,30 @@ def test_suggestions_drop_the_distance_axis_once_near_me_is_on() -> None:
     assert [c.label for c in chips] == ["사람 적은 곳만", "실내만"]
 
 
-def test_thin_results_lead_with_a_release_chip_on_the_narrowest_axis() -> None:
+def test_a_thin_turn_offers_no_condition_release_chip() -> None:
     chips = suggest_service.derive(
         QueryIntent(crowdPreference="quiet", regionHints=["제주"]),
         has_coords=False,
         result_count=2,
     )
 
-    assert chips[0].label == "조건 하나 풀기"
-    assert chips[0].patch.drop == "crowd"
-    assert [c.label for c in chips] == ["조건 하나 풀기", "유명한 곳으로", "실내만"]
+    assert [c.label for c in chips] == ["유명한 곳으로", "실내만"]
+    assert all(c.patch.drop is None for c in chips)
 
 
-def test_release_chip_falls_to_the_region_axis_when_no_narrower_axis_is_on() -> None:
-    chips = suggest_service.derive(
-        QueryIntent(regionHints=["제주"]), has_coords=False, result_count=2
-    )
-
-    assert chips[0].patch.drop == "region"
-
-
-def test_release_chip_is_withheld_when_dropping_leaves_only_the_named_place() -> None:
-    chips = suggest_service.derive(
-        QueryIntent(
-            namedPlaces=[ExtractedPlace(name="경복궁", nameKo="경복궁")],
-            moodHints=["hanok"],
-        ),
+def test_result_chips_do_not_depend_on_how_thin_the_result_is() -> None:
+    thin = suggest_service.derive(
+        QueryIntent(crowdPreference="quiet", regionHints=["제주"]),
         has_coords=False,
         result_count=2,
     )
-
-    assert "조건 하나 풀기" not in [c.label for c in chips]
-
-
-def test_release_chip_stays_when_the_named_place_keeps_another_axis() -> None:
-    chips = suggest_service.derive(
-        QueryIntent(
-            namedPlaces=[ExtractedPlace(name="경복궁", nameKo="경복궁")],
-            moodHints=["hanok"],
-            regionHints=["서울"],
-        ),
-        has_coords=False,
-        result_count=2,
-    )
-
-    assert chips[0].label == "조건 하나 풀기"
-    assert chips[0].patch.drop == "category"
-
-
-def test_release_chip_stays_for_a_thin_turn_without_named_places() -> None:
-    chips = suggest_service.derive(
-        QueryIntent(moodHints=["hanok"]), has_coords=False, result_count=2
-    )
-
-    assert chips[0].label == "조건 하나 풀기"
-    assert chips[0].patch.drop == "category"
-
-
-def test_ample_results_get_no_release_chip() -> None:
-    chips = suggest_service.derive(
+    ample = suggest_service.derive(
         QueryIntent(crowdPreference="quiet", regionHints=["제주"]),
         has_coords=False,
         result_count=20,
     )
 
-    assert "조건 하나 풀기" not in [c.label for c in chips]
-
-
-def test_thin_results_with_no_engaged_axis_get_no_release_chip() -> None:
-    chips = suggest_service.derive(QueryIntent(), has_coords=False, result_count=0)
-
-    assert [c.label for c in chips] == ["사람 적은 곳만", "실내만"]
+    assert [c.label for c in thin] == [c.label for c in ample]
 
 
 def test_festival_turns_get_no_follow_up_chips() -> None:
@@ -2266,7 +2210,7 @@ def test_suggestions_are_capped_at_three() -> None:
     )
 
     assert len(chips) == 3
-    assert [c.label for c in chips] == ["조건 하나 풀기", "사람 적은 곳만", "실내만"]
+    assert [c.label for c in chips] == ["사람 적은 곳만", "실내만", "가까운 순으로"]
 
 
 class _StubKto:
@@ -3074,61 +3018,25 @@ def test_a_truncated_candidate_sweep_does_not_hide_the_indoor_chip() -> None:
     assert "실내만" in [chip.label for chip in chips]
 
 
-def test_zero_chips_name_every_condition_the_user_can_still_release() -> None:
+def test_zero_chips_only_ever_offer_to_widen_the_region() -> None:
     intent = QueryIntent(
         categoryKeywords=["계곡"], regionHints=["제주"], indoorOnly=True, crowdPreference="quiet"
     )
 
     chips = suggest_service.derive_for_zero(intent, has_coords=False)
 
-    assert [chip.label for chip in chips] == ["한적 조건 풀기", "실내 조건 풀기", "계곡 조건 풀기"]
-    assert [chip.patch.drop for chip in chips] == ["crowd", "indoor", "category"]
-
-
-def test_zero_chips_say_widen_for_region_rather_than_release() -> None:
-    chips = suggest_service.derive_for_zero(QueryIntent(regionHints=["제주"]), has_coords=False)
-
     assert [chip.label for chip in chips] == ["지역 넓히기"]
+    assert [chip.patch.drop for chip in chips] == ["region"]
 
 
-def test_zero_chips_fall_back_to_mood_wording_when_no_keyword_was_named() -> None:
-    chips = suggest_service.derive_for_zero(QueryIntent(moodHints=["sea"]), has_coords=False)
-
-    assert [chip.label for chip in chips] == ["분위기 조건 풀기"]
-
-
-def test_zero_chips_are_empty_when_nothing_is_releasable() -> None:
+def test_zero_chips_are_empty_without_a_region_to_widen() -> None:
     assert suggest_service.derive_for_zero(QueryIntent(), has_coords=False) == []
-
-
-def test_zero_chips_stay_within_the_dock_budget() -> None:
-    intent = QueryIntent(
-        categoryKeywords=["계곡"],
-        regionHints=["제주"],
-        indoorOnly=True,
-        crowdPreference="quiet",
-        nearMe=True,
+    assert (
+        suggest_service.derive_for_zero(
+            QueryIntent(categoryKeywords=["계곡"], indoorOnly=True, nearMe=True), has_coords=True
+        )
+        == []
     )
-
-    assert len(suggest_service.derive_for_zero(intent, has_coords=True)) == 3
-
-
-def test_zero_chips_skip_near_when_the_request_carried_no_coords() -> None:
-    intent = QueryIntent(categoryKeywords=["계곡"], nearMe=True)
-
-    without = suggest_service.derive_for_zero(
-        ask_service.searched_intent(
-            intent,
-            has_coords=False,
-            region_hints=list(intent.regionHints),
-            keywords=list(intent.categoryKeywords),
-        ),
-        has_coords=False,
-    )
-    with_coords = suggest_service.derive_for_zero(intent, has_coords=True)
-
-    assert [chip.label for chip in without] == ["계곡 조건 풀기"]
-    assert "내 근처 조건 풀기" in [chip.label for chip in with_coords]
 
 
 def test_zero_chips_skip_region_when_the_hint_never_resolved() -> None:
@@ -3142,8 +3050,8 @@ def test_zero_chips_skip_region_when_the_hint_never_resolved() -> None:
     )
     resolved = suggest_service.derive_for_zero(intent, has_coords=False)
 
-    assert [chip.label for chip in unresolved] == ["계곡 조건 풀기"]
-    assert "지역 넓히기" in [chip.label for chip in resolved]
+    assert unresolved == []
+    assert [chip.label for chip in resolved] == ["지역 넓히기"]
 
 
 @pytest.mark.integration
@@ -3344,21 +3252,6 @@ async def test_an_old_app_on_the_default_region_is_still_treated_as_legacy(
     assert res.json()["error"]["code"] == "AGENT_NO_RESULTS"
 
 
-def test_zero_chips_skip_category_when_no_code_or_mood_reached_the_query() -> None:
-    intent = QueryIntent(categoryKeywords=["존재하지않는유형"], indoorOnly=True)
-
-    unapplied = suggest_service.derive_for_zero(
-        ask_service.searched_intent(
-            intent, has_coords=False, region_hints=list(intent.regionHints), keywords=[]
-        ),
-        has_coords=False,
-    )
-    applied = suggest_service.derive_for_zero(intent, has_coords=False)
-
-    assert [chip.label for chip in unapplied] == ["실내 조건 풀기"]
-    assert "존재하지않는유형 조건 풀기" in [chip.label for chip in applied]
-
-
 @pytest.mark.integration
 async def test_a_mood_only_zero_turn_names_the_mood_instead_of_saying_this_condition(
     db_session, client, seeded, monkeypatch
@@ -3403,9 +3296,6 @@ def test_a_mood_that_survives_an_unresolved_keyword_is_labeled_as_mood() -> None
     )
 
     assert ask_service._applied_conditions(searched, axes=suggest_service.ALL_AXES) == ["분위기"]
-    assert [chip.label for chip in suggest_service.derive_for_zero(searched, has_coords=False)] == [
-        "분위기 조건 풀기"
-    ]
 
 
 def test_searched_intent_leaves_an_intent_alone_when_every_axis_reached_the_query() -> None:
@@ -3530,7 +3420,7 @@ async def test_a_title_search_that_found_nothing_does_not_blame_the_near_filter(
 
 
 @pytest.mark.integration
-async def test_a_category_search_emptied_by_the_near_clause_still_offers_to_release_it(
+async def test_a_category_search_emptied_by_the_near_clause_names_it_as_the_culprit(
     db_session, client, seeded, monkeypatch
 ) -> None:
     await db_session.execute(text("UPDATE spots SET mapx = NULL, mapy = NULL"))
@@ -3550,7 +3440,7 @@ async def test_a_category_search_emptied_by_the_near_clause_still_offers_to_rele
 
     data = res.json()["data"]
     assert data["spots"] == []
-    assert "내 근처 조건 풀기" in [chip["label"] for chip in data["refinements"]]
+    assert "내 근처" in "".join(segment["text"] for segment in data["answer"])
 
 
 @pytest.mark.integration
@@ -3625,7 +3515,7 @@ async def test_a_near_only_zero_leaves_one_culprit_and_shows_what_releasing_give
     assert len([step for step in data["steps"] if step["badge"] == "0곳"]) == 1
     probe = [step for step in data["steps"] if step["label"] == ask_service.NEAR_PROBE_LABEL]
     assert probe and probe[0]["badge"] != "0곳"
-    assert "내 근처 조건 풀기" in [chip["label"] for chip in data["refinements"]]
+    assert "내 근처" in "".join(segment["text"] for segment in data["answer"])
 
 
 @pytest.mark.integration
