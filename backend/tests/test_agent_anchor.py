@@ -488,3 +488,57 @@ def test_a_nearby_question_without_a_focused_card_stays_a_search() -> None:
     context = AskContext(spots=[AskContextSpot(contentId="126198", title="통영 세병관")])
 
     assert ask_service._origin_anchor(QueryIntent(nearMe=True), context) is None
+
+
+def test_a_focused_card_pivots_when_the_user_points_without_naming() -> None:
+    from app.modules.agent.schemas import AskContext, AskContextSpot, QueryIntent
+    from app.modules.agent.services import ask as ask_service
+
+    context = AskContext(
+        spots=[AskContextSpot(contentId="126198", title="통영 세병관")],
+        focusContentId="126198",
+    )
+    intent = QueryIntent(aroundOrigin=True, categoryKeywords=["맛집"])
+
+    pivot = ask_service._origin_anchor(intent, context)
+
+    assert pivot is not None
+    assert pivot.contentId == "126198"
+    assert pivot.action == "food"
+
+
+def test_pointing_without_a_focused_card_stays_a_search() -> None:
+    from app.modules.agent.schemas import AskContext, AskContextSpot, QueryIntent
+    from app.modules.agent.services import ask as ask_service
+
+    context = AskContext(spots=[AskContextSpot(contentId="126198", title="통영 세병관")])
+
+    assert ask_service._origin_anchor(QueryIntent(aroundOrigin=True), context) is None
+
+
+def test_naming_a_region_beats_a_stale_anchor() -> None:
+    from app.modules.agent.schemas import AskContext, AskContextSpot, QueryIntent
+    from app.modules.agent.services import ask as ask_service
+
+    context = AskContext(
+        spots=[AskContextSpot(contentId="126198", title="통영 세병관")],
+        focusContentId="126198",
+    )
+    intent = QueryIntent(aroundOrigin=True, regionHints=["부산"], categoryKeywords=["카페"])
+
+    assert ask_service._origin_anchor(intent, context) is None
+
+
+def test_naming_the_origin_still_pivots_even_with_a_region() -> None:
+    from app.modules.agent.schemas import AskContext, AskContextSpot, QueryIntent
+    from app.modules.agent.services import ask as ask_service
+
+    context = AskContext(
+        spots=[AskContextSpot(contentId="126198", title="통영 세병관")],
+        focusContentId="126198",
+    )
+    intent = QueryIntent(originPlace="통영 세병관", regionHints=["통영"])
+
+    pivot = ask_service._origin_anchor(intent, context)
+
+    assert pivot is not None and pivot.contentId == "126198"

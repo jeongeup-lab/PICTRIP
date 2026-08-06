@@ -77,6 +77,7 @@ class QueryIntent(BaseModel):
     moodHints: list[Mood] = Field(default_factory=list, max_length=MAX_MOOD_HINTS)
     festivalOnly: bool = False
     originPlace: Annotated[str, StringConstraints(max_length=MAX_TITLE_CHARS)] | None = None
+    aroundOrigin: bool = False
     indoorOnly: bool = False
     nearMe: bool = False
     outOfScope: bool = False
