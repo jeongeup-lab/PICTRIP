@@ -260,3 +260,15 @@ async def test_pure_smalltalk_keeps_the_plain_greeting(monkeypatch) -> None:
     )
 
     assert _text(answer) == ask_service.BLANK_ANSWER
+
+
+def test_everyday_food_words_route_even_when_the_taxonomy_has_no_such_name() -> None:
+    from app.modules.agent.services import retrieve
+
+    assert retrieve.food_word(["맛집"]) == "food"
+    assert retrieve.food_word(["먹을 곳"]) == "food"
+    assert retrieve.food_word(["카페"]) == "cafe"
+    assert retrieve.food_word(["커피숍"]) == "cafe"
+    assert retrieve.food_word(["박물관"]) is None
+    assert retrieve.food_word(["맛집", "박물관"]) is None
+    assert retrieve.food_word([]) is None

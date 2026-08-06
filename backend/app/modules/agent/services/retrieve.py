@@ -33,6 +33,25 @@ CAFE_CODES = ("FD05", "FD030100")
 FOOD_PREFIX = "FD"
 
 
+CAFE_WORDS = ("카페", "커피", "찻집", "디저트")
+FOOD_WORDS = ("맛집", "음식", "식당", "먹을", "먹거리", "밥집")
+
+
+def food_word(keywords: list[str]) -> Literal["food", "cafe"] | None:
+    if not keywords:
+        return None
+    picked = {_eating(word) for word in keywords}
+    return picked.pop() if len(picked) == 1 and None not in picked else None
+
+
+def _eating(word: str) -> Literal["food", "cafe"] | None:
+    if any(hint in word for hint in CAFE_WORDS):
+        return "cafe"
+    if any(hint in word for hint in FOOD_WORDS):
+        return "food"
+    return None
+
+
 def food_action(codes: list[str]) -> Literal["food", "cafe"] | None:
     if not codes or not all(code.startswith(FOOD_PREFIX) for code in codes):
         return None
