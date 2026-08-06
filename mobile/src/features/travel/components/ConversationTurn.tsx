@@ -86,6 +86,7 @@ export function ConversationTurn({
             <Text style={styles.errorText}>{turn.errorMessage}</Text>
             <Pressable
               testID={`turn-retry-${turn.id}`}
+              accessibilityRole="button"
               style={({ pressed }) => [styles.retry, pressed && styles.retryPressed]}
               onPress={() => onRetry(turn)}
             >

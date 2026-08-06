@@ -75,25 +75,6 @@ export function SpotCard({
             </View>
           ) : null}
 
-          <Pressable
-            testID={`travel-spot-save-${spot.contentId}`}
-            accessibilityLabel="저장"
-            style={[styles.fav, saved && styles.favOn]}
-            hitSlop={8}
-            onPress={async (e) => {
-              e.stopPropagation();
-              const result = await toggle();
-              if (result !== null) onSaveToggle?.(result);
-            }}
-          >
-            <Icon
-              name={saved ? "heart-fill" : "heart"}
-              size={14}
-              color={colors.onImage}
-              strokeWidth={1.9}
-            />
-          </Pressable>
-
           <View style={styles.caption}>
             <Text style={styles.title} numberOfLines={1}>
               {spot.title}
@@ -111,6 +92,26 @@ export function SpotCard({
             </Text>
           ) : null}
         </View>
+      </Pressable>
+
+      <Pressable
+        testID={`travel-spot-save-${spot.contentId}`}
+        accessibilityRole="button"
+        accessibilityLabel={saved ? "저장 해제" : "저장"}
+        accessibilityState={{ selected: saved }}
+        style={[styles.fav, saved && styles.favOn]}
+        hitSlop={8}
+        onPress={async () => {
+          const result = await toggle();
+          if (result !== null) onSaveToggle?.(result);
+        }}
+      >
+        <Icon
+          name={saved ? "heart-fill" : "heart"}
+          size={14}
+          color={colors.onImage}
+          strokeWidth={1.9}
+        />
       </Pressable>
 
       {selected ? <View style={styles.selectedRing} pointerEvents="none" /> : null}

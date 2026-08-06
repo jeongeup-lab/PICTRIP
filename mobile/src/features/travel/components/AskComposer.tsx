@@ -54,6 +54,7 @@ export function AskComposer({
             </Text>
             <Pressable
               testID="travel-anchor-clear"
+              accessibilityRole="button"
               accessibilityLabel="선택 해제"
               hitSlop={8}
               onPress={onClearAnchor}
@@ -71,7 +72,13 @@ export function AskComposer({
             <Text style={styles.attachTitle}>사진 1장 첨부됨</Text>
             <Text style={styles.attachNote}>{ATTACH_NOTICE}</Text>
           </View>
-          <Pressable testID="travel-attach-clear" hitSlop={8} onPress={onClearAttach}>
+          <Pressable
+            testID="travel-attach-clear"
+            accessibilityRole="button"
+            accessibilityLabel="첨부 사진 제거"
+            hitSlop={8}
+            onPress={onClearAttach}
+          >
             <Icon name="close" size={16} color={colors.ter} strokeWidth={2} />
           </Pressable>
         </View>
@@ -111,6 +118,7 @@ export function AskComposer({
           <View style={styles.actionsLeft}>
             <Pressable
               testID="travel-shoot"
+              accessibilityRole="button"
               accessibilityLabel="사진 촬영"
               style={styles.attachButton}
               hitSlop={4}
@@ -121,6 +129,7 @@ export function AskComposer({
             </Pressable>
             <Pressable
               testID="travel-attach"
+              accessibilityRole="button"
               accessibilityLabel="사진 올리기"
               style={styles.attachButton}
               hitSlop={4}
@@ -132,6 +141,7 @@ export function AskComposer({
             {nearbyEnabled ? (
               <Pressable
                 testID="travel-nearby"
+                accessibilityRole="button"
                 style={({ pressed }) => [styles.nearby, pressed && styles.chipPressed]}
                 onPress={onNearby}
                 disabled={disabled}
@@ -143,6 +153,7 @@ export function AskComposer({
           </View>
           <Pressable
             testID="travel-send"
+            accessibilityRole="button"
             accessibilityLabel="보내기"
             style={[styles.send, ready && styles.sendReady]}
             onPress={onSubmit}

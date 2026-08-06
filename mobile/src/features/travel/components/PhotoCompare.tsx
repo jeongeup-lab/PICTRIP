@@ -23,7 +23,11 @@ export function PhotoCompare({ photo, match }: Props) {
           </Text>
         </View>
 
-        <View style={styles.link}>
+        <View
+          style={styles.link}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        >
           <Text style={styles.linkText}>≈</Text>
         </View>
 

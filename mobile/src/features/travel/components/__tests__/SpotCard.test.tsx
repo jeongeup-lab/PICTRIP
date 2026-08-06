@@ -35,6 +35,12 @@ function cardPressable(tree: renderer.ReactTestRenderer) {
   return tree.root.findAllByProps({ testID: "travel-spot-126508" })[0];
 }
 
+function saveButton(tree: renderer.ReactTestRenderer) {
+  return tree.root
+    .findAllByProps({ testID: "travel-spot-save-126508" })
+    .find((node) => typeof node.props.onPress === "function")!;
+}
+
 describe("SpotCard 접근성", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -87,15 +93,23 @@ describe("SpotCard 저장", () => {
     toggle.mockResolvedValueOnce(result);
     const onSaveToggle = jest.fn();
     const tree = mount({ onSaveToggle });
-    const save = tree.root
-      .findAllByProps({ testID: "travel-spot-save-126508" })
-      .find((node) => typeof node.props.onPress === "function")!;
-    const stopPropagation = jest.fn();
 
-    await act(async () => save.props.onPress({ stopPropagation }));
+    await act(async () => saveButton(tree).props.onPress());
 
-    expect(stopPropagation).toHaveBeenCalledTimes(1);
     expect(onSaveToggle).toHaveBeenCalledWith(result);
+  });
+
+  it("하트가 카드 밖 형제라 스크린 리더가 이름과 상태를 읽는다", () => {
+    useSaveOptimistic.mockReturnValue({ saved: true, toggle });
+    const tree = mount({ onPress: () => undefined, onDetail: () => undefined });
+    const save = saveButton(tree);
+
+    expect(save.props.accessibilityRole).toBe("button");
+    expect(save.props.accessibilityLabel).toBe("저장 해제");
+    expect(save.props.accessibilityState).toEqual({ selected: true });
+    expect(cardPressable(tree).findAllByProps({ testID: "travel-spot-save-126508" })).toHaveLength(
+      0,
+    );
   });
 
   it("does not report a save result when auth or mutation fails", async () => {
