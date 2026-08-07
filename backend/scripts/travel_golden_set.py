@@ -696,8 +696,8 @@ MESSY_FLOWS: list[Flow] = [
         "지시어만 남발한다",
         (
             Step("검색", "속초 볼거리", expect_spots="some"),
-            Step("지시어", "그거", expect_spots="any"),
-            Step("지시어 2", "거기 말고", expect_spots="any"),
+            Step("카드 고르고 지시어", "그거", anchors=0, expect_spots="any"),
+            Step("지시어 2", "거기 말고", anchors=0, expect_spots="any"),
             Step(
                 "지시어 3",
                 "그 옆에",
