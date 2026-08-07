@@ -19,6 +19,7 @@ export const colors = {
   raiseStrong: "rgba(48,52,60,0.60)",
   onImage: "#FFFFFF",
   onDim: "rgba(255,255,255,0.85)",
+  onLight: "#171719",
   danger: "#FF3B53",
   positive: "#6FDC8C",
   caution: "#FFC46B",
