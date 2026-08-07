@@ -10,7 +10,7 @@ from app.core.logging import get_logger
 from app.kto.client import KtoClient
 from app.modules.agent import naver
 from app.modules.agent.naver import search_local as naver_search
-from app.modules.spots.services import search_spots_by_title
+from app.modules.spots.services import canonical_region_token, search_spots_by_title
 
 logger = get_logger(__name__)
 
@@ -53,22 +53,34 @@ async def locate(
     asked = name.strip()
     if not asked:
         return None
-    within = (region_hint or "").strip() or None
-    rows = await search_spots_by_title(session, asked, region_hint=within, limit=TITLE_CANDIDATES)
+    terms = region_terms(region_hint)
+    narrowest = terms[-1] if terms else None
+    rows = await search_spots_by_title(
+        session, asked, region_hint=narrowest, limit=TITLE_CANDIDATES
+    )
     for row in rows:
         if row.lat is not None and row.lng is not None and names_match(asked, row.title):
             return Located(title=row.title, lat=row.lat, lng=row.lng, source="kto")
-    hit = await _borrow_coords_from_naver(asked, within)
+    hit = await _borrow_coords_from_naver(asked, terms)
     if hit is not None:
         return hit
     logger.info("agent.geocode.miss", asked=asked, candidates=len(rows))
     return None
 
 
-async def _borrow_coords_from_naver(asked: str, within: str | None) -> Located | None:
+def region_terms(hint: str | None) -> list[str]:
+    return [canonical_region_token(part) for part in (hint or "").split()]
+
+
+def address_is_within(address: str | None, terms: list[str]) -> bool:
+    haystack = address or ""
+    return all(term in haystack for term in terms)
+
+
+async def _borrow_coords_from_naver(asked: str, terms: list[str]) -> Located | None:
     if not naver.is_configured():
         return None
-    query = f"{within} {asked}" if within else asked
+    query = " ".join([*terms, asked])
     try:
         async with httpx.AsyncClient(timeout=NAVER_TIMEOUT_SECONDS) as client:
             places = await naver_search(client, query, display=NAVER_CANDIDATES)
@@ -80,7 +92,7 @@ async def _borrow_coords_from_naver(asked: str, within: str | None) -> Located |
             continue
         if not names_match(asked, place.title):
             continue
-        if within and within not in (place.address or ""):
+        if not address_is_within(place.address, terms):
             continue
         return Located(title=asked, lat=place.lat, lng=place.lng, source="naver")
     return None
