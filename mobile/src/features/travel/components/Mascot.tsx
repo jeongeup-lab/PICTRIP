@@ -53,14 +53,14 @@ export function Mascot({ size = 60, color = colors.ink, floating = true }: Props
   return (
     <Animated.View testID="travel-mascot" style={{ transform: [{ translateY }] }}>
       <Svg width={size} height={size} viewBox="0 0 64 64" fill="none">
-        <Circle cx={32} cy={11} r={6.5} {...stroke} />
-        <Path d="M32 17.5 V 26" {...stroke} />
-        <Path d="M32 24 L 20 29" {...stroke} />
-        <Path d="M32 24 L 44 29" {...stroke} />
-        <Rect x={18.5} y={27} width={27} height={19} rx={3} {...stroke} />
-        <Path d="M22 42 L 28.5 34.5 L 33 39 L 36.5 35.5 L 42 42" {...stroke} />
-        <Path d="M27 46 L 25 58" {...stroke} />
-        <Path d="M37 46 L 39 58" {...stroke} />
+        <Circle cx={23.5} cy={13} r={6.5} {...stroke} />
+        <Path d="M23.5 19.5 V 40.5" {...stroke} />
+        <Path d="M23.5 25 L 15.5 33.5" {...stroke} />
+        <Path d="M23.5 25 L 33.5 21.5" {...stroke} />
+        <Rect x={34.5} y={16} width={14.5} height={10.5} rx={2.5} {...stroke} />
+        <Circle cx={41.75} cy={21.25} r={2.2} fill={color} />
+        <Path d="M23.5 40.5 L 17.5 57" {...stroke} />
+        <Path d="M23.5 40.5 L 29.5 57" {...stroke} />
       </Svg>
     </Animated.View>
   );
