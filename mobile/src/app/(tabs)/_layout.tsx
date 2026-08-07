@@ -23,7 +23,8 @@ export default function TabsLayout() {
         tabBarActiveTintColor: colors.accentText,
         tabBarInactiveTintColor: colors.ter,
         tabBarLabelStyle: { fontSize: 10, fontWeight: "700" },
-        tabBarStyle: { borderTopColor: colors.line },
+        sceneStyle: { backgroundColor: colors.bg },
+        tabBarStyle: { backgroundColor: colors.bg, borderTopColor: colors.line },
       }}
     >
       <Tabs.Screen name="index" options={{ title: "홈", tabBarIcon: tabIcon("home") }} />

@@ -7,11 +7,8 @@ import { LEGAL_DOCS } from "@/features/legal/constants";
 
 jest.mock("expo-router", () => ({
   router: { push: jest.fn(), back: jest.fn() },
-  useFocusEffect: (effect: () => void | (() => void)) => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { useEffect } = require("react") as typeof import("react");
-    useEffect(effect, [effect]);
-  },
+  useFocusEffect: (effect: () => void | (() => void)) =>
+    jest.requireActual<typeof import("react")>("react").useEffect(effect, [effect]),
 }));
 jest.mock("expo-location", () => ({
   getForegroundPermissionsAsync: jest.fn().mockResolvedValue({ granted: false }),

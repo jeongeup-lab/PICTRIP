@@ -1,8 +1,12 @@
 import { api } from "@/lib/api-client";
 import type { SpotCard } from "@/lib/api-types";
 
+export const SAVED_PAGE_LIMIT = 60;
+
 export async function listSaved(): Promise<SpotCard[]> {
-  return (await api.get("/users/me/saved", { params: { limit: 60 } })) as unknown as SpotCard[];
+  return (await api.get("/users/me/saved", {
+    params: { limit: SAVED_PAGE_LIMIT },
+  })) as unknown as SpotCard[];
 }
 
 export async function saveSpot(contentId: string): Promise<void> {
