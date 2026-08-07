@@ -1,4 +1,5 @@
 import { useAuthStore } from "@/features/auth/stores/auth-store";
+import { useRecentSpots } from "@/features/spots/stores/recent-store";
 import { bareClient } from "@/lib/bare-client";
 import * as storage from "@/lib/storage";
 import { getIdToken } from "@/features/auth/usecases/oauth-providers";
@@ -56,6 +57,14 @@ describe("auth-store", () => {
 
     expect(queryClient.getQueryData(["saved"])).toBeUndefined();
     expect(queryClient.getQueryData(["consents"])).toBeUndefined();
+  });
+
+  it("forgets recently viewed spots on sign out so the next account cannot see them", async () => {
+    useRecentSpots.setState({ spots: [{ contentId: "1" } as never] });
+
+    await useAuthStore.getState().clear();
+
+    expect(useRecentSpots.getState().spots).toEqual([]);
   });
 
   it("setSession puts access token in memory and persists refresh", async () => {

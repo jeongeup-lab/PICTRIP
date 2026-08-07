@@ -14,6 +14,7 @@ import {
   deleteAccountRequest,
 } from "@/features/auth/api";
 import { queryClient } from "@/lib/query-client";
+import { useRecentSpots } from "@/features/spots/stores/recent-store";
 
 interface AuthState {
   accessToken: string | null;
@@ -64,6 +65,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ accessToken: null, user: null, isAuthenticated: false });
     queryClient.removeQueries({ queryKey: ["saved"] });
     queryClient.removeQueries({ queryKey: ["consents"] });
+    useRecentSpots.getState().clear();
   },
 
   hydrate: async () => {
