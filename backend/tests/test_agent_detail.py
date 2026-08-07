@@ -21,6 +21,7 @@ class SimpleTitleRow:
     lat: float | None
     lng: float | None
     content_id: str = "t1"
+    addr1: str | None = None
 
 
 def _coordless_row():  # type: ignore[no-untyped-def]
@@ -504,7 +505,14 @@ async def test_geocoding_narrows_the_spot_search_with_the_region_hint(monkeypatc
 
     async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
         seen["hint"] = region_hint
-        return [SimpleTitleRow("전북 전주 한옥마을 [슬로시티]", 35.818, 127.153)]
+        return [
+            SimpleTitleRow(
+                "전북 전주 한옥마을 [슬로시티]",
+                35.818,
+                127.153,
+                addr1="전북특별자치도 전주시 완산구 1",
+            )
+        ]
 
     monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
     found = await geocode.locate(None, "한옥마을", region_hint="전주")  # type: ignore[arg-type]
@@ -640,7 +648,9 @@ async def test_a_multi_word_region_hint_narrows_by_its_finest_token(monkeypatch)
 
     async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
         seen["hint"] = region_hint
-        return [SimpleTitleRow("속초해수욕장", 38.19, 128.60)]
+        return [
+            SimpleTitleRow("속초해수욕장", 38.19, 128.60, addr1="강원특별자치도 속초시 조양동 1")
+        ]
 
     monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
     found = await geocode.locate(  # type: ignore[arg-type]
@@ -1177,3 +1187,46 @@ async def test_a_region_food_query_without_coords_stays_a_plain_listing(monkeypa
     assert answer.intent.nearMe is False
     assert answer.tagBasis is None
     assert answer.spots[0].tag is None
+
+
+async def test_a_same_name_place_in_another_province_is_rejected(monkeypatch) -> None:
+    from app.modules.agent import naver
+    from app.modules.agent.services import geocode
+
+    seen: dict[str, object] = {}
+
+    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
+        seen["hint"] = region_hint
+        return [
+            SimpleTitleRow(
+                "고성탈박물관", 38.38, 128.46, addr1="강원특별자치도 고성군 1", content_id="w1"
+            )
+        ]
+
+    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
+    monkeypatch.setattr(naver, "is_configured", lambda: False)
+
+    found = await geocode.locate(  # type: ignore[arg-type]
+        None, "고성탈박물관", region_hint="경상남도 고성"
+    )
+
+    assert seen["hint"] == "고성"
+    assert found is None
+
+
+async def test_the_place_inside_the_named_province_is_still_taken(monkeypatch) -> None:
+    from app.modules.agent.services import geocode
+
+    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
+        return [
+            SimpleTitleRow(
+                "고성탈박물관", 35.02, 128.32, addr1="경상남도 고성군 1", content_id="s1"
+            )
+        ]
+
+    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
+    found = await geocode.locate(  # type: ignore[arg-type]
+        None, "고성탈박물관", region_hint="경상남도 고성"
+    )
+
+    assert found is not None and found.content_id == "s1"

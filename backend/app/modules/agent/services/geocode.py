@@ -58,14 +58,19 @@ async def locate(
         session, asked, region_hint=narrowest, limit=TITLE_CANDIDATES
     )
     for row in rows:
-        if row.lat is not None and row.lng is not None and names_match(asked, row.title):
-            return Located(
-                title=row.title,
-                lat=row.lat,
-                lng=row.lng,
-                source="kto",
-                content_id=row.content_id,
-            )
+        if row.lat is None or row.lng is None:
+            continue
+        if not names_match(asked, row.title):
+            continue
+        if not address_is_within(row.addr1, terms):
+            continue
+        return Located(
+            title=row.title,
+            lat=row.lat,
+            lng=row.lng,
+            source="kto",
+            content_id=row.content_id,
+        )
     hit = await _borrow_coords_from_naver(asked, terms)
     if hit is not None:
         return hit
