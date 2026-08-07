@@ -27,6 +27,7 @@ from app.modules.agent.schemas import (
     DropAxis,
     QueryIntent,
     RefinePatch,
+    ResolvedPlace,
 )
 from app.modules.agent.services import detail as detail_service
 from app.modules.agent.services import geocode as geocode_service
@@ -350,7 +351,7 @@ async def _ask_with_anchor(
         answer=answer,
         spots=spots,
         totalCount=len(spots),
-        intent=carried_intent or QueryIntent(),
+        intent=_without_unapplied_axes(carried_intent or QueryIntent()),
         tagBasis="직선거리 기준",
         refinements=[],
     )
@@ -378,7 +379,7 @@ def empty_anchor_response(
         ],
         spots=[],
         totalCount=0,
-        intent=intent or QueryIntent(),
+        intent=_without_unapplied_axes(intent or QueryIntent()),
         refinements=[],
     )
 
@@ -505,6 +506,7 @@ async def _ask_with_question(
         )
 
     pinned: list[CandidateRow] = []
+    resolved: list[ResolvedPlace] = []
     if intent.namedPlaces:
         resolved = await resolve_service.resolve_places(session, kto, intent.namedPlaces)
         content_ids = [
@@ -523,13 +525,13 @@ async def _ask_with_question(
     if eating is not None:
         return await _ask_for_food(
             session,
-            kto,
             action=eating,
             intent=intent,
             steps=steps,
             lat=lat,
             lng=lng,
             context=context,
+            resolved=resolved,
             legacy_client=legacy_client,
         )
     mood_ids = await repositories.find_mood_ids(session, list(intent.moodHints))
@@ -733,9 +735,23 @@ async def _locatable_focus(
     return row
 
 
+async def _named_origin(
+    session: AsyncSession, intent: QueryIntent, resolved: list[ResolvedPlace]
+) -> geocode_service.Located | None:
+    for index, place in enumerate(intent.namedPlaces):
+        spot = resolved[index].spot if index < len(resolved) else None
+        if spot is not None and spot.lat is not None and spot.lng is not None:
+            return geocode_service.Located(
+                title=spot.title, lat=spot.lat, lng=spot.lng, source=spot.source
+            )
+        found = await geocode_service.locate(session, place.name, region_hint=place.regionHint)
+        if found is not None:
+            return found
+    return None
+
+
 async def _ask_for_food(
     session: AsyncSession,
-    kto: KtoClient | None,
     *,
     action: AnchorAction,
     intent: QueryIntent,
@@ -743,6 +759,7 @@ async def _ask_for_food(
     lat: float | None,
     lng: float | None,
     context: AskContext | None,
+    resolved: list[ResolvedPlace],
     legacy_client: bool,
 ) -> AskResponse:
     stale = context is not None and _named_a_new_region(intent, context)
@@ -756,20 +773,18 @@ async def _ask_for_food(
             prior_steps=steps,
             carried_intent=intent,
         )
-    for place in intent.namedPlaces:
-        found = await geocode_service.locate(session, kto, place.name, region_hint=place.regionHint)
-        if found is None:
-            continue
+    origin = await _named_origin(session, intent, resolved)
+    if origin is not None:
         located = [
             *steps,
-            AskStep(tool="resolve_place", label=f"{found.title} 위치 확인", badge="1곳"),
+            AskStep(tool="resolve_place", label=f"{origin.title} 위치 확인", badge="1곳"),
         ]
         return await _ask_around(
             session,
-            found.title,
+            origin.title,
             action,
-            lat=found.lat,
-            lng=found.lng,
+            lat=origin.lat,
+            lng=origin.lng,
             steps=located,
             intent=intent,
         )
@@ -812,11 +827,11 @@ async def _food_across_region(
         return food_in_region(rows, prefixes, action, steps=steps, intent=intent)
     unfiltered = await retrieve.search_food(session, action=action, region_prefixes=prefixes)
     return food_in_region(
-        unfiltered, prefixes, action, steps=steps, intent=_without_food_filters(intent)
+        unfiltered, prefixes, action, steps=steps, intent=_without_unapplied_axes(intent)
     )
 
 
-def _without_food_filters(intent: QueryIntent) -> QueryIntent:
+def _without_unapplied_axes(intent: QueryIntent) -> QueryIntent:
     return intent.model_copy(
         update={"crowdPreference": "any", "indoorOnly": False, "moodHints": []}
     )
@@ -864,7 +879,7 @@ async def _ask_around(
         answer=answer,
         spots=spots,
         totalCount=len(spots),
-        intent=intent,
+        intent=_without_unapplied_axes(intent),
         tagBasis="직선거리 기준",
         refinements=[],
     )

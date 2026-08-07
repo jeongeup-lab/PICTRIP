@@ -316,8 +316,13 @@ def test_everyday_nouns_map_onto_the_taxonomy_words() -> None:
     assert retrieve.taxonomy_word("성당") == "기독교"
     assert retrieve.taxonomy_word("놀이공원") == "테마파크"
     assert retrieve.taxonomy_word("식물원") == "수목원"
-    assert retrieve.taxonomy_word("야시장") == "시장"
     assert retrieve.taxonomy_word("박물관") == "박물관"
+
+
+def test_a_shopping_word_stays_a_title_keyword_instead_of_a_dead_category() -> None:
+    from app.modules.agent.services import retrieve
+
+    assert retrieve.taxonomy_word("야시장") == "야시장"
 
 
 async def test_a_synonym_search_keeps_the_user_word_in_the_answer() -> None:
@@ -409,7 +414,7 @@ async def test_geocoding_prefers_a_kto_spot_that_carries_the_name(monkeypatch) -
         ]
 
     monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
-    found = await geocode.locate(None, None, "전주 한옥마을")  # type: ignore[arg-type]
+    found = await geocode.locate(None, "전주 한옥마을")  # type: ignore[arg-type]
 
     assert found is not None
     assert found.title == "전북 전주 한옥마을 [슬로시티]"
@@ -432,7 +437,7 @@ async def test_geocoding_falls_through_to_naver_when_no_spot_carries_the_name(
     monkeypatch.setattr(geocode, "naver_search", fake_local)
     monkeypatch.setattr(naver, "is_configured", lambda: True)
 
-    found = await geocode.locate(None, None, "대천역")  # type: ignore[arg-type]
+    found = await geocode.locate(None, "대천역")  # type: ignore[arg-type]
 
     assert found is not None
     assert round(found.lat, 2) == 36.34
@@ -452,7 +457,7 @@ async def test_geocoding_gives_up_rather_than_guessing(monkeypatch) -> None:
     monkeypatch.setattr(geocode, "naver_search", fake_local)
     monkeypatch.setattr(naver, "is_configured", lambda: True)
 
-    assert await geocode.locate(None, None, "한옥마을") is None  # type: ignore[arg-type]
+    assert await geocode.locate(None, "한옥마을") is None  # type: ignore[arg-type]
 
 
 async def test_the_origin_is_named_the_way_the_user_said_it(monkeypatch) -> None:
@@ -469,7 +474,7 @@ async def test_the_origin_is_named_the_way_the_user_said_it(monkeypatch) -> None
     monkeypatch.setattr(geocode, "naver_search", fake_local)
     monkeypatch.setattr(naver, "is_configured", lambda: True)
 
-    found = await geocode.locate(None, None, "대천역")  # type: ignore[arg-type]
+    found = await geocode.locate(None, "대천역")  # type: ignore[arg-type]
 
     assert found is not None
     assert found.title == "대천역"
@@ -501,7 +506,7 @@ async def test_geocoding_narrows_the_spot_search_with_the_region_hint(monkeypatc
         return [SimpleTitleRow("전북 전주 한옥마을 [슬로시티]", 35.818, 127.153)]
 
     monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
-    found = await geocode.locate(None, None, "한옥마을", region_hint="전주")  # type: ignore[arg-type]
+    found = await geocode.locate(None, "한옥마을", region_hint="전주")  # type: ignore[arg-type]
 
     assert seen["hint"] == "전주"
     assert found is not None and round(found.lat, 2) == 35.82
@@ -524,7 +529,7 @@ async def test_geocoding_asks_naver_within_the_region(monkeypatch) -> None:
     monkeypatch.setattr(geocode, "naver_search", fake_local)
     monkeypatch.setattr(naver, "is_configured", lambda: True)
 
-    found = await geocode.locate(None, None, "한옥마을", region_hint="전주")  # type: ignore[arg-type]
+    found = await geocode.locate(None, "한옥마을", region_hint="전주")  # type: ignore[arg-type]
 
     assert asked["query"] == "전주 한옥마을"
     assert found is not None
@@ -544,7 +549,7 @@ async def test_a_hit_outside_the_named_region_is_rejected(monkeypatch) -> None:
     monkeypatch.setattr(geocode, "naver_search", fake_local)
     monkeypatch.setattr(naver, "is_configured", lambda: True)
 
-    assert await geocode.locate(None, None, "한옥마을", region_hint="전주") is None  # type: ignore[arg-type]
+    assert await geocode.locate(None, "한옥마을", region_hint="전주") is None  # type: ignore[arg-type]
 
 
 async def test_a_new_region_beats_a_card_left_over_from_earlier(monkeypatch) -> None:
@@ -619,7 +624,7 @@ async def test_an_old_province_name_still_reaches_the_landmark(monkeypatch) -> N
     monkeypatch.setattr(naver, "is_configured", lambda: True)
 
     found = await geocode.locate(  # type: ignore[arg-type]
-        None, None, "속초해수욕장", region_hint="강원도"
+        None, "속초해수욕장", region_hint="강원도"
     )
 
     assert seen["hint"] == "강원"
@@ -638,7 +643,7 @@ async def test_a_multi_word_region_hint_narrows_by_its_finest_token(monkeypatch)
 
     monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
     found = await geocode.locate(  # type: ignore[arg-type]
-        None, None, "속초해수욕장", region_hint="강원도 속초"
+        None, "속초해수욕장", region_hint="강원도 속초"
     )
 
     assert seen["hint"] == "속초"
@@ -767,3 +772,111 @@ async def test_a_region_food_answer_drops_conditions_it_could_not_apply(monkeypa
     assert answer.intent.indoorOnly is False
     assert answer.intent.moodHints == []
     assert answer.intent.regionHints == ["부산"]
+
+
+def test_an_empty_surrounding_drops_the_axes_it_never_applied() -> None:
+    intent = QueryIntent(
+        categoryKeywords=["맛집"],
+        regionHints=["보령"],
+        crowdPreference="quiet",
+        indoorOnly=True,
+        moodHints=["sea"],
+    )
+
+    answer = ask_service.empty_anchor_response("대천역", "food", prior_steps=[], intent=intent)
+
+    assert answer.intent.crowdPreference == "any"
+    assert answer.intent.indoorOnly is False
+    assert answer.intent.moodHints == []
+    assert answer.intent.categoryKeywords == ["맛집"]
+
+
+async def test_an_origin_search_does_not_claim_conditions_it_never_applied(monkeypatch) -> None:
+    from app.modules.agent import repositories
+    from app.modules.spots.services import NearbySpotRow
+
+    async def fake_nearby(session, *, lat, lng, radius, category, travel_only=False):  # type: ignore[no-untyped-def]
+        return [
+            NearbySpotRow(
+                content_id="f1",
+                title="대천횟집",
+                first_image_url=None,
+                addr1="충청남도 보령시 1",
+                mapx=126.58,
+                mapy=36.34,
+                dist=220.0,
+            )
+        ]
+
+    async def fake_briefs(session, content_ids):  # type: ignore[no-untyped-def]
+        return {}
+
+    monkeypatch.setattr(ask_service, "find_nearby_spots", fake_nearby)
+    monkeypatch.setattr(repositories, "load_candidates_by_ids", fake_briefs)
+
+    answer = await ask_service._ask_around(
+        None,  # type: ignore[arg-type]
+        "대천역",
+        "food",
+        lat=36.34,
+        lng=126.58,
+        steps=[],
+        intent=QueryIntent(
+            categoryKeywords=["맛집"],
+            crowdPreference="quiet",
+            indoorOnly=True,
+            moodHints=["sea"],
+        ),
+    )
+
+    assert answer.totalCount == 1
+    assert answer.intent.crowdPreference == "any"
+    assert answer.intent.indoorOnly is False
+    assert answer.intent.moodHints == []
+
+
+async def test_a_named_food_origin_reuses_the_coords_already_resolved(monkeypatch) -> None:
+    from app.modules.agent.schemas import ExtractedPlace, ResolvedPlace, ResolvedSpot
+    from app.modules.agent.services import geocode
+
+    async def exploding_locate(session, name, *, region_hint=None):  # type: ignore[no-untyped-def]
+        raise AssertionError("an already resolved place must not be geocoded again")
+
+    monkeypatch.setattr(geocode, "locate", exploding_locate)
+
+    intent = QueryIntent(namedPlaces=[ExtractedPlace(name="한옥마을", regionHint="전주")])
+    resolved = [
+        ResolvedPlace(
+            extracted=intent.namedPlaces[0],
+            spot=ResolvedSpot(title="전주 한옥마을", lat=35.818, lng=127.153),
+            status="matched",
+        )
+    ]
+
+    origin = await ask_service._named_origin(None, intent, resolved)  # type: ignore[arg-type]
+
+    assert origin is not None
+    assert origin.title == "전주 한옥마을"
+    assert round(origin.lat, 2) == 35.82
+
+
+async def test_a_place_the_resolver_missed_still_falls_back_to_geocoding(monkeypatch) -> None:
+    from app.modules.agent.schemas import ExtractedPlace, ResolvedPlace
+    from app.modules.agent.services import geocode
+
+    asked: dict[str, object] = {}
+
+    async def fake_locate(session, name, *, region_hint=None):  # type: ignore[no-untyped-def]
+        asked["name"] = name
+        asked["hint"] = region_hint
+        return geocode.Located(title="대천역", lat=36.34, lng=126.58, source="naver")
+
+    monkeypatch.setattr(geocode, "locate", fake_locate)
+
+    intent = QueryIntent(namedPlaces=[ExtractedPlace(name="대천역", regionHint="보령")])
+    resolved = [ResolvedPlace(extracted=intent.namedPlaces[0])]
+
+    origin = await ask_service._named_origin(None, intent, resolved)  # type: ignore[arg-type]
+
+    assert asked == {"name": "대천역", "hint": "보령"}
+    assert origin is not None and origin.title == "대천역"
