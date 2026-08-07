@@ -7,7 +7,6 @@ import httpx
 
 from app.core.db import AsyncSession
 from app.core.logging import get_logger
-from app.kto.client import KtoClient
 from app.modules.agent import naver
 from app.modules.agent.naver import search_local as naver_search
 from app.modules.spots.services import canonical_region_token, search_spots_by_title
@@ -45,7 +44,6 @@ def names_match(asked: str, found: str) -> bool:
 
 async def locate(
     session: AsyncSession,
-    kto: KtoClient | None,
     name: str,
     *,
     region_hint: str | None = None,
