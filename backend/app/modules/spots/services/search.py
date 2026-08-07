@@ -195,7 +195,6 @@ def _pick_region_prefix(rows: Sequence[Any]) -> RegionPrefix | None:
 
 
 def _merged_districts(rows: Sequence[Any]) -> RegionPrefix | None:
-    """전주시완산구·전주시덕진구처럼 한 시가 구로 쪼개진 경우만 묶는다."""
     sidos = {row.sido for row in rows}
     if len(sidos) != 1:
         return None
