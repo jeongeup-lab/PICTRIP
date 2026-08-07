@@ -27,7 +27,6 @@ interface Props {
   fit?: FitBounds | null;
   pins: NearbySpot[];
   selectedId?: string | null;
-  /** The place a follow-up question is pinned to — drawn accent, results turn blue. */
   anchorId?: string | null;
   userLocation: LatLng | null;
   onReady?: () => void;
