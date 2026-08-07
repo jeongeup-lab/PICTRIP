@@ -31,6 +31,7 @@ const SavedListRowMock = SavedListRow as unknown as jest.Mock;
 
 const save = jest.fn();
 const unsave = jest.fn();
+const unsaveAsync = jest.fn();
 
 const spot = (contentId: string, over: Partial<SpotCard> = {}): SpotCard => ({
   contentId,
@@ -71,7 +72,8 @@ const renderedOrder = () =>
 beforeEach(() => {
   useSavedListMock.mockReturnValue({ data: LIST, isLoading: false });
   useSaveMutationMock.mockReturnValue({ mutate: save });
-  useUnsaveMutationMock.mockReturnValue({ mutate: unsave });
+  unsaveAsync.mockResolvedValue(undefined);
+  useUnsaveMutationMock.mockReturnValue({ mutate: unsave, mutateAsync: unsaveAsync });
   useNearbyCoordsMock.mockReturnValue({ coords: SEOUL, askable: false, ask: jest.fn() });
   useRecentSpots.setState({ spots: [] });
 });
@@ -103,7 +105,7 @@ describe("SavedScreen", () => {
     const tree = await mount();
 
     await press(tree, "swipe-far-action");
-    expect(unsave).toHaveBeenCalledWith("far");
+    expect(unsaveAsync).toHaveBeenCalledWith("far");
 
     const toast = tree.root.findAll(
       (n) => n.props.testID === "unsave-toast" && typeof n.props.message === "string",
@@ -111,6 +113,38 @@ describe("SavedScreen", () => {
     expect(toast.props.message).toBe(unsaveMessage("향일암"));
 
     await press(tree, "unsave-toast-action");
+    expect(save).toHaveBeenCalledWith("far");
+  });
+
+  it("holds the re-save until the unsave request has settled", async () => {
+    let releaseUnsave: () => void = () => undefined;
+    unsaveAsync.mockReturnValue(
+      new Promise<void>((resolve) => {
+        releaseUnsave = () => resolve();
+      }),
+    );
+
+    const tree = await mount();
+    await press(tree, "swipe-far-action");
+    await press(tree, "unsave-toast-action");
+
+    expect(save).not.toHaveBeenCalled();
+
+    await act(async () => {
+      releaseUnsave();
+    });
+
+    expect(save).toHaveBeenCalledWith("far");
+  });
+
+  it("still re-saves when the unsave request failed", async () => {
+    unsaveAsync.mockRejectedValue(new Error("network"));
+
+    const tree = await mount();
+    await press(tree, "swipe-far-action");
+    await press(tree, "unsave-toast-action");
+    await act(async () => undefined);
+
     expect(save).toHaveBeenCalledWith("far");
   });
 
