@@ -817,7 +817,7 @@ async def _ask_for_food(
         )
     if scope.prefixes:
         return await _food_across_region(
-            session, action, scope.prefixes, steps=steps, intent=intent
+            session, action, scope.prefixes, steps=steps, intent=intent, lat=lat, lng=lng
         )
     if lat is not None and lng is not None:
         return await _ask_with_anchor(
@@ -838,7 +838,11 @@ async def _food_across_region(
     *,
     steps: list[AskStep],
     intent: QueryIntent,
+    lat: float | None,
+    lng: float | None,
 ) -> AskResponse:
+    near = intent.nearMe and lat is not None and lng is not None
+    spoken = intent if near or not intent.nearMe else intent.model_copy(update={"nearMe": False})
     mood_ids = await repositories.find_mood_ids(session, list(intent.moodHints))
     narrowed = bool(mood_ids) or intent.indoorOnly or intent.crowdPreference != "any"
     rows = await retrieve.search_food(
@@ -848,12 +852,26 @@ async def _food_across_region(
         preference=intent.crowdPreference,
         indoor_only=intent.indoorOnly,
         mood_ids=mood_ids,
+        lat=lat,
+        lng=lng,
+        near=near,
     )
     if rows or not narrowed:
-        return food_in_region(rows, prefixes, action, steps=steps, intent=intent)
-    unfiltered = await retrieve.search_food(session, action=action, region_prefixes=prefixes)
+        return food_in_region(
+            rows, prefixes, action, steps=steps, intent=spoken, lat=lat, lng=lng, near=near
+        )
+    unfiltered = await retrieve.search_food(
+        session, action=action, region_prefixes=prefixes, lat=lat, lng=lng, near=near
+    )
     return food_in_region(
-        unfiltered, prefixes, action, steps=steps, intent=_without_unapplied_axes(intent)
+        unfiltered,
+        prefixes,
+        action,
+        steps=steps,
+        intent=_without_unapplied_axes(spoken),
+        lat=lat,
+        lng=lng,
+        near=near,
     )
 
 
@@ -919,6 +937,9 @@ def food_in_region(
     *,
     steps: list[AskStep],
     intent: QueryIntent,
+    lat: float | None = None,
+    lng: float | None = None,
+    near: bool = False,
 ) -> AskResponse:
     noun = ANCHOR_NOUNS[action]
     where = " · ".join(regions)
@@ -936,7 +957,7 @@ def food_in_region(
             intent=intent,
             refinements=[],
         )
-    spots = [retrieve.to_card(row, tag=None) for row in top]
+    spots = [_region_food_card(row, lat=lat, lng=lng, near=near) for row in top]
     logger.info("agent.food.region", action=action, results=len(spots))
     return AskResponse(
         steps=scanned,
@@ -948,8 +969,19 @@ def food_in_region(
         spots=spots,
         totalCount=len(spots),
         intent=intent,
+        tagBasis="직선거리 기준" if near else None,
         refinements=[],
     )
+
+
+def _region_food_card(
+    row: CandidateRow, *, lat: float | None, lng: float | None, near: bool
+) -> AgentSpotCard:
+    if near and lat is not None and lng is not None:
+        km = retrieve.distance_km(row, lat=lat, lng=lng)
+        if km is not None:
+            return retrieve.to_card(row, tag=f"{km:.1f}km")
+    return retrieve.to_card(row, tag=None)
 
 
 async def _ask_festivals(

@@ -720,6 +720,8 @@ async def test_a_region_food_query_carries_the_other_conditions(monkeypatch) -> 
         "food",
         ["부산광역시"],
         steps=[],
+        lat=None,
+        lng=None,
         intent=QueryIntent(
             categoryKeywords=["맛집"],
             regionHints=["부산"],
@@ -759,6 +761,8 @@ async def test_a_region_food_answer_drops_conditions_it_could_not_apply(monkeypa
         "food",
         ["부산광역시"],
         steps=[],
+        lat=None,
+        lng=None,
         intent=QueryIntent(
             categoryKeywords=["맛집"],
             regionHints=["부산"],
@@ -1080,3 +1084,96 @@ async def test_a_geocoded_origin_carries_the_id_that_excludes_it(monkeypatch) ->
     found = await geocode.locate(None, "스타벅스 강남점")  # type: ignore[arg-type]
 
     assert found is not None and found.content_id == "c1"
+
+
+async def test_a_region_food_query_measures_from_me_when_i_said_nearby(monkeypatch) -> None:
+    from app.modules.agent import repositories
+    from app.modules.agent.repositories import CandidateRow
+    from app.modules.agent.services import retrieve
+
+    seen: dict[str, object] = {}
+
+    async def fake_food(session, *, action, region_prefixes, **axes):  # type: ignore[no-untyped-def]
+        seen.update(axes)
+        return [
+            CandidateRow(
+                content_id="f1",
+                title="해운대횟집",
+                addr1="부산광역시 해운대구 1",
+                region_name="부산광역시",
+                sigungu_name="해운대구",
+                lat=35.16,
+                lng=129.16,
+                image_url=None,
+                cpyrht_div_cd="Type1",
+                concentration_rate=None,
+            )
+        ]
+
+    async def fake_moods(session, codes):  # type: ignore[no-untyped-def]
+        return []
+
+    monkeypatch.setattr(retrieve, "search_food", fake_food)
+    monkeypatch.setattr(repositories, "find_mood_ids", fake_moods)
+
+    answer = await ask_service._food_across_region(
+        None,  # type: ignore[arg-type]
+        "food",
+        ["부산광역시"],
+        steps=[],
+        lat=35.15,
+        lng=129.15,
+        intent=QueryIntent(categoryKeywords=["맛집"], regionHints=["부산"], nearMe=True),
+    )
+
+    assert seen["near"] is True
+    assert seen["lat"] == 35.15
+    assert answer.intent.nearMe is True
+    assert answer.tagBasis == "직선거리 기준"
+    assert answer.spots[0].tag is not None and answer.spots[0].tag.endswith("km")
+
+
+async def test_a_region_food_query_without_coords_stays_a_plain_listing(monkeypatch) -> None:
+    from app.modules.agent import repositories
+    from app.modules.agent.repositories import CandidateRow
+    from app.modules.agent.services import retrieve
+
+    seen: dict[str, object] = {}
+
+    async def fake_food(session, *, action, region_prefixes, **axes):  # type: ignore[no-untyped-def]
+        seen.update(axes)
+        return [
+            CandidateRow(
+                content_id="f1",
+                title="해운대횟집",
+                addr1="부산광역시 해운대구 1",
+                region_name="부산광역시",
+                sigungu_name="해운대구",
+                lat=35.16,
+                lng=129.16,
+                image_url=None,
+                cpyrht_div_cd="Type1",
+                concentration_rate=None,
+            )
+        ]
+
+    async def fake_moods(session, codes):  # type: ignore[no-untyped-def]
+        return []
+
+    monkeypatch.setattr(retrieve, "search_food", fake_food)
+    monkeypatch.setattr(repositories, "find_mood_ids", fake_moods)
+
+    answer = await ask_service._food_across_region(
+        None,  # type: ignore[arg-type]
+        "food",
+        ["부산광역시"],
+        steps=[],
+        lat=None,
+        lng=None,
+        intent=QueryIntent(categoryKeywords=["맛집"], regionHints=["부산"], nearMe=True),
+    )
+
+    assert seen["near"] is False
+    assert answer.intent.nearMe is False
+    assert answer.tagBasis is None
+    assert answer.spots[0].tag is None
