@@ -747,6 +747,9 @@ def _verified_origin(place: ResolvedPlace) -> geocode_service.Located | None:
     asked = [name for name in (place.extracted.nameKo, place.extracted.name) if name]
     if not any(geocode_service.names_match(name, spot.title) for name in asked):
         return None
+    terms = geocode_service.region_terms(place.extracted.regionHint)
+    if not geocode_service.address_is_within(spot.address, terms):
+        return None
     return geocode_service.Located(
         title=spot.title,
         lat=spot.lat,

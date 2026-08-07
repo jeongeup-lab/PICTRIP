@@ -863,7 +863,12 @@ async def test_a_named_food_origin_reuses_the_coords_already_resolved(monkeypatc
     resolved = [
         ResolvedPlace(
             extracted=intent.namedPlaces[0],
-            spot=ResolvedSpot(title="전주 한옥마을", lat=35.818, lng=127.153),
+            spot=ResolvedSpot(
+                title="전주 한옥마을",
+                address="전북특별자치도 전주시 완산구 1",
+                lat=35.818,
+                lng=127.153,
+            ),
             status="matched",
         )
     ]
@@ -952,7 +957,13 @@ async def test_a_verified_naver_hit_is_still_reused_as_an_origin() -> None:
     resolved = [
         ResolvedPlace(
             extracted=intent.namedPlaces[0],
-            spot=ResolvedSpot(source="naver", title="전주 한옥마을", lat=35.818, lng=127.153),
+            spot=ResolvedSpot(
+                source="naver",
+                title="전주 한옥마을",
+                address="전북특별자치도 전주시 완산구 1",
+                lat=35.818,
+                lng=127.153,
+            ),
             confidence=0.7,
             status="naver_only",
         )
@@ -1230,3 +1241,34 @@ async def test_the_place_inside_the_named_province_is_still_taken(monkeypatch) -
     )
 
     assert found is not None and found.content_id == "s1"
+
+
+async def test_a_resolved_place_in_the_wrong_county_is_not_reused(monkeypatch) -> None:
+    from app.modules.agent.schemas import ExtractedPlace, ResolvedPlace, ResolvedSpot
+    from app.modules.agent.services import geocode
+
+    asked: dict[str, object] = {}
+
+    async def fake_locate(session, name, *, region_hint=None):  # type: ignore[no-untyped-def]
+        asked["hint"] = region_hint
+        return None
+
+    monkeypatch.setattr(geocode, "locate", fake_locate)
+
+    intent = QueryIntent(namedPlaces=[ExtractedPlace(name="중앙시장", regionHint="경상남도 통영")])
+    resolved = [
+        ResolvedPlace(
+            extracted=intent.namedPlaces[0],
+            spot=ResolvedSpot(
+                title="중앙시장",
+                address="경상남도 김해시 1",
+                lat=35.23,
+                lng=128.88,
+            ),
+            confidence=0.8,
+            status="matched",
+        )
+    ]
+
+    assert await ask_service._named_origin(None, intent, resolved) is None  # type: ignore[arg-type]
+    assert asked["hint"] == "경상남도 통영"
