@@ -710,18 +710,21 @@ def _judge_spots(case_: Case, spots: list[dict[str, Any]], res: Result) -> None:
             res.ok = False
             res.reasons.append("중복 결과가 있다")
     if case_.expect_within_km is not None:
-        origin = case_.payload.get("lat"), case_.payload.get("lng")
-        if origin[0] is not None:
+        lat, lng = case_.payload.get("lat"), case_.payload.get("lng")
+        if lat is not None and lng is not None:
+            placed = [s for s in spots if s.get("lat") is not None and s.get("lng") is not None]
+            nowhere = len(spots) - len(placed)
             far = [
                 s
-                for s in spots
-                if s.get("lat") is not None
-                and _km(float(origin[0]), float(origin[1]), s["lat"], s["lng"])
-                > case_.expect_within_km
+                for s in placed
+                if _km(float(lat), float(lng), s["lat"], s["lng"]) > case_.expect_within_km
             ]
             if far:
                 res.ok = False
                 res.reasons.append(f"{len(far)}곳이 {case_.expect_within_km}km 밖")
+            if nowhere:
+                res.ok = False
+                res.reasons.append(f"{nowhere}곳에 좌표가 없어 거리를 잴 수 없다")
 
 
 @dataclass(frozen=True)
