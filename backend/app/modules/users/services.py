@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from redis.asyncio import Redis
 
 from app.core.db import AsyncSession, IntegrityError
+from app.modules.spots.services.saved import delete_all_saved_for_user
 from app.modules.users import repositories as repo
 from app.modules.users.models import User
 from app.modules.users.oidc import verify_oauth_id_token
@@ -118,7 +119,12 @@ async def get_user_public(session: AsyncSession, user_id: int) -> UserPublic:
     )
 
 
-async def delete_user_account(session: AsyncSession, redis: Redis, user_id: int) -> None:
+async def delete_user_account(
+    session: AsyncSession,
+    redis: Redis,
+    user_id: int,
+    refresh_token: str | None = None,
+) -> None:
     user = await repo.get_user(session, user_id)
     if user is not None and user.deleted_at is None:
         user.email = None
@@ -130,7 +136,9 @@ async def delete_user_account(session: AsyncSession, redis: Redis, user_id: int)
         user.password_hash = None
         user.deleted_at = datetime.now(tz=UTC)
         await repo.delete_auth_providers(session, user_id)
+        await delete_all_saved_for_user(session, user_id=user_id)
         await session.commit()
+    await deny_refresh(redis, refresh_token)
 
 
 async def put_consents(session: AsyncSession, user_id: int, body: ConsentIn) -> ConsentOut:

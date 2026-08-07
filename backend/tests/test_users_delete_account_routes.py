@@ -12,7 +12,7 @@ from sqlalchemy.pool import NullPool
 
 from app.config import settings
 from app.main import app
-from app.security.jwt import create_access_token
+from app.security.jwt import create_access_token, create_refresh_token
 
 
 @pytest.fixture(autouse=True)
@@ -162,6 +162,51 @@ async def test_delete_is_idempotent(
 
     second = await client.delete("/v1/users/me", headers=_auth(uid))
     assert second.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_delete_destroys_saved_spots(
+    client: AsyncClient, override_db_and_seed: AsyncSession
+) -> None:
+    uid = await _seed_user_with_provider(override_db_and_seed)
+    content_id = f"del-{uuid.uuid4().hex[:8]}"
+    await override_db_and_seed.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, show_flag) "
+            "VALUES (:c, 12, '탈퇴검증', 1) ON CONFLICT (content_id) DO NOTHING"
+        ),
+        {"c": content_id},
+    )
+    await override_db_and_seed.execute(
+        text("INSERT INTO user_saved_spots (user_id, content_id) VALUES (:u, :c)"),
+        {"u": uid, "c": content_id},
+    )
+    await override_db_and_seed.commit()
+
+    resp = await client.delete("/v1/users/me", headers=_auth(uid))
+    assert resp.status_code == 204
+
+    left = await override_db_and_seed.scalar(
+        text("SELECT count(*) FROM user_saved_spots WHERE user_id = :u"), {"u": uid}
+    )
+    assert left == 0
+
+
+@pytest.mark.asyncio
+async def test_delete_revokes_the_refresh_token(
+    client: AsyncClient, override_db_and_seed: AsyncSession
+) -> None:
+    uid = await _seed_user_with_provider(override_db_and_seed)
+    refresh = create_refresh_token(user_id=uid, jti=str(uuid.uuid4()))
+
+    resp = await client.request(
+        "DELETE", "/v1/users/me", headers=_auth(uid), json={"refreshToken": refresh}
+    )
+    assert resp.status_code == 204
+
+    again = await client.post("/v1/auth/refresh", json={"refreshToken": refresh})
+    assert again.status_code == 401
+    assert again.json()["error"]["code"] == "AUTH_SESSION_REVOKED"
 
 
 @pytest.mark.asyncio

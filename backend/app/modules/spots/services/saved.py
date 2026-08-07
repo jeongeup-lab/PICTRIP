@@ -58,6 +58,10 @@ async def unsave_spot(session: AsyncSession, *, user_id: int, content_id: str) -
     return removed is not None
 
 
+async def delete_all_saved_for_user(session: AsyncSession, *, user_id: int) -> None:
+    await session.execute(delete(UserSavedSpot).where(UserSavedSpot.user_id == user_id))
+
+
 async def list_saved_spots(
     session: AsyncSession,
     *,
