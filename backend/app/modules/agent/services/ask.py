@@ -735,15 +735,34 @@ async def _locatable_focus(
     return row
 
 
+VERIFIED_ORIGIN_STATUSES = ("matched", "naver_only")
+
+
+def _verified_origin(place: ResolvedPlace) -> geocode_service.Located | None:
+    spot = place.spot
+    if spot is None or spot.lat is None or spot.lng is None:
+        return None
+    if place.status not in VERIFIED_ORIGIN_STATUSES:
+        return None
+    asked = [name for name in (place.extracted.nameKo, place.extracted.name) if name]
+    if not any(geocode_service.names_match(name, spot.title) for name in asked):
+        return None
+    return geocode_service.Located(title=spot.title, lat=spot.lat, lng=spot.lng, source=spot.source)
+
+
+def _stands_in_region(row: CandidateRow, prefixes: list[str]) -> bool:
+    if not prefixes:
+        return True
+    return row.addr1 is not None and row.addr1.startswith(tuple(prefixes))
+
+
 async def _named_origin(
     session: AsyncSession, intent: QueryIntent, resolved: list[ResolvedPlace]
 ) -> geocode_service.Located | None:
     for index, place in enumerate(intent.namedPlaces):
-        spot = resolved[index].spot if index < len(resolved) else None
-        if spot is not None and spot.lat is not None and spot.lng is not None:
-            return geocode_service.Located(
-                title=spot.title, lat=spot.lat, lng=spot.lng, source=spot.source
-            )
+        reused = _verified_origin(resolved[index]) if index < len(resolved) else None
+        if reused is not None:
+            return reused
         found = await geocode_service.locate(session, place.name, region_hint=place.regionHint)
         if found is not None:
             return found
@@ -762,9 +781,10 @@ async def _ask_for_food(
     resolved: list[ResolvedPlace],
     legacy_client: bool,
 ) -> AskResponse:
+    scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
     stale = context is not None and _named_a_new_region(intent, context)
     focus = None if stale else await _locatable_focus(session, context)
-    if focus is not None:
+    if focus is not None and _stands_in_region(focus, scope.prefixes):
         return await _ask_with_anchor(
             session,
             AskAnchor(contentId=focus.content_id, action=action),
@@ -788,7 +808,6 @@ async def _ask_for_food(
             steps=located,
             intent=intent,
         )
-    scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
     if scope.prefixes:
         return await _food_across_region(
             session, action, scope.prefixes, steps=steps, intent=intent
