@@ -1,0 +1,79 @@
+{
+  "configVersion": 0,
+  "apple": {
+    "version": "1.0.0",
+    "copyright": "2026 PicTrip",
+    "categories": ["TRAVEL", "PHOTO_AND_VIDEO"],
+    "advisory": {
+      "advertising": false,
+      "ageAssurance": false,
+      "ageRatingOverride": "NONE",
+      "alcoholTobaccoOrDrugUseOrReferences": "NONE",
+      "contests": "NONE",
+      "gambling": false,
+      "gamblingSimulated": "NONE",
+      "healthOrWellnessTopics": false,
+      "horrorOrFearThemes": "NONE",
+      "kidsAgeBand": null,
+      "koreaAgeRatingOverride": "NONE",
+      "lootBox": false,
+      "matureOrSuggestiveThemes": "NONE",
+      "medicalOrTreatmentInformation": "NONE",
+      "messagingAndChat": false,
+      "parentalControls": false,
+      "profanityOrCrudeHumor": "NONE",
+      "seventeenPlus": false,
+      "sexualContentGraphicAndNudity": "NONE",
+      "sexualContentOrNudity": "NONE",
+      "unrestrictedWebAccess": false,
+      "userGeneratedContent": false,
+      "violenceCartoonOrFantasy": "NONE",
+      "violenceRealistic": "NONE",
+      "violenceRealisticProlongedGraphicOrSadistic": "NONE"
+    },
+    "release": {
+      "automaticRelease": false,
+      "phasedRelease": false
+    },
+    "info": {
+      "ko": {
+        "title": "PicTrip",
+        "subtitle": "사진으로 찾는 국내 여행지",
+        "promoText": "사진 한 장이면 충분합니다. 분위기가 닮은 국내 여행지를 찾아드립니다.",
+        "description": "사진 한 장에서 시작하는 국내 여행 탐색 앱입니다.\n\n[사진으로 찾기]\n마음에 드는 여행 사진을 고르면 색감과 분위기가 닮은 국내 여행지를 찾아줍니다. 올린 사진은 저장하지 않고, 분석 직후 폐기합니다.\n\n[해외 풍경에서 국내 여행지로]\n가보고 싶던 해외 풍경을 넘겨 보다가 마음에 드는 장면이 있으면, 분위기가 닮은 국내 여행지 세 곳을 바로 보여줍니다.\n\n[말하듯 조건 좁히기]\n'바다 보이는 조용한 곳', '서울 근교 당일치기'처럼 평소 말투로 물어보면 조건에 맞는 곳을 추려줍니다.\n\n[지도와 저장]\n찾은 여행지를 지도에서 위치와 함께 확인하고, 마음에 든 곳은 저장해 두었다가 다시 볼 수 있습니다.\n\n관광지 정보는 한국관광공사 TourAPI를 활용합니다.",
+        "keywords": [
+          "여행",
+          "국내여행",
+          "여행지추천",
+          "사진검색",
+          "관광",
+          "여행코스",
+          "주말여행",
+          "지도",
+          "가볼만한곳"
+        ],
+        "marketingUrl": "https://pictrip.org",
+        "supportUrl": "https://pictrip.org/support",
+        "privacyPolicyUrl": "https://pictrip.org/legal/privacy"
+      },
+      "en-US": {
+        "title": "PicTrip",
+        "subtitle": "Find Korea trips by photo",
+        "promoText": "One photo is enough. PicTrip finds places in Korea that share its mood.",
+        "description": "PicTrip turns a single photo into a trip idea in Korea.\n\n[Search by photo]\nPick a travel photo you like and PicTrip finds places in Korea with a similar mood and palette. Uploaded photos are analyzed and discarded, never stored.\n\n[From a place abroad to a place in Korea]\nBrowse landscapes from around the world, and when one catches your eye, see three places in Korea that feel like it.\n\n[Narrow it down in plain words]\nAsk the way you would talk - 'a quiet place with a sea view' or 'a day trip near Seoul' - and PicTrip narrows the results for you.\n\n[Map and saved places]\nCheck each place on the map and save the ones you like for later.\n\nTourism data is provided by the Korea Tourism Organization TourAPI.",
+        "keywords": [
+          "korea travel",
+          "photo search",
+          "trip planner",
+          "sightseeing",
+          "travel guide",
+          "things to do",
+          "map"
+        ],
+        "marketingUrl": "https://pictrip.org",
+        "supportUrl": "https://pictrip.org/support",
+        "privacyPolicyUrl": "https://pictrip.org/legal/privacy"
+      }
+    }
+  }
+}
