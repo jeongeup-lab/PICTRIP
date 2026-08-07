@@ -1,4 +1,5 @@
-import { daysSince, profileStats } from "@/features/profile/lib/stats";
+import { countLabel, daysSince, profileStats } from "@/features/profile/lib/stats";
+import { SAVED_PAGE_LIMIT } from "@/features/saved/api";
 import type { SpotCard } from "@/lib/api-types";
 
 const spot = (contentId: string, addr1: string | null): SpotCard => ({
@@ -15,7 +16,12 @@ const NOW = Date.parse("2026-08-08T00:00:00Z");
 
 describe("profileStats", () => {
   it("is all zeros before anything is saved", () => {
-    expect(profileStats(undefined, null, NOW)).toEqual({ saved: 0, regions: 0, days: 0 });
+    expect(profileStats(undefined, null, NOW)).toEqual({
+      saved: 0,
+      regions: 0,
+      days: 0,
+      partial: false,
+    });
   });
 
   it("counts saved spots and the distinct regions they sit in", () => {
@@ -24,7 +30,20 @@ describe("profileStats", () => {
       "2026-08-01T00:00:00Z",
       NOW,
     );
-    expect(stats).toEqual({ saved: 3, regions: 2, days: 8 });
+    expect(stats).toEqual({ saved: 3, regions: 2, days: 8, partial: false });
+  });
+});
+
+describe("countLabel", () => {
+  it("marks a count the server may have truncated", () => {
+    const capped = profileStats(
+      Array.from({ length: SAVED_PAGE_LIMIT }, (_v, i) => spot(String(i), "경남 통영시")),
+      "2026-08-01T00:00:00Z",
+      NOW,
+    );
+    expect(capped.partial).toBe(true);
+    expect(countLabel(capped.saved, capped.partial)).toBe(`${SAVED_PAGE_LIMIT}+`);
+    expect(countLabel(3, false)).toBe("3");
   });
 });
 

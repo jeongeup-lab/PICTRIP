@@ -17,9 +17,9 @@ export const PERM_LABEL: Record<PermStatus, string> = {
 
 const EMPTY: AppPermissions = { location: null, photos: null, camera: null };
 
-function toStatus(result: { granted: boolean; canAskAgain: boolean }): PermStatus {
-  if (result.granted) return "granted";
-  return result.canAskAgain ? "undetermined" : "denied";
+export function toStatus(result: { status: ImagePicker.PermissionStatus }): PermStatus {
+  if (result.status === ImagePicker.PermissionStatus.GRANTED) return "granted";
+  return result.status === ImagePicker.PermissionStatus.DENIED ? "denied" : "undetermined";
 }
 
 export function useAppPermissions(withMedia = false): AppPermissions {
