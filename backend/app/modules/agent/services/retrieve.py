@@ -206,6 +206,9 @@ async def search_food(
     preference: CrowdPreference = "any",
     indoor_only: bool = False,
     mood_ids: list[int] | None = None,
+    lat: float | None = None,
+    lng: float | None = None,
+    near: bool = False,
 ) -> list[CandidateRow]:
     pool = NearbyCategory.cafe if action == "cafe" else NearbyCategory.food
     return await search_candidates(
@@ -213,9 +216,9 @@ async def search_food(
         codes=[],
         region_prefixes=region_prefixes,
         preference=preference,
-        lat=None,
-        lng=None,
-        near=False,
+        lat=lat,
+        lng=lng,
+        near=near,
         indoor_only=indoor_only,
         mood_ids=mood_ids,
         pool_sql=category_sql(pool),
