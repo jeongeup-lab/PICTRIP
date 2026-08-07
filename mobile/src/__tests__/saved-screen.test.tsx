@@ -1,5 +1,5 @@
 import renderer, { act } from "react-test-renderer";
-import SavedScreen, { NEAR_NEEDS_LOCATION, UNSAVE_FAILED } from "@/app/saved";
+import SavedScreen, { NEAR_NEEDS_LOCATION, RESAVE_FAILED, UNSAVE_FAILED } from "@/app/saved";
 import { useSavedList, useSaveMutation, useUnsaveMutation } from "@/features/saved/queries";
 import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
 import { SavedListRow } from "@/features/saved/components/SavedListRow";
@@ -113,7 +113,7 @@ describe("SavedScreen", () => {
     expect(toast.props.message).toBe(unsaveMessage("향일암"));
 
     await press(tree, "unsave-toast-action");
-    expect(save).toHaveBeenCalledWith("far");
+    expect(save).toHaveBeenCalledWith("far", expect.any(Object));
   });
 
   it("holds the re-save until the unsave request has settled", async () => {
@@ -134,7 +134,7 @@ describe("SavedScreen", () => {
       releaseUnsave();
     });
 
-    expect(save).toHaveBeenCalledWith("far");
+    expect(save).toHaveBeenCalledWith("far", expect.any(Object));
   });
 
   it("reports the failure instead of offering to undo a delete that never happened", async () => {
@@ -150,6 +150,22 @@ describe("SavedScreen", () => {
     expect(toast.props.message).toBe(UNSAVE_FAILED);
     expect(toast.props.action).toBeNull();
     expect(save).not.toHaveBeenCalled();
+  });
+
+  it("says so when the re-save itself fails", async () => {
+    save.mockImplementationOnce((_id: string, opts?: { onError?: () => void }) =>
+      opts?.onError?.(),
+    );
+
+    const tree = await mount();
+    await press(tree, "swipe-far-action");
+    await press(tree, "unsave-toast-action");
+    await act(async () => undefined);
+
+    const toast = tree.root.findAll(
+      (n) => n.props.testID === "unsave-toast" && typeof n.props.message === "string",
+    )[0];
+    expect(toast.props.message).toBe(RESAVE_FAILED);
   });
 
   it("stays on the previous sort when no fix can be obtained", async () => {

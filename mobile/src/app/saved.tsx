@@ -34,6 +34,8 @@ export const UNSAVE_FAILED = "스크랩 해제를 못 했어요. 잠시 뒤 다�
 
 export const NEAR_NEEDS_LOCATION = "위치를 켜야 가까운 순으로 볼 수 있어요";
 
+export const RESAVE_FAILED = "되돌리지 못했어요. 다시 스크랩해 주세요";
+
 interface Notice {
   message: string;
   undoContentId: string | null;
@@ -90,7 +92,10 @@ export default function SavedScreen() {
     const settled = unsaving.current ?? Promise.resolve(true);
     setNotice(null);
     void settled.then((removed) => {
-      if (removed) resave.mutate(contentId);
+      if (!removed) return;
+      resave.mutate(contentId, {
+        onError: () => setNotice({ message: RESAVE_FAILED, undoContentId: null }),
+      });
     });
   };
 
