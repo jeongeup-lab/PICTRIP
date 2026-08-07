@@ -1875,6 +1875,55 @@ async def test_an_ambiguous_city_spelling_is_left_alone() -> None:
     assert mapping["광주시"].prefix == "경기도 광주시"
 
 
+async def test_two_character_province_names_resolve() -> None:
+    session = _RegionSession(
+        {
+            "충청북": [_RegionRow("충청북도", None, 1)],
+            "경상남": [_RegionRow("경상남도", None, 1)],
+            "전라남": [_RegionRow("전라남도", None, 1)],
+        }
+    )
+
+    mapping = await map_region_tokens_to_prefixes(session, {"충북", "경남", "전남"})
+
+    assert mapping["충북"].prefix == "충청북도"
+    assert mapping["경남"].prefix == "경상남도"
+    assert mapping["전남"].prefix == "전라남도"
+
+
+async def test_a_city_split_into_districts_resolves_to_the_city() -> None:
+    session = _RegionSession(
+        {
+            "전주": [
+                _RegionRow("전북특별자치도", "전주시완산구", 2),
+                _RegionRow("전북특별자치도", "전주시덕진구", 2),
+            ]
+        }
+    )
+
+    mapping = await map_region_tokens_to_prefixes(session, {"전주"})
+
+    assert mapping["전주"].prefix == "전북특별자치도 전주시"
+    assert mapping["전주"].sido == "전북특별자치도"
+    assert mapping["전주"].narrowed is True
+
+
+async def test_a_same_named_district_in_two_provinces_still_resolves_to_nothing() -> None:
+    session = _RegionSession(
+        {"고성": [_RegionRow("강원특별자치도", "고성군", 2), _RegionRow("경상남도", "고성군", 2)]}
+    )
+
+    assert await map_region_tokens_to_prefixes(session, {"고성"}) == {}
+
+
+async def test_unrelated_districts_in_one_province_do_not_merge() -> None:
+    session = _RegionSession(
+        {"남": [_RegionRow("부산광역시", "남구", 2), _RegionRow("부산광역시", "동구", 2)]}
+    )
+
+    assert await map_region_tokens_to_prefixes(session, {"남"}) == {}
+
+
 async def test_an_ambiguous_sigungu_token_resolves_to_nothing() -> None:
     session = _RegionSession(
         {"중구": [_RegionRow("서울특별시", "중구", 2), _RegionRow("부산광역시", "중구", 2)]}

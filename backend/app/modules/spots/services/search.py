@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from os.path import commonprefix
 from typing import Any
 
 from sqlalchemy import text
@@ -123,10 +124,16 @@ class RegionPrefix:
         return self.prefix != self.sido
 
 
+_MIN_MERGED_CHARS = 2
 _SIDO_TIER = 1
 _SIGUNGU_TIER = 2
 
 SIDO_SPELLINGS: dict[str, str] = {
+    "충북": "충청북",
+    "충남": "충청남",
+    "경북": "경상북",
+    "경남": "경상남",
+    "전남": "전라남",
     "강원도": "강원",
     "제주도": "제주",
     "전라북도": "전북",
@@ -179,7 +186,21 @@ def _pick_region_prefix(rows: Sequence[Any]) -> RegionPrefix | None:
         sido = sido_rows[0].sido
         return RegionPrefix(prefix=sido, sido=sido)
     sigungu_rows = [row for row in rows if row.tier == _SIGUNGU_TIER]
-    if len(sigungu_rows) != 1:
+    if not sigungu_rows:
         return None
-    row = sigungu_rows[0]
-    return RegionPrefix(prefix=f"{row.sido} {row.sigungu}", sido=row.sido)
+    if len(sigungu_rows) == 1:
+        row = sigungu_rows[0]
+        return RegionPrefix(prefix=f"{row.sido} {row.sigungu}", sido=row.sido)
+    return _merged_districts(sigungu_rows)
+
+
+def _merged_districts(rows: Sequence[Any]) -> RegionPrefix | None:
+    """전주시완산구·전주시덕진구처럼 한 시가 구로 쪼개진 경우만 묶는다."""
+    sidos = {row.sido for row in rows}
+    if len(sidos) != 1:
+        return None
+    shared = commonprefix([row.sigungu for row in rows]).strip()
+    if len(shared) < _MIN_MERGED_CHARS:
+        return None
+    sido = sidos.pop()
+    return RegionPrefix(prefix=f"{sido} {shared}", sido=sido)
