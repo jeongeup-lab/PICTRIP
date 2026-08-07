@@ -116,7 +116,7 @@ export function ExploreGrid() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.ink },
+  root: { flex: 1, backgroundColor: colors.bg },
   row: { flexDirection: "row", gap: GAP, marginBottom: GAP },
   sideCol: { gap: GAP, justifyContent: "space-between" },
   scrim: { position: "absolute", top: 0, left: 0, right: 0, height: SCRIM_HEIGHT },

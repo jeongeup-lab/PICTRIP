@@ -21,7 +21,7 @@ export function AnswerBlock({ answer }: Props) {
 }
 
 const styles = StyleSheet.create({
-  root: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.line },
+  root: { marginTop: 14, paddingHorizontal: 4 },
   say: { fontSize: 14.5, lineHeight: 22.5, letterSpacing: -0.2, color: colors.ink },
   emphasis: { color: colors.accentText, fontWeight: "800" },
 });

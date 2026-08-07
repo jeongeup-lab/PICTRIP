@@ -1,9 +1,13 @@
 import renderer, { act } from "react-test-renderer";
-import { FlatList, Text } from "react-native";
-import { ConversationTurn, TAP_HINT } from "@/features/travel/components/ConversationTurn";
-import { SpotCard } from "@/features/travel/components/SpotCard";
+import { Text } from "react-native";
+import {
+  ConversationTurn,
+  PENDING_HINT,
+  TAP_HINT,
+} from "@/features/travel/components/ConversationTurn";
+import { ResultRow } from "@/features/travel/components/ResultRow";
 import { StepList } from "@/features/travel/components/StepList";
-import { KakaoWebMap } from "@/features/map/components/KakaoWebMap";
+import type { LatLng } from "@/features/map/lib/geo";
 import type { Turn } from "@/features/travel/stores/conversation-store";
 
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
@@ -57,26 +61,37 @@ const turn = (over: Partial<Turn> = {}): Turn => ({
 
 const noop = () => undefined;
 
-function mount(
-  t: Turn,
-  anchorId: string | null = null,
-  onGrow = noop,
-  onOpenMap = noop,
-  onSpotTap: (spot: { contentId: string }) => void = noop,
-  onSpotDetail: (spot: { contentId: string }) => void = noop,
-  showTapHint = false,
-) {
+interface MountOptions {
+  anchorId?: string | null;
+  anchored?: boolean;
+  origin?: LatLng | null;
+  showTapHint?: boolean;
+  onGrow?: () => void;
+  onSpotTap?: (spot: { contentId: string }) => void;
+  onSpotDetail?: (spot: { contentId: string }) => void;
+}
+
+function mount(t: Turn, options: MountOptions = {}) {
+  const {
+    anchorId = null,
+    anchored = false,
+    origin = null,
+    showTapHint = false,
+    onGrow = noop,
+    onSpotTap = noop,
+    onSpotDetail = noop,
+  } = options;
   let tree: renderer.ReactTestRenderer;
   act(() => {
     tree = renderer.create(
       <ConversationTurn
         turn={t}
         anchorId={anchorId}
-        live
+        anchored={anchored}
+        origin={origin}
         showTapHint={showTapHint}
         onSpotTap={onSpotTap}
         onSpotDetail={onSpotDetail}
-        onOpenMap={onOpenMap}
         onRetry={noop}
         onGrow={onGrow}
         onSaveToggle={noop}
@@ -98,6 +113,11 @@ const texts = (tree: renderer.ReactTestRenderer): string[] =>
 
 const spinners = (tree: renderer.ReactTestRenderer) =>
   tree.root.findAllByProps({ testID: "step-spinner" }).length;
+
+const pinned = (over: Partial<(typeof answer)["spots"][number]> = {}) => ({
+  ...answer,
+  spots: [{ ...answer.spots[0], lat: 37.5, lng: 129.0, ...over }],
+});
 
 beforeEach(() => jest.useFakeTimers());
 afterEach(() => jest.useRealTimers());
@@ -123,21 +143,23 @@ describe("ConversationTurn while waiting", () => {
     expect(texts(tree)).toContain("여행지 찾는 중");
   });
 
-  it("leaves every waiting stage unchecked", () => {
+  it("leaves every waiting stage unchecked and points at the map", () => {
     const tree = mount(turn({ status: "pending", answer: null }));
     const list = tree.root.findByType(StepList);
     expect(list.props.shown).toBe(2);
     expect(list.props.completed).toBe(0);
     expect(spinners(tree)).toBeGreaterThan(0);
+    expect(texts(tree)).toContain(PENDING_HINT);
   });
 });
 
 describe("ConversationTurn once the answer lands", () => {
-  it("shows the answer and the rail with no further delay", () => {
+  it("shows the answer and the result rows with no further delay", () => {
     const tree = mount(turn());
     expect(texts(tree)).toContain("하위 30%");
-    expect(tree.root.findAllByType(SpotCard)).toHaveLength(1);
+    expect(tree.root.findAllByType(ResultRow)).toHaveLength(1);
     expect(spinners(tree)).toBe(0);
+    expect(texts(tree)).not.toContain(PENDING_HINT);
   });
 
   it("shows every server step at once, all completed", () => {
@@ -166,8 +188,8 @@ describe("ConversationTurn once the answer lands", () => {
     expect(tree.root.findAllByProps({ testID: "turn-basis-t1" })).toHaveLength(0);
   });
 
-  it("teaches the card tap grammar once and then stops", () => {
-    expect(texts(mount(turn(), null, noop, noop, noop, noop, true))).toContain(TAP_HINT);
+  it("teaches the row tap grammar once and then stops", () => {
+    expect(texts(mount(turn(), { showTapHint: true }))).toContain(TAP_HINT);
     expect(texts(mount(turn()))).not.toContain(TAP_HINT);
   });
 
@@ -176,90 +198,50 @@ describe("ConversationTurn once the answer lands", () => {
     expect(tree.root.findAllByProps({ testID: "turn-vote-t1" })).toHaveLength(0);
   });
 
-  it("offers a map for results that carry coordinates", () => {
-    const tree = mount(
-      turn({ answer: { ...answer, spots: [{ ...answer.spots[0], lat: 33.5, lng: 126.5 }] } }),
-    );
-
-    expect(tree.root.findAllByProps({ testID: "travel-turn-map" }).length).toBeGreaterThan(0);
+  it("counts the results when nothing can be measured", () => {
+    expect(texts(mount(turn()))).toContain("추천 1곳");
   });
 
-  it("hides the map when no result can be pinned", () => {
-    const tree = mount(turn());
+  it("orders by distance once an origin is known", () => {
+    const tree = mount(turn({ answer: pinned() }), { origin: { lat: 37.4, lng: 129.0 } });
 
-    expect(tree.root.findAllByProps({ testID: "travel-turn-map" })).toHaveLength(0);
+    expect(texts(tree)).toContain("가까운 순");
+    expect(tree.root.findByType(ResultRow).props.distanceKm).toBeGreaterThan(0);
   });
 
-  it("draws a real Kakao map for the live turn and only the summary bar for older ones", () => {
-    const mapped = turn({
-      answer: { ...answer, spots: [{ ...answer.spots[0], lat: 33.5, lng: 126.5 }] },
+  it("measures from the anchor while one is held", () => {
+    const tree = mount(turn({ answer: pinned() }), {
+      anchored: true,
+      origin: { lat: 37.4, lng: 129.0 },
     });
 
-    const live = mount(mapped);
-    expect(live.root.findAllByType(KakaoWebMap)).toHaveLength(1);
-
-    let older: renderer.ReactTestRenderer;
-    act(() => {
-      older = renderer.create(
-        <ConversationTurn
-          turn={mapped}
-          anchorId={null}
-          live={false}
-          showTapHint={false}
-          onSpotTap={noop}
-          onSpotDetail={noop}
-          onOpenMap={noop}
-          onRetry={noop}
-          onGrow={noop}
-          onSaveToggle={noop}
-        />,
-      );
-    });
-    expect(older!.root.findAllByType(KakaoWebMap)).toHaveLength(0);
-    expect(older!.root.findAllByProps({ testID: "travel-turn-map" }).length).toBeGreaterThan(0);
+    expect(texts(tree)).toContain("기준점에서 가까운 순");
+    expect(tree.root.findByType(ResultRow).props.tone).toBe("result");
   });
 
-  it("marks the anchored spot as the selected pin", () => {
-    const mapped = turn({
-      answer: { ...answer, spots: [{ ...answer.spots[0], lat: 33.5, lng: 126.5 }] },
-    });
-    const tree = mount(mapped, "126508");
+  it("leaves the distance out when the spot carries no coordinates", () => {
+    const tree = mount(turn(), { origin: { lat: 37.4, lng: 129.0 } });
 
-    expect(tree.root.findByType(KakaoWebMap).props.selectedId).toBe("126508");
+    expect(tree.root.findByType(ResultRow).props.distanceKm).toBeNull();
   });
 
-  it("hands the whole turn to the map opener", () => {
-    const onOpenMap = jest.fn();
-    const mapped = turn({
-      answer: { ...answer, spots: [{ ...answer.spots[0], lat: 33.5, lng: 126.5 }] },
-    });
-    const tree = mount(mapped, null, noop, onOpenMap);
-
-    act(() => {
-      tree.root.findByProps({ testID: "travel-turn-map" }).props.onPress();
-    });
-
-    expect(onOpenMap).toHaveBeenCalledWith(mapped);
-  });
-
-  it("puts every result on the rail without a see-all link", () => {
+  it("puts every result in the list without a see-all link", () => {
     const many = Array.from({ length: 20 }, (_, i) => ({
       ...answer.spots[0],
       contentId: `c${i}`,
       title: `spot-${i}`,
     }));
     const tree = mount(turn({ answer: { ...answer, spots: many } }));
-    const rail = tree.root.findByType(FlatList);
-    expect(rail.props.data).toHaveLength(20);
+    expect(tree.root.findAllByType(ResultRow)).toHaveLength(20);
     expect(texts(tree).join("")).not.toContain("전체");
   });
 
-  it("routes every card tap through one handler, with no separate anchor button", () => {
+  it("routes every row tap through one handler, with no separate anchor button", () => {
     const onSpotTap = jest.fn();
-    const tree = mount(turn(), null, noop, noop, onSpotTap);
-    const card = tree.root.findByType(SpotCard);
+    const tree = mount(turn(), { onSpotTap });
+    const row = tree.root.findByType(ResultRow);
 
-    act(() => card.props.onPress());
+    act(() => row.props.onPress());
 
     expect(onSpotTap).toHaveBeenCalledWith(answer.spots[0]);
     expect(tree.root.findAllByProps({ testID: "travel-spot-anchor-126508" })).toHaveLength(0);
@@ -267,31 +249,34 @@ describe("ConversationTurn once the answer lands", () => {
 
   it("gives screen readers a detail action — a double tap never reaches onDouble there", () => {
     const onSpotDetail = jest.fn();
-    const tree = mount(turn(), null, noop, noop, noop, onSpotDetail);
-    const card = tree.root.findByType(SpotCard);
+    const tree = mount(turn(), { onSpotDetail });
+    const row = tree.root.findByType(ResultRow);
 
-    act(() => card.props.onDetail());
+    act(() => row.props.onDetail());
 
     expect(onSpotDetail).toHaveBeenCalledWith(answer.spots[0]);
   });
 
-  it("marks the anchored card selected and dims the rest", () => {
+  it("marks the anchored row selected and dims the rest", () => {
     const two = [answer.spots[0], { ...answer.spots[0], contentId: "126509", title: "다른계곡" }];
-    const tree = mount(turn({ answer: { ...answer, spots: two } }), "126508");
-    const cards = tree.root.findAllByType(SpotCard);
-    expect(cards).toHaveLength(2);
-    expect(cards[0].props.selected).toBe(true);
-    expect(cards[0].props.dimmed).toBe(false);
-    expect(cards[1].props.selected).toBe(false);
-    expect(cards[1].props.dimmed).toBe(true);
+    const tree = mount(turn({ answer: { ...answer, spots: two } }), {
+      anchorId: "126508",
+      anchored: true,
+    });
+    const rows = tree.root.findAllByType(ResultRow);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].props.selected).toBe(true);
+    expect(rows[0].props.dimmed).toBe(false);
+    expect(rows[1].props.selected).toBe(false);
+    expect(rows[1].props.dimmed).toBe(true);
   });
 
   it("leaves a turn alone when the anchor belongs to another turn", () => {
-    const tree = mount(turn(), "999999");
-    const cards = tree.root.findAllByType(SpotCard);
+    const tree = mount(turn(), { anchorId: "999999", anchored: true });
+    const rows = tree.root.findAllByType(ResultRow);
 
-    expect(cards.every((c) => c.props.dimmed === false)).toBe(true);
-    expect(cards.every((c) => c.props.selected === false)).toBe(true);
+    expect(rows.every((c) => c.props.dimmed === false)).toBe(true);
+    expect(rows.every((c) => c.props.selected === false)).toBe(true);
   });
 
   it("keeps follow-up chips out of the answer block", () => {
@@ -301,7 +286,7 @@ describe("ConversationTurn once the answer lands", () => {
 });
 
 describe("ConversationTurn when the request fails", () => {
-  it("shows an error line with a retry chip, no steps", () => {
+  it("shows an error line with a retry button, no steps", () => {
     const tree = mount(
       turn({ status: "failed", answer: null, errorMessage: "조건에 맞는 곳을 찾지 못했어요." }),
     );

@@ -41,7 +41,7 @@ function BrandSymbol() {
         <Path d="M20 18 L26.5 15" />
         <Path d="M20 18.5 L15.5 24" />
         <Rect x={26} y={11.4} width={8} height={5.2} rx={1.6} fill="#fff" stroke="none" />
-        <Circle cx={30} cy={14} r={1.3} fill={colors.ink} />
+        <Circle cx={30} cy={14} r={1.3} fill={colors.bg} />
       </Svg>
       <View style={styles.symDot} />
     </View>
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
     width: 70,
     height: 70,
     borderRadius: 16,
-    backgroundColor: colors.ink,
+    backgroundColor: colors.raiseStrong,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: spacing.lg,

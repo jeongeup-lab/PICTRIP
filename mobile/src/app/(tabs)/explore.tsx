@@ -14,6 +14,6 @@ export default function ExploreScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.ink },
+  root: { flex: 1, backgroundColor: colors.bg },
   body: { flex: 1 },
 });

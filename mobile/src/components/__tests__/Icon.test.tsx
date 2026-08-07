@@ -38,6 +38,17 @@ describe("Icon", () => {
     },
   );
 
+  it.each(["grid", "bell", "download", "user-x", "heart-off", "settings"] as const)(
+    "renders %s",
+    async (name) => {
+      let r: renderer.ReactTestRenderer;
+      await act(async () => {
+        r = renderer.create(<Icon name={name} />);
+      });
+      expect(r!.toJSON()).toBeTruthy();
+    },
+  );
+
   it("renders chevron-down", async () => {
     let r: renderer.ReactTestRenderer;
     await act(async () => {

@@ -1,14 +1,31 @@
 import { SEOUL_CITY_HALL } from "@/constants/map";
 
-export const PIN_INK = "#171719";
-export const PIN_ACCENT = "#E60023";
+export const PIN_INK = "#2B3037";
+export const PIN_STROKE = "#8D949E";
+export const PIN_ACCENT = "#FF3B53";
+export const PIN_RESULT = "#4A9EFF";
 
 export const KOREA_BOUNDS = { swLat: 33.0, swLng: 124.5, neLat: 38.7, neLng: 132.0 };
 export const KOREA_MAX_LEVEL = 12;
 
-export function buildKakaoMapHtml(jsKey: string, interactive = true, accentDot = false): string {
+/** Kakao ships no dark basemap, so the tile layer is inverted and the overlays
+ *  are inverted back. Keep both filters identical or the pins drift in hue. */
+export const DARK_FILTER = "invert(1) hue-rotate(180deg)";
+
+export interface KakaoMapOptions {
+  interactive?: boolean;
+  accentDot?: boolean;
+  dark?: boolean;
+}
+
+export function buildKakaoMapHtml(jsKey: string, options: KakaoMapOptions = {}): string {
+  const { interactive = true, accentDot = false, dark = false } = options;
   const { lat, lng } = SEOUL_CITY_HALL;
-  const dotColor = accentDot ? "#E60023" : "#fff";
+  const dotColor = accentDot ? PIN_ACCENT : "#fff";
+  const darkCss = dark
+    ? `#map{filter:${DARK_FILTER}}
+       .pin,.sel,.me,#msg{filter:${DARK_FILTER}}`
+    : "";
   const gestures = interactive
     ? `map.setMaxLevel(${KOREA_MAX_LEVEL});
        kakao.maps.event.addListener(map,'drag',clampCenter);
@@ -26,20 +43,24 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true, accentDot =
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <style>
   html,body,#map{margin:0;padding:0;width:100%;height:100%;overflow:hidden}
-  .pin{width:28px;height:28px;background:${PIN_INK};border:2px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 1px 3px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center}
+  .pin{width:28px;height:28px;background:${PIN_INK};border:2px solid ${PIN_STROKE};border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 1px 3px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center}
   .pin .g{transform:rotate(45deg);width:15px;height:15px;display:flex;align-items:center;justify-content:center}
   .pin svg{width:15px;height:15px;display:block}
+  .pin.anchor{width:34px;height:34px;border-color:#fff}
+  .pin.anchor .g{width:18px;height:18px}
+  .pin.anchor svg{width:18px;height:18px}
   .sel{position:relative;width:28px;height:28px;display:block}
-  .sel .lab{position:absolute;top:30px;left:50%;transform:translateX(-50%);font:700 11px -apple-system,sans-serif;color:#171719;background:rgba(255,255,255,.92);border-radius:5px;padding:2px 7px;box-shadow:0 1px 4px rgba(23,23,25,.14);white-space:nowrap}
-  .me{width:16px;height:16px;background:#2D7DF6;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 6px rgba(45,125,246,.25)}
+  .sel .lab{position:absolute;top:30px;left:50%;transform:translateX(-50%);font:700 11px -apple-system,sans-serif;color:#F4F5F7;background:rgba(20,22,26,.88);border-radius:5px;padding:2px 7px;box-shadow:0 1px 4px rgba(0,0,0,.4);white-space:nowrap}
+  .me{width:16px;height:16px;background:#4A9EFF;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 6px rgba(74,158,255,.25)}
   #msg{position:absolute;top:0;left:0;right:0;font:14px -apple-system,sans-serif;color:#8a8a8e;padding:16px;text-align:center;z-index:10}
+  ${darkCss}
 </style>
 </head>
 <body>
 <div id="map"></div>
 <div id="msg"></div>
 <script>
-  var map, pins = [], me = null, lastSpots = [], selectedId = null;
+  var map, pins = [], me = null, lastSpots = [], selectedId = null, anchorId = null;
   var GLYPHS = {
     attraction: '<path d="M3 18l5-8 3 4 3-5 4 9z"/>',
     food: '<path d="M6 3v8M9 3v8M7.5 11v10M16 3c-1.4 0-2 2.2-2 5s.6 4 2 4v9"/>',
@@ -48,6 +69,7 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true, accentDot =
     shopping: '<path d="M6 8h10l-1 12H7zM9 8V6a3 3 0 0 1 6 0v2"/>'
   };
   var DOT = ${JSON.stringify(dotColor)};
+  var C = { ink:${JSON.stringify(PIN_INK)}, accent:${JSON.stringify(PIN_ACCENT)}, result:${JSON.stringify(PIN_RESULT)} };
   function glyphSvg(cat){
     var p = GLYPHS[cat] || '<circle cx="12" cy="12" r="3" fill="'+DOT+'" stroke="none"/>';
     return '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
@@ -68,12 +90,15 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true, accentDot =
     var b = new kakao.maps.LatLngBounds(new kakao.maps.LatLng(sw.lat,sw.lng), new kakao.maps.LatLng(ne.lat,ne.lng));
     map.setBounds(b, pad.top||0, pad.right||0, pad.bottom||0, pad.left||0); }
   function esc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-  function pinEl(s, sel){
+  /** anchor = the place the question is pinned to, result = what the answer found. */
+  function pinEl(s, sel, isAnchor, anchored){
     var pin = document.createElement('div');
-    pin.className='pin';
+    pin.className = isAnchor ? 'pin anchor' : 'pin';
     pin.innerHTML = '<span class="g">'+glyphSvg(s.categoryGroup)+'</span>';
-    if(!sel) return pin;
-    pin.style.background=${JSON.stringify(PIN_ACCENT)};
+    if(isAnchor) pin.style.background = C.accent;
+    else if(anchored) pin.style.background = C.result;
+    if(!sel && !isAnchor) return pin;
+    if(sel && !isAnchor) pin.style.background = C.accent;
     var wrap = document.createElement('div');
     wrap.className='sel';
     wrap.appendChild(pin);
@@ -85,11 +110,14 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true, accentDot =
   }
   function renderPins(){
     if(!map) return; clearPins();
+    var anchored = anchorId != null;
     lastSpots.forEach(function(s){
       if(s.mapy==null||s.mapx==null) return;
-      var sel = selectedId!=null && String(s.contentId)===selectedId;
-      var el = pinEl(s, sel);
-      var ov = new kakao.maps.CustomOverlay({ position:new kakao.maps.LatLng(s.mapy,s.mapx), content:el, yAnchor:1, zIndex: sel?10:1 });
+      var id = String(s.contentId);
+      var isAnchor = anchored && id===anchorId;
+      var sel = selectedId!=null && id===selectedId;
+      var el = pinEl(s, sel, isAnchor, anchored);
+      var ov = new kakao.maps.CustomOverlay({ position:new kakao.maps.LatLng(s.mapy,s.mapx), content:el, yAnchor:1, zIndex: isAnchor?20:(sel?10:1) });
       ov.setMap(map);
       el.addEventListener('click', function(){ post('pin_tap',{contentId:s.contentId}); });
       pins.push(ov);
@@ -97,6 +125,7 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true, accentDot =
   }
   function setPins(spots){ lastSpots = spots||[]; renderPins(); }
   function setSelected(id){ selectedId = (id==null?null:String(id)); renderPins(); }
+  function setAnchor(id){ anchorId = (id==null?null:String(id)); renderPins(); }
   function setUserMarker(lat,lng){
     if(me){ me.setMap(null); me=null; }
     if(lat==null||!map) return;
@@ -108,6 +137,7 @@ export function buildKakaoMapHtml(jsKey: string, interactive = true, accentDot =
     if(m.cmd==='setCenter') setCenter(m.lat,m.lng);
     else if(m.cmd==='setPins') setPins(m.spots);
     else if(m.cmd==='setSelected') setSelected(m.contentId);
+    else if(m.cmd==='setAnchor') setAnchor(m.contentId);
     else if(m.cmd==='setUserMarker') setUserMarker(m.lat,m.lng);
     else if(m.cmd==='fitBounds') fitBounds(m.sw,m.ne,m.pad||{});
   }catch(_){} }

@@ -38,7 +38,13 @@ export type IconName =
   | "arrow-down"
   | "arrow-up"
   | "plus"
-  | "chat";
+  | "chat"
+  | "grid"
+  | "bell"
+  | "download"
+  | "user-x"
+  | "heart-off"
+  | "settings";
 
 interface IconProps {
   name: IconName;
@@ -118,6 +124,20 @@ const PATHS: Record<IconName, IconSpec> = {
   "arrow-up": { d: "M12 19V5M5 12l7-7 7 7" },
   plus: { d: "M12 6v12M6 12h12" },
   chat: { d: "M20 12a7.5 7.5 0 0 1-10.9 6.7L4 20l1.4-4.2A7.5 7.5 0 1 1 20 12z" },
+  grid: { d: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" },
+  bell: { d: "M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6zM10 19a2 2 0 0 0 4 0" },
+  download: { d: "M4 13v6h16v-6M12 3v11M8 10l4 4 4-4" },
+  "user-x": {
+    d: "M5 20a7 7 0 0 1 9-6.7M16 15l5 5M21 15l-5 5",
+    circles: [{ cx: 11, cy: 8, r: 3.2 }],
+  },
+  "heart-off": {
+    d: "M12 20s-7-4.5-7-9.5A3.5 3.5 0 0 1 12 7a3.5 3.5 0 0 1 7 3.5C19 15.5 12 20 12 20zM4 4l16 16",
+  },
+  settings: {
+    d: "M12 2.5v3M12 18.5v3M4.6 6.8l2.6 1.5M16.8 15.7l2.6 1.5M4.6 17.2l2.6-1.5M16.8 8.3l2.6-1.5",
+    circles: [{ cx: 12, cy: 12, r: 3 }],
+  },
 };
 
 export function Icon({ name, size = 22, color = colors.ink, strokeWidth = 1.9 }: IconProps) {

@@ -1,11 +1,12 @@
 import renderer, { act } from "react-test-renderer";
 import { Text } from "react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import TravelScreen, { TAGLINE } from "@/app/(tabs)/travel";
+import TravelScreen, { GREETING, TAGLINE } from "@/app/(tabs)/travel";
 import { askAgent, type AgentAnswer, type QueryIntent } from "@/features/travel/api";
 import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
 import { useConversation, type Turn } from "@/features/travel/stores/conversation-store";
-import { useTravelMap } from "@/features/travel/stores/map-store";
+import { useTravelAnchor } from "@/features/travel/stores/anchor-store";
+import { KakaoWebMap } from "@/features/map/components/KakaoWebMap";
 import { DOUBLE_TAP_MS } from "@/features/travel/hooks/use-card-tap";
 import { PHOTO_PICK_FAILED, PHOTO_SHOOT_FAILED } from "@/features/travel/lib/agent-errors";
 import {
@@ -18,6 +19,7 @@ import {
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
 jest.mock("react-native-safe-area-context", () => ({
   SafeAreaView: (props: { children?: unknown }) => props.children,
+  useSafeAreaInsets: () => ({ top: 44, bottom: 34, left: 0, right: 0 }),
 }));
 jest.mock("@/features/travel/hooks/use-nearby-coords", () => ({ useNearbyCoords: jest.fn() }));
 jest.mock("@/features/travel/usecases/pick-travel-photo", () => ({
@@ -157,6 +159,7 @@ let client: QueryClient;
 beforeEach(() => {
   jest.clearAllMocks();
   useConversation.getState().clear();
+  useTravelAnchor.getState().clear();
   useNearbyCoordsMock.mockReturnValue({
     coords: COORDS,
     phase: "ready",
@@ -199,10 +202,8 @@ function pressable(tree: renderer.ReactTestRenderer, testID: string) {
     .find((node) => typeof node.props.onPress === "function");
 }
 
-function greeting(tree: renderer.ReactTestRenderer) {
-  return tree.root
-    .findAllByProps({ testID: "travel-greeting" })
-    .find((node) => node.props.importantForAccessibility !== undefined)!;
+function greeted(tree: renderer.ReactTestRenderer) {
+  return tree.root.findAllByProps({ testID: "travel-greeting" }).length > 0;
 }
 
 async function press(tree: renderer.ReactTestRenderer, testID: string) {
@@ -224,21 +225,28 @@ async function pressSave(tree: renderer.ReactTestRenderer, contentId: string) {
 }
 
 describe("TravelScreen empty state", () => {
-  it("keeps the dock — composer and starter chips — on screen with no turns yet", async () => {
+  it("keeps the search field and starter chips in the sheet with no turns yet", async () => {
     const tree = await mount();
 
     expect(useConversation.getState().turns).toHaveLength(0);
-    expect(greeting(tree).props.importantForAccessibility).toBe("auto");
+    expect(greeted(tree)).toBe(true);
     expect(tree.root.findAllByProps({ testID: "travel-mascot" }).length).toBeGreaterThan(0);
     expect(tree.root.findAllByProps({ testID: "travel-input" }).length).toBeGreaterThan(0);
     expect(pressable(tree, "travel-chip-근처 맛집")).toBeDefined();
+  });
+
+  it("puts the map behind the sheet from the first frame", async () => {
+    const tree = await mount();
+
+    expect(tree.root.findAllByType(KakaoWebMap)).toHaveLength(1);
+    expect(tree.root.findAllByProps({ testID: "travel-sheet" }).length).toBeGreaterThan(0);
   });
 
   it("keeps the invitation and puts the brand line under it, not in its place", async () => {
     const tree = await mount();
     const lines = tree.root.findAllByType(Text).map((n) => String(n.props.children ?? ""));
 
-    expect(lines.join("")).toContain("어디로 갈까요");
+    expect(lines.join("")).toContain(GREETING);
     expect(tree.root.findAllByProps({ children: TAGLINE }).length).toBeGreaterThan(0);
   });
 
@@ -251,7 +259,7 @@ describe("TravelScreen empty state", () => {
     expect(useConversation.getState().turns).toHaveLength(1);
     expect(tree.root.findAllByProps({ testID: "travel-send" })).toHaveLength(before);
     expect(tree.root.findAllByProps({ testID: "travel-input" }).length).toBeGreaterThan(0);
-    expect(greeting(tree).props.importantForAccessibility).toBe("no-hide-descendants");
+    expect(greeted(tree)).toBe(false);
   });
 });
 
@@ -736,24 +744,28 @@ describe("TravelScreen anchored follow-ups", () => {
 });
 
 describe("TravelScreen empty-screen start", () => {
-  it("keeps the empty screen to the greeting — no photo call to action", async () => {
+  it("offers the quick actions next to the greeting", async () => {
     const tree = await mount();
 
-    expect(tree.root.findAllByProps({ testID: "travel-start-photo" })).toHaveLength(0);
-    expect(tree.root.findByProps({ testID: "travel-greeting" }).props.pointerEvents).toBe(
-      "box-none",
-    );
+    expect(pressable(tree, "travel-quick-photo")).toBeDefined();
+    expect(pressable(tree, "travel-quick-festival")).toBeDefined();
     expect(tree.root.findAllByProps({ testID: "travel-attach" }).length).toBeGreaterThan(0);
+  });
+
+  it("sends the festival quick action as a prepared intent", async () => {
+    const tree = await mount();
+
+    await press(tree, "travel-quick-festival");
+
+    expect(askAgentMock.mock.calls[0][0].intent?.festivalOnly).toBe(true);
   });
 
   it("takes the start actions out of reach once the conversation begins", async () => {
     useConversation.setState({ turns: [answeredTurn], busy: false });
     const tree = await mount();
 
-    const greeting = tree.root.findByProps({ testID: "travel-greeting" });
-    expect(greeting.props.pointerEvents).toBe("none");
-    expect(greeting.props.importantForAccessibility).toBe("no-hide-descendants");
-    expect(greeting.props.accessibilityElementsHidden).toBe(true);
+    expect(greeted(tree)).toBe(false);
+    expect(pressable(tree, "travel-quick-photo")).toBeUndefined();
   });
 
   it("asks for location only when the system has not decided yet", async () => {
@@ -775,6 +787,49 @@ describe("TravelScreen empty-screen start", () => {
     const tree = await mount();
 
     expect(tree.root.findAllByProps({ testID: "travel-start-location" })).toHaveLength(0);
+  });
+});
+
+describe("TravelScreen anchor handed over from a spot detail", () => {
+  const handed = {
+    contentId: "126508",
+    title: "무릉계곡",
+    regionLabel: "강원도 동해시",
+    imageUrl: null,
+    tag: null,
+    lat: 37.5,
+    lng: 129.0,
+  };
+
+  it("opens on the anchor preview instead of the greeting", async () => {
+    useTravelAnchor.getState().pick(handed);
+    const tree = await mount();
+
+    expect(greeted(tree)).toBe(false);
+    expect(tree.root.findAllByProps({ testID: "travel-anchor-preview" }).length).toBeGreaterThan(0);
+    expect(tree.root.findAllByProps({ testID: "travel-anchor-banner" }).length).toBeGreaterThan(0);
+  });
+
+  it("asks about the handed-over spot with no earlier turn to lean on", async () => {
+    useTravelAnchor.getState().pick(handed);
+    const tree = await mount();
+
+    await press(tree, "travel-chip-근처 맛집");
+
+    expect(askAgentMock.mock.calls[0][0].anchor).toEqual({
+      contentId: "126508",
+      action: "food",
+    });
+  });
+
+  it("brings the start screen back when the anchor is released", async () => {
+    useTravelAnchor.getState().pick(handed);
+    const tree = await mount();
+
+    await press(tree, "travel-anchor-release");
+
+    expect(useTravelAnchor.getState().spot).toBeNull();
+    expect(greeted(tree)).toBe(true);
   });
 });
 
@@ -901,51 +956,82 @@ describe("TravelScreen map", () => {
     answer: { ...ANSWER, spots: pinned },
   };
 
-  const openMap = async (tree: Awaited<ReturnType<typeof mount>>) => {
-    await act(async () => {
-      tree.root.findByProps({ testID: "travel-turn-map" }).props.onPress();
-    });
-  };
+  const map = (tree: Awaited<ReturnType<typeof mount>>) => tree.root.findByType(KakaoWebMap);
 
-  beforeEach(() => useTravelMap.getState().clear());
-
-  it("leaves the map route alone until the turn map is tapped", async () => {
+  it("pins the newest answer on the background map — no separate map route", async () => {
     const { router } = jest.requireMock("expo-router") as { router: { push: jest.Mock } };
     useConversation.setState({ turns: [mapTurn], busy: false });
-    await mount();
+    const tree = await mount();
 
+    expect(map(tree).props.pins.map((p: { contentId: string }) => p.contentId)).toEqual([
+      "126508",
+      "126509",
+    ]);
     expect(router.push).not.toHaveBeenCalled();
-    expect(useTravelMap.getState().spots).toHaveLength(0);
   });
 
-  it("pushes the map screen with the pinned results of that turn", async () => {
-    const { router } = jest.requireMock("expo-router") as { router: { push: jest.Mock } };
-    useConversation.setState({ turns: [mapTurn], busy: false });
-    const tree = await mount();
-
-    await openMap(tree);
-
-    expect(router.push).toHaveBeenCalledWith("/travel-map");
-    const state = useTravelMap.getState();
-    expect(state.spots.map((s) => s.spot.contentId)).toEqual(["126508", "126509"]);
-    expect(state.question).toBe("제주에서 한적한 곳");
-    expect(state.selectedId).toBe("126508");
-  });
-
-  it("keeps the map on the stack instead of a modal over the chat", async () => {
-    useConversation.setState({ turns: [mapTurn], busy: false });
-    const tree = await mount();
-
-    await openMap(tree);
-
-    expect(tree.root.findAllByProps({ testID: "travel-map-screen" })).toHaveLength(0);
-  });
-
-  it("offers no map when the answer carries no coordinates", async () => {
+  it("leaves the map bare when the answer carries no coordinates", async () => {
     useConversation.setState({ turns: [answeredTurn], busy: false });
     const tree = await mount();
 
-    expect(tree.root.findAllByProps({ testID: "travel-turn-map" })).toHaveLength(0);
+    expect(map(tree).props.pins).toHaveLength(0);
+    expect(map(tree).props.fit).toBeNull();
+  });
+
+  it("anchors the tapped pin and marks it apart from the results", async () => {
+    useConversation.setState({ turns: [mapTurn], busy: false });
+    const tree = await mount();
+
+    await act(async () => map(tree).props.onPinTap("126509"));
+
+    expect(useTravelAnchor.getState().spot?.contentId).toBe("126509");
+    expect(map(tree).props.anchorId).toBe("126509");
+    expect(tree.root.findAllByProps({ testID: "travel-anchor-preview" }).length).toBeGreaterThan(0);
+  });
+
+  it("names what is pinned so a dropped sheet still explains the map", async () => {
+    useConversation.setState({ turns: [mapTurn], busy: false });
+    const tree = await mount();
+
+    const card = tree.root.findByProps({ testID: "travel-map-summary" });
+    const lines = card.findAllByType(Text).map((n) => String(n.props.children ?? ""));
+
+    expect(lines[0]).toBe("제주에서 한적한 곳");
+    expect(lines[1]).toContain("2곳");
+  });
+
+  it("keeps the map summary away until an answer lands", async () => {
+    const tree = await mount();
+
+    expect(tree.root.findAllByProps({ testID: "travel-map-summary" })).toHaveLength(0);
+  });
+
+  it("ignores a pin tap for a spot that is not on the map", async () => {
+    useConversation.setState({ turns: [mapTurn], busy: false });
+    const tree = await mount();
+
+    await act(async () => map(tree).props.onPinTap("999999"));
+
+    expect(useTravelAnchor.getState().spot).toBeNull();
+  });
+
+  it("keeps the anchor pinned even when it is not in the newest answer", async () => {
+    useConversation.setState({ turns: [mapTurn], busy: false });
+    useTravelAnchor.getState().pick({
+      contentId: "outside",
+      title: "소매물도",
+      regionLabel: "경남 통영시",
+      imageUrl: null,
+      tag: null,
+      lat: 34.6,
+      lng: 128.5,
+    });
+    const tree = await mount();
+
+    expect(map(tree).props.pins.map((p: { contentId: string }) => p.contentId)).toContain(
+      "outside",
+    );
+    expect(map(tree).props.anchorId).toBe("outside");
   });
 });
 

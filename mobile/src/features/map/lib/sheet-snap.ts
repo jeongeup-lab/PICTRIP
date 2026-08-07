@@ -1,4 +1,6 @@
-export type SheetSnap = "peek" | "half" | "full";
+import { snapYFromVisible, type SheetSnap } from "@/lib/sheet-snap";
+
+export type { SheetSnap };
 
 export const HANDLE_ZONE_PX = 30;
 export const CHIPS_PX = 46;
@@ -13,12 +15,6 @@ export function sheetSnapY(
   screenH: number,
   tabBarPx: number = DEFAULT_TAB_BAR_PX,
 ): Record<SheetSnap, number> {
-  const full = screenH * 0.08;
-  const peekVisible = HANDLE_ZONE_PX + CHIPS_PX + CARD_PX + PEEK_MARGIN_PX + tabBarPx;
-  const halfVisible = peekVisible + CARD_PX;
-  return {
-    peek: screenH - peekVisible,
-    half: Math.max(full + 1, screenH - halfVisible),
-    full,
-  };
+  const peek = HANDLE_ZONE_PX + CHIPS_PX + CARD_PX + PEEK_MARGIN_PX + tabBarPx;
+  return snapYFromVisible(screenH, { peek, half: peek + CARD_PX });
 }

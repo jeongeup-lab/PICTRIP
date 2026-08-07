@@ -27,12 +27,15 @@ interface Props {
   fit?: FitBounds | null;
   pins: NearbySpot[];
   selectedId?: string | null;
+  /** The place a follow-up question is pinned to — drawn accent, results turn blue. */
+  anchorId?: string | null;
   userLocation: LatLng | null;
   onReady?: () => void;
   onPinTap: (contentId: string) => void;
   onViewportChange?: (center: LatLng, bounds: Bounds) => void;
   interactive?: boolean;
   accentDot?: boolean;
+  dark?: boolean;
 }
 
 export function KakaoWebMap({
@@ -40,12 +43,14 @@ export function KakaoWebMap({
   fit = null,
   pins,
   selectedId = null,
+  anchorId = null,
   userLocation,
   onReady,
   onPinTap,
   onViewportChange,
   interactive = true,
   accentDot = false,
+  dark = true,
 }: Props) {
   const ref = useRef<WebView<object>>(null);
   const ready = useRef(false);
@@ -79,6 +84,9 @@ export function KakaoWebMap({
     if (ready.current) send({ cmd: "setSelected", contentId: selectedId });
   }, [selectedId]);
   useEffect(() => {
+    if (ready.current) send({ cmd: "setAnchor", contentId: anchorId });
+  }, [anchorId]);
+  useEffect(() => {
     if (ready.current)
       send({
         cmd: "setUserMarker",
@@ -109,6 +117,7 @@ export function KakaoWebMap({
           })),
         });
         send({ cmd: "setSelected", contentId: selectedId });
+        send({ cmd: "setAnchor", contentId: anchorId });
         send({
           cmd: "setUserMarker",
           lat: userLocation?.lat ?? null,
@@ -150,7 +159,7 @@ export function KakaoWebMap({
         style={styles.web}
         originWhitelist={["https://*", "http://*"]}
         source={{
-          html: buildKakaoMapHtml(KAKAO_JS_KEY, interactive, accentDot),
+          html: buildKakaoMapHtml(KAKAO_JS_KEY, { interactive, accentDot, dark }),
           baseUrl: KAKAO_WEB_ORIGIN,
         }}
         onMessage={onMessage}
