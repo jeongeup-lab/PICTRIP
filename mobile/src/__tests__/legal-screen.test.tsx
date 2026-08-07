@@ -5,7 +5,17 @@ import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { useConsents, useUpdateConsent } from "@/features/consent/queries";
 import { LEGAL_DOCS } from "@/features/legal/constants";
 
-jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
+jest.mock("expo-router", () => ({
+  router: { push: jest.fn(), back: jest.fn() },
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useEffect } = require("react") as typeof import("react");
+    useEffect(effect, [effect]);
+  },
+}));
+jest.mock("expo-location", () => ({
+  getForegroundPermissionsAsync: jest.fn().mockResolvedValue({ granted: false }),
+}));
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));

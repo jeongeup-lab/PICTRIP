@@ -1,5 +1,5 @@
 import renderer, { act } from "react-test-renderer";
-import SavedScreen, { UNSAVE_FAILED } from "@/app/saved";
+import SavedScreen, { NEAR_NEEDS_LOCATION, UNSAVE_FAILED } from "@/app/saved";
 import { useSavedList, useSaveMutation, useUnsaveMutation } from "@/features/saved/queries";
 import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
 import { SavedListRow } from "@/features/saved/components/SavedListRow";
@@ -150,6 +150,34 @@ describe("SavedScreen", () => {
     expect(toast.props.message).toBe(UNSAVE_FAILED);
     expect(toast.props.action).toBeNull();
     expect(save).not.toHaveBeenCalled();
+  });
+
+  it("stays on the previous sort when no fix can be obtained", async () => {
+    const ask = jest.fn().mockResolvedValue(false);
+    useNearbyCoordsMock.mockReturnValue({ coords: null, askable: true, ask });
+
+    const tree = await mount();
+    await press(tree, "sort-near");
+    await act(async () => undefined);
+
+    const chip = tree.root.findAll((n) => n.props.testID === "sort-near" && !!n.props.style)[0];
+    expect(JSON.stringify(chip.props.style)).not.toContain("chipOn");
+    const toast = tree.root.findAll(
+      (n) => n.props.testID === "unsave-toast" && typeof n.props.message === "string",
+    )[0];
+    expect(toast.props.message).toBe(NEAR_NEEDS_LOCATION);
+  });
+
+  it("says why it cannot sort by distance when the permission is already refused", async () => {
+    useNearbyCoordsMock.mockReturnValue({ coords: null, askable: false, ask: jest.fn() });
+
+    const tree = await mount();
+    await press(tree, "sort-near");
+
+    const toast = tree.root.findAll(
+      (n) => n.props.testID === "unsave-toast" && typeof n.props.message === "string",
+    )[0];
+    expect(toast.props.message).toBe(NEAR_NEEDS_LOCATION);
   });
 
   it("offers recently viewed spots when nothing is saved", async () => {
