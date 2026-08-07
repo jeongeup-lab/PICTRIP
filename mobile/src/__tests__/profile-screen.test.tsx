@@ -87,6 +87,7 @@ describe("ProfileTab", () => {
       saved: 2,
       regions: 2,
       days: daysSince(USER.createdAt, Date.now()),
+      partial: false,
     });
   });
 });

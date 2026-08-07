@@ -1,6 +1,6 @@
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Icon, type IconName } from "@/components/Icon";
-import type { ProfileStats } from "@/features/profile/lib/stats";
+import { countLabel, type ProfileStats, type StatKey } from "@/features/profile/lib/stats";
 import { colors, radii, spacing } from "@/constants/theme";
 
 interface Props {
@@ -9,7 +9,7 @@ interface Props {
 }
 
 interface Tile {
-  key: keyof ProfileStats;
+  key: StatKey;
   label: string;
   icon: IconName;
   accent?: boolean;
@@ -25,7 +25,8 @@ export function StatTiles({ stats, onPressSaved }: Props) {
   return (
     <View style={[styles.row, stats === null && styles.dim]} testID="stat-tiles">
       {TILES.map((tile) => {
-        const value = stats === null ? "—" : String(stats[tile.key]);
+        const value =
+          stats === null ? "—" : countLabel(stats[tile.key], tile.key !== "days" && stats.partial);
         const onPress = tile.key === "saved" && stats !== null ? onPressSaved : undefined;
         return (
           <Pressable
