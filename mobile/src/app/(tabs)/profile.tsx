@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { View, Pressable, ScrollView, Linking, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as WebBrowser from "expo-web-browser";
 import { router, useFocusEffect } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { ListGroup } from "@/components/ListGroup";
@@ -22,6 +23,8 @@ import { colors, spacing } from "@/constants/theme";
 
 export const GUEST_NOTICE =
   "검색 · 지도 · 사진으로 찾기는 그대로 쓸 수 있어요. 스크랩과 기록만 계정이 필요해요.";
+
+const SUPPORT_URL = "https://pictrip.org/support";
 
 export default function ProfileTab() {
   const insets = useSafeAreaInsets();
@@ -116,6 +119,20 @@ export default function ProfileTab() {
             title="약관·정책"
             chevron
             onPress={() => router.push("/legal")}
+          />
+          {isAuthenticated ? (
+            <ListRow
+              icon="check"
+              title="동의 관리"
+              chevron
+              onPress={() => router.push("/consent")}
+            />
+          ) : null}
+          <ListRow
+            icon="chat"
+            title="문의"
+            chevron
+            onPress={() => void WebBrowser.openBrowserAsync(SUPPORT_URL)}
           />
           <ListRow icon="info" title="앱 버전" value={APP_VERSION} />
         </ListGroup>
