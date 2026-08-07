@@ -1,6 +1,7 @@
 # 0012. 여행 탭에 실제 지도를 들이고, 카드 탭을 앵커로 되돌린다
 
-- 상태: 채택
+- 상태: 일부 대체 — 전체 지도 라우트는
+  [0015](0015-travel-and-profile-go-dark-on-one-map.md) 가 상시 지도로 바꿨다
 - 날짜: 2026-08-06
 - 관련: [travel-tab](../reference/travel-tab.md), [api](../reference/api.md),
   [0009 여행 탭 대화형 에이전트](0009-travel-tab-conversational-agent.md),
