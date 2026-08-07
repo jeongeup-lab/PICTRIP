@@ -63,6 +63,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await clearRefreshToken();
     set({ accessToken: null, user: null, isAuthenticated: false });
     queryClient.removeQueries({ queryKey: ["saved"] });
+    queryClient.removeQueries({ queryKey: ["consents"] });
   },
 
   hydrate: async () => {

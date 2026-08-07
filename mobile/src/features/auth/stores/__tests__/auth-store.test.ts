@@ -46,6 +46,18 @@ describe("auth-store", () => {
     await useAuthStore.getState().clear();
   });
 
+  it("drops every account-scoped cache on sign out so the next account cannot read it", async () => {
+    const { queryClient } =
+      jest.requireActual<typeof import("@/lib/query-client")>("@/lib/query-client");
+    queryClient.setQueryData(["saved"], [{ contentId: "1" }]);
+    queryClient.setQueryData(["consents"], { photoConsent: true, termsVersion: "2026-06-01" });
+
+    await useAuthStore.getState().clear();
+
+    expect(queryClient.getQueryData(["saved"])).toBeUndefined();
+    expect(queryClient.getQueryData(["consents"])).toBeUndefined();
+  });
+
   it("setSession puts access token in memory and persists refresh", async () => {
     await useAuthStore.getState().setSession(pair as never);
     expect(useAuthStore.getState().accessToken).toBe("acc");
