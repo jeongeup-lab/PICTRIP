@@ -22,7 +22,8 @@ export function buildKakaoMapHtml(jsKey: string, options: KakaoMapOptions = {}):
   const dotColor = accentDot ? PIN_ACCENT : "#fff";
   const darkCss = dark
     ? `#map{filter:${DARK_FILTER}}
-       .pin,.sel,.me,#msg{filter:${DARK_FILTER}}`
+       .pin,.sel,.me,#msg{filter:${DARK_FILTER}}
+       .sel .pin{filter:none}`
     : "";
   const gestures = interactive
     ? `map.setMaxLevel(${KOREA_MAX_LEVEL});

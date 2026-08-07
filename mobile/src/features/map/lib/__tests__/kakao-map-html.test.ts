@@ -84,6 +84,10 @@ describe("buildKakaoMapHtml", () => {
     expect(darkHtml).toContain(`.pin,.sel,.me,#msg{filter:${DARK_FILTER}}`);
   });
 
+  it("undoes the dark filter once per pin, even where a pin sits inside a wrapper", () => {
+    expect(buildKakaoMapHtml("TESTKEY123", { dark: true })).toContain(".sel .pin{filter:none}");
+  });
+
   it("leaves the basemap untouched when dark is off", () => {
     expect(buildKakaoMapHtml("TESTKEY123")).not.toContain("filter:");
   });
