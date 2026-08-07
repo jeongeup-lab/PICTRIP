@@ -169,6 +169,7 @@ async def search_candidates(
     near: bool,
     indoor_only: bool = False,
     mood_ids: list[int] | None = None,
+    pool_sql: str | None = None,
 ) -> list[CandidateRow]:
     quiet = preference == "quiet"
 
@@ -186,6 +187,7 @@ async def search_candidates(
             lng=lng,
             indoor_only=indoor_only,
             mood_ids=mood_ids,
+            pool_sql=pool_sql,
         )
 
     if preference == "any":
@@ -198,15 +200,25 @@ async def search_candidates(
 
 
 async def search_food(
-    session: AsyncSession, *, action: str, region_prefixes: list[str]
+    session: AsyncSession,
+    *,
+    action: str,
+    region_prefixes: list[str],
+    preference: CrowdPreference = "any",
+    indoor_only: bool = False,
+    mood_ids: list[int] | None = None,
 ) -> list[CandidateRow]:
     pool = NearbyCategory.cafe if action == "cafe" else NearbyCategory.food
-    return await repositories.find_candidates(
+    return await search_candidates(
         session,
-        codes=None,
-        region_prefixes=region_prefixes or None,
-        limit=CANDIDATE_LIMIT,
-        order="id",
+        codes=[],
+        region_prefixes=region_prefixes,
+        preference=preference,
+        lat=None,
+        lng=None,
+        near=False,
+        indoor_only=indoor_only,
+        mood_ids=mood_ids,
         pool_sql=category_sql(pool),
     )
 

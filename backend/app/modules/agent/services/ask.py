@@ -721,6 +721,18 @@ async def _ask_with_question(
     )
 
 
+async def _locatable_focus(
+    session: AsyncSession, context: AskContext | None
+) -> CandidateRow | None:
+    if context is None or context.focusContentId is None:
+        return None
+    briefs = await repositories.load_candidates_by_ids(session, [context.focusContentId])
+    row = briefs.get(context.focusContentId)
+    if row is None or row.lat is None or row.lng is None:
+        return None
+    return row
+
+
 async def _ask_for_food(
     session: AsyncSession,
     kto: KtoClient | None,
@@ -734,10 +746,11 @@ async def _ask_for_food(
     legacy_client: bool,
 ) -> AskResponse:
     stale = context is not None and _named_a_new_region(intent, context)
-    if context is not None and context.focusContentId is not None and not stale:
+    focus = None if stale else await _locatable_focus(session, context)
+    if focus is not None:
         return await _ask_with_anchor(
             session,
-            AskAnchor(contentId=context.focusContentId, action=action),
+            AskAnchor(contentId=focus.content_id, action=action),
             lat=lat,
             lng=lng,
             prior_steps=steps,
@@ -762,8 +775,9 @@ async def _ask_for_food(
         )
     scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
     if scope.prefixes:
-        rows = await retrieve.search_food(session, action=action, region_prefixes=scope.prefixes)
-        return food_in_region(rows, scope.prefixes, action, steps=steps, intent=intent)
+        return await _food_across_region(
+            session, action, scope.prefixes, steps=steps, intent=intent
+        )
     if lat is not None and lng is not None:
         return await _ask_with_anchor(
             session,
@@ -774,6 +788,38 @@ async def _ask_for_food(
             carried_intent=intent,
         )
     return _talk_response(steps, intent, FOOD_NEEDS_ORIGIN_ANSWER, legacy_client=legacy_client)
+
+
+async def _food_across_region(
+    session: AsyncSession,
+    action: AnchorAction,
+    prefixes: list[str],
+    *,
+    steps: list[AskStep],
+    intent: QueryIntent,
+) -> AskResponse:
+    mood_ids = await repositories.find_mood_ids(session, list(intent.moodHints))
+    narrowed = bool(mood_ids) or intent.indoorOnly or intent.crowdPreference != "any"
+    rows = await retrieve.search_food(
+        session,
+        action=action,
+        region_prefixes=prefixes,
+        preference=intent.crowdPreference,
+        indoor_only=intent.indoorOnly,
+        mood_ids=mood_ids,
+    )
+    if rows or not narrowed:
+        return food_in_region(rows, prefixes, action, steps=steps, intent=intent)
+    unfiltered = await retrieve.search_food(session, action=action, region_prefixes=prefixes)
+    return food_in_region(
+        unfiltered, prefixes, action, steps=steps, intent=_without_food_filters(intent)
+    )
+
+
+def _without_food_filters(intent: QueryIntent) -> QueryIntent:
+    return intent.model_copy(
+        update={"crowdPreference": "any", "indoorOnly": False, "moodHints": []}
+    )
 
 
 async def _ask_around(

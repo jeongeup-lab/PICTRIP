@@ -22,6 +22,23 @@ class SimpleTitleRow:
     lng: float | None
 
 
+def _coordless_row():  # type: ignore[no-untyped-def]
+    from app.modules.agent.repositories import CandidateRow
+
+    return CandidateRow(
+        content_id="126198",
+        title="통영 세병관",
+        addr1="경상남도 통영시 세병로 27",
+        region_name="경상남도",
+        sigungu_name="통영시",
+        lat=None,
+        lng=None,
+        image_url=None,
+        cpyrht_div_cd="Type1",
+        concentration_rate=None,
+    )
+
+
 class _ExplodingSession:
     async def execute(self, *args: object, **kwargs: object) -> object:
         raise AssertionError("a detail turn must not run a search")
@@ -352,7 +369,7 @@ async def test_a_region_is_a_good_enough_origin_for_food(monkeypatch) -> None:
 
     seen: dict[str, object] = {}
 
-    async def fake_food(session, *, action, region_prefixes):  # type: ignore[no-untyped-def]
+    async def fake_food(session, *, action, region_prefixes, **axes):  # type: ignore[no-untyped-def]
         seen["action"] = action
         seen["prefixes"] = region_prefixes
         return []
@@ -541,7 +558,7 @@ async def test_a_new_region_beats_a_card_left_over_from_earlier(monkeypatch) -> 
     async def fake_region(session, *, hints):  # type: ignore[no-untyped-def]
         return retrieve.RegionScope(prefixes=["부산광역시"], sido_prefixes=["부산광역시"])
 
-    async def fake_food(session, *, action, region_prefixes):  # type: ignore[no-untyped-def]
+    async def fake_food(session, *, action, region_prefixes, **axes):  # type: ignore[no-untyped-def]
         seen["prefixes"] = region_prefixes
         return []
 
@@ -579,3 +596,174 @@ def test_an_empty_surrounding_keeps_the_asked_conditions() -> None:
 
     assert answer.intent.categoryKeywords == ["맛집"]
     assert answer.intent.regionHints == ["보령"]
+
+
+async def test_an_old_province_name_still_reaches_the_landmark(monkeypatch) -> None:
+    from app.modules.agent import naver
+    from app.modules.agent.services import geocode
+
+    seen: dict[str, object] = {}
+
+    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
+        seen["hint"] = region_hint
+        return []
+
+    async def fake_local(client, query, *, display=3):  # type: ignore[no-untyped-def]
+        seen["query"] = query
+        return [
+            naver.NaverPlace("속초해수욕장", None, "강원특별자치도 속초시", 38.19, 128.60),
+        ]
+
+    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
+    monkeypatch.setattr(geocode, "naver_search", fake_local)
+    monkeypatch.setattr(naver, "is_configured", lambda: True)
+
+    found = await geocode.locate(  # type: ignore[arg-type]
+        None, None, "속초해수욕장", region_hint="강원도"
+    )
+
+    assert seen["hint"] == "강원"
+    assert seen["query"] == "강원 속초해수욕장"
+    assert found is not None and round(found.lat, 2) == 38.19
+
+
+async def test_a_multi_word_region_hint_narrows_by_its_finest_token(monkeypatch) -> None:
+    from app.modules.agent.services import geocode
+
+    seen: dict[str, object] = {}
+
+    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
+        seen["hint"] = region_hint
+        return [SimpleTitleRow("속초해수욕장", 38.19, 128.60)]
+
+    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
+    found = await geocode.locate(  # type: ignore[arg-type]
+        None, None, "속초해수욕장", region_hint="강원도 속초"
+    )
+
+    assert seen["hint"] == "속초"
+    assert found is not None
+
+
+async def test_a_focus_card_without_coordinates_yields_to_the_named_region(monkeypatch) -> None:
+    from app.modules.agent import repositories
+    from app.modules.agent.services import retrieve
+
+    seen: dict[str, object] = {}
+
+    async def fake_scope(session, keywords):  # type: ignore[no-untyped-def]
+        return retrieve.CategoryScope(codes=[], matched=[])
+
+    async def fake_region(session, *, hints):  # type: ignore[no-untyped-def]
+        return retrieve.RegionScope(prefixes=["경상남도 통영시"], sido_prefixes=["경상남도"])
+
+    async def fake_food(session, *, action, region_prefixes, **axes):  # type: ignore[no-untyped-def]
+        seen["prefixes"] = region_prefixes
+        return []
+
+    async def fake_briefs(session, content_ids):  # type: ignore[no-untyped-def]
+        return {"126198": _coordless_row()}
+
+    monkeypatch.setattr(retrieve, "resolve_category_scope", fake_scope)
+    monkeypatch.setattr(retrieve, "resolve_region_scope", fake_region)
+    monkeypatch.setattr(retrieve, "search_food", fake_food)
+    monkeypatch.setattr(repositories, "load_candidates_by_ids", fake_briefs)
+
+    async def fake_extract(q, *, prior=None, prior_spots=None):  # type: ignore[no-untyped-def]
+        return QueryIntent(categoryKeywords=["맛집"], regionHints=["통영"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_extract)
+    answer = await ask_service.ask(
+        _ExplodingSession(),  # type: ignore[arg-type]
+        FakeRedis(),
+        None,
+        question="통영 맛집",
+        lat=None,
+        lng=None,
+        image_bytes=None,
+        image_mime=None,
+        context=AskContext(
+            intent=QueryIntent(regionHints=["통영"]),
+            spots=[SEBYEONGGWAN],
+            focusContentId="126198",
+        ),
+    )
+
+    assert seen["prefixes"] == ["경상남도 통영시"]
+    assert answer.totalCount == 0
+
+
+async def test_a_region_food_query_carries_the_other_conditions(monkeypatch) -> None:
+    from app.modules.agent import repositories
+    from app.modules.agent.services import retrieve
+
+    seen: dict[str, object] = {}
+
+    async def fake_food(session, *, action, region_prefixes, **axes):  # type: ignore[no-untyped-def]
+        seen.update(axes)
+        return [_coordless_row()]
+
+    async def fake_moods(session, codes):  # type: ignore[no-untyped-def]
+        return [7]
+
+    monkeypatch.setattr(retrieve, "search_food", fake_food)
+    monkeypatch.setattr(repositories, "find_mood_ids", fake_moods)
+
+    answer = await ask_service._food_across_region(
+        None,  # type: ignore[arg-type]
+        "food",
+        ["부산광역시"],
+        steps=[],
+        intent=QueryIntent(
+            categoryKeywords=["맛집"],
+            regionHints=["부산"],
+            crowdPreference="quiet",
+            indoorOnly=True,
+            moodHints=["sea"],
+        ),
+    )
+
+    assert seen["preference"] == "quiet"
+    assert seen["indoor_only"] is True
+    assert seen["mood_ids"] == [7]
+    assert answer.intent.crowdPreference == "quiet"
+
+
+async def test_a_region_food_answer_drops_conditions_it_could_not_apply(monkeypatch) -> None:
+    from app.modules.agent import repositories
+    from app.modules.agent.services import retrieve
+
+    async def fake_food(session, *, action, region_prefixes, **axes):  # type: ignore[no-untyped-def]
+        if (
+            axes.get("mood_ids")
+            or axes.get("indoor_only")
+            or axes.get("preference", "any") != "any"
+        ):
+            return []
+        return [_coordless_row()]
+
+    async def fake_moods(session, codes):  # type: ignore[no-untyped-def]
+        return [7]
+
+    monkeypatch.setattr(retrieve, "search_food", fake_food)
+    monkeypatch.setattr(repositories, "find_mood_ids", fake_moods)
+
+    answer = await ask_service._food_across_region(
+        None,  # type: ignore[arg-type]
+        "food",
+        ["부산광역시"],
+        steps=[],
+        intent=QueryIntent(
+            categoryKeywords=["맛집"],
+            regionHints=["부산"],
+            crowdPreference="quiet",
+            indoorOnly=True,
+            moodHints=["sea"],
+        ),
+    )
+
+    assert answer.totalCount == 1
+    assert answer.intent.crowdPreference == "any"
+    assert answer.intent.indoorOnly is False
+    assert answer.intent.moodHints == []
+    assert answer.intent.regionHints == ["부산"]
