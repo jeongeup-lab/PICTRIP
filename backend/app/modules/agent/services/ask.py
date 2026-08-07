@@ -724,7 +724,6 @@ async def _ask_for_food(
     context: AskContext | None,
     legacy_client: bool,
 ) -> AskResponse:
-    """원점 우선순위: 고른 카드 > 질문 속 장소 > 지역 > 내 좌표."""
     if context is not None and context.focusContentId is not None:
         return await _ask_with_anchor(
             session,
@@ -754,7 +753,7 @@ async def _ask_for_food(
     scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
     if scope.prefixes:
         rows = await retrieve.search_food(session, action=action, region_prefixes=scope.prefixes)
-        return _food_in_region(rows, scope.prefixes[0], action, steps=steps, intent=intent)
+        return food_in_region(rows, scope.prefixes, action, steps=steps, intent=intent)
     if lat is not None and lng is not None:
         return await _ask_with_anchor(
             session,
@@ -815,24 +814,25 @@ async def _ask_around(
     )
 
 
-def _food_in_region(
+def food_in_region(
     rows: list[CandidateRow],
-    region: str,
+    regions: list[str],
     action: AnchorAction,
     *,
     steps: list[AskStep],
     intent: QueryIntent,
 ) -> AskResponse:
     noun = ANCHOR_NOUNS[action]
+    where = " · ".join(regions)
     top = rows[: retrieve.RESULT_LIMIT]
     scanned = [
         *steps,
-        AskStep(tool="category_search", label=f"{region} {noun} 조회", badge=_count(rows)),
+        AskStep(tool="category_search", label=f"{where} {noun} 조회", badge=_count(rows)),
     ]
     if not top:
         return AskResponse(
             steps=scanned,
-            answer=[AnswerSegment(text=f"{region}에는 등록된 {noun}이 없어요.")],
+            answer=[AnswerSegment(text=f"{where}에는 등록된 {noun}이 없어요.")],
             spots=[],
             totalCount=0,
             intent=intent,
@@ -843,7 +843,7 @@ def _food_in_region(
     return AskResponse(
         steps=scanned,
         answer=[
-            AnswerSegment(text=f"{region} {noun} "),
+            AnswerSegment(text=f"{where} {noun} "),
             AnswerSegment(text=f"{len(spots)}곳", emphasis=True),
             AnswerSegment(text=" 찾았어요."),
         ],

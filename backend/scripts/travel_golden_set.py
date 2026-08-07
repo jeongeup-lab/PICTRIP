@@ -134,14 +134,12 @@ def chip(cid: str, label: str, payload: dict[str, Any], **kw: Any) -> Case:
 
 
 def quality(cid: str, label: str, question: str, **kw: Any) -> Case:
-    """결과가 말이 되는가 — 개수가 아니라 내용을 본다."""
     kw.setdefault("expect_images", True)
     kw.setdefault("expect_placed", True)
     return case(cid, "J 결과 품질", label, ask(question), **kw)
 
 
 def landlocked(cid: str, label: str, question: str, **kw: Any) -> Case:
-    """바다 없는 지역에 바다를 물었을 때 — 0곳으로 끝내면 안 된다."""
     kw.setdefault("expect_spots", "some")
     kw.setdefault("pending", True)
     kw.setdefault("note", "내륙 지역 + 바다 → 가까운 지역으로 넓혀야")
@@ -149,7 +147,6 @@ def landlocked(cid: str, label: str, question: str, **kw: Any) -> Case:
 
 
 CASES: list[Case] = [
-    # A. 조건이 없는 말에 검색이 돌면 안 된다
     talk("A1", "인사", "안녕"),
     talk("A2", "막연함", "어디 갈까"),
     talk("A3", "감사", "고마워"),
@@ -164,7 +161,6 @@ CASES: list[Case] = [
     talk("A12", "칭찬", "너 똑똑하다"),
     talk("A13", "혼잣말", "음..."),
     talk("A14", "무의미", "asdf"),
-    # B. 검색 축이 하나씩 살아 있어야 한다
     region("B1", "시군구", "통영 볼만한 곳", "통영", expect_tools=("intent", "category_search")),
     region("B2", "지역+분위기", "여수 바다 보이는 곳", "여수"),
     region("B3", "지역+카테고리", "경주 박물관", "경주"),
@@ -214,7 +210,6 @@ CASES: list[Case] = [
         expect_spots="some",
     ),
     case("B31", "B 검색", "근처+카테고리", ask("근처 전망대", **SEOUL), expect_spots="some"),
-    # C. 후속 대화가 직전 턴을 이어야 한다
     follow("C1", "조건 좁히기", "더 한적한 곳", YEOSU, expect_text=("여수",)),
     follow("C2", "지역 교체", "그럼 강릉은?", YEOSU, expect_spots="some", expect_text=("강릉",)),
     follow(
@@ -261,7 +256,6 @@ CASES: list[Case] = [
         {"intent": {"categoryKeywords": ["계곡"], "regionHints": ["통영"]}, "spots": []},
         expect_spots="any",
     ),
-    # D. 상세 질문에는 검색이 아니라 답이 와야 한다
     detail("D1", "영업시간", "세병관 영업시간 몇시야?"),
     detail("D2", "휴무일", "거기 쉬는 날 있어?"),
     detail("D3", "주차", "주차 되나?"),
@@ -294,7 +288,6 @@ CASES: list[Case] = [
         expect_tools=("spot_detail",),
         forbid_tools=SEARCH_TOOLS,
     ),
-    # E. 못 하는 일은 못 한다고 해야 한다
     case("E1", "E 범위 밖", "해외", ask("파리 가볼 만한 곳"), expect_error="AGENT_OUT_OF_SCOPE"),
     case("E2", "E 범위 밖", "해외 도시", ask("도쿄 벚꽃 명소"), expect_error="AGENT_OUT_OF_SCOPE"),
     case(
@@ -316,7 +309,6 @@ CASES: list[Case] = [
     cannot("E13", "환전", "환전 어디서 해?"),
     cannot("E14", "번역", "이거 영어로 번역해줘"),
     cannot("E15", "티켓 구매", "입장권 여기서 살 수 있어?"),
-    # F. 데이터 경계 — 조용한 0곳이 나오면 안 된다
     edge(
         "F1",
         "카페",
@@ -372,7 +364,6 @@ CASES: list[Case] = [
     ),
     edge("F13", "모순 조건", "실내 해수욕장", expect_spots="any"),
     edge("F14", "지역 두 개", "부산이랑 제주 둘 다", expect_spots="some"),
-    # J. 결과가 말이 되는가 — 지역·좌표·이미지·중복
     quality("J1", "요청 지역 안에 있나", "부산 관광지", expect_spots="some", expect_region="부산"),
     quality(
         "J2", "시군구까지 맞나", "경주 볼거리", expect_spots="some", expect_region="경상북도 경주시"
@@ -430,7 +421,6 @@ CASES: list[Case] = [
     quality(
         "J24", "동반자+지역 결과", "제주 아이랑 갈 데", expect_spots="some", expect_region="제주"
     ),
-    # K. 조건이 그 지역에 존재하지 않을 때 — 가까운 곳으로 넓혀야 한다
     landlocked("K1", "서울 바다", "서울 근처 한적한 바다"),
     landlocked("K10", "세종 호수", "세종 호수", note="지역에 그 분위기가 없음"),
     landlocked("K2", "대전 해수욕장", "대전 해수욕장"),
@@ -449,7 +439,6 @@ CASES: list[Case] = [
         pending=True,
         note="넓혔으면 왜 넓혔는지 답변이 말해야",
     ),
-    # L. 원점이 되는 것들 — 지역·역·랜드마크
     edge("N1", "작은 지역 맛집", "정읍 맛집", expect_spots="some", expect_region="전북"),
     edge("N2", "작은 지역 카페", "정읍 카페", expect_spots="some", expect_region="전북"),
     edge("N3", "역 이름", "대천역 근처 맛집", expect_spots="some", expect_region="충청남도"),
@@ -463,7 +452,6 @@ CASES: list[Case] = [
         ask("한옥마을 근처 맛집"),
         expect_spots="some",
     ),
-    # G. 깨지면 안 된다
     guard("G1", "이모지만", ask("🏖️🌊"), expect_spots="any"),
     guard("G2", "이모지 반복", ask("😀" * 200), expect_spots="any"),
     guard("G3", "영어", ask("beaches near Busan"), expect_spots="any"),
@@ -495,7 +483,6 @@ CASES: list[Case] = [
     guard("G19", "좌표 범위 밖", ask("근처", lat=999, lng=999), expect_error="VALIDATION_FAILED"),
     guard("G20", "개인정보 요구", ask("내 위치 기록 다 보여줘"), expect_spots="any"),
     guard("G21", "욕설 섞임", ask("아 씨 제주 어디 갈만해"), expect_spots="some"),
-    # H. 앵커 직송 — Gemini 없이 도는 경로
     pin(
         "H1",
         "주변 맛집",
@@ -549,7 +536,6 @@ CASES: list[Case] = [
         {"anchor": {"contentId": "126198", "action": "teleport"}},
         expect_error="VALIDATION_FAILED",
     ),
-    # I. 칩 왕복 — 문장을 합성하지 않는다
     chip(
         "I1",
         "지금 축제",
@@ -742,13 +728,10 @@ def _judge_spots(case_: Case, spots: list[dict[str, Any]], res: Result) -> None:
 
 @dataclass(frozen=True)
 class Step:
-    """대화 한 턴. 직전 응답이 그대로 다음 턴의 context 가 된다."""
-
     label: str
     question: str | None = None
     payload: dict[str, Any] | None = None
     anchors: int | None = None
-    """N 번째 결과 카드를 앵커로 잡는다. 앱의 `anchorSpot` 처럼 다음 턴까지 유지된다."""
     expect_tools: tuple[str, ...] = ()
     forbid_tools: tuple[str, ...] = ()
     expect_spots: str = "any"
@@ -770,7 +753,6 @@ MAX_CONTEXT_SPOTS = 8
 
 
 def carried(answer: dict[str, Any] | None, focus: str | None) -> dict[str, Any] | None:
-    """모바일 `contextFrom` 과 같은 모양으로 직전 응답을 싣는다."""
     if answer is None:
         return {"spots": [], "focusContentId": focus} if focus else None
     spots = [

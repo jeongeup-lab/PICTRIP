@@ -456,3 +456,19 @@ async def test_the_origin_is_named_the_way_the_user_said_it(monkeypatch) -> None
 
     assert found is not None
     assert found.title == "대천역"
+
+
+def test_a_two_region_food_answer_names_both() -> None:
+    answer = ask_service.food_in_region(
+        [], ["부산광역시", "제주특별자치도"], "food", steps=[], intent=QueryIntent()
+    )
+
+    assert "부산광역시 · 제주특별자치도" in "".join(part.text for part in answer.answer)
+
+
+def test_a_two_region_food_step_names_both() -> None:
+    answer = ask_service.food_in_region(
+        [], ["부산광역시", "제주특별자치도"], "food", steps=[], intent=QueryIntent()
+    )
+
+    assert answer.steps[-1].label == "부산광역시 · 제주특별자치도 맛집 조회"

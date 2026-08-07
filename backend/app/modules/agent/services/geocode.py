@@ -33,7 +33,6 @@ def _bare(text: str) -> str:
 
 
 def names_match(asked: str, found: str) -> bool:
-    """찾은 이름이 물어본 이름을 실제로 담고 있어야 한다 — 비슷한 것으로는 부족하다."""
     wanted = _bare(asked)
     if not wanted:
         return False
@@ -52,15 +51,14 @@ async def locate(session: AsyncSession, kto: KtoClient | None, name: str) -> Loc
     for row in rows:
         if row.lat is not None and row.lng is not None and names_match(asked, row.title):
             return Located(title=row.title, lat=row.lat, lng=row.lng, source="kto")
-    hit = await _from_naver(asked)
+    hit = await _borrow_coords_from_naver(asked)
     if hit is not None:
         return hit
     logger.info("agent.geocode.miss", asked=asked, candidates=len(rows))
     return None
 
 
-async def _from_naver(asked: str) -> Located | None:
-    """상호명이 섞여 나오므로 이름은 사용자가 말한 대로 쓴다 — 좌표만 빌린다."""
+async def _borrow_coords_from_naver(asked: str) -> Located | None:
     if not naver.is_configured():
         return None
     try:
