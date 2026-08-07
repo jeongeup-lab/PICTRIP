@@ -106,7 +106,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   deleteAccount: async () => {
-    await deleteAccountRequest();
+    await deleteAccountRequest(await getRefreshToken());
     await get().clear();
   },
 

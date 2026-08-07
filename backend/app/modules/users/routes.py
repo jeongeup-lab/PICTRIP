@@ -101,8 +101,9 @@ async def delete_me(
     user_id: CurrentUserId,
     session: DbSession,
     redis: RedisDep,
+    body: LogoutBody | None = None,
 ) -> Response:
-    await services.delete_user_account(session, redis, user_id)
+    await services.delete_user_account(session, redis, user_id, body.refreshToken if body else None)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

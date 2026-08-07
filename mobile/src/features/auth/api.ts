@@ -36,6 +36,6 @@ export async function logoutRequest(refreshToken: string | null): Promise<void> 
   await bareClient.post("/auth/logout", { refreshToken });
 }
 
-export async function deleteAccountRequest(): Promise<void> {
-  await api.delete("/users/me");
+export async function deleteAccountRequest(refreshToken: string | null): Promise<void> {
+  await api.delete("/users/me", { data: { refreshToken } });
 }

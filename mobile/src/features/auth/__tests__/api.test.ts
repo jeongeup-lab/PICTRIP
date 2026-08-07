@@ -64,9 +64,9 @@ describe("auth api", () => {
     expect(bareClient.post).toHaveBeenCalledWith("/auth/logout", { refreshToken: "r1" });
   });
 
-  it("deleteAccountRequest calls authed DELETE /users/me", async () => {
+  it("deleteAccountRequest sends the refresh token so the server can revoke it", async () => {
     (api.delete as jest.Mock).mockResolvedValue(undefined);
-    await deleteAccountRequest();
-    expect(api.delete).toHaveBeenCalledWith("/users/me");
+    await deleteAccountRequest("r1");
+    expect(api.delete).toHaveBeenCalledWith("/users/me", { data: { refreshToken: "r1" } });
   });
 });
