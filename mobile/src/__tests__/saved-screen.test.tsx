@@ -1,5 +1,5 @@
 import renderer, { act } from "react-test-renderer";
-import SavedScreen from "@/app/saved";
+import SavedScreen, { UNSAVE_FAILED } from "@/app/saved";
 import { useSavedList, useSaveMutation, useUnsaveMutation } from "@/features/saved/queries";
 import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
 import { SavedListRow } from "@/features/saved/components/SavedListRow";
@@ -137,15 +137,19 @@ describe("SavedScreen", () => {
     expect(save).toHaveBeenCalledWith("far");
   });
 
-  it("still re-saves when the unsave request failed", async () => {
+  it("reports the failure instead of offering to undo a delete that never happened", async () => {
     unsaveAsync.mockRejectedValue(new Error("network"));
 
     const tree = await mount();
     await press(tree, "swipe-far-action");
-    await press(tree, "unsave-toast-action");
     await act(async () => undefined);
 
-    expect(save).toHaveBeenCalledWith("far");
+    const toast = tree.root.findAll(
+      (n) => n.props.testID === "unsave-toast" && typeof n.props.message === "string",
+    )[0];
+    expect(toast.props.message).toBe(UNSAVE_FAILED);
+    expect(toast.props.action).toBeNull();
+    expect(save).not.toHaveBeenCalled();
   });
 
   it("offers recently viewed spots when nothing is saved", async () => {

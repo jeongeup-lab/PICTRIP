@@ -30,9 +30,11 @@ import { colors, spacing, radii } from "@/constants/theme";
 
 export const EMPTY_HEADLINE = "아직 스크랩한 곳이 없어요";
 
-interface Removed {
+export const UNSAVE_FAILED = "스크랩 해제를 못 했어요. 잠시 뒤 다시 시도해 주세요";
+
+interface Notice {
   message: string;
-  contentId: string;
+  undoContentId: string | null;
 }
 
 export default function SavedScreen() {
@@ -44,8 +46,8 @@ export default function SavedScreen() {
   const { coords, askable, ask } = useNearbyCoords();
   const [sort, setSort] = useState<SavedSort>("recent");
   const [grid, setGrid] = useState(false);
-  const [removed, setRemoved] = useState<Removed | null>(null);
-  const unsaving = useRef<Promise<unknown> | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const unsaving = useRef<Promise<boolean> | null>(null);
 
   const list = useMemo(() => sortSaved(data ?? [], sort, coords), [data, sort, coords]);
 
@@ -60,16 +62,24 @@ export default function SavedScreen() {
   };
 
   const remove = (spot: SpotCard) => {
-    unsaving.current = unsave.mutateAsync(spot.contentId).catch(() => undefined);
-    setRemoved({ message: unsaveMessage(spot.title), contentId: spot.contentId });
+    setNotice({ message: unsaveMessage(spot.title), undoContentId: spot.contentId });
+    unsaving.current = unsave.mutateAsync(spot.contentId).then(
+      () => true,
+      () => {
+        setNotice({ message: UNSAVE_FAILED, undoContentId: null });
+        return false;
+      },
+    );
   };
 
   const undo = () => {
-    if (!removed) return;
-    const { contentId } = removed;
-    const settled = unsaving.current ?? Promise.resolve();
-    setRemoved(null);
-    void settled.then(() => resave.mutate(contentId));
+    const contentId = notice?.undoContentId;
+    if (!contentId) return;
+    const settled = unsaving.current ?? Promise.resolve(true);
+    setNotice(null);
+    void settled.then((removed) => {
+      if (removed) resave.mutate(contentId);
+    });
   };
 
   return (
@@ -155,10 +165,10 @@ export default function SavedScreen() {
       </ScrollView>
 
       <Toast
-        message={removed?.message ?? null}
+        message={notice?.message ?? null}
         bottom={insets.bottom + spacing.lg}
-        onHide={() => setRemoved(null)}
-        action={{ label: "되돌리기", onPress: undo }}
+        onHide={() => setNotice(null)}
+        action={notice?.undoContentId ? { label: "되돌리기", onPress: undo } : null}
         durationMs={TOAST_UNDO_MS}
         testID="unsave-toast"
       />
