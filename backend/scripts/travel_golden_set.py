@@ -45,6 +45,11 @@ class Case:
     expect_text: tuple[str, ...] = ()
     forbid_text: tuple[str, ...] = ()
     expect_error: str | None = None
+    expect_region: str | None = None
+    expect_images: bool = False
+    expect_placed: bool = False
+    expect_unique: bool = True
+    expect_within_km: float | None = None
     pending: bool = False
     note: str = ""
 
@@ -126,6 +131,21 @@ def pin(cid: str, label: str, payload: dict[str, Any], **kw: Any) -> Case:
 
 def chip(cid: str, label: str, payload: dict[str, Any], **kw: Any) -> Case:
     return case(cid, "I 칩", label, payload, **kw)
+
+
+def quality(cid: str, label: str, question: str, **kw: Any) -> Case:
+    """결과가 말이 되는가 — 개수가 아니라 내용을 본다."""
+    kw.setdefault("expect_images", True)
+    kw.setdefault("expect_placed", True)
+    return case(cid, "J 결과 품질", label, ask(question), **kw)
+
+
+def landlocked(cid: str, label: str, question: str, **kw: Any) -> Case:
+    """바다 없는 지역에 바다를 물었을 때 — 0곳으로 끝내면 안 된다."""
+    kw.setdefault("expect_spots", "some")
+    kw.setdefault("pending", True)
+    kw.setdefault("note", "내륙 지역 + 바다 → 가까운 지역으로 넓혀야")
+    return case(cid, "K 지역 대체", label, ask(question), **kw)
 
 
 CASES: list[Case] = [
@@ -352,6 +372,97 @@ CASES: list[Case] = [
     ),
     edge("F13", "모순 조건", "실내 해수욕장", expect_spots="any"),
     edge("F14", "지역 두 개", "부산이랑 제주 둘 다", expect_spots="some"),
+    # J. 결과가 말이 되는가 — 지역·좌표·이미지·중복
+    quality("J1", "요청 지역 안에 있나", "부산 관광지", expect_spots="some", expect_region="부산"),
+    quality(
+        "J2", "시군구까지 맞나", "경주 볼거리", expect_spots="some", expect_region="경상북도 경주시"
+    ),
+    quality("J3", "제주 안에 있나", "제주 오름", expect_spots="some", expect_region="제주"),
+    quality("J4", "강릉 안에 있나", "강릉 해수욕장", expect_spots="some", expect_region="강원"),
+    quality("J5", "전주 안에 있나", "전주 한옥", expect_spots="some", expect_region="전북"),
+    quality("J6", "인천 안에 있나", "인천 섬", expect_spots="some", expect_region="인천"),
+    quality("J7", "대구 안에 있나", "대구 공원", expect_spots="some", expect_region="대구"),
+    quality("J8", "광주 안에 있나", "광주 미술관", expect_spots="some", expect_region="광주"),
+    quality("J9", "울산 안에 있나", "울산 공원", expect_spots="some", expect_region="울산"),
+    quality("J10", "세종 안에 있나", "세종 공원", expect_spots="some", expect_region="세종"),
+    quality("J11", "충남 안에 있나", "충남 해안", expect_spots="some", expect_region="충청남도"),
+    quality("J12", "경남 안에 있나", "경남 사찰", expect_spots="some", expect_region="경상남도"),
+    quality("J13", "전남 안에 있나", "전남 섬", expect_spots="some", expect_region="전라남도"),
+    quality("J14", "경기 안에 있나", "경기도 수목원", expect_spots="some", expect_region="경기"),
+    quality("J15", "충북 안에 있나", "충북 동굴", expect_spots="some", expect_region="충청북도"),
+    case(
+        "J16",
+        "J 결과 품질",
+        "근처는 정말 근처인가",
+        ask("여기서 가까운 곳", **BUSAN),
+        expect_spots="some",
+        expect_within_km=60.0,
+        expect_placed=True,
+    ),
+    case(
+        "J17",
+        "J 결과 품질",
+        "근처 카테고리도 근처인가",
+        ask("근처 전망대", **SEOUL),
+        expect_spots="some",
+        expect_within_km=60.0,
+    ),
+    quality("J18", "실내 결과에 이미지·좌표", "비 와도 갈 만한 실내", expect_spots="some"),
+    quality(
+        "J19", "축제 결과에 이미지", "지금 열리는 축제", expect_spots="some", expect_placed=False
+    ),
+    quality(
+        "J20",
+        "혼잡도 결과에 이미지·좌표",
+        "제주에서 한적한 곳",
+        expect_spots="some",
+        expect_region="제주",
+    ),
+    quality("J21", "분위기 결과에 이미지·좌표", "야경 예쁜 곳", expect_spots="some"),
+    quality(
+        "J22",
+        "4축 결합 결과",
+        "부산에서 비 와도 갈 만한 한적한 박물관",
+        expect_spots="some",
+        expect_region="부산",
+    ),
+    quality("J23", "동반자 결과", "아이랑 갈 만한 곳", expect_spots="some"),
+    quality(
+        "J24", "동반자+지역 결과", "제주 아이랑 갈 데", expect_spots="some", expect_region="제주"
+    ),
+    # K. 조건이 그 지역에 존재하지 않을 때 — 가까운 곳으로 넓혀야 한다
+    landlocked("K1", "서울 바다", "서울 근처 한적한 바다"),
+    landlocked("K10", "세종 호수", "세종 호수", note="지역에 그 분위기가 없음"),
+    landlocked("K2", "대전 해수욕장", "대전 해수욕장"),
+    landlocked("K3", "충북 바다", "충북 바다"),
+    landlocked("K4", "세종 바다", "세종 바닷가"),
+    landlocked("K5", "광주 해변", "광주 해변 가고 싶어"),
+    landlocked("K6", "서울 스키장", "서울 스키장", note="지역에 없는 유형 → 가까운 지역으로"),
+    landlocked("K7", "제주 스키장", "제주 스키장", note="지역에 없는 유형"),
+    landlocked("K8", "부산 스키장", "부산 스키장", note="지역에 없는 유형"),
+    case(
+        "K9",
+        "K 지역 대체",
+        "넓힐 때 사실대로 말하나",
+        ask("서울 근처 한적한 바다"),
+        expect_text=("서울",),
+        pending=True,
+        note="넓혔으면 왜 넓혔는지 답변이 말해야",
+    ),
+    # L. 원점이 되는 것들 — 지역·역·랜드마크
+    edge("N1", "작은 지역 맛집", "정읍 맛집", expect_spots="some", expect_region="전북"),
+    edge("N2", "작은 지역 카페", "정읍 카페", expect_spots="some", expect_region="전북"),
+    edge("N3", "역 이름", "대천역 근처 맛집", expect_spots="some", expect_region="충청남도"),
+    edge("N4", "랜드마크", "전주 한옥마을 근처 맛집", expect_spots="some", expect_region="전북"),
+    edge("N5", "광역시 맛집", "부산 맛집", expect_spots="some", expect_region="부산"),
+    edge("N6", "광역시 카페", "제주 카페", expect_spots="some", expect_region="제주"),
+    case(
+        "N7",
+        "F 데이터 경계",
+        "이름을 못 잡으면 지어내지 않는다",
+        ask("한옥마을 근처 맛집"),
+        expect_spots="some",
+    ),
     # G. 깨지면 안 된다
     guard("G1", "이모지만", ask("🏖️🌊"), expect_spots="any"),
     guard("G2", "이모지 반복", ask("😀" * 200), expect_spots="any"),
@@ -569,7 +680,64 @@ def judge(case_: Case, status: int, body: dict[str, Any]) -> Result:
         if text in res.answer:
             res.ok = False
             res.reasons.append(f"answer leaked {text!r}")
+    _judge_spots(case_, data.get("spots", []), res)
     return res
+
+
+EARTH_RADIUS_KM = 6371.0
+
+
+def _km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    import math
+
+    dlat = math.radians(lat2 - lat1)
+    dlng = math.radians(lng2 - lng1)
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng / 2) ** 2
+    )
+    return 2 * EARTH_RADIUS_KM * math.asin(min(1.0, math.sqrt(a)))
+
+
+def _judge_spots(case_: Case, spots: list[dict[str, Any]], res: Result) -> None:
+    if not spots:
+        return
+    if case_.expect_region:
+        stray = [
+            s for s in spots if not (s.get("regionLabel") or "").startswith(case_.expect_region)
+        ]
+        if stray:
+            res.ok = False
+            names = ", ".join(f"{s['title']}({s.get('regionLabel')})" for s in stray[:3])
+            res.reasons.append(f"{len(stray)}곳이 {case_.expect_region} 밖: {names}")
+    if case_.expect_images:
+        blank = [s for s in spots if not s.get("imageUrl")]
+        if blank:
+            res.ok = False
+            res.reasons.append(f"{len(blank)}곳에 이미지가 없다")
+    if case_.expect_placed:
+        nowhere = [s for s in spots if s.get("lat") is None or s.get("lng") is None]
+        if nowhere:
+            res.ok = False
+            res.reasons.append(f"{len(nowhere)}곳에 좌표가 없다")
+    if case_.expect_unique:
+        ids = [s.get("contentId") for s in spots]
+        if len(ids) != len(set(ids)):
+            res.ok = False
+            res.reasons.append("중복 결과가 있다")
+    if case_.expect_within_km is not None:
+        origin = case_.payload.get("lat"), case_.payload.get("lng")
+        if origin[0] is not None:
+            far = [
+                s
+                for s in spots
+                if s.get("lat") is not None
+                and _km(float(origin[0]), float(origin[1]), s["lat"], s["lng"])
+                > case_.expect_within_km
+            ]
+            if far:
+                res.ok = False
+                res.reasons.append(f"{len(far)}곳이 {case_.expect_within_km}km 밖")
 
 
 @dataclass(frozen=True)
@@ -586,6 +754,7 @@ class Step:
     expect_spots: str = "any"
     expect_text: tuple[str, ...] = ()
     forbid_text: tuple[str, ...] = ()
+    expect_region: str | None = None
     pending: bool = False
     note: str = ""
 
@@ -867,6 +1036,7 @@ def as_case(flow: Flow, index: int, step: Step) -> Case:
         expect_spots=step.expect_spots,
         expect_text=step.expect_text,
         forbid_text=step.forbid_text,
+        expect_region=step.expect_region,
         pending=step.pending,
         note=step.note,
     )
