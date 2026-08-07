@@ -14,6 +14,7 @@ import { router } from "expo-router";
 import { setOnboardingSeen } from "@/lib/storage";
 import { Icon } from "@/components/Icon";
 import { MiniDevice } from "@/components/onboarding/MiniDevice";
+import { AccessNotice } from "@/features/consent/components/AccessNotice";
 import { colors, spacing, radii } from "@/constants/theme";
 
 const SLIDES = [
@@ -41,11 +42,14 @@ export default function Onboarding() {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(0);
+  const [phase, setPhase] = useState<"tour" | "access">("tour");
   const scrollRef = useRef<ScrollView>(null);
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     setIndex(Math.round(e.nativeEvent.contentOffset.x / width));
   };
+
+  const showAccess = () => setPhase("access");
 
   const finish = async () => {
     await setOnboardingSeen();
@@ -54,51 +58,68 @@ export default function Onboarding() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
-      <Pressable
-        style={[styles.skip, { top: insets.top + spacing.lg }]}
-        onPress={finish}
-        hitSlop={8}
-      >
-        <Text style={styles.skipText}>건너뛰기</Text>
-      </Pressable>
+      {phase === "tour" ? (
+        <>
+          <Pressable
+            style={[styles.skip, { top: insets.top + spacing.lg }]}
+            onPress={showAccess}
+            hitSlop={8}
+          >
+            <Text style={styles.skipText}>건너뛰기</Text>
+          </Pressable>
 
-      <ScrollView
-        ref={scrollRef}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        style={styles.track}
-      >
-        {SLIDES.map((s) => (
-          <View key={s.key} style={[styles.slide, { width }]}>
-            <Text style={styles.eyebrow}>{s.eyebrow}</Text>
-            <MiniDevice />
-            <View style={styles.cap}>
-              <Text style={styles.h2}>{s.h2}</Text>
-              <Text style={styles.sub}>{s.sub}</Text>
+          <ScrollView
+            ref={scrollRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            style={styles.track}
+          >
+            {SLIDES.map((s) => (
+              <View key={s.key} style={[styles.slide, { width }]}>
+                <Text style={styles.eyebrow}>{s.eyebrow}</Text>
+                <MiniDevice />
+                <View style={styles.cap}>
+                  <Text style={styles.h2}>{s.h2}</Text>
+                  <Text style={styles.sub}>{s.sub}</Text>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+
+          <View style={styles.foot}>
+            <View style={styles.dots}>
+              {SLIDES.map((s, i) => (
+                <View key={s.key} style={[styles.dot, i === index && styles.dotOn]} />
+              ))}
             </View>
+            <Pressable style={styles.cta} onPress={showAccess}>
+              <Icon name="camera" size={18} color={colors.onImage} strokeWidth={1.8} />
+              <Text style={styles.ctaLabel}>사진으로 시작하기</Text>
+            </Pressable>
+            <Pressable onPress={showAccess} hitSlop={8}>
+              <Text style={styles.aux}>
+                이미 둘러본 적이 있다면 <Text style={styles.auxLink}>바로 시작</Text>
+              </Text>
+            </Pressable>
           </View>
-        ))}
-      </ScrollView>
+        </>
+      ) : (
+        <>
+          <View style={styles.track}>
+            <AccessNotice />
+          </View>
 
-      <View style={styles.foot}>
-        <View style={styles.dots}>
-          {SLIDES.map((s, i) => (
-            <View key={s.key} style={[styles.dot, i === index && styles.dotOn]} />
-          ))}
-        </View>
-        <Pressable style={styles.cta} onPress={finish}>
-          <Icon name="camera" size={18} color={colors.onImage} strokeWidth={1.8} />
-          <Text style={styles.ctaLabel}>사진으로 시작하기</Text>
-        </Pressable>
-        <Pressable onPress={finish} hitSlop={8}>
-          <Text style={styles.aux}>
-            이미 둘러본 적이 있다면 <Text style={styles.auxLink}>바로 시작</Text>
-          </Text>
-        </Pressable>
-      </View>
+          <View style={styles.foot}>
+            <Pressable style={styles.cta} onPress={finish}>
+              <Icon name="check" size={18} color={colors.onImage} strokeWidth={1.8} />
+              <Text style={styles.ctaLabel}>확인했어요</Text>
+            </Pressable>
+          </View>
+        </>
+      )}
     </SafeAreaView>
   );
 }
