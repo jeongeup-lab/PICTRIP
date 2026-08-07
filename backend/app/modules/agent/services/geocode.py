@@ -25,6 +25,7 @@ class Located:
     lat: float
     lng: float
     source: str
+    content_id: str | None = None
 
 
 def _bare(text: str) -> str:
@@ -58,7 +59,13 @@ async def locate(
     )
     for row in rows:
         if row.lat is not None and row.lng is not None and names_match(asked, row.title):
-            return Located(title=row.title, lat=row.lat, lng=row.lng, source="kto")
+            return Located(
+                title=row.title,
+                lat=row.lat,
+                lng=row.lng,
+                source="kto",
+                content_id=row.content_id,
+            )
     hit = await _borrow_coords_from_naver(asked, terms)
     if hit is not None:
         return hit

@@ -20,6 +20,7 @@ class SimpleTitleRow:
     title: str
     lat: float | None
     lng: float | None
+    content_id: str = "t1"
 
 
 def _coordless_row():  # type: ignore[no-untyped-def]
@@ -1028,3 +1029,54 @@ async def test_a_carried_region_still_drops_the_card_left_over_from_before(monke
     )
 
     assert seen["prefixes"] == ["부산광역시"]
+
+
+async def test_the_origin_itself_is_not_offered_as_its_own_neighbour(monkeypatch) -> None:
+    from app.modules.agent import repositories
+    from app.modules.spots.services import NearbySpotRow
+
+    def _near(cid: str, title: str, dist: float) -> NearbySpotRow:
+        return NearbySpotRow(
+            content_id=cid,
+            title=title,
+            first_image_url=None,
+            addr1="서울특별시 강남구 1",
+            mapx=127.02,
+            mapy=37.50,
+            dist=dist,
+        )
+
+    async def fake_nearby(session, *, lat, lng, radius, category, travel_only=False):  # type: ignore[no-untyped-def]
+        return [_near("c1", "스타벅스 강남점", 0.0), _near("c2", "옆집 커피", 180.0)]
+
+    async def fake_briefs(session, content_ids):  # type: ignore[no-untyped-def]
+        return {}
+
+    monkeypatch.setattr(ask_service, "find_nearby_spots", fake_nearby)
+    monkeypatch.setattr(repositories, "load_candidates_by_ids", fake_briefs)
+
+    answer = await ask_service._ask_around(
+        None,  # type: ignore[arg-type]
+        "스타벅스 강남점",
+        "cafe",
+        lat=37.50,
+        lng=127.02,
+        steps=[],
+        intent=QueryIntent(categoryKeywords=["카페"]),
+        exclude="c1",
+    )
+
+    assert [spot.contentId for spot in answer.spots] == ["c2"]
+    assert answer.totalCount == 1
+
+
+async def test_a_geocoded_origin_carries_the_id_that_excludes_it(monkeypatch) -> None:
+    from app.modules.agent.services import geocode
+
+    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
+        return [SimpleTitleRow("스타벅스 강남점", 37.50, 127.02, content_id="c1")]
+
+    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
+    found = await geocode.locate(None, "스타벅스 강남점")  # type: ignore[arg-type]
+
+    assert found is not None and found.content_id == "c1"
