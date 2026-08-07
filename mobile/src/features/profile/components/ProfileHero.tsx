@@ -6,7 +6,6 @@ import { colors, radii, spacing } from "@/constants/theme";
 
 interface Props {
   user: User;
-  coverUrl?: string | null;
   onPress: () => void;
 }
 
@@ -15,7 +14,7 @@ function joinedLabel(createdAt: string | null): string | null {
   return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date.replace(/-/g, ".")} 가입` : null;
 }
 
-export function ProfileHero({ user, coverUrl, onPress }: Props) {
+export function ProfileHero({ user, onPress }: Props) {
   const joined = joinedLabel(user.createdAt);
 
   return (
@@ -25,13 +24,6 @@ export function ProfileHero({ user, coverUrl, onPress }: Props) {
       onPress={onPress}
       testID="profile-hero"
     >
-      {coverUrl ? (
-        <View style={styles.cover} pointerEvents="none">
-          <RemoteImage uri={coverUrl} style={styles.coverImg} cropBanner={false} />
-          <View style={styles.coverVeil} />
-        </View>
-      ) : null}
-
       <View style={styles.inner}>
         <View style={styles.avatar}>
           {user.avatarUrl ? (
@@ -71,16 +63,6 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     backgroundColor: colors.raise,
     overflow: "hidden",
-  },
-  cover: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
-  coverImg: { width: "100%", height: "100%", opacity: 0.3 },
-  coverVeil: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: colors.scrim,
   },
   inner: { flexDirection: "row", alignItems: "center", gap: 13, padding: spacing.md + 2 },
   avatar: {

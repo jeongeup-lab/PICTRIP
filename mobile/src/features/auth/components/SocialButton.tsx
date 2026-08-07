@@ -18,7 +18,7 @@ const LABEL: Record<Provider, string> = {
 
 const STYLE: Record<Provider, { bg: string; fg: string; border?: string }> = {
   kakao: { bg: "#FEE500", fg: "#181600" },
-  google: { bg: "#FFFFFF", fg: colors.ink, border: colors.line },
+  google: { bg: "#FFFFFF", fg: colors.onLight, border: colors.line },
   apple: { bg: "#111113", fg: "#FFFFFF" },
 };
 

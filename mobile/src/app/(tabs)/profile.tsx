@@ -51,11 +51,7 @@ export default function ProfileTab() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {isAuthenticated && user ? (
-          <ProfileHero
-            user={user}
-            coverUrl={scraps[0]?.firstImageUrl ?? null}
-            onPress={() => router.push("/account")}
-          />
+          <ProfileHero user={user} onPress={() => router.push("/account")} />
         ) : (
           <GuestHero onPress={() => router.push("/auth/login")} />
         )}

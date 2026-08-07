@@ -21,9 +21,7 @@ export const PENDING_HINT = "지도에 후보가 먼저 찍혀요";
 
 export const FAIL_TITLE = "답변을 못 받았어요";
 
-export function resultHeading(count: number, anchored: boolean, hasDistance: boolean): string {
-  if (anchored && hasDistance) return "기준점에서 가까운 순";
-  if (hasDistance) return "가까운 순";
+export function resultHeading(count: number): string {
   return `추천 ${count}곳`;
 }
 
@@ -59,7 +57,6 @@ export function ConversationTurn({
   const spots = answer?.spots ?? [];
   const holdsAnchor = spots.some((s) => s.contentId === anchorId);
   const distances = spots.map((spot) => spotDistanceKm(spot, origin));
-  const hasDistance = distances.some((km) => km !== null);
 
   useEffect(() => {
     Animated.timing(rise, {
@@ -132,7 +129,7 @@ export function ConversationTurn({
       {spots.length > 0 ? (
         <>
           <View style={styles.sectionHead}>
-            <Text style={styles.section}>{resultHeading(spots.length, anchored, hasDistance)}</Text>
+            <Text style={styles.section}>{resultHeading(spots.length)}</Text>
             {answer?.tagBasis ? (
               <Text style={styles.basis} testID={`turn-basis-${turn.id}`}>
                 {answer.tagBasis}

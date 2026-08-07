@@ -202,11 +202,23 @@ describe("ConversationTurn once the answer lands", () => {
     expect(texts(mount(turn()))).toContain("추천 1곳");
   });
 
-  it("orders by distance once an origin is known", () => {
+  it("measures each result once an origin is known", () => {
     const tree = mount(turn({ answer: pinned() }), { origin: { lat: 37.4, lng: 129.0 } });
 
-    expect(texts(tree)).toContain("가까운 순");
     expect(tree.root.findByType(ResultRow).props.distanceKm).toBeGreaterThan(0);
+  });
+
+  it("never claims an ordering the list does not apply", () => {
+    const withOrigin = mount(turn({ answer: pinned() }), { origin: { lat: 37.4, lng: 129.0 } });
+    const anchoredTurn = mount(turn({ answer: pinned() }), {
+      anchored: true,
+      origin: { lat: 37.4, lng: 129.0 },
+    });
+
+    for (const tree of [withOrigin, anchoredTurn]) {
+      expect(texts(tree)).toContain("추천 1곳");
+      expect(texts(tree).join(" ")).not.toContain("가까운 순");
+    }
   });
 
   it("measures from the anchor while one is held", () => {
@@ -215,7 +227,6 @@ describe("ConversationTurn once the answer lands", () => {
       origin: { lat: 37.4, lng: 129.0 },
     });
 
-    expect(texts(tree)).toContain("기준점에서 가까운 순");
     expect(tree.root.findByType(ResultRow).props.tone).toBe("result");
   });
 
