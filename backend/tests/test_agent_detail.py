@@ -528,3 +528,54 @@ async def test_a_hit_outside_the_named_region_is_rejected(monkeypatch) -> None:
     monkeypatch.setattr(naver, "is_configured", lambda: True)
 
     assert await geocode.locate(None, None, "한옥마을", region_hint="전주") is None  # type: ignore[arg-type]
+
+
+async def test_a_new_region_beats_a_card_left_over_from_earlier(monkeypatch) -> None:
+    from app.modules.agent.services import retrieve
+
+    seen: dict[str, object] = {}
+
+    async def fake_scope(session, keywords):  # type: ignore[no-untyped-def]
+        return retrieve.CategoryScope(codes=[], matched=[])
+
+    async def fake_region(session, *, hints):  # type: ignore[no-untyped-def]
+        return retrieve.RegionScope(prefixes=["부산광역시"], sido_prefixes=["부산광역시"])
+
+    async def fake_food(session, *, action, region_prefixes):  # type: ignore[no-untyped-def]
+        seen["prefixes"] = region_prefixes
+        return []
+
+    monkeypatch.setattr(retrieve, "resolve_category_scope", fake_scope)
+    monkeypatch.setattr(retrieve, "resolve_region_scope", fake_region)
+    monkeypatch.setattr(retrieve, "search_food", fake_food)
+
+    async def fake_extract(q, *, prior=None, prior_spots=None):  # type: ignore[no-untyped-def]
+        return QueryIntent(categoryKeywords=["맛집"], regionHints=["부산"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_extract)
+    await ask_service.ask(
+        _ExplodingSession(),  # type: ignore[arg-type]
+        FakeRedis(),
+        None,
+        question="부산 맛집",
+        lat=None,
+        lng=None,
+        image_bytes=None,
+        image_mime=None,
+        context=AskContext(
+            intent=QueryIntent(regionHints=["서울"]),
+            spots=[SEBYEONGGWAN],
+            focusContentId="126198",
+        ),
+    )
+
+    assert seen["prefixes"] == ["부산광역시"]
+
+
+def test_an_empty_surrounding_keeps_the_asked_conditions() -> None:
+    intent = QueryIntent(categoryKeywords=["맛집"], regionHints=["보령"])
+
+    answer = ask_service.empty_anchor_response("대천역", "food", prior_steps=[], intent=intent)
+
+    assert answer.intent.categoryKeywords == ["맛집"]
+    assert answer.intent.regionHints == ["보령"]

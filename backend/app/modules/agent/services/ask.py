@@ -322,7 +322,12 @@ async def _ask_with_anchor(
     kept = [near for near in found if row is None or near.content_id != row.content_id]
     kept = kept[: retrieve.RESULT_LIMIT]
     if not kept:
-        return empty_anchor_response(origin, anchor.action, prior_steps=prior_steps or [])
+        return empty_anchor_response(
+            origin,
+            anchor.action,
+            prior_steps=prior_steps or [],
+            intent=carried_intent,
+        )
     rated = await repositories.load_candidates_by_ids(session, [n.content_id for n in kept])
     spots = [_anchor_card(near, has_crowd=_has_crowd(rated.get(near.content_id))) for near in kept]
     steps = [*(prior_steps or [])]
@@ -352,7 +357,11 @@ async def _ask_with_anchor(
 
 
 def empty_anchor_response(
-    origin: str, action: AnchorAction, *, prior_steps: list[AskStep]
+    origin: str,
+    action: AnchorAction,
+    *,
+    prior_steps: list[AskStep],
+    intent: QueryIntent | None = None,
 ) -> AskResponse:
     noun = ANCHOR_NOUNS[action]
     steps = [
@@ -369,7 +378,7 @@ def empty_anchor_response(
         ],
         spots=[],
         totalCount=0,
-        intent=QueryIntent(),
+        intent=intent or QueryIntent(),
         refinements=[],
     )
 
@@ -724,7 +733,8 @@ async def _ask_for_food(
     context: AskContext | None,
     legacy_client: bool,
 ) -> AskResponse:
-    if context is not None and context.focusContentId is not None:
+    stale = context is not None and _named_a_new_region(intent, context)
+    if context is not None and context.focusContentId is not None and not stale:
         return await _ask_with_anchor(
             session,
             AskAnchor(contentId=context.focusContentId, action=action),
@@ -786,7 +796,7 @@ async def _ask_around(
     )
     kept = found[: retrieve.RESULT_LIMIT]
     if not kept:
-        return empty_anchor_response(origin, action, prior_steps=steps)
+        return empty_anchor_response(origin, action, prior_steps=steps, intent=intent)
     rated = await repositories.load_candidates_by_ids(session, [n.content_id for n in kept])
     spots = [_anchor_card(near, has_crowd=_has_crowd(rated.get(near.content_id))) for near in kept]
     walked = [
