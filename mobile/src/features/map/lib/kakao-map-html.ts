@@ -8,8 +8,6 @@ export const PIN_RESULT = "#4A9EFF";
 export const KOREA_BOUNDS = { swLat: 33.0, swLng: 124.5, neLat: 38.7, neLng: 132.0 };
 export const KOREA_MAX_LEVEL = 12;
 
-/** Kakao ships no dark basemap, so the tile layer is inverted and the overlays
- *  are inverted back. Keep both filters identical or the pins drift in hue. */
 export const DARK_FILTER = "invert(1) hue-rotate(180deg)";
 
 export interface KakaoMapOptions {
@@ -90,7 +88,6 @@ export function buildKakaoMapHtml(jsKey: string, options: KakaoMapOptions = {}):
     var b = new kakao.maps.LatLngBounds(new kakao.maps.LatLng(sw.lat,sw.lng), new kakao.maps.LatLng(ne.lat,ne.lng));
     map.setBounds(b, pad.top||0, pad.right||0, pad.bottom||0, pad.left||0); }
   function esc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-  /** anchor = the place the question is pinned to, result = what the answer found. */
   function pinEl(s, sel, isAnchor, anchored){
     var pin = document.createElement('div');
     pin.className = isAnchor ? 'pin anchor' : 'pin';

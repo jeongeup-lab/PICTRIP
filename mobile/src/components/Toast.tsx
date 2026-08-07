@@ -4,7 +4,6 @@ import { colors, radii, spacing } from "@/constants/theme";
 
 export const TOAST_VISIBLE_MS = 2600;
 
-/** An undoable toast has to outlive the reading of it, or the offer is a lie. */
 export const TOAST_UNDO_MS = 5000;
 
 export interface ToastAction {
