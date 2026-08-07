@@ -2,7 +2,6 @@ import renderer, { act } from "react-test-renderer";
 import { Text } from "react-native";
 import AccountScreen from "@/app/account";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
-import { useSavedList } from "@/features/saved/queries";
 import { AppError } from "@/lib/app-error";
 import type { User } from "@/lib/api-types";
 
@@ -10,9 +9,7 @@ jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
-jest.mock("@/features/saved/queries", () => ({ useSavedList: jest.fn() }));
 
-const useSavedListMock = useSavedList as jest.Mock;
 const logout = jest.fn(async () => undefined);
 const deleteAccount = jest.fn(async () => undefined);
 
@@ -45,7 +42,6 @@ const texts = (tree: renderer.ReactTestRenderer) =>
   tree.root.findAllByType(Text).map((node) => JSON.stringify(node.props.children));
 
 beforeEach(() => {
-  useSavedListMock.mockReturnValue({ data: [{ contentId: "1" }, { contentId: "2" }] });
   useAuthStore.setState({
     user: USER,
     isAuthenticated: true,
@@ -77,7 +73,7 @@ describe("AccountScreen", () => {
     expect(tree.root.findAllByProps({ testID: "delete-confirm" })).toHaveLength(0);
 
     await press(tree, "open-delete");
-    expect(texts(tree).join("|")).toContain("스크랩 2곳");
+    expect(texts(tree).join("|")).toContain("저장한 모든 스크랩");
     expect(deleteAccount).not.toHaveBeenCalled();
 
     await press(tree, "confirm-delete");
