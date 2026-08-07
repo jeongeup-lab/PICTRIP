@@ -17,6 +17,7 @@ import { ListRow } from "@/components/ListRow";
 import { SectionTitle } from "@/components/SectionTitle";
 import { useSavedList } from "@/features/saved/queries";
 import { buildSavedCsv } from "@/features/saved/lib/export-csv";
+import { SAVED_PAGE_LIMIT } from "@/features/saved/api";
 import { PERM_LABEL, useAppPermissions } from "@/features/profile/hooks/use-app-permissions";
 import { useNotificationPrefs } from "@/features/profile/stores/notification-prefs-store";
 import { NOTIFICATION_TOPICS } from "@/features/profile/lib/notification-prefs";
@@ -27,6 +28,10 @@ import { colors, spacing } from "@/constants/theme";
 export const PHOTO_NOTICE =
   "사진으로 찾기에 올린 이미지는 서버에 저장하지 않고 분석 직후 폐기해요.";
 export const PUSH_NOTICE = "알림 발송은 준비 중이에요. 지금은 이 기기에만 저장돼요.";
+
+export function exportSubtitle(count: number): string {
+  return count >= SAVED_PAGE_LIMIT ? `최근 ${SAVED_PAGE_LIMIT}곳까지 · CSV` : `${count}곳 · CSV`;
+}
 
 const permTone = (status: PermStatus | null) => (status === "granted" ? "on" : "off");
 
@@ -116,7 +121,7 @@ export default function SettingsScreen() {
               <ListRow
                 icon="download"
                 title="스크랩 내보내기"
-                sub={`${scraps.length}곳 · CSV`}
+                sub={exportSubtitle(scraps.length)}
                 chevron
                 onPress={exportCsv}
                 testID="export-saved"

@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  mapBadgeText: { fontSize: 12, fontWeight: "700", color: colors.ink },
+  mapBadgeText: { fontSize: 12, fontWeight: "700", color: colors.onLight },
   placeholderText: { color: colors.ter, fontSize: 14 },
   mapLinks: { flexDirection: "row", gap: 10, marginBottom: 6 },
   mapLink: {
