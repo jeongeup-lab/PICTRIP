@@ -9,6 +9,7 @@ import { InfoBox } from "@/components/InfoBox";
 import { LEGAL_DOCS } from "@/features/legal/constants";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { useConsents, useUpdateConsent } from "@/features/consent/queries";
+import { useLocationConsentSync } from "@/features/consent/hooks/use-location-consent-sync";
 import { TERMS_VERSION } from "@/constants/legal";
 import { colors, spacing } from "@/constants/theme";
 
@@ -24,6 +25,7 @@ export default function LegalListScreen() {
   const insets = useSafeAreaInsets();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const { data, isLoading, isError, refetch } = useConsents();
+  useLocationConsentSync(data);
   const update = useUpdateConsent();
 
   const consentedAt = formatDate(data?.consentedAt ?? null);

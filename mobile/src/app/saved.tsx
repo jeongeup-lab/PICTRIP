@@ -32,6 +32,8 @@ export const EMPTY_HEADLINE = "아직 스크랩한 곳이 없어요";
 
 export const UNSAVE_FAILED = "스크랩 해제를 못 했어요. 잠시 뒤 다시 시도해 주세요";
 
+export const NEAR_NEEDS_LOCATION = "위치를 켜야 가까운 순으로 볼 수 있어요";
+
 interface Notice {
   message: string;
   undoContentId: string | null;
@@ -52,8 +54,18 @@ export default function SavedScreen() {
   const list = useMemo(() => sortSaved(data ?? [], sort, coords), [data, sort, coords]);
 
   const pickSort = (mode: SavedSort) => {
-    setSort(mode);
-    if (mode === "near" && !coords && askable) void ask();
+    if (mode !== "near" || coords) {
+      setSort(mode);
+      return;
+    }
+    if (!askable) {
+      setNotice({ message: NEAR_NEEDS_LOCATION, undoContentId: null });
+      return;
+    }
+    void ask().then((fix) => {
+      if (fix) setSort("near");
+      else setNotice({ message: NEAR_NEEDS_LOCATION, undoContentId: null });
+    });
   };
 
   const openSpot = (spot: SpotCard) => {

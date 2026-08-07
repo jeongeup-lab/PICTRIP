@@ -1,12 +1,10 @@
-import { useCallback } from "react";
 import { View, Text, Pressable, ScrollView, Switch, Linking, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { router, useFocusEffect } from "expo-router";
-import * as Location from "expo-location";
+import { router } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { TERMS_VERSION } from "@/constants/legal";
 import { useConsents, useUpdateConsent } from "@/features/consent/queries";
-import { buildConsentPut } from "@/features/consent/lib/build-consent-put";
+import { useLocationConsentSync } from "@/features/consent/hooks/use-location-consent-sync";
 import { colors, radii, spacing } from "@/constants/theme";
 
 export default function ConsentScreen() {
@@ -14,21 +12,7 @@ export default function ConsentScreen() {
   const { data, isLoading, isError, refetch } = useConsents();
   const update = useUpdateConsent();
 
-  useFocusEffect(
-    useCallback(() => {
-      let cancelled = false;
-      void (async () => {
-        if (!data) return;
-        const perm = await Location.getForegroundPermissionsAsync();
-        if (!cancelled && perm.granted !== data.locationConsent) {
-          update.mutate(buildConsentPut(data, perm.granted, data.termsVersion ?? TERMS_VERSION));
-        }
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }, [data, update]),
-  );
+  useLocationConsentSync(data);
 
   const togglePhoto = (next: boolean) => {
     if (!data) return;

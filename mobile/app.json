@@ -12,7 +12,7 @@
       "url": "https://u.expo.dev/b4beab09-95ca-45e7-8726-4b3dbcb520fa"
     },
     "orientation": "portrait",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "icon": "./assets/icon.png",
     "splash": {
       "backgroundColor": "#000000",
