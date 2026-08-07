@@ -18,6 +18,8 @@ import { colors, spacing, radii } from "@/constants/theme";
 
 type Mode = "login" | "signup";
 
+const AGE_CONFIRM_LABEL = "만 14세 이상입니다";
+
 function messageForError(err: unknown): string {
   if (err instanceof AppError) {
     switch (err.code) {
@@ -46,6 +48,7 @@ export default function EmailAuthScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [focused, setFocused] = useState<"name" | "email" | "password" | null>(null);
@@ -60,7 +63,11 @@ export default function EmailAuthScreen() {
   }, [isAuthenticated]);
 
   const isSignup = mode === "signup";
-  const canSubmit = email.trim().length > 0 && password.length >= (isSignup ? 8 : 1) && !pending;
+  const canSubmit =
+    email.trim().length > 0 &&
+    password.length >= (isSignup ? 8 : 1) &&
+    (!isSignup || ageConfirmed) &&
+    !pending;
 
   const toggleMode = () => {
     setMode((m) => (m === "login" ? "signup" : "login"));
@@ -166,6 +173,26 @@ export default function EmailAuthScreen() {
             />
           </View>
 
+          {isSignup ? (
+            <Pressable
+              style={styles.age}
+              onPress={() => setAgeConfirmed((v) => !v)}
+              disabled={pending}
+              accessibilityRole="checkbox"
+              accessibilityLabel={AGE_CONFIRM_LABEL}
+              accessibilityHint="확인해야 회원가입을 진행할 수 있어요."
+              accessibilityState={{ checked: ageConfirmed, disabled: pending }}
+              hitSlop={8}
+            >
+              <View style={[styles.ageBox, ageConfirmed && styles.ageBoxChecked]}>
+                {ageConfirmed ? (
+                  <Icon name="check" size={14} color={colors.onImage} strokeWidth={2.4} />
+                ) : null}
+              </View>
+              <Text style={styles.ageText}>{AGE_CONFIRM_LABEL}</Text>
+            </Pressable>
+          ) : null}
+
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <Pressable
@@ -210,6 +237,25 @@ const styles = StyleSheet.create({
     color: colors.ink,
   },
   inputFocused: { borderWidth: 1.5, borderColor: colors.accent },
+  age: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+    marginBottom: spacing.md,
+  },
+  ageBox: {
+    width: 22,
+    height: 22,
+    borderRadius: radii.sm,
+    borderWidth: 1.5,
+    borderColor: colors.line,
+    backgroundColor: colors.bg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ageBoxChecked: { borderColor: colors.accent, backgroundColor: colors.accent },
+  ageText: { flex: 1, fontSize: 14, color: colors.sec },
   error: { color: colors.sec, fontSize: 13, marginBottom: spacing.md },
   submit: {
     height: 52,
