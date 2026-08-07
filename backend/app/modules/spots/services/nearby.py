@@ -83,6 +83,10 @@ def _predicate_sql(predicate: ColumnElement[bool]) -> str:
     )
 
 
+def category_sql(cat: NearbyCategory) -> str:
+    return _predicate_sql(category_predicate(cat))
+
+
 def all_categories_sql() -> str:
     return _predicate_sql(all_categories_predicate())
 

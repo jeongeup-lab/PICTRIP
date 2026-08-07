@@ -29,6 +29,7 @@ from app.modules.agent.schemas import (
     RefinePatch,
 )
 from app.modules.agent.services import detail as detail_service
+from app.modules.agent.services import geocode as geocode_service
 from app.modules.agent.services import intent as intent_service
 from app.modules.agent.services import photo as photo_service
 from app.modules.agent.services import refine as refine_service
@@ -511,16 +512,17 @@ async def _ask_with_question(
     codes = category.codes
     eating = retrieve.food_action(codes) or retrieve.food_word(keywords)
     if eating is not None:
-        if lat is not None and lng is not None:
-            return await _ask_with_anchor(
-                session,
-                AskAnchor(action=eating),
-                lat=lat,
-                lng=lng,
-                prior_steps=steps,
-                carried_intent=intent,
-            )
-        return _talk_response(steps, intent, FOOD_NEEDS_ORIGIN_ANSWER, legacy_client=legacy_client)
+        return await _ask_for_food(
+            session,
+            kto,
+            action=eating,
+            intent=intent,
+            steps=steps,
+            lat=lat,
+            lng=lng,
+            context=context,
+            legacy_client=legacy_client,
+        )
     mood_ids = await repositories.find_mood_ids(session, list(intent.moodHints))
     scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
     prefixes = scope.prefixes or pre_ota_region_prefixes
@@ -707,6 +709,148 @@ async def _ask_with_question(
                 any(row.indoor for row in merged) or len(candidates) >= retrieve.CANDIDATE_LIMIT
             ),
         ),
+    )
+
+
+async def _ask_for_food(
+    session: AsyncSession,
+    kto: KtoClient | None,
+    *,
+    action: AnchorAction,
+    intent: QueryIntent,
+    steps: list[AskStep],
+    lat: float | None,
+    lng: float | None,
+    context: AskContext | None,
+    legacy_client: bool,
+) -> AskResponse:
+    """원점 우선순위: 고른 카드 > 질문 속 장소 > 지역 > 내 좌표."""
+    if context is not None and context.focusContentId is not None:
+        return await _ask_with_anchor(
+            session,
+            AskAnchor(contentId=context.focusContentId, action=action),
+            lat=lat,
+            lng=lng,
+            prior_steps=steps,
+            carried_intent=intent,
+        )
+    for place in intent.namedPlaces:
+        found = await geocode_service.locate(session, kto, place.name)
+        if found is None:
+            continue
+        located = [
+            *steps,
+            AskStep(tool="resolve_place", label=f"{found.title} 위치 확인", badge="1곳"),
+        ]
+        return await _ask_around(
+            session,
+            found.title,
+            action,
+            lat=found.lat,
+            lng=found.lng,
+            steps=located,
+            intent=intent,
+        )
+    scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
+    if scope.prefixes:
+        rows = await retrieve.search_food(session, action=action, region_prefixes=scope.prefixes)
+        return _food_in_region(rows, scope.prefixes[0], action, steps=steps, intent=intent)
+    if lat is not None and lng is not None:
+        return await _ask_with_anchor(
+            session,
+            AskAnchor(action=action),
+            lat=lat,
+            lng=lng,
+            prior_steps=steps,
+            carried_intent=intent,
+        )
+    return _talk_response(steps, intent, FOOD_NEEDS_ORIGIN_ANSWER, legacy_client=legacy_client)
+
+
+async def _ask_around(
+    session: AsyncSession,
+    origin: str,
+    action: AnchorAction,
+    *,
+    lat: float,
+    lng: float,
+    steps: list[AskStep],
+    intent: QueryIntent,
+) -> AskResponse:
+    noun = ANCHOR_NOUNS[action]
+    found = await find_nearby_spots(
+        session,
+        lat=lat,
+        lng=lng,
+        radius=ANCHOR_RADIUS_M,
+        category=ANCHOR_CATEGORIES[action],
+    )
+    kept = found[: retrieve.RESULT_LIMIT]
+    if not kept:
+        return empty_anchor_response(origin, action, prior_steps=steps)
+    rated = await repositories.load_candidates_by_ids(session, [n.content_id for n in kept])
+    spots = [_anchor_card(near, has_crowd=_has_crowd(rated.get(near.content_id))) for near in kept]
+    walked = [
+        *steps,
+        AskStep(tool="nearby", label=f"{origin} 주변 {noun} 조회", badge=f"{len(kept)}곳"),
+    ]
+    answer = [
+        AnswerSegment(text=f"{origin} 주변 {noun} "),
+        AnswerSegment(text=f"{len(spots)}곳", emphasis=True),
+        AnswerSegment(text=" 찾았어요."),
+    ]
+    if kept[0].dist is not None:
+        answer.append(AnswerSegment(text=" 가장 가까운 곳은 "))
+        answer.append(AnswerSegment(text=_meters_label(kept[0].dist), emphasis=True))
+        answer.append(AnswerSegment(text=" 거리예요."))
+    logger.info("agent.food.around", action=action, results=len(spots))
+    return AskResponse(
+        steps=walked,
+        answer=answer,
+        spots=spots,
+        totalCount=len(spots),
+        intent=intent,
+        tagBasis="직선거리 기준",
+        refinements=[],
+    )
+
+
+def _food_in_region(
+    rows: list[CandidateRow],
+    region: str,
+    action: AnchorAction,
+    *,
+    steps: list[AskStep],
+    intent: QueryIntent,
+) -> AskResponse:
+    noun = ANCHOR_NOUNS[action]
+    top = rows[: retrieve.RESULT_LIMIT]
+    scanned = [
+        *steps,
+        AskStep(tool="category_search", label=f"{region} {noun} 조회", badge=_count(rows)),
+    ]
+    if not top:
+        return AskResponse(
+            steps=scanned,
+            answer=[AnswerSegment(text=f"{region}에는 등록된 {noun}이 없어요.")],
+            spots=[],
+            totalCount=0,
+            intent=intent,
+            refinements=[],
+        )
+    spots = [retrieve.to_card(row, tag=None) for row in top]
+    logger.info("agent.food.region", action=action, results=len(spots))
+    return AskResponse(
+        steps=scanned,
+        answer=[
+            AnswerSegment(text=f"{region} {noun} "),
+            AnswerSegment(text=f"{len(spots)}곳", emphasis=True),
+            AnswerSegment(text=" 찾았어요."),
+        ],
+        spots=spots,
+        totalCount=len(spots),
+        intent=intent,
+        refinements=[],
     )
 
 
