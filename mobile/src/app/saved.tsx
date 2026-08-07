@@ -80,7 +80,11 @@ export default function SavedScreen() {
     unsaving.current = unsave.mutateAsync(spot.contentId).then(
       () => true,
       () => {
-        setNotice({ message: UNSAVE_FAILED, undoContentId: null });
+        setNotice((current) =>
+          current?.undoContentId === spot.contentId
+            ? { message: UNSAVE_FAILED, undoContentId: null }
+            : current,
+        );
         return false;
       },
     );

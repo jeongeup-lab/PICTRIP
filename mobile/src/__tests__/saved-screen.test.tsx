@@ -168,6 +168,31 @@ describe("SavedScreen", () => {
     expect(toast.props.message).toBe(RESAVE_FAILED);
   });
 
+  it("keeps the newest undo when an older unsave fails late", async () => {
+    let failFirst: () => void = () => undefined;
+    unsaveAsync
+      .mockReturnValueOnce(
+        new Promise<void>((_resolve, reject) => {
+          failFirst = () => reject(new Error("network"));
+        }),
+      )
+      .mockResolvedValueOnce(undefined);
+
+    const tree = await mount();
+    await press(tree, "swipe-far-action");
+    await press(tree, "swipe-near-action");
+
+    await act(async () => {
+      failFirst();
+    });
+
+    const toast = tree.root.findAll(
+      (n) => n.props.testID === "unsave-toast" && typeof n.props.message === "string",
+    )[0];
+    expect(toast.props.message).toBe(unsaveMessage("덕수궁"));
+    expect(toast.props.action).not.toBeNull();
+  });
+
   it("stays on the previous sort when no fix can be obtained", async () => {
     const ask = jest.fn().mockResolvedValue(false);
     useNearbyCoordsMock.mockReturnValue({ coords: null, askable: true, ask });

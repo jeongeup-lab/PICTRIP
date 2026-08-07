@@ -8,7 +8,6 @@ import { ListRow } from "@/components/ListRow";
 import { InfoBox } from "@/components/InfoBox";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
-import { useSavedList } from "@/features/saved/queries";
 import { AppError } from "@/lib/app-error";
 import { colors, spacing } from "@/constants/theme";
 
@@ -37,13 +36,11 @@ export default function AccountScreen() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const logout = useAuthStore((s) => s.logout);
   const deleteAccount = useAuthStore((s) => s.deleteAccount);
-  const { data: saved } = useSavedList();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const joined = formatDate(user?.createdAt ?? null);
-  const scrapCount = saved?.length ?? 0;
 
   const onLogout = async () => {
     setBusy(true);
@@ -117,14 +114,12 @@ export default function AccountScreen() {
                 testID="delete-confirm"
               >
                 <View style={styles.checklist}>
-                  {[`스크랩 ${scrapCount}곳`, "계정 정보와 로그인 연결", "취향 데이터"].map(
-                    (item) => (
-                      <View key={item} style={styles.checkItem}>
-                        <Icon name="close" size={14} color={colors.accent} />
-                        <Text style={styles.checkText}>{item}</Text>
-                      </View>
-                    ),
-                  )}
+                  {["저장한 모든 스크랩", "계정 정보와 로그인 연결", "취향 데이터"].map((item) => (
+                    <View key={item} style={styles.checkItem}>
+                      <Icon name="close" size={14} color={colors.accent} />
+                      <Text style={styles.checkText}>{item}</Text>
+                    </View>
+                  ))}
                 </View>
                 {error ? <Text style={styles.error}>{error}</Text> : null}
                 <View style={styles.actions}>
