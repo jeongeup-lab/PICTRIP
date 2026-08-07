@@ -43,31 +43,44 @@ def names_match(asked: str, found: str) -> bool:
     return len(parts) > 1 and all(_bare(part) in haystack for part in parts)
 
 
-async def locate(session: AsyncSession, kto: KtoClient | None, name: str) -> Located | None:
+async def locate(
+    session: AsyncSession,
+    kto: KtoClient | None,
+    name: str,
+    *,
+    region_hint: str | None = None,
+) -> Located | None:
     asked = name.strip()
     if not asked:
         return None
-    rows = await search_spots_by_title(session, asked, limit=TITLE_CANDIDATES)
+    within = (region_hint or "").strip() or None
+    rows = await search_spots_by_title(session, asked, region_hint=within, limit=TITLE_CANDIDATES)
     for row in rows:
         if row.lat is not None and row.lng is not None and names_match(asked, row.title):
             return Located(title=row.title, lat=row.lat, lng=row.lng, source="kto")
-    hit = await _borrow_coords_from_naver(asked)
+    hit = await _borrow_coords_from_naver(asked, within)
     if hit is not None:
         return hit
     logger.info("agent.geocode.miss", asked=asked, candidates=len(rows))
     return None
 
 
-async def _borrow_coords_from_naver(asked: str) -> Located | None:
+async def _borrow_coords_from_naver(asked: str, within: str | None) -> Located | None:
     if not naver.is_configured():
         return None
+    query = f"{within} {asked}" if within else asked
     try:
         async with httpx.AsyncClient(timeout=NAVER_TIMEOUT_SECONDS) as client:
-            places = await naver_search(client, asked, display=NAVER_CANDIDATES)
+            places = await naver_search(client, query, display=NAVER_CANDIDATES)
     except httpx.HTTPError as exc:
         logger.warning("agent.geocode.naver_failed", error_type=type(exc).__name__)
         return None
     for place in places:
-        if place.lat is not None and place.lng is not None and names_match(asked, place.title):
-            return Located(title=asked, lat=place.lat, lng=place.lng, source="naver")
+        if place.lat is None or place.lng is None:
+            continue
+        if not names_match(asked, place.title):
+            continue
+        if within and within not in (place.address or ""):
+            continue
+        return Located(title=asked, lat=place.lat, lng=place.lng, source="naver")
     return None

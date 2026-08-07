@@ -734,7 +734,7 @@ async def _ask_for_food(
             carried_intent=intent,
         )
     for place in intent.namedPlaces:
-        found = await geocode_service.locate(session, kto, place.name)
+        found = await geocode_service.locate(session, kto, place.name, region_hint=place.regionHint)
         if found is None:
             continue
         located = [
