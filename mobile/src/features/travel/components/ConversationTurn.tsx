@@ -1,30 +1,40 @@
 import { useEffect, useMemo } from "react";
-import { Animated, Easing, FlatList, Pressable, View, Text, StyleSheet } from "react-native";
+import { Animated, Easing, Pressable, View, Text, StyleSheet } from "react-native";
 import { Image } from "expo-image";
-import { SpotCard } from "@/features/travel/components/SpotCard";
+import { ResultRow } from "@/features/travel/components/ResultRow";
 import { StepList } from "@/features/travel/components/StepList";
 import { AnswerBlock } from "@/features/travel/components/AnswerBlock";
-import { TurnMap } from "@/features/travel/components/TurnMap";
 import { PhotoCompare } from "@/features/travel/components/PhotoCompare";
-import { placed } from "@/features/travel/lib/spot-geo";
 import { pendingSteps } from "@/features/travel/lib/pending-steps";
+import { spotDistanceKm } from "@/features/travel/lib/distance";
 import { RETRY_SUGGESTION } from "@/features/travel/lib/question";
+import type { LatLng } from "@/features/map/lib/geo";
 import type { TravelSpot } from "@/features/travel/api";
 import type { Turn } from "@/features/travel/stores/conversation-store";
-import { colors, spacing } from "@/constants/theme";
+import { colors, radii, spacing } from "@/constants/theme";
 
 const RISE_MS = 320;
 
 export const TAP_HINT = "한 번 탭 = 이어서 묻기 · 두 번 탭 = 상세";
 
+export const PENDING_HINT = "지도에 후보가 먼저 찍혀요";
+
+export const FAIL_TITLE = "답변을 못 받았어요";
+
+export function resultHeading(count: number, anchored: boolean, hasDistance: boolean): string {
+  if (anchored && hasDistance) return "기준점에서 가까운 순";
+  if (hasDistance) return "가까운 순";
+  return `추천 ${count}곳`;
+}
+
 interface Props {
   turn: Turn;
   anchorId: string | null;
-  live: boolean;
+  anchored: boolean;
+  origin: LatLng | null;
   showTapHint: boolean;
   onSpotTap: (spot: TravelSpot) => void;
   onSpotDetail: (spot: TravelSpot) => void;
-  onOpenMap: (turn: Turn) => void;
   onRetry: (turn: Turn) => void;
   onGrow: () => void;
   onSaveToggle: (saved: boolean) => void;
@@ -33,11 +43,11 @@ interface Props {
 export function ConversationTurn({
   turn,
   anchorId,
-  live,
+  anchored,
+  origin,
   showTapHint,
   onSpotTap,
   onSpotDetail,
-  onOpenMap,
   onRetry,
   onGrow,
   onSaveToggle,
@@ -46,8 +56,10 @@ export function ConversationTurn({
   const waiting = turn.status === "pending";
   const answer = turn.answer;
   const steps = waiting ? pendingSteps(turn) : (answer?.steps ?? []);
-  const mappable = useMemo(() => placed(answer?.spots ?? []), [answer]);
-  const anchored = (answer?.spots ?? []).some((s) => s.contentId === anchorId);
+  const spots = answer?.spots ?? [];
+  const holdsAnchor = spots.some((s) => s.contentId === anchorId);
+  const distances = spots.map((spot) => spotDistanceKm(spot, origin));
+  const hasDistance = distances.some((km) => km !== null);
 
   useEffect(() => {
     Animated.timing(rise, {
@@ -84,69 +96,66 @@ export function ConversationTurn({
         </View>
       </View>
 
-      <View style={styles.box}>
-        {turn.status === "failed" ? (
-          <View>
-            <Text style={styles.errorText}>{turn.errorMessage}</Text>
-            <Pressable
-              testID={`turn-retry-${turn.id}`}
-              accessibilityRole="button"
-              style={({ pressed }) => [styles.retry, pressed && styles.retryPressed]}
-              onPress={() => onRetry(turn)}
-            >
-              <Text style={styles.retryText}>{RETRY_SUGGESTION}</Text>
-            </Pressable>
-          </View>
-        ) : (
+      {turn.status === "failed" ? (
+        <View style={styles.failBox}>
+          <Text style={styles.failTitle}>{FAIL_TITLE}</Text>
+          <Text style={styles.failText}>{turn.errorMessage}</Text>
+          <Pressable
+            testID={`turn-retry-${turn.id}`}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.retry, pressed && styles.pressed]}
+            onPress={() => onRetry(turn)}
+          >
+            <Text style={styles.retryText}>{RETRY_SUGGESTION}</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <View style={styles.trace}>
           <StepList steps={steps} shown={steps.length} completed={waiting ? 0 : steps.length} />
-        )}
+        </View>
+      )}
 
-        {answer && turn.photo && answer.spots.length > 0 ? (
-          <PhotoCompare photo={turn.photo} match={answer.spots[0]} />
-        ) : null}
+      {waiting ? <Text style={styles.pendingHint}>{PENDING_HINT}</Text> : null}
 
-        {answer ? <AnswerBlock answer={answer.answer} /> : null}
-      </View>
+      {answer && turn.photo && spots.length > 0 ? (
+        <View style={styles.inset}>
+          <PhotoCompare photo={turn.photo} match={spots[0]} />
+        </View>
+      ) : null}
 
-      {answer && answer.spots.length > 0 ? (
+      {answer ? (
+        <View style={styles.inset}>
+          <AnswerBlock answer={answer.answer} />
+        </View>
+      ) : null}
+
+      {spots.length > 0 ? (
         <>
-          {mappable.length > 0 ? (
-            <TurnMap
-              spots={mappable}
-              live={live}
-              selectedId={anchored ? anchorId : null}
-              onOpen={() => onOpenMap(turn)}
+          <View style={styles.sectionHead}>
+            <Text style={styles.section}>{resultHeading(spots.length, anchored, hasDistance)}</Text>
+            {answer?.tagBasis ? (
+              <Text style={styles.basis} testID={`turn-basis-${turn.id}`}>
+                {answer.tagBasis}
+              </Text>
+            ) : null}
+            {showTapHint ? <Text style={styles.basis}>{TAP_HINT}</Text> : null}
+          </View>
+
+          {spots.map((spot, index) => (
+            <ResultRow
+              key={spot.contentId}
+              spot={spot}
+              index={index}
+              first={index === 0}
+              tone={anchored ? "result" : "neutral"}
+              selected={holdsAnchor && spot.contentId === anchorId}
+              dimmed={holdsAnchor && spot.contentId !== anchorId}
+              distanceKm={distances[index]}
+              onPress={() => onSpotTap(spot)}
+              onDetail={() => onSpotDetail(spot)}
+              onSaveToggle={onSaveToggle}
             />
-          ) : null}
-
-          {answer.tagBasis || showTapHint ? (
-            <View style={styles.railHead}>
-              {answer.tagBasis ? (
-                <Text style={styles.basis} testID={`turn-basis-${turn.id}`}>
-                  {answer.tagBasis}
-                </Text>
-              ) : null}
-              {showTapHint ? <Text style={styles.hint}>{TAP_HINT}</Text> : null}
-            </View>
-          ) : null}
-
-          <FlatList
-            horizontal
-            data={answer.spots}
-            keyExtractor={(spot) => spot.contentId}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.rail}
-            renderItem={({ item }) => (
-              <SpotCard
-                spot={item}
-                selected={anchored && item.contentId === anchorId}
-                dimmed={anchored && item.contentId !== anchorId}
-                onPress={() => onSpotTap(item)}
-                onDetail={() => onSpotDetail(item)}
-                onSaveToggle={onSaveToggle}
-              />
-            )}
-          />
+          ))}
         </>
       ) : null}
     </Animated.View>
@@ -154,45 +163,62 @@ export function ConversationTurn({
 }
 
 const styles = StyleSheet.create({
-  turn: { marginBottom: 22 },
-  askRow: { flexDirection: "row", justifyContent: "flex-end", marginBottom: 14 },
+  turn: { paddingBottom: 22 },
+  askRow: { flexDirection: "row", justifyContent: "flex-end", paddingHorizontal: spacing.md },
   bubble: {
-    maxWidth: "80%",
-    backgroundColor: colors.ink,
-    borderRadius: 14,
-    paddingVertical: 11,
+    maxWidth: "78%",
+    backgroundColor: colors.accent,
+    borderRadius: 17,
+    borderBottomRightRadius: 5,
+    paddingVertical: 10,
     paddingHorizontal: 14,
   },
   shot: { width: "100%", height: 104, borderRadius: 9, marginBottom: 9 },
   askText: {
-    fontSize: 14.5,
-    fontWeight: "500",
-    lineHeight: 21.5,
+    fontSize: 14,
+    fontWeight: "600",
+    lineHeight: 21,
     letterSpacing: -0.2,
     color: colors.onImage,
   },
-  box: {
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: 16,
-    padding: spacing.md + 2,
-    backgroundColor: colors.bg,
-  },
-  errorText: { fontSize: 13.5, lineHeight: 20, color: colors.sec },
-  retry: {
-    alignSelf: "flex-start",
+  trace: {
     marginTop: 14,
-    height: 34,
-    paddingHorizontal: 14,
-    borderRadius: 999,
+    marginHorizontal: spacing.md,
+    paddingHorizontal: 13,
+    borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: colors.line,
+    backgroundColor: colors.raise,
+  },
+  inset: { marginHorizontal: spacing.md },
+  pendingHint: { marginTop: 12, marginHorizontal: spacing.lg, fontSize: 12, color: colors.ter },
+  failBox: {
+    marginTop: 14,
+    marginHorizontal: spacing.md,
+    padding: 15,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.raise,
+  },
+  failTitle: { fontSize: 15, fontWeight: "700", letterSpacing: -0.3, color: colors.ink },
+  failText: { marginTop: 7, fontSize: 13, lineHeight: 20, color: colors.sec },
+  retry: {
+    marginTop: 13,
+    height: 40,
+    borderRadius: radii.lg,
+    backgroundColor: colors.accent,
+    alignItems: "center",
     justifyContent: "center",
   },
-  retryPressed: { backgroundColor: colors.fill },
-  retryText: { fontSize: 13, fontWeight: "700", color: colors.sec },
-  rail: { gap: 11, paddingTop: 14 },
-  railHead: { marginTop: 13, gap: 3 },
-  basis: { fontSize: 11, letterSpacing: -0.1, color: colors.ter },
-  hint: { fontSize: 11.5, letterSpacing: -0.1, color: colors.ter },
+  pressed: { opacity: 0.7 },
+  retryText: { fontSize: 13.5, fontWeight: "700", color: colors.onImage },
+  sectionHead: { paddingTop: 18, paddingHorizontal: spacing.lg, paddingBottom: 6, gap: 3 },
+  section: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.1,
+    color: colors.ter,
+  },
+  basis: { fontSize: 11.5, letterSpacing: -0.1, color: colors.ter },
 });

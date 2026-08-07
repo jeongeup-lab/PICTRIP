@@ -1,66 +1,80 @@
-import { View, Text, Pressable, ScrollView, Alert, StyleSheet } from "react-native";
+import { useState } from "react";
+import { View, Text, Pressable, ScrollView, Linking, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Icon } from "@/components/Icon";
+import { ListGroup } from "@/components/ListGroup";
+import { ListRow } from "@/components/ListRow";
+import { SectionTitle } from "@/components/SectionTitle";
+import { InfoBox } from "@/components/InfoBox";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { useSavedList } from "@/features/saved/queries";
-import { prefetchSpot } from "@/features/spots/queries";
 import { SavedRail } from "@/features/saved/components/SavedRail";
 import { EmptyBoard } from "@/features/saved/components/EmptyBoard";
-import { ProfileHeader } from "@/features/profile/components/ProfileHeader";
-import { GuestLoginRow } from "@/features/profile/components/GuestLoginRow";
-import { SettingsRows } from "@/features/profile/components/SettingsRows";
+import { prefetchSpot } from "@/features/spots/queries";
+import { ProfileHero } from "@/features/profile/components/ProfileHero";
+import { GuestHero } from "@/features/profile/components/GuestHero";
+import { StatTiles } from "@/features/profile/components/StatTiles";
+import { profileStats } from "@/features/profile/lib/stats";
+import { PERM_LABEL, useAppPermissions } from "@/features/profile/hooks/use-app-permissions";
+import { APP_VERSION } from "@/lib/app-meta";
 import { colors, spacing } from "@/constants/theme";
+
+export const GUEST_NOTICE =
+  "검색 · 지도 · 사진으로 찾기는 그대로 쓸 수 있어요. 스크랩과 기록만 계정이 필요해요.";
 
 export default function ProfileTab() {
   const insets = useSafeAreaInsets();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
-  const deleteAccount = useAuthStore((s) => s.deleteAccount);
   const { data: saved } = useSavedList();
+  const { location } = useAppPermissions();
+  const [openedAt] = useState(() => Date.now());
 
-  const confirmDelete = () =>
-    Alert.alert("회원 탈퇴", "탈퇴하면 스크랩과 계정 정보가 삭제돼요. 계속할까요?", [
-      { text: "취소", style: "cancel" },
-      { text: "탈퇴", style: "destructive", onPress: () => void deleteAccount() },
-    ]);
+  const stats = isAuthenticated ? profileStats(saved, user?.createdAt, openedAt) : null;
+  const scraps = saved ?? [];
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.nav}>
         <Text style={styles.navTitle}>마이</Text>
+        <Pressable
+          accessibilityRole="button"
+          hitSlop={8}
+          style={styles.navBtn}
+          onPress={() => router.push("/settings")}
+          testID="open-settings"
+        >
+          <Icon name="settings" size={20} color={colors.ink} />
+        </Pressable>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {isAuthenticated && user ? (
-          <ProfileHeader user={user} />
+          <ProfileHero
+            user={user}
+            coverUrl={scraps[0]?.firstImageUrl ?? null}
+            onPress={() => router.push("/account")}
+          />
         ) : (
-          <GuestLoginRow onPress={() => router.push("/auth/login")} />
+          <GuestHero onPress={() => router.push("/auth/login")} />
         )}
 
-        <View style={styles.sep} />
+        <StatTiles stats={stats} onPressSaved={() => router.push("/saved")} />
 
-        <View style={styles.scrapWrap}>
-          <View style={styles.secHead}>
-            <Text style={styles.secTitle}>
-              스크랩
-              {isAuthenticated && saved && saved.length > 0 ? (
-                <Text style={styles.secCount}> {saved.length}</Text>
-              ) : null}
-            </Text>
-            {isAuthenticated && saved && saved.length > 0 ? (
-              <Pressable style={styles.seeAll} onPress={() => router.push("/saved")}>
-                <Text style={styles.seeAllText}>전체보기</Text>
-                <Icon name="chevron-right" size={15} color={colors.sec} />
-              </Pressable>
-            ) : null}
-          </View>
+        {!isAuthenticated ? <InfoBox title="로그인 없이도 되는 것" text={GUEST_NOTICE} /> : null}
 
-          {isAuthenticated ? (
-            saved && saved.length > 0 ? (
+        {isAuthenticated ? (
+          <>
+            <SectionTitle
+              title="스크랩"
+              actionLabel={scraps.length > 0 ? `전체 ${scraps.length}` : undefined}
+              onAction={scraps.length > 0 ? () => router.push("/saved") : undefined}
+              testID="see-all-saved"
+            />
+            {scraps.length > 0 ? (
               <SavedRail
-                spots={saved}
+                spots={scraps}
                 onPressItem={(spot) => {
                   prefetchSpot(spot);
                   router.push(`/spots/${spot.contentId}`);
@@ -73,52 +87,60 @@ export default function ProfileTab() {
                 actionIcon="home"
                 onAction={() => router.push("/(tabs)")}
               />
-            )
-          ) : (
-            <EmptyBoard
-              text="로그인하고 마음에 든 곳을 스크랩하세요"
-              actionLabel="로그인하기"
-              actionIcon="log-in"
-              onAction={() => router.push("/auth/login")}
-            />
-          )}
-        </View>
+            )}
+          </>
+        ) : null}
 
-        <View style={styles.sep} />
+        <SectionTitle title="설정" />
+        <ListGroup>
+          {isAuthenticated ? (
+            <ListRow icon="person" title="계정" chevron onPress={() => router.push("/account")} />
+          ) : null}
+          <ListRow
+            icon="map-pin"
+            title="위치 권한"
+            value={location ? PERM_LABEL[location] : null}
+            tone={location === "granted" ? "on" : "off"}
+            chevron
+            onPress={() => void Linking.openSettings()}
+          />
+          <ListRow
+            icon="bell"
+            title="알림·권한 설정"
+            chevron
+            onPress={() => router.push("/settings")}
+          />
+          <ListRow
+            icon="shield-check"
+            title="약관·정책"
+            chevron
+            onPress={() => router.push("/legal")}
+          />
+          <ListRow icon="info" title="앱 버전" value={APP_VERSION} />
+        </ListGroup>
 
-        <SettingsRows
-          onLogout={isAuthenticated ? () => void logout() : undefined}
-          onDeleteAccount={isAuthenticated ? confirmDelete : undefined}
-        />
-
-        <View style={styles.foot} />
+        <Text style={styles.foot}>관광 정보 출처 · 한국관광공사 TourAPI</Text>
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.inset },
-  nav: { height: 50, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg },
-  navTitle: { fontSize: 17, fontWeight: "700", color: colors.ink },
-  sep: { height: 9, backgroundColor: colors.inset },
-  scrapWrap: { backgroundColor: colors.bg, paddingBottom: 2 },
-  secHead: {
+  root: { flex: 1, backgroundColor: colors.bg },
+  nav: {
+    height: 50,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: 11,
   },
-  secTitle: { fontSize: 18, fontWeight: "800", letterSpacing: -0.3, color: colors.ink },
-  secCount: { color: colors.accentText },
-  seeAll: { flexDirection: "row", alignItems: "center", gap: 3 },
-  seeAllText: { color: colors.sec, fontSize: 13.5, fontWeight: "600" },
+  navTitle: { fontSize: 21, fontWeight: "800", letterSpacing: -0.5, color: colors.ink },
+  navBtn: { width: 34, height: 34, alignItems: "flex-end", justifyContent: "center" },
+  scroll: { paddingBottom: spacing.xxl },
   foot: {
-    height: 30,
-    backgroundColor: colors.inset,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    fontSize: 11.5,
+    color: colors.ter,
   },
 });

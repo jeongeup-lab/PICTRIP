@@ -22,7 +22,6 @@ const EARTH_RADIUS_KM = 6371;
 const MIN_SPAN_DEG = 0.02;
 const MAX_NAMED_GROUPS = 2;
 const SPREAD_MENTION_KM = 20;
-const MINI_FIT_LAT_DEG = 2.5;
 
 export function placed(spots: TravelSpot[]): PlacedSpot[] {
   return spots.flatMap((spot) =>
@@ -45,22 +44,6 @@ export function pinsFrom(spots: PlacedSpot[]): NearbySpot[] {
     sigunguName: null,
     overview: null,
   }));
-}
-
-export function miniFitSpots(spots: PlacedSpot[]): PlacedSpot[] {
-  if (spots.length === 0) return spots;
-  const lats = spots.map((s) => s.lat);
-  if (Math.max(...lats) - Math.min(...lats) <= MINI_FIT_LAT_DEG) return spots;
-  return largestCluster(spots);
-}
-
-function largestCluster(spots: PlacedSpot[]): PlacedSpot[] {
-  const buckets = new Map<string, PlacedSpot[]>();
-  spots.forEach((s) => {
-    const key = s.spot.regionLabel.trim().replace(/\s+/g, " ");
-    buckets.set(key, [...(buckets.get(key) ?? []), s]);
-  });
-  return [...buckets.values()].sort((a, b) => b.length - a.length)[0] ?? spots;
 }
 
 export function center(spots: PlacedSpot[]): LatLng | null {

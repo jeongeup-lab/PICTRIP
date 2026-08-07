@@ -42,7 +42,7 @@ export function PhotoCompare({ photo, match }: Props) {
 }
 
 const styles = StyleSheet.create({
-  root: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.line },
+  root: { marginTop: 14 },
   row: { flexDirection: "row", alignItems: "center", gap: 10 },
   half: { flex: 1, minWidth: 0 },
   shot: { width: "100%", height: 84, borderRadius: 10, backgroundColor: colors.skeleton },

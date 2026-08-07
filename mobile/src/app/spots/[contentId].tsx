@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ScrollView, View, Text, Pressable, Share, StyleSheet } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSpot } from "@/features/spots/queries";
+import { useRecentSpots } from "@/features/spots/stores/recent-store";
 import { useSaveOptimistic } from "@/features/saved/hooks/use-save-optimistic";
 import { Icon } from "@/components/Icon";
 import { Skeleton } from "@/components/Skeleton";
@@ -11,6 +12,8 @@ import { PhotoViewer } from "@/features/spots/components/PhotoViewer";
 import { LocationSection } from "@/features/spots/components/LocationSection";
 import { VisitSection } from "@/features/spots/components/VisitSection";
 import { NearbyRail } from "@/features/spots/components/NearbyRail";
+import { AskAboutSpot } from "@/features/travel/components/AskAboutSpot";
+import { useTravelAnchor } from "@/features/travel/stores/anchor-store";
 import { colors, spacing } from "@/constants/theme";
 
 export default function SpotScreen() {
@@ -18,6 +21,21 @@ export default function SpotScreen() {
   const { data, isLoading, isError, refetch, isPlaceholderData } = useSpot(contentId);
   const { saved, toggle: onToggleSave } = useSaveOptimistic(contentId);
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const pickAnchor = useTravelAnchor((s) => s.pick);
+  const recordRecent = useRecentSpots((s) => s.record);
+
+  useEffect(() => {
+    if (!data || isPlaceholderData) return;
+    recordRecent({
+      contentId: data.contentId,
+      title: data.title,
+      firstImageUrl: data.firstImageUrl,
+      addr1: data.addr1,
+      mapx: data.mapx,
+      mapy: data.mapy,
+      category: data.category,
+    });
+  }, [data, isPlaceholderData, recordRecent]);
 
   const galleryImages =
     data && data.images.length > 0
@@ -35,6 +53,21 @@ export default function SpotScreen() {
 
   const onViewAll = () => {
     if (galleryImages.length > 0) setGalleryOpen(true);
+  };
+
+  const onAskAbout = () => {
+    if (!data) return;
+    pickAnchor({
+      contentId: data.contentId,
+      title: data.title,
+      regionLabel:
+        [data.regionName, data.sigunguName].filter(Boolean).join(" ") || data.addr1 || "",
+      imageUrl: data.firstImageUrl,
+      tag: null,
+      lat: data.mapy,
+      lng: data.mapx,
+    });
+    router.push("/(tabs)/travel");
   };
 
   if (isError && !data) {
@@ -99,6 +132,7 @@ export default function SpotScreen() {
             <View style={styles.band} />
             <LocationSection spot={data} />
             <VisitSection title={data.title} onShare={onShare} onScrap={onToggleSave} />
+            <AskAboutSpot title={data.title} onPress={onAskAbout} />
           </>
         )}
 
@@ -156,7 +190,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.ink,
+    backgroundColor: colors.accent,
   },
   retryText: { fontSize: 15, fontWeight: "700", color: colors.onImage },
 });

@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
   },
-  chipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
+  chipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   label: { fontSize: 13.5, fontWeight: "700", color: colors.sec },
   labelActive: { color: colors.onImage },
 });

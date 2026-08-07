@@ -1,7 +1,6 @@
 import {
   bounds,
   center,
-  miniFitSpots,
   pinsFrom,
   placed,
   regionGroups,
@@ -52,31 +51,6 @@ describe("pinsFrom", () => {
 
   it("falls back to a plain pin when the server names no category", () => {
     expect(pinsFrom(placed([spot()]))[0].categoryGroup).toBeNull();
-  });
-});
-
-describe("miniFitSpots", () => {
-  it("frames every spot when they fit the mini map", () => {
-    const rows = placed([
-      spot({ contentId: "a", regionLabel: "충남 태안군", lat: 36.5, lng: 126.3 }),
-      spot({ contentId: "b", regionLabel: "부산 해운대구", lat: 35.16, lng: 129.16 }),
-    ]);
-
-    expect(miniFitSpots(rows)).toEqual(rows);
-  });
-
-  it("falls back to the busiest area when the results span the country", () => {
-    const rows = placed([
-      spot({ contentId: "a", regionLabel: "강원 고성군", lat: 38.4, lng: 128.46 }),
-      spot({ contentId: "b", regionLabel: "강원 고성군", lat: 38.35, lng: 128.47 }),
-      spot({ contentId: "c", regionLabel: "제주 제주시", lat: 33.5, lng: 126.5 }),
-    ]);
-
-    expect(miniFitSpots(rows).map((r) => r.spot.contentId)).toEqual(["a", "b"]);
-  });
-
-  it("has nothing to frame for an empty answer", () => {
-    expect(miniFitSpots([])).toEqual([]);
   });
 });
 

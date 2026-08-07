@@ -4,6 +4,7 @@ import { File, Paths } from "expo-file-system";
 const REFRESH_KEY = "refresh_token";
 const ONBOARDING_KEY = "onboarding_seen";
 const SEEN_CHANNELS_KEY = "seen_channels";
+const NOTIFICATION_PREFS_KEY = "notification_prefs";
 const INSTALL_MARKER = "install.marker";
 
 const refreshOptions = {
@@ -36,6 +37,14 @@ export async function getSeenChannelsRaw(): Promise<string | null> {
 
 export async function setSeenChannelsRaw(value: string): Promise<void> {
   await SecureStore.setItemAsync(SEEN_CHANNELS_KEY, value);
+}
+
+export async function getNotificationPrefsRaw(): Promise<string | null> {
+  return SecureStore.getItemAsync(NOTIFICATION_PREFS_KEY);
+}
+
+export async function setNotificationPrefsRaw(value: string): Promise<void> {
+  await SecureStore.setItemAsync(NOTIFICATION_PREFS_KEY, value);
 }
 
 export async function ensureFreshInstall(): Promise<void> {
