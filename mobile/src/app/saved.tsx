@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -45,6 +45,7 @@ export default function SavedScreen() {
   const [sort, setSort] = useState<SavedSort>("recent");
   const [grid, setGrid] = useState(false);
   const [removed, setRemoved] = useState<Removed | null>(null);
+  const unsaving = useRef<Promise<unknown> | null>(null);
 
   const list = useMemo(() => sortSaved(data ?? [], sort, coords), [data, sort, coords]);
 
@@ -59,13 +60,16 @@ export default function SavedScreen() {
   };
 
   const remove = (spot: SpotCard) => {
-    unsave.mutate(spot.contentId);
+    unsaving.current = unsave.mutateAsync(spot.contentId).catch(() => undefined);
     setRemoved({ message: unsaveMessage(spot.title), contentId: spot.contentId });
   };
 
   const undo = () => {
-    if (removed) resave.mutate(removed.contentId);
+    if (!removed) return;
+    const { contentId } = removed;
+    const settled = unsaving.current ?? Promise.resolve();
     setRemoved(null);
+    void settled.then(() => resave.mutate(contentId));
   };
 
   return (

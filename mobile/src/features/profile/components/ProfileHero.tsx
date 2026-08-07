@@ -27,7 +27,7 @@ export function ProfileHero({ user, coverUrl, onPress }: Props) {
     >
       {coverUrl ? (
         <View style={styles.cover} pointerEvents="none">
-          <RemoteImage uri={coverUrl} style={styles.coverImg} cropBanner={false} blurRadius={2} />
+          <RemoteImage uri={coverUrl} style={styles.coverImg} cropBanner={false} />
           <View style={styles.coverVeil} />
         </View>
       ) : null}
