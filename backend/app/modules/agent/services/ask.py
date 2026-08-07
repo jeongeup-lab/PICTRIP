@@ -747,7 +747,13 @@ def _verified_origin(place: ResolvedPlace) -> geocode_service.Located | None:
     asked = [name for name in (place.extracted.nameKo, place.extracted.name) if name]
     if not any(geocode_service.names_match(name, spot.title) for name in asked):
         return None
-    return geocode_service.Located(title=spot.title, lat=spot.lat, lng=spot.lng, source=spot.source)
+    return geocode_service.Located(
+        title=spot.title,
+        lat=spot.lat,
+        lng=spot.lng,
+        source=spot.source,
+        content_id=spot.contentId,
+    )
 
 
 def _stands_in_region(row: CandidateRow, prefixes: list[str]) -> bool:
@@ -807,6 +813,7 @@ async def _ask_for_food(
             lng=origin.lng,
             steps=located,
             intent=intent,
+            exclude=origin.content_id,
         )
     if scope.prefixes:
         return await _food_across_region(
@@ -865,6 +872,7 @@ async def _ask_around(
     lng: float,
     steps: list[AskStep],
     intent: QueryIntent,
+    exclude: str | None = None,
 ) -> AskResponse:
     noun = ANCHOR_NOUNS[action]
     found = await find_nearby_spots(
@@ -874,7 +882,7 @@ async def _ask_around(
         radius=ANCHOR_RADIUS_M,
         category=ANCHOR_CATEGORIES[action],
     )
-    kept = found[: retrieve.RESULT_LIMIT]
+    kept = [near for near in found if near.content_id != exclude][: retrieve.RESULT_LIMIT]
     if not kept:
         return empty_anchor_response(origin, action, prior_steps=steps, intent=intent)
     rated = await repositories.load_candidates_by_ids(session, [n.content_id for n in kept])
