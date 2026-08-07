@@ -472,3 +472,59 @@ def test_a_two_region_food_step_names_both() -> None:
     )
 
     assert answer.steps[-1].label == "부산광역시 · 제주특별자치도 맛집 조회"
+
+
+async def test_geocoding_narrows_the_spot_search_with_the_region_hint(monkeypatch) -> None:
+    from app.modules.agent.services import geocode
+
+    seen: dict[str, object] = {}
+
+    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
+        seen["hint"] = region_hint
+        return [SimpleTitleRow("전북 전주 한옥마을 [슬로시티]", 35.818, 127.153)]
+
+    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
+    found = await geocode.locate(None, None, "한옥마을", region_hint="전주")  # type: ignore[arg-type]
+
+    assert seen["hint"] == "전주"
+    assert found is not None and round(found.lat, 2) == 35.82
+
+
+async def test_geocoding_asks_naver_within_the_region(monkeypatch) -> None:
+    from app.modules.agent import naver
+    from app.modules.agent.services import geocode
+
+    asked: dict[str, object] = {}
+
+    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
+        return []
+
+    async def fake_local(client, query, *, display=3):  # type: ignore[no-untyped-def]
+        asked["query"] = query
+        return [naver.NaverPlace("전주 한옥마을", None, "전북특별자치도 전주시", 35.818, 127.153)]
+
+    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
+    monkeypatch.setattr(geocode, "naver_search", fake_local)
+    monkeypatch.setattr(naver, "is_configured", lambda: True)
+
+    found = await geocode.locate(None, None, "한옥마을", region_hint="전주")  # type: ignore[arg-type]
+
+    assert asked["query"] == "전주 한옥마을"
+    assert found is not None
+
+
+async def test_a_hit_outside_the_named_region_is_rejected(monkeypatch) -> None:
+    from app.modules.agent import naver
+    from app.modules.agent.services import geocode
+
+    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
+        return []
+
+    async def fake_local(client, query, *, display=3):  # type: ignore[no-untyped-def]
+        return [naver.NaverPlace("송도 한옥마을", None, "인천광역시 연수구", 37.38, 126.65)]
+
+    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
+    monkeypatch.setattr(geocode, "naver_search", fake_local)
+    monkeypatch.setattr(naver, "is_configured", lambda: True)
+
+    assert await geocode.locate(None, None, "한옥마을", region_hint="전주") is None  # type: ignore[arg-type]
