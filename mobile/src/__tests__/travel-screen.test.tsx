@@ -1,6 +1,7 @@
 import renderer, { act } from "react-test-renderer";
+import { Text } from "react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import TravelScreen from "@/app/(tabs)/travel";
+import TravelScreen, { TAGLINE } from "@/app/(tabs)/travel";
 import { askAgent, type AgentAnswer, type QueryIntent } from "@/features/travel/api";
 import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
 import { useConversation, type Turn } from "@/features/travel/stores/conversation-store";
@@ -225,6 +226,14 @@ describe("TravelScreen empty state", () => {
     expect(tree.root.findAllByProps({ testID: "travel-mascot" }).length).toBeGreaterThan(0);
     expect(tree.root.findAllByProps({ testID: "travel-input" }).length).toBeGreaterThan(0);
     expect(pressable(tree, "travel-chip-근처 맛집")).toBeDefined();
+  });
+
+  it("keeps the invitation and puts the brand line under it, not in its place", async () => {
+    const tree = await mount();
+    const lines = tree.root.findAllByType(Text).map((n) => String(n.props.children ?? ""));
+
+    expect(lines.join("")).toContain("어디로 갈까요");
+    expect(tree.root.findAllByProps({ children: TAGLINE }).length).toBeGreaterThan(0);
   });
 
   it("leaves the composer in place once the first turn lands", async () => {
