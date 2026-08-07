@@ -14,6 +14,7 @@ import { SearchPulse } from "@/features/travel/components/SearchPulse";
 import { StartActions } from "@/features/travel/components/StartActions";
 import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
 import { useCardTap } from "@/features/travel/hooks/use-card-tap";
+import { useAuthGate } from "@/features/auth/hooks/use-auth-gate";
 import { useAskAgentMutation } from "@/features/travel/queries";
 import { useConversation, type Turn } from "@/features/travel/stores/conversation-store";
 import { useTravelAnchor } from "@/features/travel/stores/anchor-store";
@@ -77,6 +78,7 @@ export default function TravelScreen() {
 
   const { coords, askable: locationAskable, ask: askLocation } = useNearbyCoords();
   const ask = useAskAgentMutation();
+  const requireAuth = useAuthGate();
 
   const empty = turns.length === 0;
   const snapY = useMemo(() => travelSheetSnapY(SCREEN_H, TAB_BAR_PX + insets.bottom), [insets]);
@@ -223,6 +225,10 @@ export default function TravelScreen() {
   const onNearby = useCallback(() => submit(NEARBY_CHIP.question, null), [submit]);
 
   const onFestival = useCallback(() => refineFrom(undefined, FESTIVAL_CHIP), [refineFrom]);
+
+  const openSaved = useCallback(async () => {
+    if (await requireAuth("saved-list")) router.push("/saved");
+  }, [requireAuth]);
 
   const onNewChat = useCallback(() => {
     clearTurns();
@@ -416,7 +422,7 @@ export default function TravelScreen() {
                 onPhoto={() => void onAttach()}
                 onNearby={onNearby}
                 onFestival={onFestival}
-                onSaved={() => router.push("/saved")}
+                onSaved={() => void openSaved()}
                 nearbyEnabled={coords !== null}
                 onAskLocation={() => void askLocation()}
                 locationAskable={locationAskable}
