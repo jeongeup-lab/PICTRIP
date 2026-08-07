@@ -224,6 +224,7 @@ async def find_candidates(
     lng: float | None = None,
     indoor_only: bool = False,
     mood_ids: list[int] | None = None,
+    pool_sql: str | None = None,
 ) -> list[CandidateRow]:
     params: dict[str, object] = {"lim": limit}
     percentile_clause = ""
@@ -255,7 +256,7 @@ async def find_candidates(
         params["lng"] = lng
         params["lng_scale"] = math.cos(math.radians(lat))
     sql = _CANDIDATE_SQL.format(
-        attraction=travel_category_sql(),
+        attraction=pool_sql or travel_category_sql(),
         code_clause=code_clause,
         region_clause=region_clause,
         indoor_clause=indoor_clause,
