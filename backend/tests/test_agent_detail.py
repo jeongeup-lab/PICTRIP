@@ -880,3 +880,151 @@ async def test_a_place_the_resolver_missed_still_falls_back_to_geocoding(monkeyp
 
     assert asked == {"name": "대천역", "hint": "보령"}
     assert origin is not None and origin.title == "대천역"
+
+
+async def test_an_ambiguous_resolution_is_not_taken_as_an_origin(monkeypatch) -> None:
+    from app.modules.agent.schemas import ExtractedPlace, ResolvedPlace, ResolvedSpot
+    from app.modules.agent.services import geocode
+
+    async def fake_locate(session, name, *, region_hint=None):  # type: ignore[no-untyped-def]
+        return geocode.Located(title="대천역", lat=36.34, lng=126.58, source="naver")
+
+    monkeypatch.setattr(geocode, "locate", fake_locate)
+
+    intent = QueryIntent(namedPlaces=[ExtractedPlace(name="대천역")])
+    resolved = [
+        ResolvedPlace(
+            extracted=intent.namedPlaces[0],
+            spot=ResolvedSpot(title="대천천", lat=35.242, lng=129.019),
+            confidence=0.5,
+            status="ambiguous",
+        )
+    ]
+
+    origin = await ask_service._named_origin(None, intent, resolved)  # type: ignore[arg-type]
+
+    assert origin is not None
+    assert origin.title == "대천역"
+    assert round(origin.lat, 2) == 36.34
+
+
+async def test_a_naver_hit_whose_name_does_not_hold_is_not_an_origin(monkeypatch) -> None:
+    from app.modules.agent.schemas import ExtractedPlace, ResolvedPlace, ResolvedSpot
+    from app.modules.agent.services import geocode
+
+    async def fake_locate(session, name, *, region_hint=None):  # type: ignore[no-untyped-def]
+        return None
+
+    monkeypatch.setattr(geocode, "locate", fake_locate)
+
+    intent = QueryIntent(namedPlaces=[ExtractedPlace(name="한옥마을", regionHint="전주")])
+    resolved = [
+        ResolvedPlace(
+            extracted=intent.namedPlaces[0],
+            spot=ResolvedSpot(source="naver", title="북촌도담", lat=37.577, lng=126.985),
+            confidence=0.7,
+            status="naver_only",
+        )
+    ]
+
+    assert await ask_service._named_origin(None, intent, resolved) is None  # type: ignore[arg-type]
+
+
+async def test_a_verified_naver_hit_is_still_reused_as_an_origin() -> None:
+    from app.modules.agent.schemas import ExtractedPlace, ResolvedPlace, ResolvedSpot
+
+    intent = QueryIntent(namedPlaces=[ExtractedPlace(name="한옥마을", regionHint="전주")])
+    resolved = [
+        ResolvedPlace(
+            extracted=intent.namedPlaces[0],
+            spot=ResolvedSpot(source="naver", title="전주 한옥마을", lat=35.818, lng=127.153),
+            confidence=0.7,
+            status="naver_only",
+        )
+    ]
+
+    origin = await ask_service._named_origin(None, intent, resolved)  # type: ignore[arg-type]
+
+    assert origin is not None and origin.title == "전주 한옥마을"
+
+
+def test_a_card_from_another_region_is_no_longer_an_origin() -> None:
+    from app.modules.agent.repositories import CandidateRow
+
+    seoul = CandidateRow(
+        content_id="s1",
+        title="경복궁",
+        addr1="서울특별시 종로구 1",
+        region_name="서울특별시",
+        sigungu_name="종로구",
+        lat=37.57,
+        lng=126.97,
+        image_url=None,
+        cpyrht_div_cd="Type1",
+        concentration_rate=None,
+    )
+
+    assert ask_service._stands_in_region(seoul, ["부산광역시"]) is False
+    assert ask_service._stands_in_region(seoul, ["서울특별시"]) is True
+    assert ask_service._stands_in_region(seoul, []) is True
+
+
+async def test_a_carried_region_still_drops_the_card_left_over_from_before(monkeypatch) -> None:
+    from app.modules.agent import repositories
+    from app.modules.agent.repositories import CandidateRow
+    from app.modules.agent.services import retrieve
+
+    seen: dict[str, object] = {}
+
+    async def fake_scope(session, keywords):  # type: ignore[no-untyped-def]
+        return retrieve.CategoryScope(codes=[], matched=[])
+
+    async def fake_region(session, *, hints):  # type: ignore[no-untyped-def]
+        return retrieve.RegionScope(prefixes=["부산광역시"], sido_prefixes=["부산광역시"])
+
+    async def fake_food(session, *, action, region_prefixes, **axes):  # type: ignore[no-untyped-def]
+        seen["prefixes"] = region_prefixes
+        return []
+
+    async def fake_briefs(session, content_ids):  # type: ignore[no-untyped-def]
+        return {
+            "s1": CandidateRow(
+                content_id="s1",
+                title="경복궁",
+                addr1="서울특별시 종로구 1",
+                region_name="서울특별시",
+                sigungu_name="종로구",
+                lat=37.57,
+                lng=126.97,
+                image_url=None,
+                cpyrht_div_cd="Type1",
+                concentration_rate=None,
+            )
+        }
+
+    monkeypatch.setattr(retrieve, "resolve_category_scope", fake_scope)
+    monkeypatch.setattr(retrieve, "resolve_region_scope", fake_region)
+    monkeypatch.setattr(retrieve, "search_food", fake_food)
+    monkeypatch.setattr(repositories, "load_candidates_by_ids", fake_briefs)
+
+    async def fake_extract(q, *, prior=None, prior_spots=None):  # type: ignore[no-untyped-def]
+        return QueryIntent(categoryKeywords=["맛집"], regionHints=["부산"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_extract)
+    await ask_service.ask(
+        _ExplodingSession(),  # type: ignore[arg-type]
+        FakeRedis(),
+        None,
+        question="맛집",
+        lat=None,
+        lng=None,
+        image_bytes=None,
+        image_mime=None,
+        context=AskContext(
+            intent=QueryIntent(regionHints=["부산"]),
+            spots=[AskContextSpot(contentId="s1", title="경복궁")],
+            focusContentId="s1",
+        ),
+    )
+
+    assert seen["prefixes"] == ["부산광역시"]
