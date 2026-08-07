@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Animated, Dimensions, PanResponder, View, StyleSheet } from "react-native";
 import { nearestSnap, type SheetSnap } from "@/lib/sheet-snap";
 import { colors, radii, shadows } from "@/constants/theme";
@@ -26,8 +26,7 @@ export function GlassSheet({
   onTranslate,
   testID,
 }: Props) {
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- stable value: init once, never re-create.
-  const y = useMemo(() => new Animated.Value(snapY[snap]), []);
+  const [y] = useState(() => new Animated.Value(snapY[snap]));
 
   useEffect(() => {
     onTranslate?.(y);

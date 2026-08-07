@@ -22,6 +22,7 @@ export const useNotificationPrefs = create<NotificationPrefsState>((set, get) =>
     if (get().hydrated) return;
     try {
       const raw = await getNotificationPrefsRaw();
+      if (get().hydrated) return;
       set({ prefs: parseNotificationPrefs(raw), hydrated: true });
     } catch {
       set({ hydrated: true });
@@ -29,7 +30,7 @@ export const useNotificationPrefs = create<NotificationPrefsState>((set, get) =>
   },
   toggle: (topic, next) => {
     const prefs = { ...get().prefs, [topic]: next };
-    set({ prefs });
+    set({ prefs, hydrated: true });
     void setNotificationPrefsRaw(serializeNotificationPrefs(prefs)).catch(() => undefined);
   },
 }));
