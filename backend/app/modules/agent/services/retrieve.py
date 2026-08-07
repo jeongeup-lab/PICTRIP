@@ -11,12 +11,7 @@ from app.modules.agent.repositories import INDOOR_L3 as INDOOR_L3
 from app.modules.agent.repositories import CandidateOrder, CandidateRow
 from app.modules.agent.schemas import MAX_HINT_TOKENS, AgentSpotCard, CrowdPreference
 from app.modules.agent.services.geo import haversine_km
-from app.modules.spots.services import (
-    NearbyCategory,
-    category_sql,
-    map_region_tokens_to_prefixes,
-    search_spots_by_title,
-)
+from app.modules.spots.services import map_region_tokens_to_prefixes, search_spots_by_title
 
 CANDIDATE_LIMIT = 400
 TITLE_KEYWORD_LIMIT = 3
@@ -65,28 +60,11 @@ def food_action(codes: list[str]) -> Literal["food", "cafe"] | None:
     return "food"
 
 
-TAXONOMY_SYNONYMS: dict[str, str] = {
-    "사찰": "불교",
-    "절": "불교",
-    "템플스테이": "불교",
-    "교회": "기독교",
-    "성당": "기독교",
-    "놀이공원": "테마파크",
-    "식물원": "수목원",
-    "야시장": "시장",
-    "트레킹": "둘레길",
-}
-
-
-def taxonomy_word(keyword: str) -> str:
-    return TAXONOMY_SYNONYMS.get(keyword, keyword)
-
-
 async def resolve_category_scope(session: AsyncSession, keywords: list[str]) -> CategoryScope:
     codes: list[str] = []
     matched: list[str] = []
     for keyword in keywords:
-        found = await repositories.find_category_codes(session, taxonomy_word(keyword))
+        found = await repositories.find_category_codes(session, keyword)
         if found:
             matched.append(keyword)
         for code in found:
@@ -195,20 +173,6 @@ async def search_candidates(
         floor=None if quiet else 100 - round(POPULAR_KEEP_RATIO * 100),
     )
     return within or await query(ceiling=None, floor=None)
-
-
-async def search_food(
-    session: AsyncSession, *, action: str, region_prefixes: list[str]
-) -> list[CandidateRow]:
-    pool = NearbyCategory.cafe if action == "cafe" else NearbyCategory.food
-    return await repositories.find_candidates(
-        session,
-        codes=None,
-        region_prefixes=region_prefixes or None,
-        limit=CANDIDATE_LIMIT,
-        order="id",
-        pool_sql=category_sql(pool),
-    )
 
 
 async def search_by_title(

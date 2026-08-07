@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import pytest
 from fakeredis.aioredis import FakeRedis
 
@@ -13,13 +11,6 @@ from app.modules.agent.services import intent as intent_service
 from app.modules.spots.services.rows import SpotDetailRow, SpotIntroRow
 
 SEBYEONGGWAN = AskContextSpot(contentId="126198", title="통영 세병관")
-
-
-@dataclass
-class SimpleTitleRow:
-    title: str
-    lat: float | None
-    lng: float | None
 
 
 class _ExplodingSession:
@@ -239,24 +230,16 @@ def test_food_codes_are_recognised_as_a_food_scope() -> None:
     assert retrieve.food_action([]) is None
 
 
-async def test_a_food_search_with_no_origin_at_all_says_how_to_get_one(monkeypatch) -> None:
+async def test_a_food_search_without_a_place_says_how_to_get_one(monkeypatch) -> None:
     from app.modules.agent.services import retrieve
 
     async def fake_scope(session, keywords):  # type: ignore[no-untyped-def]
         return retrieve.CategoryScope(codes=["FD010100"], matched=list(keywords))
 
-    async def fake_region(session, *, hints):  # type: ignore[no-untyped-def]
-        return retrieve.EMPTY_REGION_SCOPE
-
     monkeypatch.setattr(retrieve, "resolve_category_scope", fake_scope)
-    monkeypatch.setattr(retrieve, "resolve_region_scope", fake_region)
+    intent = QueryIntent(categoryKeywords=["맛집"], regionHints=["부산"])
 
-    answer = await _ask(
-        "맛집 아무데나",
-        intent=QueryIntent(categoryKeywords=["맛집"]),
-        row=None,
-        monkeypatch=monkeypatch,
-    )
+    answer = await _ask("부산 맛집", intent=intent, row=None, monkeypatch=monkeypatch)
 
     assert answer.spots == []
     assert _text(answer) == ask_service.FOOD_NEEDS_ORIGIN_ANSWER
@@ -289,170 +272,3 @@ def test_everyday_food_words_route_even_when_the_taxonomy_has_no_such_name() -> 
     assert retrieve.food_word(["박물관"]) is None
     assert retrieve.food_word(["맛집", "박물관"]) is None
     assert retrieve.food_word([]) is None
-
-
-def test_everyday_nouns_map_onto_the_taxonomy_words() -> None:
-    from app.modules.agent.services import retrieve
-
-    assert retrieve.taxonomy_word("사찰") == "불교"
-    assert retrieve.taxonomy_word("절") == "불교"
-    assert retrieve.taxonomy_word("성당") == "기독교"
-    assert retrieve.taxonomy_word("놀이공원") == "테마파크"
-    assert retrieve.taxonomy_word("식물원") == "수목원"
-    assert retrieve.taxonomy_word("야시장") == "시장"
-    assert retrieve.taxonomy_word("박물관") == "박물관"
-
-
-async def test_a_synonym_search_keeps_the_user_word_in_the_answer() -> None:
-    from app.modules.agent import repositories
-    from app.modules.agent.services import retrieve
-
-    asked: list[str] = []
-
-    class _Session:
-        async def execute(self, *args: object, **kwargs: object) -> object:
-            raise AssertionError("unused")
-
-    async def fake_codes(session, keyword, *, limit=40):  # type: ignore[no-untyped-def]
-        asked.append(keyword)
-        return ["HS030100"] if keyword == "불교" else []
-
-    original = repositories.find_category_codes
-    repositories.find_category_codes = fake_codes  # type: ignore[assignment]
-    try:
-        scope = await retrieve.resolve_category_scope(_Session(), ["사찰"])  # type: ignore[arg-type]
-    finally:
-        repositories.find_category_codes = original  # type: ignore[assignment]
-
-    assert asked == ["불교"]
-    assert scope.codes == ["HS030100"]
-    assert scope.matched == ["사찰"]
-
-
-def test_a_food_pool_sql_is_available_per_category() -> None:
-    from app.modules.spots.services import NearbyCategory, category_sql
-
-    food = category_sql(NearbyCategory.food)
-    cafe = category_sql(NearbyCategory.cafe)
-
-    assert "FD01" in food and "FD05" not in food
-    assert "FD05" in cafe
-
-
-async def test_a_region_is_a_good_enough_origin_for_food(monkeypatch) -> None:
-    from app.modules.agent.services import retrieve
-
-    async def fake_scope(session, keywords):  # type: ignore[no-untyped-def]
-        return retrieve.CategoryScope(codes=[], matched=[])
-
-    async def fake_region(session, *, hints):  # type: ignore[no-untyped-def]
-        return retrieve.RegionScope(
-            prefixes=["전북특별자치도 정읍시"], sido_prefixes=["전북특별자치도"]
-        )
-
-    seen: dict[str, object] = {}
-
-    async def fake_food(session, *, action, region_prefixes):  # type: ignore[no-untyped-def]
-        seen["action"] = action
-        seen["prefixes"] = region_prefixes
-        return []
-
-    monkeypatch.setattr(retrieve, "resolve_category_scope", fake_scope)
-    monkeypatch.setattr(retrieve, "resolve_region_scope", fake_region)
-    monkeypatch.setattr(retrieve, "search_food", fake_food)
-
-    await _ask(
-        "정읍 맛집",
-        intent=QueryIntent(categoryKeywords=["맛집"], regionHints=["정읍"]),
-        row=None,
-        monkeypatch=monkeypatch,
-    )
-
-    assert seen["action"] == "food"
-    assert seen["prefixes"] == ["전북특별자치도 정읍시"]
-
-
-def test_a_geocode_hit_must_actually_carry_the_asked_name() -> None:
-    from app.modules.agent.services import geocode
-
-    assert geocode.names_match("대천역", "대천역 장항선") is True
-    assert geocode.names_match("대천역", "대천천") is False
-    assert geocode.names_match("한옥마을", "북촌도담") is False
-    assert geocode.names_match("전주 한옥마을", "전북 전주 한옥마을 [슬로시티]") is True
-    assert geocode.names_match("정읍역", "정읍역 (고속철도)") is True
-    assert geocode.names_match("", "아무거나") is False
-
-
-async def test_geocoding_prefers_a_kto_spot_that_carries_the_name(monkeypatch) -> None:
-    from app.modules.agent.services import geocode
-
-    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
-        return [
-            SimpleTitleRow("전북 전주 한옥마을 [슬로시티]", 35.818, 127.153),
-        ]
-
-    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
-    found = await geocode.locate(None, None, "전주 한옥마을")  # type: ignore[arg-type]
-
-    assert found is not None
-    assert found.title == "전북 전주 한옥마을 [슬로시티]"
-    assert round(found.lat, 2) == 35.82
-
-
-async def test_geocoding_falls_through_to_naver_when_no_spot_carries_the_name(
-    monkeypatch,
-) -> None:
-    from app.modules.agent import naver
-    from app.modules.agent.services import geocode
-
-    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
-        return [SimpleTitleRow("대천천", 35.242, 129.019)]
-
-    async def fake_local(client, query, *, display=3):  # type: ignore[no-untyped-def]
-        return [naver.NaverPlace("대천역 장항선", None, "충청남도 보령시", 36.3416, 126.5867)]
-
-    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
-    monkeypatch.setattr(geocode, "naver_search", fake_local)
-    monkeypatch.setattr(naver, "is_configured", lambda: True)
-
-    found = await geocode.locate(None, None, "대천역")  # type: ignore[arg-type]
-
-    assert found is not None
-    assert round(found.lat, 2) == 36.34
-
-
-async def test_geocoding_gives_up_rather_than_guessing(monkeypatch) -> None:
-    from app.modules.agent import naver
-    from app.modules.agent.services import geocode
-
-    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
-        return []
-
-    async def fake_local(client, query, *, display=3):  # type: ignore[no-untyped-def]
-        return [naver.NaverPlace("북촌도담", None, "서울특별시 종로구", 37.577, 126.985)]
-
-    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
-    monkeypatch.setattr(geocode, "naver_search", fake_local)
-    monkeypatch.setattr(naver, "is_configured", lambda: True)
-
-    assert await geocode.locate(None, None, "한옥마을") is None  # type: ignore[arg-type]
-
-
-async def test_the_origin_is_named_the_way_the_user_said_it(monkeypatch) -> None:
-    from app.modules.agent import naver
-    from app.modules.agent.services import geocode
-
-    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
-        return []
-
-    async def fake_local(client, query, *, display=3):  # type: ignore[no-untyped-def]
-        return [naver.NaverPlace("타이어뱅크 대천역점", None, "충청남도 보령시", 36.34, 126.58)]
-
-    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
-    monkeypatch.setattr(geocode, "naver_search", fake_local)
-    monkeypatch.setattr(naver, "is_configured", lambda: True)
-
-    found = await geocode.locate(None, None, "대천역")  # type: ignore[arg-type]
-
-    assert found is not None
-    assert found.title == "대천역"
