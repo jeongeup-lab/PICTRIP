@@ -39,6 +39,8 @@ const UNSAVE_COMPLETE = "여행지 저장을 해제했어요";
 const TOAST_BOTTOM = 150;
 const GREETING_FADE_MS = 180;
 
+export const TAGLINE = "사진 한 장으로 떠나는 여행";
+
 export default function TravelScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const nextId = useRef(0);
@@ -302,6 +304,7 @@ export default function TravelScreen() {
         >
           <Mascot floating={empty} />
           <Text style={styles.greetingText}>오늘,{"\n"}어디로 갈까요</Text>
+          <Text style={styles.tagline}>{TAGLINE}</Text>
           <View style={styles.startActions}>
             <StartActions
               onAskLocation={() => void askLocation()}
@@ -388,6 +391,13 @@ const styles = StyleSheet.create({
     letterSpacing: -0.9,
     lineHeight: 34,
     color: colors.ink,
+  },
+  tagline: {
+    marginTop: 10,
+    textAlign: "center",
+    fontSize: 12.5,
+    letterSpacing: -0.2,
+    color: colors.ter,
   },
   talk: { marginTop: 22, marginHorizontal: spacing.lg },
 });

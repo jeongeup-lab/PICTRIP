@@ -55,6 +55,7 @@
 |---|---|
 | 마스코트 | `Mascot` 60px `ink`, 아래 여백 16 |
 | 인사말 | `오늘,\n어디로 갈까요` 26/800, letterSpacing -0.9, lineHeight 34, 중앙 정렬 |
+| 태그라인 | `사진 한 장으로 떠나는 여행` 12.5 `ter`, 인사말 아래 여백 10 |
 | 전이 | 첫 턴이 생기면 opacity 180ms 페이드 |
 
 `Mascot`(`features/travel/components/Mascot.tsx`) = `react-native-svg` 단선
