@@ -1,7 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { FlatList, View, Text, RefreshControl, StyleSheet, type ViewToken } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useScrollToTop } from "expo-router";
 import { ChannelTiles } from "@/features/channels/components/ChannelTiles";
 import { PostCarousel } from "@/features/feed/components/PostCarousel";
 import { prefetchMatches, usePostsFeed } from "@/features/feed/posts-queries";
@@ -24,6 +24,9 @@ function Header() {
 
 export default function HomeScreen() {
   const [seed, setSeed] = useState(() => makeSeed());
+  const listRef = useRef<FlatList<OverseasPost>>(null);
+
+  useScrollToTop(listRef);
 
   const {
     data,
@@ -79,6 +82,7 @@ export default function HomeScreen() {
         </View>
       ) : (
         <FlatList
+          ref={listRef}
           data={posts}
           keyExtractor={(post) => String(post.id)}
           renderItem={({ item }) => (

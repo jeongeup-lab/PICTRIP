@@ -1,4 +1,4 @@
-import { coordsOf, distanceReading, spotDistanceKm } from "../distance";
+import { coordsOf, distanceLabel, distanceReading, spotDistanceKm } from "../distance";
 import type { TravelSpot } from "@/features/travel/api";
 
 const spot = (over: Partial<TravelSpot> = {}): TravelSpot => ({
@@ -44,6 +44,27 @@ describe("distanceReading", () => {
 
   it("먼 거리는 정수 km 로 줄인다", () => {
     expect(distanceReading(12.4)).toEqual({ value: "12", unit: "km" });
+  });
+});
+
+describe("distanceLabel", () => {
+  it("서버가 잰 거리가 있으면 그 문구를 그대로 쓴다", () => {
+    expect(distanceLabel("420m", 450)).toBe("420m");
+    expect(distanceLabel("2.4km", 450)).toBe("2.4km");
+  });
+
+  it("기기 위치를 모를 때도 서버 거리는 남는다", () => {
+    expect(distanceLabel("420m", null)).toBe("420m");
+  });
+
+  it("서버가 거리를 주지 않으면 기기 위치로 잰 값을 읽는다", () => {
+    expect(distanceLabel(null, 2.44)).toBe("2.4km");
+    expect(distanceLabel("한산", 2.44)).toBe("2.4km");
+  });
+
+  it("양쪽 다 없으면 붙일 거리가 없다", () => {
+    expect(distanceLabel(null, null)).toBeNull();
+    expect(distanceLabel("한산", null)).toBeNull();
   });
 });
 

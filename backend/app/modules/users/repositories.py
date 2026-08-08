@@ -107,7 +107,6 @@ async def upsert_consent(
     *,
     user_id: int,
     location_consent: bool,
-    photo_consent: bool,
     terms_version: str,
 ) -> Any:
     stmt = (
@@ -115,7 +114,6 @@ async def upsert_consent(
         .values(
             user_id=user_id,
             location_consent=location_consent,
-            photo_consent=photo_consent,
             terms_version=terms_version,
             consented_at=func.now(),
         )
@@ -123,14 +121,12 @@ async def upsert_consent(
             index_elements=[UserConsent.user_id],
             set_={
                 "location_consent": location_consent,
-                "photo_consent": photo_consent,
                 "terms_version": terms_version,
                 "consented_at": func.now(),
             },
         )
         .returning(
             UserConsent.location_consent,
-            UserConsent.photo_consent,
             UserConsent.terms_version,
             UserConsent.consented_at,
         )

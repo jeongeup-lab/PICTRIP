@@ -52,7 +52,6 @@ class SavedSpotToggle(BaseModel):
 
 class ConsentIn(BaseModel):
     locationConsent: bool
-    photoConsent: bool = False
     termsVersion: str
 
 
@@ -60,13 +59,11 @@ class ConsentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     locationConsent: bool
-    photoConsent: bool
     termsVersion: str
     consentedAt: datetime
 
 
 class ConsentState(BaseModel):
     locationConsent: bool = False
-    photoConsent: bool = False
     termsVersion: str | None = None
     consentedAt: datetime | None = None

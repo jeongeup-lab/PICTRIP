@@ -5,6 +5,7 @@ import { useExploreFeed } from "@/features/explore/queries";
 import type { OverseasPost } from "@/features/feed/posts-api";
 
 jest.mock("@/features/explore/queries", () => ({ useExploreFeed: jest.fn() }));
+jest.mock("expo-router", () => ({ useScrollToTop: jest.fn() }));
 jest.mock("@/features/feed/components/PostCarousel", () => {
   const React = require("react");
   const { Text } = require("react-native");
@@ -28,6 +29,8 @@ function posts(n: number): OverseasPost[] {
     imageSourceUrl: `https://commons.wikimedia.org/${i + 1}`,
   }));
 }
+
+const { useScrollToTop } = jest.requireMock("expo-router") as { useScrollToTop: jest.Mock };
 
 let fetchNextPage: jest.Mock;
 let refetch: jest.Mock;
@@ -97,6 +100,17 @@ describe("ExploreGrid", () => {
       r.root.findByProps({ testID: "post-modal-close" }).props.onPress();
     });
     expect(hosts(r, "carousel").length).toBe(0);
+  });
+
+  it("wires the grid list into the tab re-tap scroll-to-top hook", async () => {
+    setFeed();
+    const r = await mount();
+    expect(useScrollToTop).toHaveBeenCalled();
+    const ref = useScrollToTop.mock.calls.at(-1)?.[0] as {
+      current: { scrollToOffset?: unknown } | null;
+    };
+    expect(ref.current).toBe(r.root.findAllByType(FlatList)[0].instance);
+    expect(typeof ref.current?.scrollToOffset).toBe("function");
   });
 
   it("pull-to-refresh hands useExploreFeed a fresh seed to reshuffle", async () => {

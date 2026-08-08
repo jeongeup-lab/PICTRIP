@@ -136,7 +136,7 @@ async def test_anchor_food_returns_nearby_restaurants_sorted_by_distance(
     assert [step["tool"] for step in data["steps"]] == ["nearby"]
     assert "김녕미로공원 주변 맛집" in data["steps"][0]["label"]
     assert [spot["contentId"] for spot in data["spots"]] == ["f1", "f2"]
-    assert all(spot["tag"].endswith("km") for spot in data["spots"])
+    assert all(ask_service._is_distance_tag(spot["tag"]) for spot in data["spots"])
     assert data["refinements"] == []
     assert data["suggestions"] == []
 
@@ -256,7 +256,7 @@ def test_anchor_card_carries_distance_tag_and_short_region() -> None:
         has_crowd=False,
     )
 
-    assert card.tag == "0.4km"
+    assert card.tag == "440m"
     assert card.regionLabel == "제주특별자치도 제주시"
 
 
@@ -326,7 +326,7 @@ async def test_an_anchor_without_a_content_id_centres_on_my_coords(
     assert res.status_code == 200
     data = res.json()["data"]
     assert data["spots"]
-    assert "내 위치 주변 맛집" in "".join(part["text"] for part in data["answer"])
+    assert "내 위치 주변으로" in "".join(part["text"] for part in data["answer"])
     assert data["steps"][0]["label"].startswith("내 위치 주변 맛집")
 
 
@@ -559,3 +559,93 @@ def test_naming_the_origin_still_pivots_even_with_a_region() -> None:
     pivot = ask_service._origin_anchor(intent, context)
 
     assert pivot is not None and pivot.contentId == "126198"
+
+
+def test_an_anchor_answer_leads_with_the_nearest_distance() -> None:
+    segments = ask_service._anchor_lead("성산일출봉", "food", nearest_m=420)
+
+    text = "".join(s.text for s in segments)
+    assert text.startswith("가장 가까운 맛집이 420m 거리예요.")
+    assert [s.text for s in segments if s.emphasis] == ["420m"]
+
+
+def test_a_sub_kilometre_distance_reads_in_metres_not_zero_point_something() -> None:
+    assert ask_service._meters_label(38.0) == "40m"
+    assert ask_service._meters_label(874.0) == "870m"
+    assert ask_service._meters_label(4.0) == "10m"
+
+
+def test_a_kilometre_scale_distance_keeps_the_kilometre_form() -> None:
+    assert ask_service._meters_label(1000.0) == "1.0km"
+    assert ask_service._meters_label(3210.0) == "3.2km"
+    assert ask_service._meters_label(996.0) == "1.0km"
+
+
+def test_a_close_anchor_never_leads_with_a_zero_distance() -> None:
+    segments = ask_service._anchor_lead("성산일출봉", "cafe", nearest_m=32.0)
+
+    assert "".join(s.text for s in segments) == "가장 가까운 카페가 30m 거리예요."
+
+
+def test_an_anchor_answer_without_a_distance_states_the_scope() -> None:
+    segments = ask_service._anchor_lead("성산일출봉", "cafe", nearest_m=None)
+
+    assert "".join(s.text for s in segments) == "성산일출봉 주변 카페예요."
+
+
+def test_an_anchor_answer_attaches_the_particle_each_noun_actually_takes() -> None:
+    leads = {
+        action: "".join(
+            part.text for part in ask_service._anchor_lead("성산일출봉", action, nearest_m=420)
+        )
+        for action in ("food", "cafe", "nearby")
+    }
+
+    assert leads["food"].startswith("가장 가까운 맛집이 ")
+    assert leads["cafe"].startswith("가장 가까운 카페가 ")
+    assert leads["nearby"].startswith("가장 가까운 볼거리가 ")
+
+
+def test_an_empty_anchor_line_attaches_the_particle_each_noun_takes() -> None:
+    lines = {
+        action: "".join(
+            part.text
+            for part in ask_service.empty_anchor_response(
+                "성산일출봉", action, prior_steps=[]
+            ).answer
+        )
+        for action in ("food", "cafe", "nearby")
+    }
+
+    assert "안에는 맛집이 없어요." in lines["food"]
+    assert "안에는 카페가 없어요." in lines["cafe"]
+    assert "안에는 볼거리가 없어요." in lines["nearby"]
+
+
+def test_an_empty_region_line_attaches_the_particle_each_noun_takes() -> None:
+    lines = {
+        action: "".join(
+            part.text
+            for part in ask_service.food_in_region(
+                [], ["부산광역시"], action, steps=[], intent=QueryIntent()
+            ).answer
+        )
+        for action in ("food", "cafe", "nearby")
+    }
+
+    assert lines["food"] == "부산광역시에는 등록된 맛집이 없어요."
+    assert lines["cafe"] == "부산광역시에는 등록된 카페가 없어요."
+    assert lines["nearby"] == "부산광역시에는 등록된 볼거리가 없어요."
+
+
+def test_an_anchor_scope_line_ends_with_the_copula_each_noun_takes() -> None:
+    scopes = {
+        action: "".join(
+            part.text for part in ask_service._anchor_lead("성산일출봉", action, nearest_m=None)
+        )
+        for action in ("food", "cafe", "nearby")
+    }
+
+    assert scopes["food"] == "성산일출봉 주변 맛집이에요."
+    assert scopes["cafe"] == "성산일출봉 주변 카페예요."
+    assert scopes["nearby"] == "성산일출봉 주변 볼거리예요."

@@ -9,6 +9,7 @@ let seedCounter = 0;
 jest.mock("@/lib/seed", () => ({ makeSeed: () => `seed-${(seedCounter += 1)}` }));
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), push: jest.fn() },
+  useScrollToTop: jest.fn(),
 }));
 jest.mock("react-native-safe-area-context", () => ({
   SafeAreaView: (props: { children?: unknown }) => props.children,
@@ -39,7 +40,10 @@ jest.mock("@/features/feed/components/PostCarousel", () => {
 
 const usePostsFeedMock = usePostsFeed as jest.Mock;
 const prefetchMatchesMock = prefetchMatches as jest.Mock;
-const { router } = jest.requireMock("expo-router") as { router: { push: jest.Mock } };
+const { router, useScrollToTop } = jest.requireMock("expo-router") as {
+  router: { push: jest.Mock };
+  useScrollToTop: jest.Mock;
+};
 
 function posts(n: number): OverseasPost[] {
   return Array.from({ length: n }, (_, i) => ({
@@ -189,6 +193,17 @@ describe("HomeScreen", () => {
     const r = await mount();
     const list = r.root.findAllByType(FlatList)[0];
     expect(list.props.refreshControl.props.refreshing).toBe(true);
+  });
+
+  it("wires the feed list into the tab re-tap scroll-to-top hook", async () => {
+    setFeed();
+    const r = await mount();
+    expect(useScrollToTop).toHaveBeenCalled();
+    const ref = useScrollToTop.mock.calls.at(-1)?.[0] as {
+      current: { scrollToOffset?: unknown } | null;
+    };
+    expect(ref.current).toBe(r.root.findAllByType(FlatList)[0].instance);
+    expect(typeof ref.current?.scrollToOffset).toBe("function");
   });
 
   it("prefetches matches for posts as they become viewable", async () => {

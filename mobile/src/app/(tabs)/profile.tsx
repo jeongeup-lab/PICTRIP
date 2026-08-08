@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { View, Text, Pressable, ScrollView, Linking, StyleSheet } from "react-native";
+import { View, Pressable, ScrollView, Linking, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -41,10 +41,10 @@ export default function ProfileTab() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.nav}>
-        <Text style={styles.navTitle}>마이</Text>
+      <View style={styles.nav} testID="profile-nav">
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel="마이 설정"
           hitSlop={8}
           style={styles.navBtn}
           onPress={() => router.push("/settings")}
@@ -130,10 +130,9 @@ const styles = StyleSheet.create({
     height: 50,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
     paddingHorizontal: spacing.lg,
   },
-  navTitle: { fontSize: 21, fontWeight: "800", letterSpacing: -0.5, color: colors.ink },
   navBtn: { width: 34, height: 34, alignItems: "flex-end", justifyContent: "center" },
   scroll: { paddingBottom: spacing.xxl },
 });

@@ -1,7 +1,5 @@
 export const PHOTO_ONLY_QUESTION = "이 사진 같은 분위기의 여행지";
 
-export const RETRY_SUGGESTION = "다시 시도";
-
 export const MY_LOCATION = "내 위치";
 
 export function composeQuestion(input: string, hasPhoto: boolean): string | null {

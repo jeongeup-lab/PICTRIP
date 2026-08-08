@@ -16,7 +16,7 @@ export function useLocationConsentSync(data: ConsentState | undefined) {
         if (!data) return;
         const perm = await Location.getForegroundPermissionsAsync();
         if (!cancelled && perm.granted !== data.locationConsent) {
-          update.mutate(buildConsentPut(data, perm.granted, data.termsVersion ?? TERMS_VERSION));
+          update.mutate(buildConsentPut(perm.granted, data.termsVersion ?? TERMS_VERSION));
         }
       })();
       return () => {

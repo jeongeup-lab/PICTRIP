@@ -1,4 +1,4 @@
-import { View, Text, Pressable, ScrollView, Switch, Linking, StyleSheet } from "react-native";
+import { View, Text, Pressable, ScrollView, Linking, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -7,9 +7,8 @@ import { ListRow } from "@/components/ListRow";
 import { SectionTitle } from "@/components/SectionTitle";
 import { LEGAL_DOCS } from "@/features/legal/constants";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
-import { useConsents, useUpdateConsent } from "@/features/consent/queries";
+import { useConsents } from "@/features/consent/queries";
 import { useLocationConsentSync } from "@/features/consent/hooks/use-location-consent-sync";
-import { TERMS_VERSION } from "@/constants/legal";
 import { localDateLabel } from "@/lib/local-date";
 import { colors, spacing } from "@/constants/theme";
 
@@ -18,7 +17,6 @@ export default function LegalListScreen() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const { data, isLoading, isError, refetch } = useConsents();
   useLocationConsentSync(data);
-  const update = useUpdateConsent();
 
   const consentedAt = localDateLabel(data?.consentedAt ?? null);
   const termsVersion = data?.termsVersion ?? null;
@@ -28,15 +26,6 @@ export default function LegalListScreen() {
   ]
     .filter(Boolean)
     .join(" · ");
-
-  const togglePhoto = (next: boolean) => {
-    if (!data) return;
-    update.mutate({
-      locationConsent: data.locationConsent,
-      photoConsent: next,
-      termsVersion: data.termsVersion ?? TERMS_VERSION,
-    });
-  };
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -89,19 +78,6 @@ export default function LegalListScreen() {
                   chevron
                   onPress={() => void Linking.openSettings()}
                   testID="consent-location"
-                />
-                <ListRow
-                  icon="photo"
-                  title="[선택] 사진 분석 이용"
-                  sub={data.photoConsent ? "동의함 · 언제든 철회할 수 있어요" : "동의하지 않음"}
-                  right={
-                    <Switch
-                      value={data.photoConsent}
-                      onValueChange={togglePhoto}
-                      trackColor={{ false: colors.line, true: colors.accent }}
-                      testID="consent-photo-switch"
-                    />
-                  }
                 />
               </ListGroup>
             )}

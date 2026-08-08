@@ -29,6 +29,11 @@
   DROP을 막는다(→ [ADR-0002](../adr/0002-expand-contract-migrations.md)).
 - **의도적 unmapped 컬럼** — `user_consents.notification_consent`는 DB에
   있으나 ORM에 매핑하지 않는다(expand→contract 중간 상태).
+- **반대 방향의 이상 항목** — `user_consents.photo_consent`는 ORM에 살아 있는
+  `Mapped[bool]`(`users/models.py`)이지만 **읽기·쓰기 경로가 하나도 없다**.
+  사진 분석 선택 동의를 화면·API·스키마에서 걷어내면서 컬럼과 매핑만 남겼다.
+  DROP은 일부러 미뤘다(expand→contract, → [ADR-0002](../adr/0002-expand-contract-migrations.md)) —
+  매핑이 살아 있다고 사용 중으로 읽지 말 것.
 
 ## 어떻게 맞물리나
 

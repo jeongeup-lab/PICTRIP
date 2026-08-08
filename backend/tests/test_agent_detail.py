@@ -1151,7 +1151,7 @@ async def test_a_region_food_query_measures_from_me_when_i_said_nearby(monkeypat
     assert seen["lat"] == 35.15
     assert answer.intent.nearMe is True
     assert answer.tagBasis == "직선거리 기준"
-    assert answer.spots[0].tag is not None and answer.spots[0].tag.endswith("km")
+    assert ask_service._is_distance_tag(answer.spots[0].tag)
 
 
 async def test_a_region_food_query_without_coords_stays_a_plain_listing(monkeypatch) -> None:

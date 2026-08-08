@@ -109,7 +109,7 @@ async def delete_me(
 @router.get(
     "/users/me/consents",
     status_code=status.HTTP_200_OK,
-    summary="My current consent state (location/photo/terms)",
+    summary="My current consent state (location/terms)",
 )
 async def get_consents(
     user_id: CurrentUserId,
@@ -122,7 +122,7 @@ async def get_consents(
 @router.put(
     "/users/me/consents",
     status_code=status.HTTP_200_OK,
-    summary="Upsert my consents (location/photo/terms)",
+    summary="Upsert my consents (location/terms)",
 )
 async def put_consents(
     body: ConsentIn,

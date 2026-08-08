@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 
 from redis.asyncio import Redis
 
@@ -70,6 +71,8 @@ ANCHOR_CATEGORIES: dict[str, NearbyCategory] = {
     "nearby": NearbyCategory.attraction,
 }
 ANCHOR_NOUNS: dict[str, str] = {"food": "맛집", "cafe": "카페", "nearby": "볼거리"}
+METERS_STEP = 10
+DISTANCE_TAG = re.compile(r"^\d+(\.\d+)?(km|m)$")
 ORIGIN_ACTION_WORDS: tuple[tuple[str, AnchorAction], ...] = (
     ("카페", "cafe"),
     ("커피", "cafe"),
@@ -239,17 +242,9 @@ async def _ask_with_photo(
 
     top = ordered[: retrieve.RESULT_LIMIT]
     spots = [_photo_card(row, similarity=similarity, lat=lat, lng=lng, near=near) for row in top]
-    answer = [
-        AnswerSegment(text="사진과 닮은 곳으로 "),
-        AnswerSegment(text=f"{len(top)}곳", emphasis=True),
-        AnswerSegment(text=" 찾았어요."),
-    ]
-    if widened is not None:
-        answer.extend(_widen_sentence(widened))
-    answer.append(AnswerSegment(text=" 원본 사진은 비교 후 바로 폐기했어요."))
     return AskResponse(
         steps=steps,
-        answer=answer,
+        answer=_photo_answer(top, spots, near=near, lat=lat, lng=lng, widened=widened),
         spots=spots,
         totalCount=len(spots),
         intent=intent,
@@ -262,6 +257,35 @@ async def _ask_with_photo(
             indoor_available=any(row.indoor for row in ordered),
         ),
     )
+
+
+def _photo_answer(
+    top: list[CandidateRow],
+    spots: list[AgentSpotCard],
+    *,
+    near: bool,
+    lat: float | None,
+    lng: float | None,
+    widened: retrieve.RegionScope | None,
+) -> list[AnswerSegment]:
+    lead: list[AnswerSegment] = []
+    if near and lat is not None and lng is not None:
+        lead = _nearest_sentence(top, lat=lat, lng=lng)
+    if not lead:
+        lead = [
+            AnswerSegment(text=spots[0].title, emphasis=True),
+            AnswerSegment(text=f"{_subject_particle(spots[0].title)} 가장 비슷해요."),
+        ]
+    answer = [
+        *lead,
+        AnswerSegment(text=" 사진과 닮은 곳으로 "),
+        AnswerSegment(text=f"{len(top)}곳이에요."),
+    ]
+    if widened is not None:
+        answer.append(AnswerSegment(text=" "))
+        answer.extend(_widen_sentence(widened))
+    answer.append(AnswerSegment(text=" 원본 사진은 비교 후 바로 폐기했어요."))
+    return answer
 
 
 def _photo_label(prefixes: list[str]) -> str:
@@ -281,7 +305,7 @@ def _photo_card(
     if near and lat is not None and lng is not None:
         km = retrieve.distance_km(row, lat=lat, lng=lng)
         if km is not None:
-            return retrieve.to_card(row, tag=f"{km:.1f}km")
+            return retrieve.to_card(row, tag=_km_label(km))
     return retrieve.to_card(row, tag=f"유사도 {round(similarity.get(row.content_id, 0.0) * 100)}%")
 
 
@@ -336,15 +360,10 @@ async def _ask_with_anchor(
         AskStep(tool="nearby", label=f"{origin} 주변 {noun} 조회", badge=f"{len(spots)}곳")
     )
     answer = [
-        AnswerSegment(text=f"{origin} 주변 {noun} "),
-        AnswerSegment(text=f"{len(spots)}곳", emphasis=True),
-        AnswerSegment(text=" 찾았어요."),
+        *_anchor_lead(origin, anchor.action, nearest_m=kept[0].dist),
+        AnswerSegment(text=f" {origin} 주변으로 "),
+        AnswerSegment(text=f"{len(spots)}곳이에요."),
     ]
-    nearest = kept[0].dist
-    if nearest is not None:
-        answer.append(AnswerSegment(text=" 가장 가까운 곳은 "))
-        answer.append(AnswerSegment(text=_meters_label(nearest), emphasis=True))
-        answer.append(AnswerSegment(text=" 거리예요."))
     logger.info("agent.anchor.done", action=anchor.action, results=len(spots))
     return AskResponse(
         steps=steps,
@@ -375,13 +394,36 @@ def empty_anchor_response(
         answer=[
             AnswerSegment(text=f"{origin} 주변 "),
             AnswerSegment(text=f"{ANCHOR_RADIUS_M // 1000}km", emphasis=True),
-            AnswerSegment(text=f" 안에는 {noun}이 없어요. 다른 곳을 골라 보세요."),
+            AnswerSegment(
+                text=f" 안에는 {noun}{_subject_particle(noun)} 없어요. 다른 곳을 골라 보세요."
+            ),
         ],
         spots=[],
         totalCount=0,
         intent=_without_unapplied_axes(intent or QueryIntent()),
         refinements=[],
     )
+
+
+def _subject_particle(word: str) -> str:
+    return "이" if detail_service.ends_with_consonant(word) else "가"
+
+
+def _copula(word: str) -> str:
+    return "이에요" if detail_service.ends_with_consonant(word) else "예요"
+
+
+def _anchor_lead(
+    origin: str, action: AnchorAction, *, nearest_m: float | None
+) -> list[AnswerSegment]:
+    noun = ANCHOR_NOUNS[action]
+    if nearest_m is None:
+        return [AnswerSegment(text=f"{origin} 주변 {noun}{_copula(noun)}.")]
+    return [
+        AnswerSegment(text=f"가장 가까운 {noun}{_subject_particle(noun)} "),
+        AnswerSegment(text=_meters_label(nearest_m), emphasis=True),
+        AnswerSegment(text=" 거리예요."),
+    ]
 
 
 def _anchor_crowd_response(row: CandidateRow) -> AskResponse:
@@ -439,7 +481,18 @@ def _addr_label(addr1: str | None) -> str:
 
 
 def _meters_label(meters: float) -> str:
+    rounded = max(METERS_STEP, round(meters / METERS_STEP) * METERS_STEP)
+    if rounded < 1000:
+        return f"{rounded}m"
     return f"{meters / 1000:.1f}km"
+
+
+def _km_label(km: float) -> str:
+    return _meters_label(km * 1000)
+
+
+def _is_distance_tag(tag: str | None) -> bool:
+    return tag is not None and DISTANCE_TAG.match(tag) is not None
 
 
 async def _ask_with_question(
@@ -913,14 +966,10 @@ async def _ask_around(
         AskStep(tool="nearby", label=f"{origin} 주변 {noun} 조회", badge=f"{len(kept)}곳"),
     ]
     answer = [
-        AnswerSegment(text=f"{origin} 주변 {noun} "),
-        AnswerSegment(text=f"{len(spots)}곳", emphasis=True),
-        AnswerSegment(text=" 찾았어요."),
+        *_anchor_lead(origin, action, nearest_m=kept[0].dist),
+        AnswerSegment(text=f" {origin} 주변으로 "),
+        AnswerSegment(text=f"{len(spots)}곳이에요."),
     ]
-    if kept[0].dist is not None:
-        answer.append(AnswerSegment(text=" 가장 가까운 곳은 "))
-        answer.append(AnswerSegment(text=_meters_label(kept[0].dist), emphasis=True))
-        answer.append(AnswerSegment(text=" 거리예요."))
     logger.info("agent.food.around", action=action, results=len(spots))
     return AskResponse(
         steps=walked,
@@ -954,7 +1003,9 @@ def food_in_region(
     if not top:
         return AskResponse(
             steps=scanned,
-            answer=[AnswerSegment(text=f"{where}에는 등록된 {noun}이 없어요.")],
+            answer=[
+                AnswerSegment(text=f"{where}에는 등록된 {noun}{_subject_particle(noun)} 없어요.")
+            ],
             spots=[],
             totalCount=0,
             intent=intent,
@@ -965,9 +1016,9 @@ def food_in_region(
     return AskResponse(
         steps=scanned,
         answer=[
-            AnswerSegment(text=f"{where} {noun} "),
-            AnswerSegment(text=f"{len(spots)}곳", emphasis=True),
-            AnswerSegment(text=" 찾았어요."),
+            AnswerSegment(text=where, emphasis=True),
+            AnswerSegment(text=f" {noun} "),
+            AnswerSegment(text=f"{len(spots)}곳이에요."),
         ],
         spots=spots,
         totalCount=len(spots),
@@ -983,7 +1034,7 @@ def _region_food_card(
     if near and lat is not None and lng is not None:
         km = retrieve.distance_km(row, lat=lat, lng=lng)
         if km is not None:
-            return retrieve.to_card(row, tag=f"{km:.1f}km")
+            return retrieve.to_card(row, tag=_km_label(km))
     return retrieve.to_card(row, tag=None)
 
 
@@ -1036,9 +1087,9 @@ async def _ask_festivals(
         raise AgentNoResults()
     steps.append(AskStep(tool="festival", label="오늘 열리는 축제 조회", badge=f"{len(spots)}곳"))
     answer = [
-        AnswerSegment(text="오늘 열리는 축제로 "),
-        AnswerSegment(text=f"{len(spots)}곳", emphasis=True),
-        AnswerSegment(text=" 찾았어요."),
+        AnswerSegment(text=spots[0].title, emphasis=True),
+        AnswerSegment(text=f"{_subject_particle(spots[0].title)} 오늘 열려요. 오늘 열리는 축제로 "),
+        AnswerSegment(text=f"{len(spots)}곳이에요."),
     ]
     if fallback is not None:
         answer.append(AnswerSegment(text=fallback))
@@ -1122,7 +1173,7 @@ def _widen_label(scope: retrieve.RegionScope) -> str:
 
 def _widen_sentence(scope: retrieve.RegionScope) -> list[AnswerSegment]:
     return [
-        AnswerSegment(text=f". {scope.narrowed_label} 안에서는 찾지 못해 "),
+        AnswerSegment(text=f"{scope.narrowed_label} 안에서는 찾지 못해 "),
         AnswerSegment(text=scope.widened_label, emphasis=True),
         AnswerSegment(text=" 전체에서 골랐어요."),
     ]
@@ -1156,7 +1207,7 @@ def _card(
     if near and lat is not None and lng is not None:
         km = retrieve.distance_km(row, lat=lat, lng=lng)
         if km is not None:
-            return retrieve.to_card(row, tag=f"{km:.1f}km")
+            return retrieve.to_card(row, tag=_km_label(km))
     if intent.crowdPreference == "quiet" and row.percentile is not None:
         return retrieve.to_card(row, tag=f"하위 {row.percentile}%")
     return retrieve.to_card(row, tag=retrieve.crowd_label(row))
@@ -1169,6 +1220,48 @@ def _answer_opening(intent: QueryIntent) -> str:
     return f"{' + '.join(conditions)} 조건으로 "
 
 
+def _scope_sentence(top: list[CandidateRow], *, intent: QueryIntent) -> list[AnswerSegment]:
+    return [
+        AnswerSegment(text=_answer_opening(intent)),
+        AnswerSegment(text=f"{len(top)}곳이에요."),
+    ]
+
+
+def _lead_sentence(
+    top: list[CandidateRow],
+    *,
+    intent: QueryIntent,
+    near: bool,
+    lat: float | None,
+    lng: float | None,
+    region_widened: retrieve.RegionScope | None,
+) -> list[AnswerSegment]:
+    if region_widened is not None:
+        return _widen_sentence(region_widened)
+    if intent.crowdPreference == "quiet":
+        pcts = [row.percentile for row in top if row.percentile is not None]
+        if pcts:
+            return [
+                AnswerSegment(text="혼잡도 "),
+                AnswerSegment(text=f"하위 {max(pcts)}%", emphasis=True),
+                AnswerSegment(text=" 안쪽으로만 골랐어요."),
+            ]
+    if near and lat is not None and lng is not None:
+        return _nearest_sentence(top, lat=lat, lng=lng)
+    return []
+
+
+def _nearest_sentence(top: list[CandidateRow], *, lat: float, lng: float) -> list[AnswerSegment]:
+    kms = [km for row in top if (km := retrieve.distance_km(row, lat=lat, lng=lng)) is not None]
+    if not kms:
+        return []
+    return [
+        AnswerSegment(text="가장 가까운 곳이 "),
+        AnswerSegment(text=_km_label(min(kms)), emphasis=True),
+        AnswerSegment(text="예요."),
+    ]
+
+
 def _answer(
     top: list[CandidateRow],
     *,
@@ -1178,29 +1271,13 @@ def _answer(
     lng: float | None,
     region_widened: retrieve.RegionScope | None = None,
 ) -> list[AnswerSegment]:
-    segments = [AnswerSegment(text=_answer_opening(intent))]
-    segments.append(AnswerSegment(text=f"{len(top)}곳", emphasis=True))
-    segments.append(AnswerSegment(text=" 추렸어요"))
-
-    if region_widened is not None:
-        segments.extend(_widen_sentence(region_widened))
-        return segments
-    if intent.crowdPreference == "quiet":
-        pcts = [row.percentile for row in top if row.percentile is not None]
-        if pcts:
-            segments.append(AnswerSegment(text=". 모두 이 조건 안에서 혼잡도 "))
-            segments.append(AnswerSegment(text=f"하위 {max(pcts)}%", emphasis=True))
-            segments.append(AnswerSegment(text=" 안쪽이에요."))
-            return segments
-    if near and lat is not None and lng is not None:
-        kms = [km for row in top if (km := retrieve.distance_km(row, lat=lat, lng=lng)) is not None]
-        if kms:
-            segments.append(AnswerSegment(text=". 가장 가까운 곳은 "))
-            segments.append(AnswerSegment(text=f"{min(kms):.1f}km", emphasis=True))
-            segments.append(AnswerSegment(text=" 거리예요."))
-            return segments
-    segments.append(AnswerSegment(text=". 마음에 드는 게 없으면 조건을 좁혀 말해주세요."))
-    return segments
+    lead = _lead_sentence(
+        top, intent=intent, near=near, lat=lat, lng=lng, region_widened=region_widened
+    )
+    scope = _scope_sentence(top, intent=intent)
+    if not lead:
+        return [*scope, AnswerSegment(text=" 마음에 드는 게 없으면 조건을 좁혀 말해주세요.")]
+    return [*lead, AnswerSegment(text=" "), *scope]
 
 
 def _count(rows: list[CandidateRow]) -> str:
@@ -1251,14 +1328,21 @@ def _applied_conditions(intent: QueryIntent, *, axes: frozenset[DropAxis]) -> li
 
 def _zero_answer(intent: QueryIntent, *, axes: frozenset[DropAxis]) -> list[AnswerSegment]:
     conditions = _applied_conditions(intent, axes=axes)
-    head = f"{' + '.join(conditions)} 조건" if conditions else "이 조건"
-    segments = [
-        AnswerSegment(text=f"{head}으로는 "),
-        AnswerSegment(text="0곳", emphasis=True),
-        AnswerSegment(text="이에요."),
+    way_out = (
+        " 지역을 넓히면 나올 수 있어요."
+        if intent.regionHints
+        else " 조건을 조금 바꿔서 다시 물어봐 주세요."
+    )
+    if not conditions:
+        return [
+            AnswerSegment(text="이 조건으로는 없어요."),
+            AnswerSegment(text=way_out),
+        ]
+    return [
+        AnswerSegment(text=" + ".join(conditions), emphasis=True),
+        AnswerSegment(text=" 조건으로는 없어요."),
+        AnswerSegment(text=way_out),
     ]
-    segments.append(AnswerSegment(text=" 조건을 조금 바꿔서 다시 물어봐 주세요."))
-    return segments
 
 
 def _asks_for_nothing(intent: QueryIntent, *, prefixes: list[str]) -> bool:
@@ -1357,7 +1441,7 @@ def _is_crowd_tag(tag: str | None) -> bool:
 
 
 def _tag_basis(rows: list[CandidateRow], spots: list[AgentSpotCard], *, near: bool) -> str | None:
-    if near and spots and all((spot.tag or "").endswith("km") for spot in spots):
+    if near and spots and all(_is_distance_tag(spot.tag) for spot in spots):
         return "직선거리 기준"
     if any((spot.tag or "").startswith("유사도 ") for spot in spots):
         return PHOTO_BASIS

@@ -4,7 +4,6 @@ export function applyConsentPut(current: ConsentState, body: ConsentPutBody): Co
   return {
     ...current,
     locationConsent: body.locationConsent,
-    photoConsent: body.photoConsent,
     termsVersion: body.termsVersion,
   };
 }

@@ -2,15 +2,19 @@ import { View, Text, Pressable, StyleSheet } from "react-native";
 import Svg, { Defs, LinearGradient, Stop, Rect } from "react-native-svg";
 import { router } from "expo-router";
 import { RemoteImage } from "@/components/RemoteImage";
+import { Icon } from "@/components/Icon";
 import { prefetchSpot } from "@/features/spots/queries";
 import type { MatchCard, OverseasPost } from "@/features/feed/posts-api";
 import { commonsWidthFor } from "@/lib/commons-width";
-import { colors } from "@/constants/theme";
+import { colors, spacing } from "@/constants/theme";
 
 export type Slide =
   | { kind: "hero"; post: OverseasPost }
   | { kind: "match"; match: MatchCard; number: number }
+  | { kind: "empty" }
   | { kind: "skeleton" };
+
+export const MATCH_EMPTY_TEXT = "닮은 국내 관광지를 아직 찾지 못했어요";
 
 interface Props {
   slide: Slide;
@@ -31,6 +35,8 @@ export function PostSlide({ slide, width, onNavigate }: Props) {
           onNavigate={onNavigate}
         />
       );
+    case "empty":
+      return <EmptySlide width={width} />;
     case "skeleton":
     default:
       return <SkeletonSlide width={width} />;
@@ -128,6 +134,15 @@ function MatchSlide({
   );
 }
 
+function EmptySlide({ width }: { width: number }) {
+  return (
+    <View testID="match-empty" style={[styles.slide, styles.empty, { width }]}>
+      <Icon name="search" size={22} color={colors.ter} strokeWidth={1.8} />
+      <Text style={styles.emptyText}>{MATCH_EMPTY_TEXT}</Text>
+    </View>
+  );
+}
+
 function SkeletonSlide({ width }: { width: number }) {
   return <View style={[styles.slide, styles.skeleton, { width }]} />;
 }
@@ -162,4 +177,12 @@ const styles = StyleSheet.create({
   matchChipText: { fontSize: 12.5, fontWeight: "600", color: colors.onImage },
   matchOverview: { fontSize: 14, lineHeight: 20, color: colors.onDim, marginTop: 10 },
   skeleton: { backgroundColor: colors.skeleton },
+  empty: {
+    backgroundColor: colors.skeleton,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.md,
+    paddingHorizontal: spacing.xl,
+  },
+  emptyText: { fontSize: 14.5, lineHeight: 21, color: colors.sec, textAlign: "center" },
 });

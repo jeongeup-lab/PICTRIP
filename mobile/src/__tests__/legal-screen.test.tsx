@@ -27,7 +27,6 @@ const mutate = jest.fn();
 
 const CONSENTS = {
   locationConsent: true,
-  photoConsent: true,
   termsVersion: "2026-06-22",
   consentedAt: "2026-03-14T09:00:00Z",
 };
@@ -75,21 +74,10 @@ describe("LegalListScreen", () => {
     expect(texts(tree)).toContain("버전 2026-06-22");
   });
 
-  it("withdraws the optional photo consent from the switch", async () => {
+  it("offers no photo analysis consent", async () => {
     const tree = await mount();
-    const toggle = tree.root.findAll(
-      (n) => n.props.testID === "consent-photo-switch" && !!n.props.onValueChange,
-    )[0];
-
-    await act(async () => {
-      toggle.props.onValueChange(false);
-    });
-
-    expect(mutate).toHaveBeenCalledWith({
-      locationConsent: true,
-      photoConsent: false,
-      termsVersion: "2026-06-22",
-    });
+    expect(texts(tree)).not.toContain("사진 분석");
+    expect(tree.root.findAllByProps({ testID: "consent-location" }).length).toBeGreaterThan(0);
   });
 
   it("hides the consent history from guests", async () => {

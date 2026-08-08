@@ -1,4 +1,4 @@
-import { View, Text, Pressable, ScrollView, Switch, Linking, StyleSheet } from "react-native";
+import { View, Text, Pressable, ScrollView, Linking, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -15,20 +15,10 @@ export default function ConsentScreen() {
 
   useLocationConsentSync(data);
 
-  const togglePhoto = (next: boolean) => {
-    if (!data) return;
-    update.mutate({
-      locationConsent: data.locationConsent,
-      photoConsent: next,
-      termsVersion: data.termsVersion ?? TERMS_VERSION,
-    });
-  };
-
   const reConsent = () => {
     if (!data) return;
     update.mutate({
       locationConsent: data.locationConsent,
-      photoConsent: data.photoConsent,
       termsVersion: TERMS_VERSION,
     });
   };
@@ -70,22 +60,6 @@ export default function ConsentScreen() {
                 </Text>
                 <Icon name="chevron-right" size={20} color={colors.ter} />
               </Pressable>
-            </View>
-
-            <View style={styles.group}>
-              <View style={styles.row}>
-                <View style={styles.rowMain}>
-                  <Text style={styles.label}>사진 분석 이용 동의</Text>
-                  <Text style={styles.sub}>
-                    사진 검색 시 이미지는 기기에서 분석 후 즉시 폐기되며 저장하지 않아요.
-                  </Text>
-                </View>
-                <Switch
-                  value={data.photoConsent}
-                  onValueChange={togglePhoto}
-                  trackColor={{ false: colors.line, true: colors.accent }}
-                />
-              </View>
             </View>
 
             <View style={styles.group}>

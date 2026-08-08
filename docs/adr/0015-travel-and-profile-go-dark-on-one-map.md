@@ -1,10 +1,14 @@
 # 0015. 여행 탭은 지도 하나 위에서 돌고, 앱은 다크로 간다
 
-- 상태: 채택
+- 상태: 일부 대체 — 대화를 담던 `GlassSheet` 는
+  [0017](0017-travel-tab-drops-the-sheet-for-a-map-carousel.md) 이 지도 위 캐러셀로
+  바꿨고, 카카오 다크 반전은 [0016](0016-drop-the-in-app-map-screen.md) 이 되돌렸다.
+  앱 크롬 다크 전환과 상시 지도는 그대로다
 - 날짜: 2026-08-08
 - 관련: [travel-tab](../reference/travel-tab.md),
   [0012 실제 지도·카드 탭](0012-travel-tab-live-map-and-card-tap.md),
-  [0013 턴마다 자기 설명을 하지 않는다](0013-travel-tab-drops-per-turn-footnotes.md)
+  [0013 턴마다 자기 설명을 하지 않는다](0013-travel-tab-drops-per-turn-footnotes.md),
+  [0017 시트를 버리고 지도 위 캐러셀로](0017-travel-tab-drops-the-sheet-for-a-map-carousel.md)
 
 ## 맥락
 
