@@ -5,6 +5,7 @@ import { Icon } from "@/components/Icon";
 import { TERMS_VERSION } from "@/constants/legal";
 import { useConsents, useUpdateConsent } from "@/features/consent/queries";
 import { useLocationConsentSync } from "@/features/consent/hooks/use-location-consent-sync";
+import { localDateLabel } from "@/lib/local-date";
 import { colors, radii, spacing } from "@/constants/theme";
 
 export default function ConsentScreen() {
@@ -33,7 +34,7 @@ export default function ConsentScreen() {
   };
 
   const isCurrent = data?.termsVersion === TERMS_VERSION;
-  const consentedDate = data?.consentedAt ? data.consentedAt.slice(0, 10).replace(/-/g, ".") : null;
+  const consentedDate = localDateLabel(data?.consentedAt);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>

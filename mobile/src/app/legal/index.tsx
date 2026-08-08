@@ -11,15 +11,11 @@ import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { useConsents, useUpdateConsent } from "@/features/consent/queries";
 import { useLocationConsentSync } from "@/features/consent/hooks/use-location-consent-sync";
 import { TERMS_VERSION } from "@/constants/legal";
+import { localDateLabel } from "@/lib/local-date";
 import { colors, spacing } from "@/constants/theme";
 
 export const SOURCE_NOTE =
   "관광 정보 · 이미지 — 한국관광공사 TourAPI (공공누리 제1·3유형).\n제3유형 이미지는 원본을 변형 없이 표시해요.";
-
-function formatDate(value: string | null): string | null {
-  const date = value?.slice(0, 10);
-  return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.replace(/-/g, ".") : null;
-}
 
 export default function LegalListScreen() {
   const insets = useSafeAreaInsets();
@@ -28,7 +24,7 @@ export default function LegalListScreen() {
   useLocationConsentSync(data);
   const update = useUpdateConsent();
 
-  const consentedAt = formatDate(data?.consentedAt ?? null);
+  const consentedAt = localDateLabel(data?.consentedAt ?? null);
   const termsVersion = data?.termsVersion ?? null;
   const agreedSub = [
     termsVersion ? `버전 ${termsVersion}` : null,

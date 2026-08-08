@@ -6,7 +6,11 @@ import { StatTiles } from "@/features/profile/components/StatTiles";
 import { daysSince } from "@/features/profile/lib/stats";
 import type { SpotCard, User } from "@/lib/api-types";
 
-jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
+jest.mock("expo-router", () => ({
+  router: { push: jest.fn(), back: jest.fn() },
+  useFocusEffect: (effect: () => void | (() => void)) =>
+    jest.requireActual<typeof import("react")>("react").useEffect(effect, [effect]),
+}));
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
