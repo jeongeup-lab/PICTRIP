@@ -112,5 +112,5 @@ export const useConversation = create<ConversationState>((set, get) => ({
           }
         : s,
     ),
-  clear: () => set({ turns: [], busy: false, activeId: null, issued: 0 }),
+  clear: () => set({ turns: [], busy: false, activeId: null }),
 }));

@@ -133,9 +133,17 @@ describe("turn ids", () => {
     expect(useConversation.getState().turns.map((t) => t.id)).toEqual([first]);
   });
 
-  it("starts over only when the conversation is cleared", () => {
+  it("keeps counting across a cleared conversation so a late reply cannot land on a new turn", () => {
     const before = useConversation.getState().nextTurnId();
+    useConversation.getState().start({
+      id: before,
+      question: "사람 적은 바닷가",
+      request: "사람 적은 바닷가",
+      photo: null,
+    });
+
     useConversation.getState().clear();
-    expect(useConversation.getState().nextTurnId()).toBe(before);
+
+    expect(useConversation.getState().nextTurnId()).not.toBe(before);
   });
 });
