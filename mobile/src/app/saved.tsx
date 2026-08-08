@@ -98,7 +98,10 @@ export default function SavedScreen() {
     void settled.then((removed) => {
       if (!removed) return;
       resave.mutate(contentId, {
-        onError: () => setNotice({ message: RESAVE_FAILED, undoContentId: null }),
+        onError: () =>
+          setNotice((current) =>
+            current === null ? { message: RESAVE_FAILED, undoContentId: null } : current,
+          ),
       });
     });
   };
