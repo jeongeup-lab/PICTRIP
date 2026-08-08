@@ -9,6 +9,8 @@ export const START_PX = 152;
 export const ROWS_PX = 196;
 export const DEFAULT_TAB_BAR_PX = 83;
 
+export const TAB_BAR_CONTENT_PX = 49;
+
 export function travelSheetSnapY(
   screenH: number,
   tabBarPx: number = DEFAULT_TAB_BAR_PX,

@@ -26,7 +26,11 @@ import {
 import { composeQuestion, anchorQuestion, MY_LOCATION } from "@/features/travel/lib/question";
 import { composerChips, FESTIVAL_CHIP, NEARBY_CHIP, type Chip } from "@/features/travel/lib/chips";
 import { contextFrom } from "@/features/travel/lib/conversation-context";
-import { travelSheetSnapY, type SheetSnap } from "@/features/travel/lib/sheet-snap";
+import {
+  TAB_BAR_CONTENT_PX,
+  travelSheetSnapY,
+  type SheetSnap,
+} from "@/features/travel/lib/sheet-snap";
 import { coordsOf, spotDistanceKm } from "@/features/travel/lib/distance";
 import { pickTravelPhoto, shootTravelPhoto } from "@/features/travel/usecases/pick-travel-photo";
 import {
@@ -44,7 +48,6 @@ import { colors, radii, spacing } from "@/constants/theme";
 const SAVE_COMPLETE = "여행지를 저장했어요";
 const UNSAVE_COMPLETE = "여행지 저장을 해제했어요";
 const TOAST_LIFT = 12;
-const TAB_BAR_PX = 83;
 const FIT_TOP_PAD = 96;
 const FIT_SIDE_PAD = 40;
 const FIT_BOTTOM_MARGIN = 24;
@@ -81,7 +84,10 @@ export default function TravelScreen() {
   const requireAuth = useAuthGate();
 
   const empty = turns.length === 0;
-  const snapY = useMemo(() => travelSheetSnapY(SCREEN_H, TAB_BAR_PX + insets.bottom), [insets]);
+  const snapY = useMemo(
+    () => travelSheetSnapY(SCREEN_H, TAB_BAR_CONTENT_PX + insets.bottom),
+    [insets],
+  );
 
   const lastAnswered = [...turns].reverse().find((t) => t.status === "done" && t.answer);
   const tapHintTurnId = turns.find((t) => (t.answer?.spots.length ?? 0) > 0)?.id ?? null;
@@ -307,7 +313,7 @@ export default function TravelScreen() {
   const chips = composerChips(lastAnswered?.answer, anchorSpot, coords !== null);
   const listPaddingBottom = mapListPaddingBottom(
     snapY[snap],
-    TAB_BAR_PX + insets.bottom,
+    TAB_BAR_CONTENT_PX + insets.bottom,
     spacing.xxl,
   );
 
