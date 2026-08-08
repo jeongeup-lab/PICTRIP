@@ -9,16 +9,12 @@ import { InfoBox } from "@/components/InfoBox";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { AppError } from "@/lib/app-error";
+import { localDateLabel } from "@/lib/local-date";
 import { colors, spacing } from "@/constants/theme";
 
 export const DELETE_TITLE = "회원 탈퇴";
 export const DELETE_LEAD = "다음 항목이 즉시 삭제되고 되돌릴 수 없어요.";
 export const DELETE_EXPORT_HINT = "탈퇴 전 스크랩을 CSV로 내보낼 수 있어요. 설정 > 내 데이터.";
-
-function formatDate(value: string | null): string | null {
-  const date = value?.slice(0, 10);
-  return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.replace(/-/g, ".") : null;
-}
 
 function deleteErrorMessage(error: unknown): string {
   if (error instanceof AppError && error.code === "AUTH_TOKEN_INVALID") {
@@ -40,7 +36,7 @@ export default function AccountScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const joined = formatDate(user?.createdAt ?? null);
+  const joined = localDateLabel(user?.createdAt);
 
   const onLogout = async () => {
     setBusy(true);

@@ -2,6 +2,7 @@ import { View, Text, Pressable, StyleSheet } from "react-native";
 import { RemoteImage } from "@/components/RemoteImage";
 import { Icon } from "@/components/Icon";
 import type { User } from "@/lib/api-types";
+import { localDateLabel } from "@/lib/local-date";
 import { colors, radii, spacing } from "@/constants/theme";
 
 interface Props {
@@ -9,13 +10,8 @@ interface Props {
   onPress: () => void;
 }
 
-function joinedLabel(createdAt: string | null): string | null {
-  const date = createdAt?.slice(0, 10);
-  return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date.replace(/-/g, ".")} 가입` : null;
-}
-
 export function ProfileHero({ user, onPress }: Props) {
-  const joined = joinedLabel(user.createdAt);
+  const joined = localDateLabel(user.createdAt);
 
   return (
     <Pressable
@@ -44,7 +40,7 @@ export function ProfileHero({ user, onPress }: Props) {
           {joined ? (
             <View style={styles.badge}>
               <Icon name="check" size={10} color={colors.ink} strokeWidth={2.6} />
-              <Text style={styles.badgeText}>{joined}</Text>
+              <Text style={styles.badgeText}>{`${joined} 가입`}</Text>
             </View>
           ) : null}
         </View>

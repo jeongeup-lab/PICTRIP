@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { View, Text, Pressable, ScrollView, Linking, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { ListGroup } from "@/components/ListGroup";
 import { ListRow } from "@/components/ListRow";
@@ -29,9 +29,14 @@ export default function ProfileTab() {
   const user = useAuthStore((s) => s.user);
   const { data: saved } = useSavedList();
   const { location } = useAppPermissions();
-  const [openedAt] = useState(() => Date.now());
+  const [today, setToday] = useState(() => Date.now());
+  useFocusEffect(
+    useCallback(() => {
+      setToday(Date.now());
+    }, []),
+  );
 
-  const stats = isAuthenticated ? profileStats(saved, user?.createdAt, openedAt) : null;
+  const stats = isAuthenticated ? profileStats(saved, user?.createdAt, today) : null;
   const scraps = saved ?? [];
 
   return (
