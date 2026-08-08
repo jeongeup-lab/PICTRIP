@@ -5,7 +5,6 @@ import { Icon } from "@/components/Icon";
 import { ListGroup } from "@/components/ListGroup";
 import { ListRow } from "@/components/ListRow";
 import { SectionTitle } from "@/components/SectionTitle";
-import { InfoBox } from "@/components/InfoBox";
 import { LEGAL_DOCS } from "@/features/legal/constants";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { useConsents, useUpdateConsent } from "@/features/consent/queries";
@@ -13,9 +12,6 @@ import { useLocationConsentSync } from "@/features/consent/hooks/use-location-co
 import { TERMS_VERSION } from "@/constants/legal";
 import { localDateLabel } from "@/lib/local-date";
 import { colors, spacing } from "@/constants/theme";
-
-export const SOURCE_NOTE =
-  "관광 정보 · 이미지 — 한국관광공사 TourAPI (공공누리 제1·3유형).\n제3유형 이미지는 원본을 변형 없이 표시해요.";
 
 export default function LegalListScreen() {
   const insets = useSafeAreaInsets();
@@ -111,8 +107,6 @@ export default function LegalListScreen() {
             )}
           </>
         ) : null}
-
-        <InfoBox title="데이터 출처" text={SOURCE_NOTE} />
       </ScrollView>
     </View>
   );
