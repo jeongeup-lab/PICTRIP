@@ -1,6 +1,8 @@
 import {
   travelSheetSnapY,
   CHIPS_PX,
+  DEFAULT_TAB_BAR_PX,
+  TAB_BAR_CONTENT_PX,
   FIELD_PX,
   HANDLE_ZONE_PX,
   ROWS_PX,
@@ -33,5 +35,19 @@ describe("travelSheetSnapY", () => {
 
   it("탭바가 두꺼운 기기에선 peek 도 같이 올라온다", () => {
     expect(travelSheetSnapY(SCREEN_H, 100).peek).toBeLessThan(travelSheetSnapY(SCREEN_H, 83).peek);
+  });
+});
+
+describe("tab bar height", () => {
+  it("reaches the standard tab bar once the home indicator inset is added", () => {
+    const HOME_INDICATOR_PX = 34;
+    expect(TAB_BAR_CONTENT_PX + HOME_INDICATOR_PX).toBe(DEFAULT_TAB_BAR_PX);
+  });
+
+  it("leaves only the bar itself on devices without a bottom inset", () => {
+    expect(TAB_BAR_CONTENT_PX + 0).toBe(TAB_BAR_CONTENT_PX);
+    expect(travelSheetSnapY(852, TAB_BAR_CONTENT_PX).peek).toBeGreaterThan(
+      travelSheetSnapY(852, DEFAULT_TAB_BAR_PX).peek,
+    );
   });
 });
