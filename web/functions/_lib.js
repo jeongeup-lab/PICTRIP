@@ -42,11 +42,11 @@ export function renderPage({ url, title, description, image, bodyHtml }) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${t} · PicTrip</title>
+  <title>${t} · PICTRIP</title>
   <meta name="description" content="${d}" />
   <link rel="canonical" href="${escapeHtml(url)}" />
   <meta name="apple-itunes-app" content="app-id=6778157312, app-argument=${escapeHtml(url)}" />
-  <meta property="og:site_name" content="PicTrip" />
+  <meta property="og:site_name" content="PICTRIP" />
   <meta property="og:type" content="article" />
   <meta property="og:title" content="${t}" />
   <meta property="og:description" content="${d}" />
@@ -70,7 +70,7 @@ export function renderPage({ url, title, description, image, bodyHtml }) {
   </style>
 </head>
 <body>
-  <div class="brand">PicTrip</div>
+  <div class="brand">PICTRIP</div>
 ${bodyHtml}
   <div class="cta">
     <a class="primary" href="${APP_STORE}">App Store에서 받기</a>

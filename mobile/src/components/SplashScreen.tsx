@@ -16,7 +16,7 @@ export function SplashScreen() {
           <Rect x={26} y={11.4} width={8} height={5.2} rx={1.6} fill="#fff" />
           <Circle cx={30} cy={14} r={1.3} fill="#000" />
         </Svg>
-        <Text style={styles.logo}>PicTrip</Text>
+        <Text style={styles.logo}>PICTRIP</Text>
       </View>
     </View>
   );

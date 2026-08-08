@@ -6,11 +6,11 @@ export async function onRequestGet(context) {
   const spot = await fetchData(`/spots/${encodeURIComponent(params.id)}`);
 
   if (!spot || !spot.title) {
-    const body = `  <h1>PicTrip</h1>
+    const body = `  <h1>PICTRIP</h1>
   <p class="sub">사진으로 찾는 국내 여행지</p>
   <p class="body">요청하신 관광지를 찾을 수 없어요. 앱에서 둘러보세요.</p>`;
     return htmlResponse(
-      renderPage({ url, title: "PicTrip", description: "사진으로 찾는 국내 여행지 추천", image: null, bodyHtml: body }),
+      renderPage({ url, title: "PICTRIP", description: "사진으로 찾는 국내 여행지 추천", image: null, bodyHtml: body }),
       404,
     );
   }

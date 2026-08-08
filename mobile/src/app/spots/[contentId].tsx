@@ -48,7 +48,7 @@ export default function SpotScreen() {
 
   const onShare = () => {
     if (!data) return;
-    void Share.share({ message: `${data.title} · PicTrip` });
+    void Share.share({ message: `${data.title} · PICTRIP` });
   };
 
   const onViewAll = () => {
