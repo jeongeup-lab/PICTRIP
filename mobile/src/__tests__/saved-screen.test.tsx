@@ -168,6 +168,32 @@ describe("SavedScreen", () => {
     expect(toast.props.message).toBe(RESAVE_FAILED);
   });
 
+  it("still reports a failure that lands after the undo toast expired", async () => {
+    let failLate: () => void = () => undefined;
+    unsaveAsync.mockReturnValueOnce(
+      new Promise<void>((_resolve, reject) => {
+        failLate = () => reject(new Error("timeout"));
+      }),
+    );
+
+    const tree = await mount();
+    await press(tree, "swipe-far-action");
+
+    const toast = tree.root.findAll((n) => n.props.testID === "unsave-toast")[0];
+    await act(async () => {
+      toast.props.onHide();
+    });
+
+    await act(async () => {
+      failLate();
+    });
+
+    const after = tree.root.findAll(
+      (n) => n.props.testID === "unsave-toast" && typeof n.props.message === "string",
+    )[0];
+    expect(after.props.message).toBe(UNSAVE_FAILED);
+  });
+
   it("keeps the newest undo when an older unsave fails late", async () => {
     let failFirst: () => void = () => undefined;
     unsaveAsync

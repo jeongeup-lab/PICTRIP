@@ -81,7 +81,7 @@ export default function SavedScreen() {
       () => true,
       () => {
         setNotice((current) =>
-          current?.undoContentId === spot.contentId
+          current === null || current.undoContentId === spot.contentId
             ? { message: UNSAVE_FAILED, undoContentId: null }
             : current,
         );
