@@ -18,3 +18,7 @@ export function travelSheetSnapY(
   const peek = HANDLE_ZONE_PX + FIELD_PX + CHIPS_PX + START_PX + tabBarPx;
   return snapYFromVisible(screenH, { peek, half: peek + ROWS_PX });
 }
+
+export function sheetHeightOverRoot(screenH: number, tabBarPx: number, snapYValue: number): number {
+  return Math.max(0, screenH - tabBarPx - snapYValue);
+}

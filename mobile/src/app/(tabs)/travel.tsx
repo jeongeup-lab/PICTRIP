@@ -28,6 +28,7 @@ import { composerChips, FESTIVAL_CHIP, NEARBY_CHIP, type Chip } from "@/features
 import { contextFrom } from "@/features/travel/lib/conversation-context";
 import {
   TAB_BAR_CONTENT_PX,
+  sheetHeightOverRoot,
   travelSheetSnapY,
   type SheetSnap,
 } from "@/features/travel/lib/sheet-snap";
@@ -84,6 +85,7 @@ export default function TravelScreen() {
   const requireAuth = useAuthGate();
 
   const empty = turns.length === 0;
+  const tabBarPx = TAB_BAR_CONTENT_PX + insets.bottom;
   const snapY = useMemo(
     () => travelSheetSnapY(SCREEN_H, TAB_BAR_CONTENT_PX + insets.bottom),
     [insets],
@@ -100,6 +102,7 @@ export default function TravelScreen() {
   }, [lastAnswered, anchorSpot]);
 
   const pins = useMemo(() => pinsFrom(mapSpots), [mapSpots]);
+  const sheetOverRoot = sheetHeightOverRoot(SCREEN_H, tabBarPx, snapY[snap]);
   const fit = useMemo(() => {
     const box = bounds(mapSpots);
     if (!box) return null;
@@ -108,11 +111,11 @@ export default function TravelScreen() {
       pad: {
         top: insets.top + FIT_TOP_PAD,
         right: FIT_SIDE_PAD,
-        bottom: SCREEN_H - snapY[snap] + FIT_BOTTOM_MARGIN,
+        bottom: sheetOverRoot + FIT_BOTTOM_MARGIN,
         left: FIT_SIDE_PAD,
       },
     };
-  }, [mapSpots, snap, snapY, insets]);
+  }, [mapSpots, sheetOverRoot, insets]);
   const focus = useMemo(() => {
     if (anchorSpot) return coordsOf(anchorSpot) ?? center(mapSpots) ?? coords;
     return center(mapSpots) ?? coords;
@@ -307,11 +310,7 @@ export default function TravelScreen() {
   const onShoot = useCallback(() => attachFrom(shootTravelPhoto, PHOTO_SHOOT_FAILED), [attachFrom]);
 
   const chips = composerChips(lastAnswered?.answer, anchorSpot, coords !== null);
-  const listPaddingBottom = mapListPaddingBottom(
-    snapY[snap],
-    TAB_BAR_CONTENT_PX + insets.bottom,
-    spacing.xxl,
-  );
+  const listPaddingBottom = mapListPaddingBottom(snapY[snap], tabBarPx, spacing.xxl);
 
   return (
     <View style={styles.root}>
@@ -324,7 +323,7 @@ export default function TravelScreen() {
         onPinTap={onPinTap}
       />
 
-      <SearchPulse active={busy} bottom={SCREEN_H - snapY[snap]} />
+      <SearchPulse active={busy} bottom={sheetOverRoot} />
 
       {lastAnswered && pins.length > 0 ? (
         <View
@@ -437,7 +436,7 @@ export default function TravelScreen() {
       <Toast
         testID="travel-toast"
         message={toast}
-        bottom={SCREEN_H - snapY[snap] + TOAST_LIFT}
+        bottom={sheetOverRoot + TOAST_LIFT}
         onHide={() => setToast(null)}
       />
     </View>

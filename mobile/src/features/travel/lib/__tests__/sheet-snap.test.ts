@@ -1,5 +1,6 @@
 import {
   travelSheetSnapY,
+  sheetHeightOverRoot,
   CHIPS_PX,
   DEFAULT_TAB_BAR_PX,
   TAB_BAR_CONTENT_PX,
@@ -49,5 +50,21 @@ describe("tab bar height", () => {
     expect(travelSheetSnapY(852, TAB_BAR_CONTENT_PX).peek).toBeGreaterThan(
       travelSheetSnapY(852, DEFAULT_TAB_BAR_PX).peek,
     );
+  });
+});
+
+describe("sheetHeightOverRoot", () => {
+  const SCREEN_H = 852;
+  const TAB_BAR = 83;
+
+  it("measures the sheet from the root view, which stops above the tab bar", () => {
+    const snapY = travelSheetSnapY(SCREEN_H, TAB_BAR);
+    const visibleOnScreen = SCREEN_H - snapY.peek;
+
+    expect(sheetHeightOverRoot(SCREEN_H, TAB_BAR, snapY.peek)).toBe(visibleOnScreen - TAB_BAR);
+  });
+
+  it("never goes negative when the sheet sits below the root", () => {
+    expect(sheetHeightOverRoot(SCREEN_H, TAB_BAR, SCREEN_H)).toBe(0);
   });
 });
