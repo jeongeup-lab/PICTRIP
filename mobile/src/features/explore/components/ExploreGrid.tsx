@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   View,
   FlatList,
@@ -9,6 +9,7 @@ import {
   StyleSheet,
 } from "react-native";
 import Svg, { Defs, LinearGradient, Stop, Rect } from "react-native-svg";
+import { useScrollToTop } from "expo-router";
 import { RemoteImage } from "@/components/RemoteImage";
 import { useExploreFeed } from "@/features/explore/queries";
 import { toGridBlocks, type GridBlock } from "@/features/explore/lib/grid-blocks";
@@ -25,6 +26,9 @@ export function ExploreGrid() {
   const { width } = useWindowDimensions();
   const [seed, setSeed] = useState(() => makeSeed());
   const [selected, setSelected] = useState<OverseasPost | null>(null);
+  const listRef = useRef<FlatList<GridBlock>>(null);
+
+  useScrollToTop(listRef);
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isFetching, isLoading } =
     useExploreFeed(seed);
@@ -78,6 +82,7 @@ export function ExploreGrid() {
     <View style={styles.root}>
       <StatusBar barStyle="light-content" />
       <FlatList
+        ref={listRef}
         data={blocks}
         keyExtractor={(b) => (b.type === "big" ? `big-${b.big.id}` : `row3-${b.items[0].id}`)}
         renderItem={renderBlock}

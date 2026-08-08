@@ -6,6 +6,7 @@ export type IconName =
   | "chevron-left"
   | "chevron-right"
   | "chevron-down"
+  | "chevron-up"
   | "share"
   | "heart"
   | "heart-fill"
@@ -44,7 +45,9 @@ export type IconName =
   | "download"
   | "user-x"
   | "heart-off"
-  | "settings";
+  | "settings"
+  | "users"
+  | "tag";
 
 interface IconProps {
   name: IconName;
@@ -64,6 +67,7 @@ const PATHS: Record<IconName, IconSpec> = {
   "chevron-left": { d: "M15 5l-7 7 7 7" },
   "chevron-right": { d: "M9 5l7 7-7 7" },
   "chevron-down": { d: "M6 9l6 6 6-6" },
+  "chevron-up": { d: "M6 14.5l6-6 6 6" },
   share: {
     d: "M8.3 10.7l7.4-4.4M8.3 13.3l7.4 4.4",
     circles: [
@@ -137,6 +141,14 @@ const PATHS: Record<IconName, IconSpec> = {
   settings: {
     d: "M12 2.5v3M12 18.5v3M4.6 6.8l2.6 1.5M16.8 15.7l2.6 1.5M4.6 17.2l2.6-1.5M16.8 8.3l2.6-1.5",
     circles: [{ cx: 12, cy: 12, r: 3 }],
+  },
+  users: {
+    d: "M3.5 19c0-3 2.7-5 6-5s6 2 6 5M16.4 5.2a3.1 3.1 0 0 1 0 5.9M17.6 14.4c2 .7 3.4 2.3 3.4 4.6",
+    circles: [{ cx: 9.5, cy: 8, r: 3.2 }],
+  },
+  tag: {
+    d: "M4 4h7l9 9-7 7-9-9z",
+    circles: [{ cx: 8, cy: 8, r: 1.4 }],
   },
 };
 

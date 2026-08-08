@@ -138,13 +138,11 @@ async def put_consents(session: AsyncSession, user_id: int, body: ConsentIn) -> 
         session,
         user_id=user_id,
         location_consent=body.locationConsent,
-        photo_consent=body.photoConsent,
         terms_version=body.termsVersion,
     )
     await session.commit()
     return ConsentOut(
         locationConsent=row.location_consent,
-        photoConsent=row.photo_consent,
         termsVersion=row.terms_version,
         consentedAt=row.consented_at,
     )
@@ -156,7 +154,6 @@ async def get_consents(session: AsyncSession, user_id: int) -> ConsentState:
         return ConsentState()
     return ConsentState(
         locationConsent=row.location_consent,
-        photoConsent=row.photo_consent,
         termsVersion=row.terms_version,
         consentedAt=row.consented_at,
     )

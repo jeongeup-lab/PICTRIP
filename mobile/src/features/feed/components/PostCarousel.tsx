@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -24,10 +24,10 @@ const CARD_HEIGHT = 520;
 function slidesFor(post: OverseasPost, matches: ReturnType<typeof useMatches>["data"]): Slide[] {
   const hero: Slide = { kind: "hero", post };
   if (!matches) {
-    return [hero, { kind: "skeleton" }, { kind: "skeleton" }, { kind: "skeleton" }];
+    return [hero, { kind: "skeleton" }];
   }
   if (matches.matches.length === 0) {
-    return [hero];
+    return [hero, { kind: "empty" }];
   }
   return [
     hero,
@@ -44,15 +44,23 @@ export function PostCarousel({
 }) {
   const { width } = useWindowDimensions();
   const cardWidth = width - 32;
-  const [index, setIndex] = useState(0);
+  const [restedIndex, setRestedIndex] = useState(0);
   const [armed, setArmed] = useState(false);
   const [creditOpen, setCreditOpen] = useState(false);
+  const listRef = useRef<FlatList<Slide>>(null);
 
   const { data } = useMatches(post.id, { enabled: armed });
   const slides = useMemo(() => slidesFor(post, data), [post, data]);
-  const counted = !!data && slides.length > 1;
-  const page = Math.min(index, slides.length - 1);
-  const active = slides[page];
+  const counted = (data?.matches.length ?? 0) > 0;
+
+  const lastIndex = slides.length - 1;
+  const index = Math.min(restedIndex, lastIndex);
+  const active = slides[index];
+
+  useEffect(() => {
+    if (restedIndex <= lastIndex) return;
+    listRef.current?.scrollToIndex({ index: lastIndex, animated: false });
+  }, [restedIndex, lastIndex]);
 
   useEffect(() => {
     for (const m of data?.matches.slice(0, 2) ?? []) {
@@ -61,18 +69,24 @@ export function PostCarousel({
     }
   }, [data]);
 
+  const settleTo = (x: number) => {
+    const next = cardWidth > 0 ? Math.round(x / cardWidth) : 0;
+    setRestedIndex((prev) => (prev === next ? prev : next));
+  };
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) =>
+    settleTo(e.nativeEvent.contentOffset.x);
   const onScrollBeginDrag = () => setArmed(true);
-  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (cardWidth <= 0) return;
-    const i = Math.round(e.nativeEvent.contentOffset.x / cardWidth);
-    if (i !== index && i >= 0 && i < slides.length) setIndex(i);
-    if (i >= 1) setArmed(true);
+  const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const x = e.nativeEvent.contentOffset.x;
+    settleTo(x);
+    if (cardWidth > 0 && Math.round(x / cardWidth) >= 1) setArmed(true);
   };
 
   return (
     <View style={styles.wrap}>
       <View style={[styles.card, { width: cardWidth, height: CARD_HEIGHT }]}>
         <FlatList
+          ref={listRef}
           data={slides}
           keyExtractor={(s, i) => `${s.kind}-${i}`}
           horizontal
@@ -80,9 +94,10 @@ export function PostCarousel({
           scrollEnabled={slides.length > 1}
           showsHorizontalScrollIndicator={false}
           getItemLayout={(_, i) => ({ length: cardWidth, offset: cardWidth * i, index: i })}
-          onScrollBeginDrag={onScrollBeginDrag}
           onScroll={onScroll}
           scrollEventThrottle={16}
+          onScrollBeginDrag={onScrollBeginDrag}
+          onMomentumScrollEnd={onMomentumEnd}
           renderItem={({ item }) => (
             <PostSlide slide={item} width={cardWidth} onNavigate={onNavigate} />
           )}
@@ -104,7 +119,7 @@ export function PostCarousel({
         {counted ? (
           <View style={styles.counter} pointerEvents="none">
             <Text testID="post-counter" style={styles.counterText}>
-              {`${page + 1}/${slides.length}`}
+              {`${index + 1}/${slides.length}`}
             </Text>
           </View>
         ) : null}
@@ -115,7 +130,8 @@ export function PostCarousel({
           {slides.map((s, i) => (
             <View
               key={`${s.kind}-${i}`}
-              style={[styles.dot, i === page ? styles.dotActive : styles.dotIdle]}
+              testID="carousel-dot"
+              style={[styles.dot, i === index ? styles.dotActive : styles.dotIdle]}
             />
           ))}
         </View>

@@ -19,7 +19,7 @@
 | `spot_concentration` | 일일 크론 | 집중률 0–100 — Hot/Hidden 채널 · agent 혼잡도 축 소스. 커버리지는 전량이 아니다(2026-07-26 실측: attraction 모수 11,575곳 중 5,323곳 = **46.0%**) |
 | `users` | backend | `taste_vector halfvec(512)` · email 부분 unique(`deleted_at IS NULL`) |
 | `user_auth_providers` | backend | provider CHECK(kakao/google/apple/email) · (provider, provider_user_id) unique |
-| `user_consents` | backend | `notification_consent` 컬럼은 의도적 unmapped |
+| `user_consents` | backend | `notification_consent` 컬럼은 의도적 unmapped. `photo_consent` 는 그 반대 — ORM에 매핑돼 있으나 읽기·쓰기 경로가 없다(DROP 보류) |
 | `user_saved_spots` | backend | (user_id, content_id) PK · 양방향 CASCADE |
 | `admin_users` | 수동 | 콘솔 자격증명 (bcrypt) |
 | `moods` · `spot_moods` | 시드/pipeline | **서빙 표면 있음** — agent `mood_search` 축(`EXISTS` 서브쿼리). 4,677행 전부 `source='code'`·`confidence=1.00`(카테고리에서 결정적 파생). 코드 8종 중 **7종만 쓴다** — `market`은 카테고리 술어에서 SH06이 빠져 모수 0 |

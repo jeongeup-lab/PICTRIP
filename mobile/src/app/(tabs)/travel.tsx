@@ -1,22 +1,20 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ScrollView, Pressable, View, Text, StyleSheet } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { View, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { Icon } from "@/components/Icon";
-import { GlassSheet, SCREEN_H } from "@/components/GlassSheet";
 import { Toast } from "@/components/Toast";
 import { KakaoWebMap } from "@/features/map/components/KakaoWebMap";
-import { AskComposer } from "@/features/travel/components/AskComposer";
-import { AnchorPreview } from "@/features/travel/components/AnchorPreview";
-import { ConversationTurn } from "@/features/travel/components/ConversationTurn";
-import { Mascot } from "@/features/travel/components/Mascot";
+import { AnswerBar } from "@/features/travel/components/AnswerBar";
+import {
+  SpotCarousel,
+  SpotCarouselSkeleton,
+  CAROUSEL_BLOCK_PX,
+} from "@/features/travel/components/SpotCarousel";
+import { TravelDock } from "@/features/travel/components/TravelDock";
 import { SearchPulse } from "@/features/travel/components/SearchPulse";
-import { StartActions } from "@/features/travel/components/StartActions";
 import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
-import { useCardTap } from "@/features/travel/hooks/use-card-tap";
-import { useAuthGate } from "@/features/auth/hooks/use-auth-gate";
 import { useAskAgentMutation } from "@/features/travel/queries";
-import { useConversation, type Turn } from "@/features/travel/stores/conversation-store";
+import { useConversation } from "@/features/travel/stores/conversation-store";
 import { useTravelAnchor } from "@/features/travel/stores/anchor-store";
 import {
   agentErrorMessage,
@@ -24,47 +22,33 @@ import {
   PHOTO_SHOOT_FAILED,
 } from "@/features/travel/lib/agent-errors";
 import { composeQuestion, anchorQuestion, MY_LOCATION } from "@/features/travel/lib/question";
-import { composerChips, FESTIVAL_CHIP, NEARBY_CHIP, type Chip } from "@/features/travel/lib/chips";
 import { contextFrom } from "@/features/travel/lib/conversation-context";
-import {
-  TAB_BAR_CONTENT_PX,
-  sheetHeightOverRoot,
-  travelSheetSnapY,
-  type SheetSnap,
-} from "@/features/travel/lib/sheet-snap";
-import { coordsOf, spotDistanceKm } from "@/features/travel/lib/distance";
+import { dockChips, type DockChip } from "@/features/travel/lib/dock-chips";
+import { pendingSteps } from "@/features/travel/lib/pending-steps";
+import { coordsOf } from "@/features/travel/lib/distance";
+import { bounds, center, pinsFrom, placed } from "@/features/travel/lib/spot-geo";
+import { dockBasePx, mapFitPadding } from "@/features/travel/lib/screen-layout";
 import { pickTravelPhoto, shootTravelPhoto } from "@/features/travel/usecases/pick-travel-photo";
-import {
-  bounds,
-  center,
-  pinsFrom,
-  placed,
-  spatialSummary,
-  summaryLine,
-} from "@/features/travel/lib/spot-geo";
-import { mapListPaddingBottom } from "@/features/map/lib/list-padding";
 import type { AskInput, PhotoUpload, TravelSpot } from "@/features/travel/api";
-import { colors, radii, spacing } from "@/constants/theme";
+import { colors } from "@/constants/theme";
 
 const SAVE_COMPLETE = "여행지를 저장했어요";
 const UNSAVE_COMPLETE = "여행지 저장을 해제했어요";
 const TOAST_LIFT = 12;
-const FIT_TOP_PAD = 96;
-const FIT_SIDE_PAD = 40;
-const FIT_BOTTOM_MARGIN = 24;
+const NO_SPOTS: TravelSpot[] = [];
 
-export const TAGLINE = "사진 한 장으로 떠나는 여행";
-
-export const GREETING = "오늘, 어디로 갈까요";
+export const ASK_PLACEHOLDER = "어디로 갈지 말해보세요";
+export const ATTACHED_PLACEHOLDER = "지역이나 조건을 덧붙여 보세요";
 
 export default function TravelScreen() {
   const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ScrollView>(null);
   const [draft, setDraft] = useState("");
   const [photo, setPhoto] = useState<PhotoUpload | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [snap, setSnap] = useState<SheetSnap>("peek");
-  const [everAnchored, setEverAnchored] = useState(false);
+  const [expandedAnswer, setExpandedAnswer] = useState(false);
+  const [expandedChips, setExpandedChips] = useState(false);
+  const [focusedIndexRaw, setFocusedIndexRaw] = useState(0);
+  const [scrollToRaw, setScrollToRaw] = useState<number | null>(null);
 
   const turns = useConversation((s) => s.turns);
   const busy = useConversation((s) => s.busy);
@@ -75,82 +59,64 @@ export default function TravelScreen() {
   const clearTurns = useConversation((s) => s.clear);
   const nextTurnId = useConversation((s) => s.nextTurnId);
 
-  const anchorSpot = useTravelAnchor((s) => s.spot);
-  const toggleAnchor = useTravelAnchor((s) => s.toggle);
-  const pickAnchor = useTravelAnchor((s) => s.pick);
-  const clearAnchor = useTravelAnchor((s) => s.clear);
+  const seeded = useTravelAnchor((s) => s.spot);
+  const clearSeed = useTravelAnchor((s) => s.clear);
 
   const { coords, askable: locationAskable, ask: askLocation } = useNearbyCoords();
   const ask = useAskAgentMutation();
-  const requireAuth = useAuthGate();
 
-  const empty = turns.length === 0;
-  const tabBarPx = TAB_BAR_CONTENT_PX + insets.bottom;
-  const snapY = useMemo(
-    () => travelSheetSnapY(SCREEN_H, TAB_BAR_CONTENT_PX + insets.bottom),
-    [insets],
-  );
+  const lastTurn = turns.length > 0 ? turns[turns.length - 1] : null;
+  const turn = seeded ? null : lastTurn;
+  const answer = turn?.status === "done" ? turn.answer : null;
+  const seededSpots = useMemo(() => (seeded ? [seeded] : NO_SPOTS), [seeded]);
+  const spots = seeded ? seededSpots : (answer?.spots ?? NO_SPOTS);
+  const focusedAt = seeded ? 0 : focusedIndexRaw;
+  const scrollToAt = seeded ? null : scrollToRaw;
+  const focused = spots[focusedAt] ?? null;
+  const pending = turn?.status === "pending";
 
-  const lastAnswered = [...turns].reverse().find((t) => t.status === "done" && t.answer);
-  const tapHintTurnId = turns.find((t) => (t.answer?.spots.length ?? 0) > 0)?.id ?? null;
-
-  const mapSpots = useMemo(() => {
-    const shown = placed(lastAnswered?.answer?.spots ?? []);
-    if (!anchorSpot || shown.some((s) => s.spot.contentId === anchorSpot.contentId)) return shown;
-    const at = coordsOf(anchorSpot);
-    return at ? [...shown, { spot: anchorSpot, lat: at.lat, lng: at.lng }] : shown;
-  }, [lastAnswered, anchorSpot]);
-
+  const mapSpots = useMemo(() => placed(spots), [spots]);
   const pins = useMemo(() => pinsFrom(mapSpots), [mapSpots]);
-  const sheetOverRoot = sheetHeightOverRoot(SCREEN_H, tabBarPx, snapY[snap]);
+
+  const dockBase = dockBasePx({ primer: locationAskable, attached: photo !== null });
+  const carouselShown = pending || spots.length > 0;
+  const dockHeight = dockBase + (carouselShown ? CAROUSEL_BLOCK_PX : 0);
+
   const fit = useMemo(() => {
     const box = bounds(mapSpots);
     if (!box) return null;
-    return {
-      ...box,
-      pad: {
-        top: insets.top + FIT_TOP_PAD,
-        right: FIT_SIDE_PAD,
-        bottom: sheetOverRoot + FIT_BOTTOM_MARGIN,
-        left: FIT_SIDE_PAD,
-      },
-    };
-  }, [mapSpots, sheetOverRoot, insets]);
+    return { ...box, pad: mapFitPadding({ safeTop: insets.top, dockHeight }) };
+  }, [mapSpots, insets.top, dockHeight]);
+
   const focus = useMemo(() => {
-    if (anchorSpot) return coordsOf(anchorSpot) ?? center(mapSpots) ?? coords;
+    if (focused) return coordsOf(focused) ?? center(mapSpots) ?? coords;
     return center(mapSpots) ?? coords;
-  }, [anchorSpot, mapSpots, coords]);
+  }, [focused, mapSpots, coords]);
 
-  const origin = anchorSpot ? coordsOf(anchorSpot) : coords;
-  const summary = useMemo(() => summaryLine(spatialSummary(mapSpots)), [mapSpots]);
-
-  const scrollFrame = useRef<number | null>(null);
-
-  useEffect(
-    () => () => {
-      if (scrollFrame.current !== null) cancelAnimationFrame(scrollFrame.current);
-    },
-    [],
-  );
-
-  const scrollToEnd = useCallback(() => {
-    scrollFrame.current = requestAnimationFrame(() =>
-      scrollRef.current?.scrollToEnd({ animated: true }),
-    );
-  }, []);
+  useEffect(() => {
+    if (seeded) clearTurns();
+  }, [seeded, clearTurns]);
 
   const run = useCallback(
     (id: string, input: Omit<AskInput, "coords">) => {
       ask.mutate(
         { ...input, coords },
         {
-          onSuccess: (answer) => resolveTurn(id, answer),
+          onSuccess: (result) => resolveTurn(id, result),
           onError: (error) => failTurn(id, agentErrorMessage(error)),
         },
       );
     },
     [ask, coords, resolveTurn, failTurn],
   );
+
+  const beginTurn = useCallback(() => {
+    clearSeed();
+    setExpandedAnswer(false);
+    setExpandedChips(false);
+    setFocusedIndexRaw(0);
+    setScrollToRaw(null);
+  }, [clearSeed]);
 
   const submit = useCallback(
     (text: string, attached: PhotoUpload | null) => {
@@ -159,158 +125,140 @@ export default function TravelScreen() {
       if (!question) return;
       const request = text.trim();
       const id = nextTurnId();
-      const context = contextFrom(lastAnswered?.answer, anchorSpot?.contentId ?? null);
+      const context = contextFrom(answer, focused?.contentId ?? null);
       startTurn({ id, question, request, photo: attached, context });
       setDraft("");
       setPhoto(null);
-      setSnap("half");
-      scrollToEnd();
+      beginTurn();
       run(id, { question: request, photo: attached, context });
     },
-    [busy, startTurn, scrollToEnd, run, lastAnswered, anchorSpot, nextTurnId],
+    [busy, nextTurnId, answer, focused, startTurn, beginTurn, run],
   );
 
-  const refineFrom = useCallback(
-    (source: Turn | undefined, chip: Chip) => {
+  const onChipPress = useCallback(
+    async (chip: DockChip) => {
       if (busy) return;
-      if (chip.kind === "question") {
-        submit(chip.question, null);
+      if (chip.kind === "photo") {
+        try {
+          const picked = await pickTravelPhoto();
+          if (picked) setPhoto(picked);
+        } catch {
+          setToast(PHOTO_PICK_FAILED);
+        }
         return;
       }
-      if (chip.kind === "anchor") {
-        if (!anchorSpot && !coords) return;
+      if (chip.kind === "context") {
+        setExpandedChips((open) => !open);
+        return;
+      }
+      const inner = chip.chip;
+      if (inner.kind === "question") {
+        submit(inner.question, null);
+        return;
+      }
+      if (inner.kind === "anchor") {
+        if (!focused && !coords) return;
+        const anchor = focused
+          ? { contentId: focused.contentId, action: inner.action }
+          : { action: inner.action };
         const id = nextTurnId();
-        const anchor = anchorSpot
-          ? { contentId: anchorSpot.contentId, action: chip.action }
-          : { action: chip.action };
         startTurn({
           id,
-          question: anchorQuestion(anchorSpot?.title ?? MY_LOCATION, chip.label),
+          question: anchorQuestion(focused?.title ?? MY_LOCATION, inner.label),
           request: "",
           photo: null,
           anchor,
         });
-        setSnap("half");
-        scrollToEnd();
+        beginTurn();
         run(id, { anchor });
         return;
       }
-      if (chip.kind === "intent") {
+      if (inner.kind === "intent") {
         const id = nextTurnId();
-        startTurn({ id, question: chip.label, request: "", photo: null, intent: chip.intent });
-        setSnap("half");
-        scrollToEnd();
-        run(id, { intent: chip.intent });
+        startTurn({ id, question: inner.label, request: "", photo: null, intent: inner.intent });
+        beginTurn();
+        run(id, { intent: inner.intent });
         return;
       }
-      const intent = source?.answer?.intent ?? null;
+      const intent = answer?.intent ?? null;
       if (!intent) return;
+      const attached = turn?.photo ?? null;
       const id = nextTurnId();
-      const attached = source?.photo ?? null;
       startTurn({
         id,
-        question: chip.label,
+        question: inner.label,
         request: "",
         photo: attached,
         intent,
-        patch: chip.patch,
+        patch: inner.patch,
       });
-      setSnap("half");
-      scrollToEnd();
-      run(id, { photo: attached, intent, patch: chip.patch });
+      beginTurn();
+      run(id, { photo: attached, intent, patch: inner.patch });
     },
-    [busy, submit, anchorSpot, coords, startTurn, scrollToEnd, run, nextTurnId],
+    [busy, submit, nextTurnId, focused, coords, answer, turn, startTurn, beginTurn, run],
   );
 
-  const submitDockChip = useCallback(
-    (chip: Chip) => refineFrom(lastAnswered, chip),
-    [refineFrom, lastAnswered],
-  );
-
-  const onNearby = useCallback(() => submit(NEARBY_CHIP.question, null), [submit]);
-
-  const onFestival = useCallback(() => refineFrom(undefined, FESTIVAL_CHIP), [refineFrom]);
-
-  const openSaved = useCallback(async () => {
-    if (await requireAuth("saved-list")) router.push("/saved");
-  }, [requireAuth]);
+  const onShoot = useCallback(async () => {
+    try {
+      const picked = await shootTravelPhoto();
+      if (picked) setPhoto(picked);
+    } catch {
+      setToast(PHOTO_SHOOT_FAILED);
+    }
+  }, []);
 
   const onNewChat = useCallback(() => {
     clearTurns();
     setDraft("");
     setPhoto(null);
-    clearAnchor();
-    setSnap("peek");
-  }, [clearTurns, clearAnchor]);
+    beginTurn();
+  }, [clearTurns, beginTurn]);
 
-  const onSpotDetail = useCallback((spot: TravelSpot) => {
-    router.push(`/spots/${spot.contentId}`);
-  }, []);
-
-  const onSpotAnchor = useCallback(
-    (spot: TravelSpot) => {
-      setEverAnchored(true);
-      toggleAnchor(spot);
-    },
-    [toggleAnchor],
-  );
-
-  const onSpotTap = useCardTap(onSpotAnchor, onSpotDetail);
+  const onRetry = useCallback(() => {
+    if (busy || !turn) return;
+    retryTurn(turn.id);
+    beginTurn();
+    run(turn.id, {
+      question: turn.request,
+      photo: turn.photo,
+      intent: turn.intent,
+      patch: turn.patch,
+      anchor: turn.anchor,
+      context: turn.context,
+    });
+  }, [busy, turn, retryTurn, beginTurn, run]);
 
   const onPinTap = useCallback(
     (contentId: string) => {
-      const hit = mapSpots.find((s) => s.spot.contentId === contentId);
-      if (!hit) return;
-      setEverAnchored(true);
-      pickAnchor(hit.spot);
-      setSnap("peek");
+      const at = spots.findIndex((s) => s.contentId === contentId);
+      if (at < 0) return;
+      setFocusedIndexRaw(at);
+      setScrollToRaw(at);
     },
-    [mapSpots, pickAnchor],
+    [spots],
   );
 
-  const onRetry = useCallback(
-    (turn: Turn) => {
-      if (busy) return;
-      retryTurn(turn.id);
-      run(turn.id, {
-        question: turn.request,
-        photo: turn.photo,
-        intent: turn.intent,
-        patch: turn.patch,
-        anchor: turn.anchor,
-        context: turn.context,
-      });
-    },
-    [busy, retryTurn, run],
-  );
-
-  const onChangeDraft = useCallback((text: string) => setDraft(text), []);
-
-  const attachFrom = useCallback(
-    async (source: () => Promise<PhotoUpload | null>, failure: string) => {
-      try {
-        const picked = await source();
-        if (picked) {
-          setPhoto(picked);
-          clearAnchor();
-        }
-      } catch {
-        setToast(failure);
-      }
-    },
-    [clearAnchor],
-  );
-
-  const onSaveToggle = useCallback((saved: boolean) => {
-    setToast(saved ? SAVE_COMPLETE : UNSAVE_COMPLETE);
+  const onFocusChange = useCallback((index: number) => {
+    setFocusedIndexRaw(index);
+    setExpandedChips(false);
+    setScrollToRaw(null);
   }, []);
 
-  const onAttach = useCallback(() => attachFrom(pickTravelPhoto, PHOTO_PICK_FAILED), [attachFrom]);
+  const chips = dockChips({
+    answer,
+    focused,
+    expanded: expandedChips,
+    hasCoords: coords !== null,
+    hasCrowd: focused?.hasCrowd === true,
+  });
 
-  const onShoot = useCallback(() => attachFrom(shootTravelPhoto, PHOTO_SHOOT_FAILED), [attachFrom]);
+  const placeholder = photo
+    ? ATTACHED_PLACEHOLDER
+    : focused
+      ? `${focused.title}에 대해 물어보기`
+      : ASK_PLACEHOLDER;
 
-  const chips = composerChips(lastAnswered?.answer, anchorSpot, coords !== null);
-  const listPaddingBottom = mapListPaddingBottom(snapY[snap], tabBarPx, spacing.xxl);
+  const step = pending && turn ? (pendingSteps(turn)[0]?.label ?? null) : null;
 
   return (
     <View style={styles.root}>
@@ -318,125 +266,71 @@ export default function TravelScreen() {
         center={focus}
         fit={fit}
         pins={pins}
-        anchorId={anchorSpot?.contentId ?? null}
+        anchorId={focused?.contentId ?? null}
         userLocation={coords}
         onPinTap={onPinTap}
       />
 
-      <SearchPulse active={busy} bottom={sheetOverRoot} />
+      <SearchPulse active={busy} bottom={dockHeight} />
 
-      {lastAnswered && pins.length > 0 ? (
-        <View
-          testID="travel-map-summary"
-          style={[styles.summary, { top: insets.top + spacing.sm }]}
-          pointerEvents="none"
-        >
-          <Text style={styles.summaryTitle} numberOfLines={1}>
-            {lastAnswered.question}
-          </Text>
-          <Text style={styles.summaryLine} numberOfLines={1}>
-            {summary ? `${pins.length}곳 · ${summary}` : `${pins.length}곳`}
-          </Text>
-        </View>
+      {turn ? (
+        <AnswerBar
+          question={turn.question}
+          answer={answer?.answer ?? null}
+          photoUri={turn.photo?.uri ?? null}
+          step={step}
+          errorMessage={turn.status === "failed" ? turn.errorMessage : null}
+          expanded={expandedAnswer || spots.length === 0}
+          collapsible={spots.length > 0}
+          top={insets.top + 7}
+          onToggle={() => setExpandedAnswer((open) => !open)}
+          onClose={onNewChat}
+          onRetry={onRetry}
+        />
       ) : null}
 
-      <View style={[styles.controls, { top: insets.top + spacing.sm }]} pointerEvents="box-none">
-        {empty ? null : (
-          <Pressable
-            testID="travel-new-chat"
-            accessibilityRole="button"
-            accessibilityLabel="새 대화"
-            style={({ pressed }) => [styles.control, pressed && styles.pressed]}
-            hitSlop={6}
-            onPress={onNewChat}
-          >
-            <Icon name="close" size={19} color={colors.ink} strokeWidth={2} />
-          </Pressable>
-        )}
+      <View
+        testID="travel-carousel-slot"
+        style={[styles.stack, { bottom: dockBase }]}
+        pointerEvents="box-none"
+      >
+        {pending ? <SpotCarouselSkeleton /> : null}
+        <SpotCarousel
+          spots={spots}
+          tagBasis={answer?.tagBasis ?? null}
+          focusedIndex={focusedAt}
+          scrollToIndex={scrollToAt}
+          origin={coords}
+          onFocusChange={onFocusChange}
+          onDetail={(spot: TravelSpot) => router.push(`/spots/${spot.contentId}`)}
+          onSaveToggle={(saved) => setToast(saved ? SAVE_COMPLETE : UNSAVE_COMPLETE)}
+          onMetricPress={(tooltip) => {
+            if (tooltip) setToast(tooltip);
+          }}
+        />
       </View>
 
-      <GlassSheet
-        testID="travel-sheet"
-        snap={snap}
-        snapY={snapY}
-        onSnapChange={setSnap}
-        headerExtra={
-          <AskComposer
-            value={draft}
-            photo={photo}
-            chips={chips}
-            disabled={busy}
-            anchorTitle={anchorSpot?.title ?? null}
-            onClearAnchor={clearAnchor}
-            onChange={onChangeDraft}
-            onSuggest={submitDockChip}
-            onAttach={() => void onAttach()}
-            onShoot={() => void onShoot()}
-            onClearAttach={() => setPhoto(null)}
-            onSubmit={() => submit(draft, photo)}
-            onFocus={() => setSnap("half")}
-          />
-        }
-      >
-        <ScrollView
-          ref={scrollRef}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingBottom: listPaddingBottom }}
-        >
-          {anchorSpot ? (
-            <AnchorPreview
-              spot={anchorSpot}
-              distanceKm={spotDistanceKm(anchorSpot, coords)}
-              onDetail={() => onSpotDetail(anchorSpot)}
-              onRelease={clearAnchor}
-              onSaveToggle={onSaveToggle}
-            />
-          ) : null}
-
-          {!empty ? (
-            turns.map((turn) => (
-              <ConversationTurn
-                key={turn.id}
-                turn={turn}
-                anchorId={anchorSpot?.contentId ?? null}
-                anchored={anchorSpot !== null}
-                origin={origin}
-                showTapHint={!everAnchored && turn.id === tapHintTurnId}
-                onSpotTap={onSpotTap}
-                onSpotDetail={onSpotDetail}
-                onRetry={onRetry}
-                onGrow={scrollToEnd}
-                onSaveToggle={onSaveToggle}
-              />
-            ))
-          ) : anchorSpot ? null : (
-            <View testID="travel-greeting">
-              <View style={styles.greeting}>
-                <Mascot size={44} floating />
-                <View style={styles.greetingCopy}>
-                  <Text style={styles.greetingText}>{GREETING}</Text>
-                  <Text style={styles.tagline}>{TAGLINE}</Text>
-                </View>
-              </View>
-              <StartActions
-                onPhoto={() => void onAttach()}
-                onNearby={onNearby}
-                onFestival={onFestival}
-                onSaved={() => void openSaved()}
-                nearbyEnabled={coords !== null}
-                onAskLocation={() => void askLocation()}
-                locationAskable={locationAskable}
-              />
-            </View>
-          )}
-        </ScrollView>
-      </GlassSheet>
+      <TravelDock
+        value={draft}
+        photo={photo}
+        chips={chips}
+        disabled={busy}
+        placeholder={placeholder}
+        locationAskable={locationAskable}
+        bottom={0}
+        onChange={setDraft}
+        onChipPress={(chip) => void onChipPress(chip)}
+        onShoot={() => void onShoot()}
+        onClearAttach={() => setPhoto(null)}
+        onSubmit={() => submit(draft, photo)}
+        onFocus={() => setExpandedChips(false)}
+        onAskLocation={() => void askLocation()}
+      />
 
       <Toast
         testID="travel-toast"
         message={toast}
-        bottom={sheetOverRoot + TOAST_LIFT}
+        bottom={dockHeight + TOAST_LIFT}
         onHide={() => setToast(null)}
       />
     </View>
@@ -445,43 +339,5 @@ export default function TravelScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  controls: {
-    position: "absolute",
-    right: spacing.md,
-    gap: 9,
-  },
-  summary: {
-    position: "absolute",
-    left: spacing.md,
-    right: 70,
-    paddingVertical: 9,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.glassFill,
-  },
-  summaryTitle: { fontSize: 13.5, fontWeight: "700", letterSpacing: -0.3, color: colors.ink },
-  summaryLine: { marginTop: 3, fontSize: 11.5, color: colors.sec },
-  control: {
-    width: 42,
-    height: 42,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.glassFill,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  pressed: { opacity: 0.7 },
-  greeting: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: spacing.lg,
-    paddingTop: 16,
-  },
-  greetingCopy: { flex: 1, minWidth: 0 },
-  greetingText: { fontSize: 21, fontWeight: "800", letterSpacing: -0.8, color: colors.ink },
-  tagline: { marginTop: 5, fontSize: 12.5, letterSpacing: -0.2, color: colors.ter },
+  stack: { position: "absolute", left: 0, right: 0 },
 });

@@ -3,7 +3,10 @@ import { useConversation } from "@/features/travel/stores/conversation-store";
 
 const answer: AgentAnswer = {
   steps: [{ tool: "intent", label: "질문에서 조건 추출", badge: "96곳" }],
-  answer: [{ text: "4곳 찾았어요", emphasis: false }],
+  answer: [
+    { text: "무릉계곡", emphasis: true },
+    { text: "이 조건에 가장 맞아요. 계곡 조건으로 4곳이에요.", emphasis: false },
+  ],
   spots: [],
   totalCount: 4,
   intent: { categoryKeywords: ["계곡"], regionHints: [] },

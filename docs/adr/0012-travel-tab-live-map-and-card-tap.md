@@ -1,12 +1,15 @@
 # 0012. 여행 탭에 실제 지도를 들이고, 카드 탭을 앵커로 되돌린다
 
 - 상태: 일부 대체 — 전체 지도 라우트는
-  [0015](0015-travel-and-profile-go-dark-on-one-map.md) 가 상시 지도로 바꿨다
+  [0015](0015-travel-and-profile-go-dark-on-one-map.md) 가 상시 지도로 바꿨고,
+  `카드 한 번 탭 = 앵커, 두 번 탭 = 상세` 는
+  [0017](0017-travel-tab-drops-the-sheet-for-a-map-carousel.md) 이 폐기했다
 - 날짜: 2026-08-06
 - 관련: [travel-tab](../reference/travel-tab.md), [api](../reference/api.md),
   [0009 여행 탭 대화형 에이전트](0009-travel-tab-conversational-agent.md),
   [0010 조건 시트 폐기](0010-travel-tab-drops-condition-sheet.md),
-  [0011 칩 상태 기계](0011-travel-tab-chip-state-machine.md)
+  [0011 칩 상태 기계](0011-travel-tab-chip-state-machine.md),
+  [0017 시트를 버리고 지도 위 캐러셀로](0017-travel-tab-drops-the-sheet-for-a-map-carousel.md)
 
 ## 맥락
 

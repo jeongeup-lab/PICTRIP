@@ -121,24 +121,112 @@ def test_card_tag_prefers_distance_then_percentile() -> None:
     near_card = ask_service._card(pool[0], intent=quiet, lat=LAT, lng=LNG, near=True)
     quiet_card = ask_service._card(pool[0], intent=quiet, lat=None, lng=None, near=False)
 
-    assert near_card.tag is not None and near_card.tag.endswith("km")
+    assert near_card.tag == "10m"
+    assert ask_service._is_distance_tag(near_card.tag)
     assert quiet_card.tag == "하위 10%"
 
 
-def test_answer_emphasises_the_result_count() -> None:
+def test_a_quiet_answer_leads_with_the_percentile_not_the_count() -> None:
     segments = ask_service._answer(
         _pool()[:4],
-        intent=QueryIntent(),
+        intent=QueryIntent(crowdPreference="quiet"),
         near=False,
         lat=None,
         lng=None,
     )
 
-    assert [s.text for s in segments if s.emphasis] == ["4곳"]
-    assert "이번 주말" not in "".join(s.text for s in segments)
+    text = "".join(s.text for s in segments)
+    assert text.startswith("혼잡도 ")
+    assert "안쪽으로만 골랐어요." in text
+    assert "4곳" in text
+    assert next(s.text for s in segments if s.emphasis).startswith("하위 ")
 
 
-def test_an_answer_names_the_conditions_it_searched() -> None:
+def test_a_near_answer_leads_with_the_closest_distance() -> None:
+    segments = ask_service._answer(
+        _pool()[:4],
+        intent=QueryIntent(nearMe=True),
+        near=True,
+        lat=35.0,
+        lng=128.0,
+    )
+
+    text = "".join(s.text for s in segments)
+    assert text.startswith("가장 가까운 곳이 ")
+    assert ask_service._is_distance_tag(next(s.text for s in segments if s.emphasis))
+
+
+def _photo_spots(rows: list[CandidateRow], *, near: bool) -> list[AgentSpotCard]:
+    similarity = {row.content_id: 0.9 for row in rows}
+    return [
+        ask_service._photo_card(
+            row,
+            similarity=similarity,
+            lat=LAT if near else None,
+            lng=LNG if near else None,
+            near=near,
+        )
+        for row in rows
+    ]
+
+
+def test_a_similarity_ordered_photo_answer_leads_with_the_first_card() -> None:
+    rows = _pool()[:3]
+
+    segments = ask_service._photo_answer(
+        rows,
+        _photo_spots(rows, near=False),
+        near=False,
+        lat=None,
+        lng=None,
+        widened=None,
+    )
+
+    text = "".join(s.text for s in segments)
+    assert text.startswith("t-c0이 가장 비슷해요.")
+    assert "사진과 닮은 곳으로 3곳이에요." in text
+    assert next(s.text for s in segments if s.emphasis) == "t-c0"
+
+
+def test_a_distance_ordered_photo_answer_leads_with_the_distance_not_similarity() -> None:
+    rows = [
+        _row("near", rate=None, lat=35.1501, lng=129.05),
+        _row("far", rate=None, lat=35.20, lng=129.05),
+    ]
+
+    segments = ask_service._photo_answer(
+        rows,
+        _photo_spots(rows, near=True),
+        near=True,
+        lat=LAT,
+        lng=LNG,
+        widened=None,
+    )
+
+    text = "".join(s.text for s in segments)
+    assert text.startswith("가장 가까운 곳이 ")
+    assert "가장 비슷해요" not in text
+    assert "사진과 닮은 곳으로 2곳이에요." in text
+    assert ask_service._is_distance_tag(next(s.text for s in segments if s.emphasis))
+
+
+def test_a_photo_answer_never_emphasises_a_bare_count() -> None:
+    rows = _pool()[:2]
+
+    for near in (False, True):
+        segments = ask_service._photo_answer(
+            rows,
+            _photo_spots(rows, near=near),
+            near=near,
+            lat=LAT if near else None,
+            lng=LNG if near else None,
+            widened=None,
+        )
+
+        assert all("곳이에요" not in s.text for s in segments if s.emphasis)
+
+
+def test_an_answer_with_no_specific_fact_leads_with_the_conditions() -> None:
     segments = ask_service._answer(
         _pool()[:4],
         intent=QueryIntent(regionHints=["통영"], categoryKeywords=["계곡"]),
@@ -147,10 +235,11 @@ def test_an_answer_names_the_conditions_it_searched() -> None:
         lng=None,
     )
 
-    assert "".join(s.text for s in segments).startswith("통영 + 계곡 조건으로 4곳 추렸어요")
+    text = "".join(s.text for s in segments)
+    assert text.startswith("통영 + 계곡 조건으로 4곳이에요.")
 
 
-def test_an_answer_with_no_nameable_condition_keeps_the_plain_opening() -> None:
+def test_an_answer_with_nothing_nameable_keeps_the_plain_opening() -> None:
     segments = ask_service._answer(
         _pool()[:4],
         intent=QueryIntent(namedPlaces=[ExtractedPlace(name="감천문화마을")]),
@@ -159,7 +248,39 @@ def test_an_answer_with_no_nameable_condition_keeps_the_plain_opening() -> None:
         lng=None,
     )
 
-    assert "".join(s.text for s in segments).startswith("조건에 맞는 곳으로 4곳 추렸어요")
+    assert "".join(s.text for s in segments).startswith("조건에 맞는 곳으로 4곳이에요.")
+
+
+def test_a_widened_answer_leads_with_the_region_it_widened_to() -> None:
+    segments = ask_service._answer(
+        _pool()[:4],
+        intent=QueryIntent(regionHints=["수영"]),
+        near=False,
+        lat=None,
+        lng=None,
+        region_widened=retrieve.RegionScope(
+            prefixes=["부산광역시"],
+            sido_prefixes=["부산광역시"],
+            narrowed_hints=("수영구",),
+            narrowed_sidos=("부산광역시",),
+        ),
+    )
+
+    text = "".join(s.text for s in segments)
+    assert text.startswith("수영구 안에서는 찾지 못해 부산광역시 전체에서 골랐어요.")
+    assert "4곳" in text
+
+
+def test_an_answer_never_emphasises_a_bare_count() -> None:
+    segments = ask_service._answer(
+        _pool()[:4],
+        intent=QueryIntent(crowdPreference="quiet"),
+        near=False,
+        lat=None,
+        lng=None,
+    )
+
+    assert "4곳" not in [s.text for s in segments if s.emphasis]
 
 
 def _override(db_session: AsyncSession) -> None:
@@ -352,7 +473,7 @@ async def test_nothing_matching_answers_with_zero_and_a_way_out(
     assert data["spots"] == []
     assert data["totalCount"] == 0
     answer = "".join(segment["text"] for segment in data["answer"])
-    assert "0곳" in answer
+    assert "없어요" in answer
     assert [chip["label"] for chip in data["refinements"]] == ["지역 넓히기"]
 
 
@@ -543,7 +664,7 @@ async def test_near_me_orders_candidates_by_distance_in_sql(
     data = res.json()["data"]
     assert [spot["contentId"] for spot in data["spots"]] == ["v3", "v2", "v1"]
     assert [step["tool"] for step in data["steps"]][-1] == "nearby"
-    assert all(spot["tag"].endswith("km") for spot in data["spots"])
+    assert all(ask_service._is_distance_tag(spot["tag"]) for spot in data["spots"])
 
 
 @pytest.mark.integration
@@ -626,7 +747,7 @@ async def test_a_photo_that_matches_nothing_answers_with_zero_not_an_error(
     assert res.status_code == 200
     data = res.json()["data"]
     assert data["spots"] == []
-    assert "0곳" in "".join(segment["text"] for segment in data["answer"])
+    assert "없어요" in "".join(segment["text"] for segment in data["answer"])
     assert [chip["label"] for chip in data["refinements"]] == ["지역 넓히기"]
     assert data["steps"][-1]["badge"] == "0곳"
 
@@ -1298,7 +1419,7 @@ async def test_near_with_quiet_still_filters_by_percentile_in_sql(
     assert [spot["contentId"] for spot in res.json()["data"]["spots"]] == ["v1"]
 
 
-def test_answer_reports_a_zero_kilometre_distance() -> None:
+def test_a_search_lead_never_reports_a_zero_kilometre_distance() -> None:
     here = _row("c0", rate=10.0, percentile=10, lat=LAT, lng=LNG)
 
     segments = ask_service._answer(
@@ -1309,7 +1430,9 @@ def test_answer_reports_a_zero_kilometre_distance() -> None:
         lng=LNG,
     )
 
-    assert "0.0km" in "".join(s.text for s in segments)
+    text = "".join(s.text for s in segments)
+    assert "0.0km" not in text
+    assert "가장 가까운 곳이 10m예요." in text
 
 
 @pytest.mark.integration
@@ -2484,6 +2607,7 @@ async def test_festival_region_miss_falls_back_nationwide_and_says_so(
     body = res.json()["data"]
     sentence = "".join(part["text"] for part in body["answer"])
     assert [s["contentId"] for s in body["spots"]] == ["f1"]
+    assert sentence.startswith("봉화은어축제가 오늘 열려요.")
     assert "제주에는 오늘 열리는 축제가 없어 전국에서 골랐어요" in sentence
 
 
@@ -3805,6 +3929,40 @@ def test_an_all_distance_batch_says_so() -> None:
     assert ask_service._tag_basis([], cards, near=True) == "직선거리 기준"
 
 
+def test_a_metre_tagged_batch_keeps_the_straight_line_basis() -> None:
+    cards = [
+        AgentSpotCard(contentId="a", title="t", regionLabel="r", tag="870m"),
+        AgentSpotCard(contentId="b", title="t", regionLabel="r", tag="40m"),
+    ]
+
+    assert ask_service._tag_basis([], cards, near=True) == "직선거리 기준"
+
+
+def test_metres_and_kilometres_mixed_still_read_as_one_distance_batch() -> None:
+    cards = [
+        AgentSpotCard(contentId="a", title="t", regionLabel="r", tag="870m"),
+        AgentSpotCard(contentId="b", title="t", regionLabel="r", tag="3.2km"),
+    ]
+
+    assert ask_service._tag_basis([], cards, near=True) == "직선거리 기준"
+
+
+@pytest.mark.parametrize("tag", ["40m", "870m", "1.0km", "3.2km", "12km"])
+def test_every_distance_label_the_formatter_emits_is_shaped_like_a_distance(tag) -> None:
+    assert ask_service._is_distance_tag(tag)
+
+
+@pytest.mark.parametrize("tag", ["한산", "하위 8%", "유사도 87%", "D-3", "바다뷰", None, ""])
+def test_a_non_distance_tag_is_not_mistaken_for_one(tag) -> None:
+    assert not ask_service._is_distance_tag(tag)
+
+
+def test_the_formatter_and_the_basis_gate_agree_on_every_step_from_zero_to_two_km() -> None:
+    labels = [ask_service._meters_label(float(m)) for m in range(0, 2000, 7)]
+
+    assert all(ask_service._is_distance_tag(label) for label in labels)
+
+
 def test_no_crowd_tag_means_no_crowd_basis() -> None:
     from dataclasses import replace
     from datetime import date
@@ -4011,3 +4169,46 @@ async def test_a_prepared_intent_still_skips_the_extractor_even_with_context(
         app.dependency_overrides.clear()
 
     assert res.status_code == 200
+
+
+def test_a_zero_answer_leads_with_the_conditions_that_failed() -> None:
+    segments = ask_service._zero_answer(
+        QueryIntent(regionHints=["울릉도"], indoorOnly=True),
+        axes=suggest_service.ALL_AXES,
+    )
+
+    text = "".join(s.text for s in segments)
+    assert text.startswith("울릉도 + 실내 조건으로는 없어요.")
+    assert "지역을 넓히면" in text
+    assert [s.text for s in segments if s.emphasis] == ["울릉도 + 실내"]
+
+
+def test_a_headline_particle_follows_the_place_name_it_attaches_to() -> None:
+    assert ask_service._subject_particle("우도") == "가"
+    assert ask_service._subject_particle("오동도") == "가"
+    assert ask_service._subject_particle("봉화은어축제") == "가"
+    assert ask_service._subject_particle("성산일출봉") == "이"
+    assert ask_service._subject_particle("한라산") == "이"
+
+
+def test_a_zero_answer_without_a_region_does_not_tell_me_to_widen_one() -> None:
+    intent = QueryIntent(moodHints=["lake"], crowdPreference="quiet")
+
+    segments = ask_service._zero_answer(intent, axes=suggest_service.ALL_AXES)
+
+    text = "".join(s.text for s in segments)
+    assert text.startswith("분위기 + 한적 조건으로는 없어요.")
+    assert "지역을 넓히면" not in text
+    assert text.endswith(" 조건을 조금 바꿔서 다시 물어봐 주세요.")
+    assert suggest_service.derive_for_zero(intent, has_coords=False) == []
+
+
+def test_a_zero_answer_only_offers_widening_when_a_widen_chip_comes_with_it() -> None:
+    intent = QueryIntent(regionHints=["울릉도"], indoorOnly=True)
+
+    text = "".join(s.text for s in ask_service._zero_answer(intent, axes=suggest_service.ALL_AXES))
+
+    assert "지역을 넓히면" in text
+    assert [chip.label for chip in suggest_service.derive_for_zero(intent, has_coords=False)] == [
+        suggest_service.WIDEN_REGION_LABEL
+    ]

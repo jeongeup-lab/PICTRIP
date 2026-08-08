@@ -98,8 +98,8 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 |---|---|---|
 | `steps[]` | `{tool, label, badge}` | 서버가 **실제로 실행한** 툴 순서. `badge`는 그 단계 후 잔여 건수(`128곳`) 또는 근거 표시(`Gemini` · `pgvector`) |
 | `answer[]` | `{text, emphasis}` | 문장 조각. `emphasis=true`는 `accentText` 800으로 렌더 (HTML을 보내지 않는다) |
-| `context.focusContentId` | 대화 레일에서 앵커로 잡은 카드. 자유문에 함께 실린다 — `detail` 턴의 1순위 대상이다 |
-| `spots[]` | `{contentId, title, regionLabel, imageUrl, tag, lat, lng, categoryGroup, hasCrowd}` | 상위 20곳 — 대화 레일이 전부 그린다. `tag`는 카드 좌상단 배지(`하위 8%` · `4.2km` · `유사도 86%`). `categoryGroup`은 `lcls_systm*`에서 파생한 지도 핀 글리프 키(`food`·`cafe`·`attraction`·`leisure`·`shopping`, 없으면 `null`). 여행 후보 풀은 전시·공연장(`VE06`·`VE07`)을 담지만 지도 탭 필터용 `derive_category`는 그 둘을 빼므로, 에이전트는 `repositories.category_group`으로 되메워 `실내만` 결과의 핀이 통째로 흰 점이 되지 않게 한다. `anchor.action=crowd`는 빈 배열 |
+| `context.focusContentId` | 캐러셀에서 보고 있는 카드. 자유문에 함께 실린다 — `detail` 턴의 1순위 대상이다 |
+| `spots[]` | `{contentId, title, regionLabel, imageUrl, tag, lat, lng, categoryGroup, hasCrowd}` | 상위 20곳 — 여행 탭 캐러셀이 전부 그린다. `tag`는 카드 좌상단 배지(`하위 8%` · `4.2km` · `유사도 86%`). `categoryGroup`은 `lcls_systm*`에서 파생한 지도 핀 글리프 키(`food`·`cafe`·`attraction`·`leisure`·`shopping`, 없으면 `null`). 여행 후보 풀은 전시·공연장(`VE06`·`VE07`)을 담지만 지도 탭 필터용 `derive_category`는 그 둘을 빼므로, 에이전트는 `repositories.category_group`으로 되메워 `실내만` 결과의 핀이 통째로 흰 점이 되지 않게 한다. `anchor.action=crowd`는 빈 배열 |
 | `totalCount` | int | `spots[]` 길이 |
 | `intent` | `QueryIntent` | 서버가 **실제로 적용한** 의도. 다음 턴이 그대로 되돌려 보낸다 |
 | `refinements[]` | `{label, patch}` | 후속 제안 칩 최대 3개. `label`은 상태 전환 문구(`사람 적은 곳만`), `patch`는 그 칩이 바꿀 축 |
@@ -107,6 +107,34 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 
 `imageUrl`은 서명된 `img.pictrip.org` 프록시 URL — 클라이언트는 변형 없이 그대로
 쓴다(`cpyrhtDivCd=Type3` 무변형, [ADR 0005](../adr/0005-kto-image-policy.md)).
+
+**`answer[]` 는 구체적 사실이 먼저, 조건·개수가 뒤다.** 문장은 LLM 이 아니라
+`agent/services/ask.py` 의 결정적 템플릿이 짓는다(`_lead_sentence` +
+`_scope_sentence`). 앱의 답변 바가 **첫 문장만** 접어 보여주므로 그 한 줄이
+개수가 아니라 사실을 들어야 한다
+([ADR 0017](../adr/0017-travel-tab-drops-the-sheet-for-a-map-carousel.md)).
+
+| 경로 | 첫 문장 | 뒤따르는 문장 |
+|---|---|---|
+| 지역을 넓혔을 때 | `통영 안에서는 찾지 못해 경상남도 전체에서 골랐어요.` | `경상남도 + 한적 조건으로 12곳이에요.` |
+| `crowdPreference=quiet` | `혼잡도 하위 8% 안쪽으로만 골랐어요.` | `제주 + 한적 조건으로 8곳이에요.` |
+| `nearMe` + 좌표 | `가장 가까운 곳이 1.2km예요.` | `내 근처 조건으로 20곳이에요.` |
+| 그 밖의 검색 | (앞 문장 없음) `제주 조건으로 20곳이에요.` | `마음에 드는 게 없으면 조건을 좁혀 말해주세요.` |
+| 사진 | `성산일출봉이 가장 비슷해요.` | `사진과 닮은 곳으로 12곳이에요.` + `원본 사진은 비교 후 바로 폐기했어요.` |
+| 사진 + `nearMe` + 좌표 | `가장 가까운 곳이 1.2km예요.` | 사진과 같음 |
+| 앵커 반경 | `가장 가까운 카페가 0.3km 거리예요.` | `성산일출봉 주변으로 7곳이에요.` |
+| 축제 | `진주남강유등축제가 오늘 열려요.` | `오늘 열리는 축제로 9곳이에요.` |
+
+지역을 넓히면 `intent.regionHints` 가 넓힌 도명으로 교체되므로, 뒤따르는 문장은
+사용자가 말한 시군구가 아니라 **넓힌 도명**을 든다.
+| 0곳 | `제주 + 실내 조건으로는 없어요.` | `지역을 넓히면 나올 수 있어요.` |
+
+첫 문장은 **정렬된 그대로의 목록에 대해 참인 사실**을 말한다 — 거리순으로 정렬한
+목록이면 거리를, 유사도순이면 유사도를 든다. 사진 질의도 `nearMe` + 좌표가 오면
+목록이 거리순이 되므로 첫 문장이 거리로 바뀐다.
+
+`emphasis` 는 그 문장이 말하는 **사실**에 붙는다 — `하위 8%` · `1.2km` ·
+넓힌 지역명 · 스팟 제목 · 0곳 턴의 조건 이름. 개수(`N곳`)에는 붙지 않는다.
 
 **툴** — `steps[].tool` 값이자 서버가 고정 순서로 실행하는 단위.
 
@@ -384,7 +412,8 @@ TTL 48h이며 **신선도는 TTL이 아니라 저장된 날짜로 판정한다**
 찍힌 마지막 단계가 최종 실패 지점이다. **아무것도 거르지 않은 단계는 아예
 남기지 않으므로** 0곳 배지는 전부 실제로 돌린 조회다 — 재시도가 여러 번이면
 그 시도들이 차례로 보인다), 건 조건을 이름으로 되짚는 `answer`(`제주 + 실내 조건으로는
-0곳이에요. 조건을 조금 바꿔서 다시 물어봐 주세요.`), 그리고 지역 힌트가 살아
+없어요. 지역을 넓히면 나올 수 있어요.` — 지역 힌트가 없으면 뒷문장이 `조건을 조금
+바꿔서 다시 물어봐 주세요.`), 그리고 지역 힌트가 살아
 있으면 `지역 넓히기` 한 장뿐인 `refinements`. `intent`는 **실제로 SQL에 닿은 축만
 남긴 값**(`searched_intent`)을 돌려준다 — 해석 못 한 지역 힌트, 코드로 안 풀린
 카테고리 키워드, 좌표 없는 `nearMe`는 지워서 내려간다. 칩·문구·반환 intent가

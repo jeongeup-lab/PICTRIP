@@ -1,8 +1,11 @@
 # 0016. 앱 안의 지도 화면을 걷어내고, 지도는 라이트로 돌린다
 
-- 상태: 채택
+- 상태: 일부 대체 — 남는 파일 목록의 `list-padding` 은
+  [0017](0017-travel-tab-drops-the-sheet-for-a-map-carousel.md) 이 시트와 함께
+  지웠다. 지도 화면 제거와 라이트 타일 복귀는 그대로다
 - 날짜: 2026-08-08
 - 관련: [0015 여행 탭은 지도 하나 위에서 돈다](0015-travel-and-profile-go-dark-on-one-map.md),
+  [0017 시트를 버리고 지도 위 캐러셀로](0017-travel-tab-drops-the-sheet-for-a-map-carousel.md),
   [profile-tab](../reference/profile-tab.md),
   [product](../explanation/product.md)
 
@@ -57,4 +60,4 @@ basemap 을 쓴다. 앱 크롬은 다크로 두되 지도만 라이트다 — �
 - 카테고리 칩·이 지역 검색·지역 선택기는 사라진다. 여행 탭이 대화로 같은 일을
   하므로 되살릴 계획은 없다.
 - `mobile/src/features/map/` 에는 `KakaoWebMap`·`PermissionPrimer`·`geo`·
-  `list-padding`·`request-location` 만 남는다 — 전부 여행 탭·채널·상세가 쓴다.
+  `kakao-map-html`·`request-location` 만 남는다 — 전부 여행 탭·채널·상세가 쓴다.

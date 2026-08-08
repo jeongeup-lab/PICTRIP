@@ -8,20 +8,7 @@ export interface PlacedSpot {
   lng: number;
 }
 
-export interface RegionGroup {
-  label: string;
-  count: number;
-}
-
-export interface SpatialSummary {
-  places: string;
-  spread: string | null;
-}
-
-const EARTH_RADIUS_KM = 6371;
 const MIN_SPAN_DEG = 0.02;
-const MAX_NAMED_GROUPS = 2;
-const SPREAD_MENTION_KM = 20;
 
 export function placed(spots: TravelSpot[]): PlacedSpot[] {
   return spots.flatMap((spot) =>
@@ -54,48 +41,6 @@ export function center(spots: PlacedSpot[]): LatLng | null {
   };
 }
 
-export function distanceKm(a: PlacedSpot, b: PlacedSpot): number {
-  const toRad = (deg: number) => (deg * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
-  return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
-}
-
-export function spreadKm(spots: PlacedSpot[]): number {
-  let widest = 0;
-  for (let i = 0; i < spots.length; i += 1) {
-    for (let j = i + 1; j < spots.length; j += 1) {
-      widest = Math.max(widest, distanceKm(spots[i], spots[j]));
-    }
-  }
-  return widest;
-}
-
-export function regionGroups(spots: PlacedSpot[]): RegionGroup[] {
-  const counts = new Map<string, number>();
-  spots.forEach((s) => {
-    const key = s.spot.regionLabel.trim().replace(/\s+/g, " ");
-    if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
-  });
-  const keys = [...counts.keys()];
-  const narrow = keys.map(areaLabel);
-  return keys
-    .map((key, index) => ({
-      label: narrow.filter((n) => n === narrow[index]).length > 1 ? key : narrow[index],
-      count: counts.get(key) ?? 0,
-    }))
-    .sort((a, b) => b.count - a.count);
-}
-
-function areaLabel(regionLabel: string): string {
-  const parts = regionLabel.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "";
-  return parts[parts.length - 1];
-}
-
 export function bounds(spots: PlacedSpot[]): { sw: LatLng; ne: LatLng } | null {
   if (spots.length === 0) return null;
   const lat = widen(spots.map((s) => s.lat));
@@ -109,30 +54,4 @@ function widen(values: number[]): { min: number; max: number } {
   if (max - min >= MIN_SPAN_DEG) return { min, max };
   const mid = (min + max) / 2;
   return { min: mid - MIN_SPAN_DEG / 2, max: mid + MIN_SPAN_DEG / 2 };
-}
-
-export function spatialSummary(spots: PlacedSpot[]): SpatialSummary | null {
-  if (spots.length < 2) return null;
-  const groups = regionGroups(spots);
-  if (groups.length === 0) return null;
-  const spread = spreadKm(spots);
-  return {
-    places: placesLabel(groups),
-    spread: spread >= SPREAD_MENTION_KM ? `최대 ${Math.round(spread)}km` : null,
-  };
-}
-
-function placesLabel(groups: RegionGroup[]): string {
-  if (groups.length === 1) return `모두 ${groups[0].label}`;
-  const named = groups
-    .slice(0, MAX_NAMED_GROUPS)
-    .map((g) => `${g.label} ${g.count}곳`)
-    .join(" · ");
-  const rest = groups.length - MAX_NAMED_GROUPS;
-  return rest > 0 ? `${named} · +${rest}` : named;
-}
-
-export function summaryLine(summary: SpatialSummary | null): string | null {
-  if (summary === null) return null;
-  return summary.spread === null ? summary.places : `${summary.places} · ${summary.spread}`;
 }

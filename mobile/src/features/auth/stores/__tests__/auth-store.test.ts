@@ -51,7 +51,7 @@ describe("auth-store", () => {
     const { queryClient } =
       jest.requireActual<typeof import("@/lib/query-client")>("@/lib/query-client");
     queryClient.setQueryData(["saved"], [{ contentId: "1" }]);
-    queryClient.setQueryData(["consents"], { photoConsent: true, termsVersion: "2026-06-01" });
+    queryClient.setQueryData(["consents"], { locationConsent: true, termsVersion: "2026-06-01" });
 
     await useAuthStore.getState().clear();
 

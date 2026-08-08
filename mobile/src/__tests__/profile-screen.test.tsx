@@ -1,4 +1,6 @@
+import { StyleSheet } from "react-native";
 import renderer, { act } from "react-test-renderer";
+import { router } from "expo-router";
 import ProfileTab from "@/app/(tabs)/profile";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { useSavedList } from "@/features/saved/queries";
@@ -93,5 +95,22 @@ describe("ProfileTab", () => {
       days: daysSince(USER.createdAt, Date.now()),
       partial: false,
     });
+  });
+
+  it("keeps the settings button reachable at the right edge without a screen title", async () => {
+    const tree = await mount();
+
+    expect(tree.root.findAllByProps({ children: "마이" })).toHaveLength(0);
+
+    const nav = tree.root.findByProps({ testID: "profile-nav" });
+    expect(StyleSheet.flatten(nav.props.style).justifyContent).toBe("flex-end");
+
+    const button = tree.root.findByProps({ testID: "open-settings" });
+    expect(button.props.accessibilityLabel).toBe("마이 설정");
+
+    await act(async () => {
+      button.props.onPress();
+    });
+    expect(router.push).toHaveBeenCalledWith("/settings");
   });
 });

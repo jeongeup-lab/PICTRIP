@@ -84,12 +84,12 @@ async def test_put_consents_creates_and_echoes(
     assert body["error"] is None
     data = body["data"]
     assert data["locationConsent"] is True
-    assert data["photoConsent"] is False
+    assert "photoConsent" not in data
     assert data["termsVersion"] == "v1.0"
     assert data["consentedAt"] is not None
 
 
-async def test_put_consents_with_photo_consent(
+async def test_put_consents_ignores_a_retired_photo_consent_field(
     client: AsyncClient, override_db_and_seed: AsyncSession
 ) -> None:
     uid = await _seed_user(override_db_and_seed)
@@ -103,8 +103,28 @@ async def test_put_consents_with_photo_consent(
     assert resp.status_code == 200
     data = resp.json()["data"]
     assert data["locationConsent"] is True
-    assert data["photoConsent"] is True
+    assert "photoConsent" not in data
     assert data["termsVersion"] == "v2.0"
+
+
+async def test_put_consents_leaves_the_retired_column_on_its_default(
+    client: AsyncClient, override_db_and_seed: AsyncSession
+) -> None:
+    uid = await _seed_user(override_db_and_seed)
+
+    resp = await client.put(
+        "/v1/users/me/consents",
+        headers=_auth(uid),
+        json={"locationConsent": True, "termsVersion": "v1.0"},
+    )
+    assert resp.status_code == 200
+
+    stored = (
+        await override_db_and_seed.execute(
+            text("SELECT photo_consent FROM user_consents WHERE user_id = :u"), {"u": uid}
+        )
+    ).scalar_one()
+    assert stored is False
 
 
 async def test_put_consents_is_idempotent_upsert(
@@ -115,19 +135,18 @@ async def test_put_consents_is_idempotent_upsert(
     first = await client.put(
         "/v1/users/me/consents",
         headers=_auth(uid),
-        json={"locationConsent": True, "photoConsent": True, "termsVersion": "v1.0"},
+        json={"locationConsent": True, "termsVersion": "v1.0"},
     )
     assert first.status_code == 200
 
     second = await client.put(
         "/v1/users/me/consents",
         headers=_auth(uid),
-        json={"locationConsent": False, "photoConsent": False, "termsVersion": "v3.0"},
+        json={"locationConsent": False, "termsVersion": "v3.0"},
     )
     assert second.status_code == 200
     data = second.json()["data"]
     assert data["locationConsent"] is False
-    assert data["photoConsent"] is False
     assert data["termsVersion"] == "v3.0"
 
     count = (
@@ -158,7 +177,6 @@ async def test_get_consents_returns_defaults_when_no_row(
     data = resp.json()["data"]
     assert data == {
         "locationConsent": False,
-        "photoConsent": False,
         "termsVersion": None,
         "consentedAt": None,
     }
@@ -171,7 +189,7 @@ async def test_get_consents_echoes_persisted_row(
     await client.put(
         "/v1/users/me/consents",
         headers=_auth(uid),
-        json={"locationConsent": True, "photoConsent": True, "termsVersion": "v9.0"},
+        json={"locationConsent": True, "termsVersion": "v9.0"},
     )
 
     resp = await client.get("/v1/users/me/consents", headers=_auth(uid))
@@ -179,7 +197,6 @@ async def test_get_consents_echoes_persisted_row(
     assert resp.status_code == 200
     data = resp.json()["data"]
     assert data["locationConsent"] is True
-    assert data["photoConsent"] is True
     assert data["termsVersion"] == "v9.0"
     assert data["consentedAt"] is not None
 

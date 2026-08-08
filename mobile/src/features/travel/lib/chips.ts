@@ -15,23 +15,15 @@ export type Chip =
 export type AnchorChip = Extract<Chip, { kind: "anchor" }>;
 
 export const ANCHOR_CHIPS: AnchorChip[] = [
-  { kind: "anchor", label: "근처 맛집", action: "food" },
-  { kind: "anchor", label: "근처 카페", action: "cafe" },
-  { kind: "anchor", label: "주변 볼거리", action: "nearby" },
+  { kind: "anchor", label: "맛집", action: "food" },
+  { kind: "anchor", label: "카페", action: "cafe" },
+  { kind: "anchor", label: "볼거리", action: "nearby" },
   { kind: "anchor", label: "오늘 붐벼?", action: "crowd" },
 ];
 
 export function anchorChips(hasCrowd: boolean): Chip[] {
   return hasCrowd ? ANCHOR_CHIPS : ANCHOR_CHIPS.filter((chip) => chip.action !== "crowd");
 }
-
-export type QuestionChip = Extract<Chip, { kind: "question" }>;
-
-export const NEARBY_CHIP: QuestionChip = {
-  kind: "question",
-  label: "내 근처",
-  question: "여기서 가까운 곳",
-};
 
 export const FESTIVAL_CHIP: Chip = {
   kind: "intent",
@@ -66,34 +58,6 @@ export function refineChips(refinements: Suggestion[] | null | undefined): Chip[
   return (refinements ?? []).map((s) => ({ kind: "refine", label: s.label, patch: s.patch }));
 }
 
-type ChipAnswer = Pick<AgentAnswer, "totalCount" | "refinements"> & {
+export type ChipAnswer = Pick<AgentAnswer, "totalCount" | "refinements"> & {
   intent?: QueryIntent | null;
 };
-
-export function askedForNothing(intent: QueryIntent | null | undefined): boolean {
-  if (!intent) return false;
-  return !(
-    intent.categoryKeywords.length > 0 ||
-    intent.regionHints.length > 0 ||
-    (intent.namedPlaces?.length ?? 0) > 0 ||
-    (intent.moodHints?.length ?? 0) > 0 ||
-    intent.indoorOnly === true ||
-    intent.nearMe === true ||
-    intent.festivalOnly === true ||
-    (intent.crowdPreference !== undefined && intent.crowdPreference !== "any")
-  );
-}
-
-export function composerChips(
-  answer: ChipAnswer | null | undefined,
-  anchor: { hasCrowd?: boolean } | null = null,
-  hasCoords: boolean = false,
-): Chip[] {
-  if (anchor) return anchorChips(anchor.hasCrowd === true);
-  const refine = refineChips(answer?.refinements);
-  if (refine.length > 0) return refine;
-  if (answer && answer.totalCount === 0) {
-    return askedForNothing(answer.intent) ? idleChips(hasCoords) : [];
-  }
-  return idleChips(hasCoords);
-}

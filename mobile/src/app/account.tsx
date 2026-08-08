@@ -109,7 +109,7 @@ export default function AccountScreen() {
                 testID="delete-confirm"
               >
                 <View style={styles.checklist}>
-                  {["저장한 모든 스크랩", "계정 정보와 로그인 연결", "취향 데이터"].map((item) => (
+                  {["저장한 모든 스크랩", "계정 정보와 로그인 연결"].map((item) => (
                     <View key={item} style={styles.checkItem}>
                       <Icon name="close" size={14} color={colors.accent} />
                       <Text style={styles.checkText}>{item}</Text>

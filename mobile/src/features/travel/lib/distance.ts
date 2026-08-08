@@ -1,4 +1,5 @@
 import { haversineMeters, type LatLng } from "@/features/map/lib/geo";
+import { isDistanceTag } from "@/features/travel/lib/metric";
 import type { TravelSpot } from "@/features/travel/api";
 
 export interface DistanceReading {
@@ -24,4 +25,11 @@ export function distanceReading(km: number): DistanceReading {
   if (km < 1) return { value: String(Math.max(10, Math.round(km * METERS_IN_KM))), unit: "m" };
   if (km < NEAR_KM) return { value: km.toFixed(1), unit: "km" };
   return { value: String(Math.round(km)), unit: "km" };
+}
+
+export function distanceLabel(tag: string | null, distanceKm: number | null): string | null {
+  if (isDistanceTag(tag)) return tag;
+  if (distanceKm === null) return null;
+  const reading = distanceReading(distanceKm);
+  return `${reading.value}${reading.unit}`;
 }
