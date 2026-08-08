@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -10,29 +10,17 @@ import { ListGroup } from "@/components/ListGroup";
 import { SectionTitle } from "@/components/SectionTitle";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SavedCard } from "@/features/saved/components/SavedCard";
-import { SavedListRow } from "@/features/saved/components/SavedListRow";
-import { SwipeRow } from "@/features/saved/components/SwipeRow";
 import { RecentSpotRow } from "@/features/saved/components/RecentSpotRow";
 import { useSavedList, useSaveMutation, useUnsaveMutation } from "@/features/saved/queries";
-import {
-  SAVED_SORTS,
-  distanceLabel,
-  distanceMeters,
-  sortSaved,
-  type SavedSort,
-} from "@/features/saved/lib/sort";
 import { unsaveMessage } from "@/features/saved/lib/undo-message";
 import { useRecentSpots } from "@/features/spots/stores/recent-store";
 import { prefetchSpot } from "@/features/spots/queries";
-import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
 import type { SpotCard } from "@/lib/api-types";
 import { colors, spacing, radii } from "@/constants/theme";
 
 export const EMPTY_HEADLINE = "아직 스크랩한 곳이 없어요";
 
 export const UNSAVE_FAILED = "스크랩 해제를 못 했어요. 잠시 뒤 다시 시도해 주세요";
-
-export const NEAR_NEEDS_LOCATION = "위치를 켜야 가까운 순으로 볼 수 있어요";
 
 export const RESAVE_FAILED = "되돌리지 못했어요. 다시 스크랩해 주세요";
 
@@ -47,28 +35,10 @@ export default function SavedScreen() {
   const unsave = useUnsaveMutation();
   const resave = useSaveMutation();
   const recents = useRecentSpots((s) => s.spots);
-  const { coords, askable, ask } = useNearbyCoords();
-  const [sort, setSort] = useState<SavedSort>("recent");
-  const [grid, setGrid] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const unsaving = useRef<Promise<boolean> | null>(null);
 
-  const list = useMemo(() => sortSaved(data ?? [], sort, coords), [data, sort, coords]);
-
-  const pickSort = (mode: SavedSort) => {
-    if (mode !== "near" || coords) {
-      setSort(mode);
-      return;
-    }
-    if (!askable) {
-      setNotice({ message: NEAR_NEEDS_LOCATION, undoContentId: null });
-      return;
-    }
-    void ask().then((fix) => {
-      if (fix) setSort("near");
-      else setNotice({ message: NEAR_NEEDS_LOCATION, undoContentId: null });
-    });
-  };
+  const list = data ?? [];
 
   const openSpot = (spot: SpotCard) => {
     prefetchSpot(spot);
@@ -113,41 +83,9 @@ export default function SavedScreen() {
           <Icon name="chevron-left" size={23} />
         </Pressable>
         <Text style={styles.title}>스크랩{list.length > 0 ? ` ${list.length}` : ""}</Text>
-        {list.length > 0 ? (
-          <Pressable
-            accessibilityRole="button"
-            style={styles.navBtn}
-            hitSlop={8}
-            onPress={() => setGrid((g) => !g)}
-            testID="toggle-view"
-          >
-            <Icon name={grid ? "sort" : "grid"} size={19} color={colors.ink} />
-          </Pressable>
-        ) : null}
       </View>
 
-      {list.length > 0 ? (
-        <View style={styles.chips}>
-          {SAVED_SORTS.map((option) => (
-            <Pressable
-              key={option.mode}
-              accessibilityRole="button"
-              style={[styles.chip, sort === option.mode && styles.chipOn]}
-              onPress={() => pickSort(option.mode)}
-              testID={`sort-${option.mode}`}
-            >
-              <Text style={[styles.chipText, sort === option.mode && styles.chipTextOn]}>
-                {option.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={grid ? styles.gridPad : styles.listPad}
-      >
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {isLoading ? (
           <View style={styles.loading}>
             {[0, 1, 2, 3].map((i) => (
@@ -156,8 +94,8 @@ export default function SavedScreen() {
           </View>
         ) : list.length === 0 ? (
           <EmptyState recents={recents} onOpenSpot={openSpot} />
-        ) : grid ? (
-          <View style={styles.grid}>
+        ) : (
+          <View style={styles.album}>
             {list.map((spot) => (
               <SavedCard
                 key={spot.contentId}
@@ -165,26 +103,10 @@ export default function SavedScreen() {
                 onPressIn={() => prefetchSpot(spot)}
                 onPress={() => openSpot(spot)}
                 onUnsave={() => remove(spot)}
+                testID={`saved-${spot.contentId}`}
               />
             ))}
           </View>
-        ) : (
-          list.map((spot) => (
-            <SwipeRow
-              key={spot.contentId}
-              actionLabel="해제"
-              onAction={() => remove(spot)}
-              testID={`swipe-${spot.contentId}`}
-            >
-              <SavedListRow
-                spot={spot}
-                distance={coords ? distanceLabel(distanceMeters(spot, coords)) : null}
-                onPressIn={() => prefetchSpot(spot)}
-                onPress={() => openSpot(spot)}
-                testID={`saved-${spot.contentId}`}
-              />
-            </SwipeRow>
-          ))
         )}
       </ScrollView>
 
@@ -219,7 +141,7 @@ function EmptyState({
 
       <InfoBox
         title="이렇게 쓰면 편해요"
-        text="여행 탭에서 결과를 받고 마음에 드는 곳만 하트 → 스크랩에서 가까운 순으로 정렬해 동선을 짜는 흐름이에요."
+        text="여행 탭에서 결과를 받고 마음에 드는 곳만 하트 → 스크랩에 앨범처럼 모아두고 다음 여행을 짜는 흐름이에요."
       >
         <View style={styles.emptyAction}>
           <PrimaryButton
@@ -251,7 +173,7 @@ function EmptyState({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  nav: { height: 50, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  nav: { height: 50, flexDirection: "row", alignItems: "center" },
   navBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   title: {
     position: "absolute",
@@ -262,28 +184,13 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.ink,
   },
-  chips: { flexDirection: "row", gap: 7, paddingHorizontal: spacing.md, paddingBottom: 10 },
-  chip: {
-    height: 32,
-    paddingHorizontal: 13,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.raise,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
-  chipText: { fontSize: 12.5, fontWeight: "700", color: colors.sec },
-  chipTextOn: { color: colors.bg },
-  listPad: { paddingBottom: spacing.xxl },
-  gridPad: { paddingBottom: spacing.xxl },
+  scroll: { paddingBottom: spacing.xxl },
   loading: { gap: 10, paddingHorizontal: spacing.md, paddingTop: spacing.sm },
-  grid: {
+  album: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    rowGap: 12,
+    rowGap: 18,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
   },
