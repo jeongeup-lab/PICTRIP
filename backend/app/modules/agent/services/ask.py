@@ -1169,6 +1169,47 @@ def _answer_opening(intent: QueryIntent) -> str:
     return f"{' + '.join(conditions)} 조건으로 "
 
 
+def _scope_sentence(top: list[CandidateRow], *, intent: QueryIntent) -> list[AnswerSegment]:
+    return [
+        AnswerSegment(text=_answer_opening(intent)),
+        AnswerSegment(text=f"{len(top)}곳이에요."),
+    ]
+
+
+def _lead_sentence(
+    top: list[CandidateRow],
+    *,
+    intent: QueryIntent,
+    near: bool,
+    lat: float | None,
+    lng: float | None,
+    region_widened: retrieve.RegionScope | None,
+) -> list[AnswerSegment]:
+    if region_widened is not None:
+        return [
+            AnswerSegment(text=f"{region_widened.narrowed_label} 안에서는 찾지 못해 "),
+            AnswerSegment(text=region_widened.widened_label, emphasis=True),
+            AnswerSegment(text=" 전체에서 골랐어요."),
+        ]
+    if intent.crowdPreference == "quiet":
+        pcts = [row.percentile for row in top if row.percentile is not None]
+        if pcts:
+            return [
+                AnswerSegment(text="혼잡도 "),
+                AnswerSegment(text=f"하위 {max(pcts)}%", emphasis=True),
+                AnswerSegment(text=" 안쪽으로만 골랐어요."),
+            ]
+    if near and lat is not None and lng is not None:
+        kms = [km for row in top if (km := retrieve.distance_km(row, lat=lat, lng=lng)) is not None]
+        if kms:
+            return [
+                AnswerSegment(text="가장 가까운 곳이 "),
+                AnswerSegment(text=f"{min(kms):.1f}km", emphasis=True),
+                AnswerSegment(text="예요."),
+            ]
+    return []
+
+
 def _answer(
     top: list[CandidateRow],
     *,
@@ -1178,29 +1219,13 @@ def _answer(
     lng: float | None,
     region_widened: retrieve.RegionScope | None = None,
 ) -> list[AnswerSegment]:
-    segments = [AnswerSegment(text=_answer_opening(intent))]
-    segments.append(AnswerSegment(text=f"{len(top)}곳", emphasis=True))
-    segments.append(AnswerSegment(text=" 추렸어요"))
-
-    if region_widened is not None:
-        segments.extend(_widen_sentence(region_widened))
-        return segments
-    if intent.crowdPreference == "quiet":
-        pcts = [row.percentile for row in top if row.percentile is not None]
-        if pcts:
-            segments.append(AnswerSegment(text=". 모두 이 조건 안에서 혼잡도 "))
-            segments.append(AnswerSegment(text=f"하위 {max(pcts)}%", emphasis=True))
-            segments.append(AnswerSegment(text=" 안쪽이에요."))
-            return segments
-    if near and lat is not None and lng is not None:
-        kms = [km for row in top if (km := retrieve.distance_km(row, lat=lat, lng=lng)) is not None]
-        if kms:
-            segments.append(AnswerSegment(text=". 가장 가까운 곳은 "))
-            segments.append(AnswerSegment(text=f"{min(kms):.1f}km", emphasis=True))
-            segments.append(AnswerSegment(text=" 거리예요."))
-            return segments
-    segments.append(AnswerSegment(text=". 마음에 드는 게 없으면 조건을 좁혀 말해주세요."))
-    return segments
+    lead = _lead_sentence(
+        top, intent=intent, near=near, lat=lat, lng=lng, region_widened=region_widened
+    )
+    scope = _scope_sentence(top, intent=intent)
+    if not lead:
+        return [*scope, AnswerSegment(text=" 마음에 드는 게 없으면 조건을 좁혀 말해주세요.")]
+    return [*lead, AnswerSegment(text=" "), *scope]
 
 
 def _count(rows: list[CandidateRow]) -> str:

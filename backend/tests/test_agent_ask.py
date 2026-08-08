@@ -125,20 +125,37 @@ def test_card_tag_prefers_distance_then_percentile() -> None:
     assert quiet_card.tag == "하위 10%"
 
 
-def test_answer_emphasises_the_result_count() -> None:
+def test_a_quiet_answer_leads_with_the_percentile_not_the_count() -> None:
     segments = ask_service._answer(
         _pool()[:4],
-        intent=QueryIntent(),
+        intent=QueryIntent(crowdPreference="quiet"),
         near=False,
         lat=None,
         lng=None,
     )
 
-    assert [s.text for s in segments if s.emphasis] == ["4곳"]
-    assert "이번 주말" not in "".join(s.text for s in segments)
+    text = "".join(s.text for s in segments)
+    assert text.startswith("혼잡도 ")
+    assert "안쪽으로만 골랐어요." in text
+    assert "4곳" in text
+    assert next(s.text for s in segments if s.emphasis).startswith("하위 ")
 
 
-def test_an_answer_names_the_conditions_it_searched() -> None:
+def test_a_near_answer_leads_with_the_closest_distance() -> None:
+    segments = ask_service._answer(
+        _pool()[:4],
+        intent=QueryIntent(nearMe=True),
+        near=True,
+        lat=35.0,
+        lng=128.0,
+    )
+
+    text = "".join(s.text for s in segments)
+    assert text.startswith("가장 가까운 곳이 ")
+    assert "km예요." in text
+
+
+def test_an_answer_with_no_specific_fact_leads_with_the_conditions() -> None:
     segments = ask_service._answer(
         _pool()[:4],
         intent=QueryIntent(regionHints=["통영"], categoryKeywords=["계곡"]),
@@ -147,10 +164,11 @@ def test_an_answer_names_the_conditions_it_searched() -> None:
         lng=None,
     )
 
-    assert "".join(s.text for s in segments).startswith("통영 + 계곡 조건으로 4곳 추렸어요")
+    text = "".join(s.text for s in segments)
+    assert text.startswith("통영 + 계곡 조건으로 4곳이에요.")
 
 
-def test_an_answer_with_no_nameable_condition_keeps_the_plain_opening() -> None:
+def test_an_answer_with_nothing_nameable_keeps_the_plain_opening() -> None:
     segments = ask_service._answer(
         _pool()[:4],
         intent=QueryIntent(namedPlaces=[ExtractedPlace(name="감천문화마을")]),
@@ -159,7 +177,39 @@ def test_an_answer_with_no_nameable_condition_keeps_the_plain_opening() -> None:
         lng=None,
     )
 
-    assert "".join(s.text for s in segments).startswith("조건에 맞는 곳으로 4곳 추렸어요")
+    assert "".join(s.text for s in segments).startswith("조건에 맞는 곳으로 4곳이에요.")
+
+
+def test_a_widened_answer_leads_with_the_region_it_widened_to() -> None:
+    segments = ask_service._answer(
+        _pool()[:4],
+        intent=QueryIntent(regionHints=["수영"]),
+        near=False,
+        lat=None,
+        lng=None,
+        region_widened=retrieve.RegionScope(
+            prefixes=["부산광역시"],
+            sido_prefixes=["부산광역시"],
+            narrowed_hints=("수영구",),
+            narrowed_sidos=("부산광역시",),
+        ),
+    )
+
+    text = "".join(s.text for s in segments)
+    assert text.startswith("수영구 안에서는 찾지 못해 부산광역시 전체에서 골랐어요.")
+    assert "4곳" in text
+
+
+def test_an_answer_never_emphasises_a_bare_count() -> None:
+    segments = ask_service._answer(
+        _pool()[:4],
+        intent=QueryIntent(crowdPreference="quiet"),
+        near=False,
+        lat=None,
+        lng=None,
+    )
+
+    assert "4곳" not in [s.text for s in segments if s.emphasis]
 
 
 def _override(db_session: AsyncSession) -> None:
