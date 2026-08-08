@@ -8,6 +8,8 @@ import { unsaveMessage } from "@/features/saved/lib/undo-message";
 import type { SpotCard } from "@/lib/api-types";
 
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
+
+const routerPush = jest.requireMock<{ router: { push: jest.Mock } }>("expo-router").router.push;
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
@@ -268,6 +270,16 @@ describe("SavedScreen", () => {
       (n) => n.props.testID === "unsave-toast" && typeof n.props.message === "string",
     )[0];
     expect(toast.props.message).toBe(NEAR_NEEDS_LOCATION);
+  });
+
+  it("saves from the recent row without opening the spot", async () => {
+    useSavedListMock.mockReturnValue({ data: [], isLoading: false });
+    useRecentSpots.setState({ spots: [spot("seen", { title: "바람의 언덕" })] });
+
+    const tree = await mount();
+    await press(tree, "recent-seen-heart");
+
+    expect(routerPush).not.toHaveBeenCalledWith("/spots/seen");
   });
 
   it("offers recently viewed spots when nothing is saved", async () => {

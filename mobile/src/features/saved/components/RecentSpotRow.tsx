@@ -17,28 +17,33 @@ export function RecentSpotRow({ spot, onPress, testID }: Props) {
   const sub = subline(spot);
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-      onPress={onPress}
-      testID={testID}
-    >
-      <RemoteImage uri={spot.firstImageUrl} style={styles.thumb} radius={radii.md} />
-      <View style={styles.main}>
-        <Text style={styles.title} numberOfLines={1}>
-          {spot.title}
-        </Text>
-        {sub ? (
-          <Text style={styles.sub} numberOfLines={1}>
-            {sub}
-          </Text>
-        ) : null}
-      </View>
+    <View style={styles.row}>
       <Pressable
         accessibilityRole="button"
+        style={({ pressed }) => [styles.tapArea, pressed && styles.pressed]}
+        onPress={onPress}
+        testID={testID}
+      >
+        <RemoteImage uri={spot.firstImageUrl} style={styles.thumb} radius={radii.md} />
+        <View style={styles.main}>
+          <Text style={styles.title} numberOfLines={1}>
+            {spot.title}
+          </Text>
+          {sub ? (
+            <Text style={styles.sub} numberOfLines={1}>
+              {sub}
+            </Text>
+          ) : null}
+        </View>
+      </Pressable>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={saved ? "저장 해제" : "저장"}
+        accessibilityState={{ selected: saved }}
         hitSlop={10}
         onPress={() => void toggle()}
-        style={styles.heart}
+        style={({ pressed }) => [styles.heart, pressed && styles.pressed]}
         testID={testID ? `${testID}-heart` : undefined}
       >
         <Icon
@@ -47,7 +52,7 @@ export function RecentSpotRow({ spot, onPress, testID }: Props) {
           color={saved ? colors.accent : colors.ter}
         />
       </Pressable>
-    </Pressable>
+    </View>
   );
 }
 
@@ -55,9 +60,14 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
+    paddingHorizontal: spacing.md,
+  },
+  tapArea: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     paddingVertical: 10,
-    paddingHorizontal: spacing.md,
   },
   pressed: { backgroundColor: colors.fill },
   thumb: { width: 48, height: 48, borderRadius: radii.md },
