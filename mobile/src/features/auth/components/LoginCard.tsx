@@ -73,7 +73,7 @@ export function LoginCard({ variant, onSuccess, onCancel, onEmailPress }: Props)
       {variant === "full" ? (
         <View style={styles.brand}>
           <BrandSymbol />
-          <Text style={styles.word}>PicTrip</Text>
+          <Text style={styles.word}>PICTRIP</Text>
           <Text style={styles.tagline}>사진으로 떠나는 여행</Text>
         </View>
       ) : (
