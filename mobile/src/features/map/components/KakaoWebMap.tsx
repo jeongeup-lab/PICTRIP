@@ -34,7 +34,6 @@ interface Props {
   onViewportChange?: (center: LatLng, bounds: Bounds) => void;
   interactive?: boolean;
   accentDot?: boolean;
-  dark?: boolean;
 }
 
 export function KakaoWebMap({
@@ -49,7 +48,6 @@ export function KakaoWebMap({
   onViewportChange,
   interactive = true,
   accentDot = false,
-  dark = true,
 }: Props) {
   const ref = useRef<WebView<object>>(null);
   const ready = useRef(false);
@@ -158,7 +156,7 @@ export function KakaoWebMap({
         style={styles.web}
         originWhitelist={["https://*", "http://*"]}
         source={{
-          html: buildKakaoMapHtml(KAKAO_JS_KEY, { interactive, accentDot, dark }),
+          html: buildKakaoMapHtml(KAKAO_JS_KEY, { interactive, accentDot }),
           baseUrl: KAKAO_WEB_ORIGIN,
         }}
         onMessage={onMessage}

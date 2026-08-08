@@ -8,23 +8,15 @@ export const PIN_RESULT = "#4A9EFF";
 export const KOREA_BOUNDS = { swLat: 33.0, swLng: 124.5, neLat: 38.7, neLng: 132.0 };
 export const KOREA_MAX_LEVEL = 12;
 
-export const DARK_FILTER = "invert(1) hue-rotate(180deg)";
-
 export interface KakaoMapOptions {
   interactive?: boolean;
   accentDot?: boolean;
-  dark?: boolean;
 }
 
 export function buildKakaoMapHtml(jsKey: string, options: KakaoMapOptions = {}): string {
-  const { interactive = true, accentDot = false, dark = false } = options;
+  const { interactive = true, accentDot = false } = options;
   const { lat, lng } = SEOUL_CITY_HALL;
   const dotColor = accentDot ? PIN_ACCENT : "#fff";
-  const darkCss = dark
-    ? `#map{filter:${DARK_FILTER}}
-       .pin,.sel,.me,#msg{filter:${DARK_FILTER}}
-       .sel .pin{filter:none}`
-    : "";
   const gestures = interactive
     ? `map.setMaxLevel(${KOREA_MAX_LEVEL});
        kakao.maps.event.addListener(map,'drag',clampCenter);
@@ -52,7 +44,6 @@ export function buildKakaoMapHtml(jsKey: string, options: KakaoMapOptions = {}):
   .sel .lab{position:absolute;top:30px;left:50%;transform:translateX(-50%);font:700 11px -apple-system,sans-serif;color:#F4F5F7;background:rgba(20,22,26,.88);border-radius:5px;padding:2px 7px;box-shadow:0 1px 4px rgba(0,0,0,.4);white-space:nowrap}
   .me{width:16px;height:16px;background:#4A9EFF;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 6px rgba(74,158,255,.25)}
   #msg{position:absolute;top:0;left:0;right:0;font:14px -apple-system,sans-serif;color:#8a8a8e;padding:16px;text-align:center;z-index:10}
-  ${darkCss}
 </style>
 </head>
 <body>

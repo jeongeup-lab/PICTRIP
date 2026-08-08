@@ -1,6 +1,5 @@
 import {
   buildKakaoMapHtml,
-  DARK_FILTER,
   PIN_ACCENT,
   PIN_INK,
   PIN_RESULT,
@@ -78,17 +77,7 @@ describe("buildKakaoMapHtml", () => {
     expect(buildKakaoMapHtml("TESTKEY123", { interactive: false })).toContain('var DOT = "#fff"');
   });
 
-  it("inverts the basemap and inverts the overlays back when dark", () => {
-    const darkHtml = buildKakaoMapHtml("TESTKEY123", { dark: true });
-    expect(darkHtml).toContain(`#map{filter:${DARK_FILTER}}`);
-    expect(darkHtml).toContain(`.pin,.sel,.me,#msg{filter:${DARK_FILTER}}`);
-  });
-
-  it("undoes the dark filter once per pin, even where a pin sits inside a wrapper", () => {
-    expect(buildKakaoMapHtml("TESTKEY123", { dark: true })).toContain(".sel .pin{filter:none}");
-  });
-
-  it("leaves the basemap untouched when dark is off", () => {
+  it("renders the basemap in its default colors", () => {
     expect(buildKakaoMapHtml("TESTKEY123")).not.toContain("filter:");
   });
 
