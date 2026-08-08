@@ -1,8 +1,7 @@
 import renderer, { act } from "react-test-renderer";
-import SavedScreen, { NEAR_NEEDS_LOCATION, RESAVE_FAILED, UNSAVE_FAILED } from "@/app/saved";
+import SavedScreen, { RESAVE_FAILED, UNSAVE_FAILED } from "@/app/saved";
 import { useSavedList, useSaveMutation, useUnsaveMutation } from "@/features/saved/queries";
-import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
-import { SavedListRow } from "@/features/saved/components/SavedListRow";
+import { SavedCard } from "@/features/saved/components/SavedCard";
 import { useRecentSpots } from "@/features/spots/stores/recent-store";
 import { unsaveMessage } from "@/features/saved/lib/undo-message";
 import type { SpotCard } from "@/lib/api-types";
@@ -20,16 +19,14 @@ jest.mock("@/features/saved/queries", () => ({
   useIsSaved: jest.fn(() => false),
 }));
 jest.mock("@/features/spots/queries", () => ({ prefetchSpot: jest.fn() }));
-jest.mock("@/features/travel/hooks/use-nearby-coords", () => ({ useNearbyCoords: jest.fn() }));
-jest.mock("@/features/saved/components/SavedListRow", () => ({
-  SavedListRow: jest.fn(() => null),
+jest.mock("@/features/saved/components/SavedCard", () => ({
+  SavedCard: jest.fn(() => null),
 }));
 
 const useSavedListMock = useSavedList as jest.Mock;
 const useSaveMutationMock = useSaveMutation as jest.Mock;
 const useUnsaveMutationMock = useUnsaveMutation as jest.Mock;
-const useNearbyCoordsMock = useNearbyCoords as jest.Mock;
-const SavedListRowMock = SavedListRow as unknown as jest.Mock;
+const SavedCardMock = SavedCard as unknown as jest.Mock;
 
 const save = jest.fn();
 const unsave = jest.fn();
@@ -46,7 +43,6 @@ const spot = (contentId: string, over: Partial<SpotCard> = {}): SpotCard => ({
   ...over,
 });
 
-const SEOUL = { lat: 37.5665, lng: 126.978 };
 const LIST = [
   spot("far", { title: "향일암", addr1: "전남 여수시", mapx: 127.7, mapy: 34.7 }),
   spot("near", { title: "덕수궁", addr1: "서울 중구", mapx: 126.99, mapy: 37.56 }),
@@ -68,15 +64,24 @@ const press = async (tree: renderer.ReactTestRenderer, testID: string) => {
   });
 };
 
+const unsaveTile = async (contentId: string) => {
+  const calls = SavedCardMock.mock.calls.filter(
+    (call) => (call[0].spot as SpotCard).contentId === contentId,
+  );
+  const latest = calls[calls.length - 1]![0] as { onUnsave: () => void };
+  await act(async () => {
+    latest.onUnsave();
+  });
+};
+
 const renderedOrder = () =>
-  SavedListRowMock.mock.calls.map((call) => (call[0].spot as SpotCard).contentId);
+  SavedCardMock.mock.calls.map((call) => (call[0].spot as SpotCard).contentId);
 
 beforeEach(() => {
   useSavedListMock.mockReturnValue({ data: LIST, isLoading: false });
   useSaveMutationMock.mockReturnValue({ mutate: save });
   unsaveAsync.mockResolvedValue(undefined);
   useUnsaveMutationMock.mockReturnValue({ mutate: unsave, mutateAsync: unsaveAsync });
-  useNearbyCoordsMock.mockReturnValue({ coords: SEOUL, askable: false, ask: jest.fn() });
   useRecentSpots.setState({ spots: [] });
 });
 
@@ -89,24 +94,20 @@ afterEach(async () => {
 });
 
 describe("SavedScreen", () => {
-  it("keeps the server order until another sort is picked", async () => {
+  it("lays every scrap out as one album in server order", async () => {
     const tree = await mount();
+
     expect(renderedOrder()).toEqual(["far", "near"]);
-
-    SavedListRowMock.mockClear();
-    await press(tree, "sort-near");
-    expect(renderedOrder()).toEqual(["near", "far"]);
+    expect(tree.root.findAll((n) => String(n.props.testID ?? "").startsWith("sort-"))).toHaveLength(
+      0,
+    );
+    expect(tree.root.findAllByProps({ testID: "toggle-view" })).toHaveLength(0);
   });
 
-  it("shows the distance next to each row once a fix is available", async () => {
-    await mount();
-    expect(SavedListRowMock.mock.calls[1][0].distance).toBe("1.3km");
-  });
-
-  it("unsaves on the swipe action and restores it from the undo toast", async () => {
+  it("unsaves from the tile heart and restores it from the undo toast", async () => {
     const tree = await mount();
 
-    await press(tree, "swipe-far-action");
+    await unsaveTile("far");
     expect(unsaveAsync).toHaveBeenCalledWith("far");
 
     const toast = tree.root.findAll(
@@ -127,7 +128,7 @@ describe("SavedScreen", () => {
     );
 
     const tree = await mount();
-    await press(tree, "swipe-far-action");
+    await unsaveTile("far");
     await press(tree, "unsave-toast-action");
 
     expect(save).not.toHaveBeenCalled();
@@ -143,7 +144,7 @@ describe("SavedScreen", () => {
     unsaveAsync.mockRejectedValue(new Error("network"));
 
     const tree = await mount();
-    await press(tree, "swipe-far-action");
+    await unsaveTile("far");
     await act(async () => undefined);
 
     const toast = tree.root.findAll(
@@ -160,7 +161,7 @@ describe("SavedScreen", () => {
     );
 
     const tree = await mount();
-    await press(tree, "swipe-far-action");
+    await unsaveTile("far");
     await press(tree, "unsave-toast-action");
     await act(async () => undefined);
 
@@ -179,7 +180,7 @@ describe("SavedScreen", () => {
     );
 
     const tree = await mount();
-    await press(tree, "swipe-far-action");
+    await unsaveTile("far");
 
     const toast = tree.root.findAll((n) => n.props.testID === "unsave-toast")[0];
     await act(async () => {
@@ -207,8 +208,8 @@ describe("SavedScreen", () => {
       .mockResolvedValueOnce(undefined);
 
     const tree = await mount();
-    await press(tree, "swipe-far-action");
-    await press(tree, "swipe-near-action");
+    await unsaveTile("far");
+    await unsaveTile("near");
 
     await act(async () => {
       failFirst();
@@ -228,10 +229,10 @@ describe("SavedScreen", () => {
     });
 
     const tree = await mount();
-    await press(tree, "swipe-far-action");
+    await unsaveTile("far");
     await press(tree, "unsave-toast-action");
     await act(async () => undefined);
-    await press(tree, "swipe-near-action");
+    await unsaveTile("near");
 
     await act(async () => {
       failResave();
@@ -242,34 +243,6 @@ describe("SavedScreen", () => {
     )[0];
     expect(toast.props.message).toBe(unsaveMessage("덕수궁"));
     expect(toast.props.action).not.toBeNull();
-  });
-
-  it("stays on the previous sort when no fix can be obtained", async () => {
-    const ask = jest.fn().mockResolvedValue(false);
-    useNearbyCoordsMock.mockReturnValue({ coords: null, askable: true, ask });
-
-    const tree = await mount();
-    await press(tree, "sort-near");
-    await act(async () => undefined);
-
-    const chip = tree.root.findAll((n) => n.props.testID === "sort-near" && !!n.props.style)[0];
-    expect(JSON.stringify(chip.props.style)).not.toContain("chipOn");
-    const toast = tree.root.findAll(
-      (n) => n.props.testID === "unsave-toast" && typeof n.props.message === "string",
-    )[0];
-    expect(toast.props.message).toBe(NEAR_NEEDS_LOCATION);
-  });
-
-  it("says why it cannot sort by distance when the permission is already refused", async () => {
-    useNearbyCoordsMock.mockReturnValue({ coords: null, askable: false, ask: jest.fn() });
-
-    const tree = await mount();
-    await press(tree, "sort-near");
-
-    const toast = tree.root.findAll(
-      (n) => n.props.testID === "unsave-toast" && typeof n.props.message === "string",
-    )[0];
-    expect(toast.props.message).toBe(NEAR_NEEDS_LOCATION);
   });
 
   it("saves from the recent row without opening the spot", async () => {

@@ -1,4 +1,4 @@
-import { regionCount } from "@/features/saved/lib/sort";
+import { regionCount } from "@/features/saved/lib/region";
 import { SAVED_PAGE_LIMIT } from "@/features/saved/api";
 import { calendarDaysSince } from "@/lib/local-date";
 import type { SpotCard } from "@/lib/api-types";

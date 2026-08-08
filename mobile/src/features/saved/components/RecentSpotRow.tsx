@@ -1,7 +1,7 @@
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { RemoteImage } from "@/components/RemoteImage";
 import { Icon } from "@/components/Icon";
-import { subline } from "@/features/saved/lib/sort";
+import { subline } from "@/features/saved/lib/region";
 import { useSaveOptimistic } from "@/features/saved/hooks/use-save-optimistic";
 import type { SpotCard } from "@/lib/api-types";
 import { colors, radii, spacing } from "@/constants/theme";
