@@ -14,7 +14,6 @@ import { colors, spacing } from "@/constants/theme";
 
 export const DELETE_TITLE = "회원 탈퇴";
 export const DELETE_LEAD = "다음 항목이 즉시 삭제되고 되돌릴 수 없어요.";
-export const DELETE_EXPORT_HINT = "탈퇴 전 스크랩을 CSV로 내보낼 수 있어요. 설정 > 내 데이터.";
 
 function deleteErrorMessage(error: unknown): string {
   if (error instanceof AppError && error.code === "AUTH_TOKEN_INVALID") {
@@ -138,8 +137,6 @@ export default function AccountScreen() {
                 </View>
               </InfoBox>
             ) : null}
-
-            <Text style={styles.foot}>{DELETE_EXPORT_HINT}</Text>
           </>
         )}
       </ScrollView>
@@ -176,11 +173,4 @@ const styles = StyleSheet.create({
   error: { marginTop: spacing.md, fontSize: 12.5, color: colors.accentText },
   actions: { flexDirection: "row", gap: 9, marginTop: spacing.md },
   actionHalf: { flex: 1 },
-  foot: {
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.lg,
-    fontSize: 11.5,
-    lineHeight: 17,
-    color: colors.ter,
-  },
 });

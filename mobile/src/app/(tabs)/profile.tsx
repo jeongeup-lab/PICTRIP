@@ -106,8 +106,8 @@ export default function ProfileTab() {
             onPress={() => void Linking.openSettings()}
           />
           <ListRow
-            icon="bell"
-            title="알림·권한 설정"
+            icon="settings"
+            title="권한 설정"
             chevron
             onPress={() => router.push("/settings")}
           />
@@ -119,8 +119,6 @@ export default function ProfileTab() {
           />
           <ListRow icon="info" title="앱 버전" value={APP_VERSION} />
         </ListGroup>
-
-        <Text style={styles.foot}>관광 정보 출처 · 한국관광공사 TourAPI</Text>
       </ScrollView>
     </View>
   );
@@ -138,10 +136,4 @@ const styles = StyleSheet.create({
   navTitle: { fontSize: 21, fontWeight: "800", letterSpacing: -0.5, color: colors.ink },
   navBtn: { width: 34, height: 34, alignItems: "flex-end", justifyContent: "center" },
   scroll: { paddingBottom: spacing.xxl },
-  foot: {
-    marginTop: spacing.lg,
-    paddingHorizontal: spacing.lg,
-    fontSize: 11.5,
-    color: colors.ter,
-  },
 });
