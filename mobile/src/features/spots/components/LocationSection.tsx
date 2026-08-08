@@ -8,12 +8,10 @@ import {
   InteractionManager,
   StyleSheet,
 } from "react-native";
-import { router } from "expo-router";
 import type { SpotDetail, NearbySpot } from "@/lib/api-types";
 import { Icon } from "@/components/Icon";
 import type { IconName } from "@/components/Icon";
 import { KakaoWebMap } from "@/features/map/components/KakaoWebMap";
-import { useMapStore } from "@/features/map/stores/map-store";
 import { cleanHomepage } from "@/lib/homepage";
 import { htmlToPlainText } from "@/lib/html-text";
 import { colors, radii } from "@/constants/theme";
@@ -133,19 +131,6 @@ export function LocationSection({ spot }: { spot: SpotDetail }) {
       onPress: () => Linking.openURL(homepage.url),
     });
 
-  const openNearbyMap = () => {
-    if (lat == null || lng == null) return;
-    const store = useMapStore.getState();
-    store.applyRegion({ lat, lng });
-    store.setLabel({
-      sido: spot.regionName,
-      sigungu: spot.sigunguName,
-      dong: null,
-      label: spot.sigunguName ?? spot.regionName ?? spot.title,
-    });
-    router.push("/map");
-  };
-
   return (
     <View style={styles.section}>
       <Text style={styles.h2}>위치</Text>
@@ -153,9 +138,9 @@ export function LocationSection({ spot }: { spot: SpotDetail }) {
         <Pressable
           testID="spot-open-map"
           style={styles.map}
-          onPress={openNearbyMap}
+          onPress={openKakao}
           accessibilityRole="button"
-          accessibilityLabel="주변 지도 열기"
+          accessibilityLabel="카카오맵에서 열기"
         >
           <View style={StyleSheet.absoluteFill} pointerEvents="none">
             {mapReady ? (
@@ -168,9 +153,6 @@ export function LocationSection({ spot }: { spot: SpotDetail }) {
                 onPinTap={() => {}}
               />
             ) : null}
-          </View>
-          <View style={styles.mapBadge} pointerEvents="none">
-            <Text style={styles.mapBadgeText}>주변 둘러보기</Text>
           </View>
         </Pressable>
       ) : (
@@ -210,18 +192,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   mapPlaceholder: { alignItems: "center", justifyContent: "center" },
-  mapBadge: {
-    position: "absolute",
-    right: 10,
-    bottom: 10,
-    height: 28,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.92)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  mapBadgeText: { fontSize: 12, fontWeight: "700", color: colors.onLight },
   placeholderText: { color: colors.ter, fontSize: 14 },
   mapLinks: { flexDirection: "row", gap: 10, marginBottom: 6 },
   mapLink: {
