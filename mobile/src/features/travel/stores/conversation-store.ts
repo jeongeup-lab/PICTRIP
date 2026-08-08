@@ -28,6 +28,8 @@ interface ConversationState {
   turns: Turn[];
   busy: boolean;
   activeId: string | null;
+  issued: number;
+  nextTurnId: () => string;
   start: (turn: {
     id: string;
     question: string;
@@ -48,10 +50,16 @@ function patch(turns: Turn[], id: string, next: Partial<Turn>): Turn[] {
   return turns.map((t) => (t.id === id ? { ...t, ...next } : t));
 }
 
-export const useConversation = create<ConversationState>((set) => ({
+export const useConversation = create<ConversationState>((set, get) => ({
   turns: [],
   busy: false,
   activeId: null,
+  issued: 0,
+  nextTurnId: () => {
+    const issued = get().issued + 1;
+    set({ issued });
+    return `turn-${issued}`;
+  },
   start: ({
     id,
     question,
@@ -104,5 +112,5 @@ export const useConversation = create<ConversationState>((set) => ({
           }
         : s,
     ),
-  clear: () => set({ turns: [], busy: false, activeId: null }),
+  clear: () => set({ turns: [], busy: false, activeId: null, issued: 0 }),
 }));

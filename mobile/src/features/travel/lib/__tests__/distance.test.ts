@@ -46,3 +46,13 @@ describe("distanceReading", () => {
     expect(distanceReading(12.4)).toEqual({ value: "12", unit: "km" });
   });
 });
+
+describe("distanceReading at the origin", () => {
+  it("shows the anchored place itself as 0m, not a floor of 10m", () => {
+    expect(distanceReading(0)).toEqual({ value: "0", unit: "m" });
+  });
+
+  it("still floors a real but tiny distance so it is not rounded to nothing", () => {
+    expect(distanceReading(0.002)).toEqual({ value: "10", unit: "m" });
+  });
+});

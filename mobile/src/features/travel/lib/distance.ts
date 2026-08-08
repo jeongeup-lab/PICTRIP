@@ -20,6 +20,7 @@ export function spotDistanceKm(spot: TravelSpot, origin: LatLng | null): number 
 }
 
 export function distanceReading(km: number): DistanceReading {
+  if (km <= 0) return { value: "0", unit: "m" };
   if (km < 1) return { value: String(Math.max(10, Math.round(km * METERS_IN_KM))), unit: "m" };
   if (km < NEAR_KM) return { value: km.toFixed(1), unit: "km" };
   return { value: String(Math.round(km)), unit: "km" };

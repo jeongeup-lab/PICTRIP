@@ -67,7 +67,7 @@ export default function SpotScreen() {
       lat: data.mapy,
       lng: data.mapx,
     });
-    router.push("/(tabs)/travel");
+    router.navigate("/(tabs)/travel");
   };
 
   if (isError && !data) {

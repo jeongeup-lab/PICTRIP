@@ -59,7 +59,6 @@ export const GREETING = "오늘, 어디로 갈까요";
 export default function TravelScreen() {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
-  const nextId = useRef(0);
   const [draft, setDraft] = useState("");
   const [photo, setPhoto] = useState<PhotoUpload | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -73,6 +72,7 @@ export default function TravelScreen() {
   const resolveTurn = useConversation((s) => s.resolve);
   const failTurn = useConversation((s) => s.fail);
   const clearTurns = useConversation((s) => s.clear);
+  const nextTurnId = useConversation((s) => s.nextTurnId);
 
   const anchorSpot = useTravelAnchor((s) => s.spot);
   const toggleAnchor = useTravelAnchor((s) => s.toggle);
@@ -155,8 +155,7 @@ export default function TravelScreen() {
       const question = composeQuestion(text, attached !== null);
       if (!question) return;
       const request = text.trim();
-      nextId.current += 1;
-      const id = `turn-${nextId.current}`;
+      const id = nextTurnId();
       const context = contextFrom(lastAnswered?.answer, anchorSpot?.contentId ?? null);
       startTurn({ id, question, request, photo: attached, context });
       setDraft("");
@@ -165,7 +164,7 @@ export default function TravelScreen() {
       scrollToEnd();
       run(id, { question: request, photo: attached, context });
     },
-    [busy, startTurn, scrollToEnd, run, lastAnswered, anchorSpot],
+    [busy, startTurn, scrollToEnd, run, lastAnswered, anchorSpot, nextTurnId],
   );
 
   const refineFrom = useCallback(
@@ -177,8 +176,7 @@ export default function TravelScreen() {
       }
       if (chip.kind === "anchor") {
         if (!anchorSpot && !coords) return;
-        nextId.current += 1;
-        const id = `turn-${nextId.current}`;
+        const id = nextTurnId();
         const anchor = anchorSpot
           ? { contentId: anchorSpot.contentId, action: chip.action }
           : { action: chip.action };
@@ -195,8 +193,7 @@ export default function TravelScreen() {
         return;
       }
       if (chip.kind === "intent") {
-        nextId.current += 1;
-        const id = `turn-${nextId.current}`;
+        const id = nextTurnId();
         startTurn({ id, question: chip.label, request: "", photo: null, intent: chip.intent });
         setSnap("half");
         scrollToEnd();
@@ -205,8 +202,7 @@ export default function TravelScreen() {
       }
       const intent = source?.answer?.intent ?? null;
       if (!intent) return;
-      nextId.current += 1;
-      const id = `turn-${nextId.current}`;
+      const id = nextTurnId();
       const attached = source?.photo ?? null;
       startTurn({
         id,
@@ -220,7 +216,7 @@ export default function TravelScreen() {
       scrollToEnd();
       run(id, { photo: attached, intent, patch: chip.patch });
     },
-    [busy, submit, anchorSpot, coords, startTurn, scrollToEnd, run],
+    [busy, submit, anchorSpot, coords, startTurn, scrollToEnd, run, nextTurnId],
   );
 
   const submitDockChip = useCallback(

@@ -108,3 +108,34 @@ describe("conversation store", () => {
     ]);
   });
 });
+
+describe("turn ids", () => {
+  it("hands out a fresh id every call, not one derived from the turns it can see", () => {
+    const issued = [
+      useConversation.getState().nextTurnId(),
+      useConversation.getState().nextTurnId(),
+      useConversation.getState().nextTurnId(),
+    ];
+
+    expect(new Set(issued).size).toBe(3);
+  });
+
+  it("keeps counting past the turns already in the conversation", () => {
+    const first = useConversation.getState().nextTurnId();
+    useConversation.getState().start({
+      id: first,
+      question: "사람 적은 바닷가",
+      request: "사람 적은 바닷가",
+      photo: null,
+    });
+
+    expect(useConversation.getState().nextTurnId()).not.toBe(first);
+    expect(useConversation.getState().turns.map((t) => t.id)).toEqual([first]);
+  });
+
+  it("starts over only when the conversation is cleared", () => {
+    const before = useConversation.getState().nextTurnId();
+    useConversation.getState().clear();
+    expect(useConversation.getState().nextTurnId()).toBe(before);
+  });
+});
