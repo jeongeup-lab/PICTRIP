@@ -1,6 +1,5 @@
 const API_BASE = "https://api.pictrip.org/v1";
 const APP_STORE = "https://apps.apple.com/app/id6778157312";
-const PLAY_STORE = "https://play.google.com/store/apps/details?id=com.jeongeup.pictrip";
 
 export function escapeHtml(s) {
   if (s == null) return "";
@@ -74,7 +73,6 @@ export function renderPage({ url, title, description, image, bodyHtml }) {
 ${bodyHtml}
   <div class="cta">
     <a class="primary" href="${APP_STORE}">App Store에서 받기</a>
-    <a href="${PLAY_STORE}">Google Play에서 받기</a>
   </div>
   <footer>
     <a href="https://pictrip.org/legal/data-sources">데이터 출처 고지</a>

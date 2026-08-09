@@ -6,13 +6,7 @@ import { AppError } from "@/lib/app-error";
 import { registerAuthSession } from "@/lib/auth-session";
 import { getIdToken, type Provider } from "@/features/auth/usecases/oauth-providers";
 import { recordConsentSnapshot } from "@/features/auth/usecases/record-consent";
-import {
-  oauthLogin,
-  emailLogin,
-  emailSignup,
-  logoutRequest,
-  deleteAccountRequest,
-} from "@/features/auth/api";
+import { oauthLogin, logoutRequest, deleteAccountRequest } from "@/features/auth/api";
 import { queryClient } from "@/lib/query-client";
 import { useRecentSpots } from "@/features/spots/stores/recent-store";
 
@@ -25,8 +19,6 @@ interface AuthState {
   clear: () => Promise<void>;
   hydrate: () => Promise<void>;
   loginWithOAuth: (provider: Provider) => Promise<"success" | "canceled">;
-  loginWithEmail: (email: string, password: string) => Promise<void>;
-  signupWithEmail: (email: string, password: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<void>;
   devLogin: () => void;
@@ -83,18 +75,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await get().setSession(pair);
     void recordConsentSnapshot().catch(() => undefined);
     return "success";
-  },
-
-  loginWithEmail: async (email, password) => {
-    const pair = await emailLogin(email, password);
-    await get().setSession(pair);
-    void recordConsentSnapshot().catch(() => undefined);
-  },
-
-  signupWithEmail: async (email, password, name) => {
-    const pair = await emailSignup(email, password, name);
-    await get().setSession(pair);
-    void recordConsentSnapshot().catch(() => undefined);
   },
 
   logout: async () => {

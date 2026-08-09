@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 
 class UserPublic(BaseModel):
@@ -17,17 +17,6 @@ class UserPublic(BaseModel):
 class OAuthLoginIn(BaseModel):
     idToken: str
     nonce: str | None = None
-
-
-class EmailSignupIn(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=8, max_length=72)
-    name: str | None = None
-
-
-class EmailLoginIn(BaseModel):
-    email: EmailStr
-    password: str = Field(max_length=72)
 
 
 class RefreshBody(BaseModel):

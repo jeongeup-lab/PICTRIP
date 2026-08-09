@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { Modal, Pressable, View, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { router } from "expo-router";
 import { LoginCard } from "@/features/auth/components/LoginCard";
 import { useAuthPromptStore } from "@/features/auth/stores/auth-prompt-store";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
@@ -12,7 +11,6 @@ export function AuthPromptSheet() {
   const visible = useAuthPromptStore((s) => s.visible);
   const resolve = useAuthPromptStore((s) => s.resolve);
   const succeed = useAuthPromptStore((s) => s.succeed);
-  const hide = useAuthPromptStore((s) => s.hide);
   const dismiss = useAuthPromptStore((s) => s.dismiss);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
@@ -28,15 +26,7 @@ export function AuthPromptSheet() {
           onPress={(e) => e.stopPropagation()}
         >
           <View style={styles.grabber} />
-          <LoginCard
-            variant="sheet"
-            onSuccess={succeed}
-            onCancel={dismiss}
-            onEmailPress={() => {
-              hide();
-              router.push("/auth/email");
-            }}
-          />
+          <LoginCard variant="sheet" onSuccess={succeed} onCancel={dismiss} />
         </Pressable>
       </Pressable>
     </Modal>

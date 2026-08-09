@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Query, Response, status
 
 from app.core.db import DbSession
 from app.core.redis import RedisDep
@@ -12,8 +12,6 @@ from app.modules.spots.schemas import SpotCard
 from app.modules.users import services
 from app.modules.users.schemas import (
     ConsentIn,
-    EmailLoginIn,
-    EmailSignupIn,
     LogoutBody,
     OAuthLoginIn,
     RefreshBody,
@@ -21,7 +19,6 @@ from app.modules.users.schemas import (
 )
 from app.security.jwt import CurrentUserId
 from app.web.envelope import PaginationMeta, ok
-from app.web.ratelimit import rate_limit
 
 router = APIRouter(tags=["USR · user/auth"])
 
@@ -29,7 +26,7 @@ router = APIRouter(tags=["USR · user/auth"])
 @router.post(
     "/auth/oauth/{provider}",
     status_code=status.HTTP_200_OK,
-    summary="OIDC id_token → internal token pair (provider ∈ kakao/google/apple)",
+    summary="OIDC id_token → internal token pair (provider ∈ kakao/apple)",
 )
 async def oauth_login(
     provider: str,
@@ -37,28 +34,6 @@ async def oauth_login(
     session: DbSession,
 ) -> dict[str, Any]:
     pair = await services.authenticate_with_oauth(session, provider, body)
-    return ok(pair.model_dump())
-
-
-@router.post(
-    "/auth/email/signup",
-    status_code=status.HTTP_201_CREATED,
-    summary="Email/password signup → internal token pair",
-    dependencies=[Depends(rate_limit(bucket="email_signup", limit=5, window_seconds=60))],
-)
-async def email_signup(body: EmailSignupIn, session: DbSession) -> dict[str, Any]:
-    pair = await services.signup_with_email(session, body)
-    return ok(pair.model_dump())
-
-
-@router.post(
-    "/auth/email/login",
-    status_code=status.HTTP_200_OK,
-    summary="Email/password login → internal token pair",
-    dependencies=[Depends(rate_limit(bucket="email_login", limit=10, window_seconds=60))],
-)
-async def email_login(body: EmailLoginIn, session: DbSession) -> dict[str, Any]:
-    pair = await services.login_with_email(session, body)
     return ok(pair.model_dump())
 
 

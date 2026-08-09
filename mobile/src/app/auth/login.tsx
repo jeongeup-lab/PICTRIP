@@ -26,11 +26,7 @@ export default function LoginScreen() {
       <Pressable style={styles.back} onPress={close} hitSlop={8}>
         <Icon name="chevron-left" size={24} />
       </Pressable>
-      <LoginCard
-        variant="full"
-        onSuccess={() => {}}
-        onEmailPress={() => router.replace("/auth/email")}
-      />
+      <LoginCard variant="full" onSuccess={() => {}} />
       {__DEV__ ? (
         <Pressable
           style={[styles.dev, { bottom: insets.bottom + spacing.sm }]}

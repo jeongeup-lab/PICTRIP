@@ -26,7 +26,7 @@ jest.mock("expo-auth-session", () => ({
   AuthRequest: jest.fn(),
 }));
 jest.mock("@/constants/oauth", () => ({
-  OAUTH: { google: { clientId: "gid", webClientId: "gweb" }, kakao: { restKey: "kkey" } },
+  OAUTH: { kakao: { restKey: "kkey" } },
 }));
 
 describe("getIdToken", () => {
@@ -46,23 +46,6 @@ describe("getIdToken", () => {
   it("apple throws AppError on provider failure", async () => {
     (Apple.signInAsync as jest.Mock).mockRejectedValue(new Error("boom"));
     await expect(getIdToken("apple")).rejects.toBeInstanceOf(AppError);
-  });
-
-  it("web oidc (google) exchanges code → idToken", async () => {
-    const promptAsync = jest.fn(async () => ({ type: "success", params: { code: "c1" } }));
-    (AuthSession.AuthRequest as unknown as jest.Mock).mockImplementation(() => ({
-      promptAsync,
-      codeVerifier: "ver",
-    }));
-    (AuthSession.exchangeCodeAsync as jest.Mock).mockResolvedValue({ idToken: "g-id-tok" });
-    const res = await getIdToken("google");
-    expect(res).toEqual({ idToken: "g-id-tok", nonce: "raw-nonce" });
-  });
-
-  it("web oidc (google) dismiss maps to 'canceled'", async () => {
-    const promptAsync = jest.fn(async () => ({ type: "dismiss" }));
-    (AuthSession.AuthRequest as unknown as jest.Mock).mockImplementation(() => ({ promptAsync }));
-    expect(await getIdToken("google")).toBe("canceled");
   });
 
   it("kakao exchanges code via https bounce → idToken", async () => {
@@ -87,35 +70,6 @@ describe("getIdToken", () => {
     }));
     (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValue({ type: "dismiss" });
     expect(await getIdToken("kakao")).toBe("canceled");
-  });
-
-  it("web oidc (google) access_denied maps to 'canceled'", async () => {
-    const promptAsync = jest.fn(async () => ({
-      type: "success",
-      params: { error: "access_denied" },
-    }));
-    (AuthSession.AuthRequest as unknown as jest.Mock).mockImplementation(() => ({ promptAsync }));
-    expect(await getIdToken("google")).toBe("canceled");
-  });
-
-  it("web oidc (google) type:error access_denied maps to 'canceled'", async () => {
-    const promptAsync = jest.fn(async () => ({
-      type: "error",
-      params: { error: "access_denied" },
-      errorCode: "access_denied",
-    }));
-    (AuthSession.AuthRequest as unknown as jest.Mock).mockImplementation(() => ({ promptAsync }));
-    expect(await getIdToken("google")).toBe("canceled");
-  });
-
-  it("web oidc (google) type:error non-cancel surfaces AppError", async () => {
-    const promptAsync = jest.fn(async () => ({
-      type: "error",
-      params: { error: "server_error" },
-      errorCode: "server_error",
-    }));
-    (AuthSession.AuthRequest as unknown as jest.Mock).mockImplementation(() => ({ promptAsync }));
-    await expect(getIdToken("google")).rejects.toBeInstanceOf(AppError);
   });
 
   it("kakao access_denied (consent decline) maps to 'canceled'", async () => {

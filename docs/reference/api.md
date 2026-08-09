@@ -9,9 +9,7 @@
 
 | Method | Path | 목적 | 인증 |
 |---|---|---|---|
-| POST | `/auth/oauth/{provider}` | OIDC id_token → 토큰쌍 (kakao·google·apple) | — |
-| POST | `/auth/email/signup` | 이메일 가입 (rate-limit 5/분/IP) | — |
-| POST | `/auth/email/login` | 이메일 로그인 (rate-limit 10/분/IP) | — |
+| POST | `/auth/oauth/{provider}` | OIDC id_token → 토큰쌍 (kakao·apple) | — |
 | POST | `/auth/refresh` | 슬라이딩 재발급 (denylist 확인) | refresh 본문 |
 | POST | `/auth/logout` | 멱등 로그아웃 (jti denylist) | — |
 | GET | `/users/me` | 내 프로필 | JWT |

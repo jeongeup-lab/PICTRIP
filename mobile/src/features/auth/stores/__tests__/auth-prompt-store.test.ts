@@ -18,13 +18,4 @@ describe("auth-prompt-store", () => {
     await expect(p).resolves.toBe(false);
     expect(useAuthPromptStore.getState().resolve).toBeNull();
   });
-
-  it("hide closes the sheet UI but keeps the pending action armed", async () => {
-    const p = useAuthPromptStore.getState().prompt("save");
-    useAuthPromptStore.getState().hide();
-    expect(useAuthPromptStore.getState().visible).toBe(false);
-    expect(useAuthPromptStore.getState().resolve).not.toBeNull();
-    useAuthPromptStore.getState().succeed();
-    await expect(p).resolves.toBe(true);
-  });
 });

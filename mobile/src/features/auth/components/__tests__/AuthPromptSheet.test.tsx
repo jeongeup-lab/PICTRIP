@@ -24,7 +24,7 @@ describe("AuthPromptSheet", () => {
     tree = null;
   });
 
-  it("resumes the pending action when auth succeeds via the email screen path", async () => {
+  it("resumes the pending action once the sheet's login succeeds", async () => {
     await act(async () => {
       tree = renderer.create(<AuthPromptSheet />);
     });
@@ -37,8 +37,6 @@ describe("AuthPromptSheet", () => {
     void pending.then((v) => (resolved = v));
     expect(useAuthPromptStore.getState().visible).toBe(true);
 
-    act(() => useAuthPromptStore.getState().hide());
-    expect(useAuthPromptStore.getState().visible).toBe(false);
     await act(async () => setAuth(true));
 
     await act(async () => {});
