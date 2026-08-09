@@ -1,6 +1,7 @@
 import { StyleSheet } from "react-native";
 import renderer, { act } from "react-test-renderer";
 import { router } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import ProfileTab from "@/app/(tabs)/profile";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { useSavedList } from "@/features/saved/queries";
@@ -23,6 +24,10 @@ jest.mock("@/features/profile/hooks/use-app-permissions", () => ({
   useAppPermissions: () => ({ location: "granted", photos: null, camera: null }),
 }));
 jest.mock("@/features/profile/components/StatTiles", () => ({ StatTiles: jest.fn(() => null) }));
+jest.mock("expo-web-browser", () => ({
+  openBrowserAsync: jest.fn(),
+  maybeCompleteAuthSession: jest.fn(),
+}));
 
 const useSavedListMock = useSavedList as jest.Mock;
 const StatTilesMock = StatTiles as unknown as jest.Mock;
@@ -57,6 +62,9 @@ async function mount() {
 
 const has = (tree: renderer.ReactTestRenderer, testID: string) =>
   tree.root.findAllByProps({ testID }).length > 0;
+
+const row = (tree: renderer.ReactTestRenderer, title: string) =>
+  tree.root.findAllByProps({ title })[0];
 
 beforeEach(() => {
   useSavedListMock.mockReturnValue({ data: [] });
@@ -112,5 +120,32 @@ describe("ProfileTab", () => {
       button.props.onPress();
     });
     expect(router.push).toHaveBeenCalledWith("/settings");
+  });
+
+  it("keeps a way into the consent screen when logged in", async () => {
+    useAuthStore.setState({ user: USER, isAuthenticated: true, accessToken: "token" });
+    const tree = await mount();
+
+    const consent = row(tree, "동의 관리");
+    expect(consent).toBeDefined();
+
+    await act(async () => {
+      consent.props.onPress();
+    });
+    expect(router.push).toHaveBeenCalledWith("/consent");
+  });
+
+  it("hides the consent row for guests", async () => {
+    const tree = await mount();
+    expect(tree.root.findAllByProps({ title: "동의 관리" })).toHaveLength(0);
+  });
+
+  it("opens the support page from the inquiry row", async () => {
+    const tree = await mount();
+
+    await act(async () => {
+      row(tree, "문의").props.onPress();
+    });
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://pictrip.org/support");
   });
 });
