@@ -32,16 +32,6 @@ async def get_active_user_by_email(session: AsyncSession, email: str) -> User | 
     )
 
 
-async def create_email_user(session: AsyncSession, *, email: str, password_hash: str) -> User:
-    async with session.begin_nested():
-        user = User(email=email, name=generate_nickname(), password_hash=password_hash)
-        session.add(user)
-        await session.flush()
-        session.add(UserAuthProvider(user_id=user.id, provider="email", provider_user_id=email))
-        await session.flush()
-    return user
-
-
 async def get_or_create_user_via_provider(
     session: AsyncSession,
     *,

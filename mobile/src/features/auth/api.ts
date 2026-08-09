@@ -13,25 +13,6 @@ export async function oauthLogin(
   })) as unknown as TokenPair;
 }
 
-export async function emailLogin(email: string, password: string): Promise<TokenPair> {
-  return (await bareClient.post("/auth/email/login", {
-    email,
-    password,
-  })) as unknown as TokenPair;
-}
-
-export async function emailSignup(
-  email: string,
-  password: string,
-  name?: string,
-): Promise<TokenPair> {
-  return (await bareClient.post("/auth/email/signup", {
-    email,
-    password,
-    name,
-  })) as unknown as TokenPair;
-}
-
 export async function logoutRequest(refreshToken: string | null): Promise<void> {
   await bareClient.post("/auth/logout", { refreshToken });
 }

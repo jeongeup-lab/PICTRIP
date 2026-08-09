@@ -1,25 +1,20 @@
 import { useState } from "react";
-import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 import { router } from "expo-router";
 import { SocialButton } from "@/features/auth/components/SocialButton";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import type { Provider } from "@/features/auth/usecases/oauth-providers";
 import { AppError } from "@/lib/app-error";
-import { colors, spacing, radii } from "@/constants/theme";
+import { colors, spacing } from "@/constants/theme";
 
 interface Props {
   variant: "full" | "sheet";
   onSuccess: () => void;
   onCancel?: () => void;
-  onEmailPress?: () => void;
 }
 
-const PROVIDERS: Provider[] = [
-  "kakao",
-  "google",
-  ...(Platform.OS === "ios" ? (["apple"] as Provider[]) : []),
-];
+const PROVIDERS: Provider[] = ["kakao", "apple"];
 
 function BrandSymbol() {
   return (
@@ -48,7 +43,7 @@ function BrandSymbol() {
   );
 }
 
-export function LoginCard({ variant, onSuccess, onCancel, onEmailPress }: Props) {
+export function LoginCard({ variant, onSuccess, onCancel }: Props) {
   const loginWithOAuth = useAuthStore((s) => s.loginWithOAuth);
   const [pending, setPending] = useState<Provider | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -93,24 +88,6 @@ export function LoginCard({ variant, onSuccess, onCancel, onEmailPress }: Props)
       </View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
-
-      {variant === "full" ? (
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>또는</Text>
-          <View style={styles.dividerLine} />
-        </View>
-      ) : null}
-
-      <View style={variant === "full" ? styles.emailWrap : styles.emailWrapSheet}>
-        <Pressable
-          style={({ pressed }) => [styles.emailBtn, pressed && styles.emailBtnPressed]}
-          onPress={onEmailPress ?? (() => router.push("/auth/email"))}
-          disabled={pending !== null}
-        >
-          <Text style={styles.emailBtnText}>이메일로 계속하기</Text>
-        </Pressable>
-      </View>
 
       <Text style={styles.terms}>
         계속 진행하면{" "}
@@ -162,28 +139,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   social: { paddingHorizontal: spacing.lg, gap: 11 },
-  divider: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: spacing.lg,
-    marginTop: spacing.lg,
-    gap: spacing.md,
-  },
-  dividerLine: { flex: 1, height: 1, backgroundColor: colors.line },
-  dividerText: { fontSize: 11.5, color: colors.ter },
-  emailWrap: { paddingHorizontal: spacing.lg, marginTop: spacing.lg },
-  emailWrapSheet: { paddingHorizontal: spacing.lg, marginTop: 11 },
-  emailBtn: {
-    height: 52,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: "rgba(112,115,124,0.28)",
-    backgroundColor: colors.bg,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emailBtnPressed: { backgroundColor: colors.fill },
-  emailBtnText: { fontSize: 16, fontWeight: "700", color: colors.ink },
   error: { color: colors.sec, fontSize: 13, textAlign: "center", marginTop: spacing.md },
   terms: {
     textAlign: "center",

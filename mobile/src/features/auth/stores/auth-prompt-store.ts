@@ -8,7 +8,6 @@ interface AuthPromptState {
   resolve: ((ok: boolean) => void) | null;
   prompt: (reason: AuthReason) => Promise<boolean>;
   succeed: () => void;
-  hide: () => void;
   dismiss: () => void;
 }
 
@@ -21,7 +20,6 @@ export const useAuthPromptStore = create<AuthPromptState>((set, get) => ({
     get().resolve?.(true);
     set({ visible: false, reason: null, resolve: null });
   },
-  hide: () => set({ visible: false }),
   dismiss: () => {
     get().resolve?.(false);
     set({ visible: false, reason: null, resolve: null });

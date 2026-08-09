@@ -42,9 +42,10 @@ BootGate(스플래시) → 온보딩(최초 1회) → 탭 셸
   나간다 — 앱 안에 별도 지도 화면은 없다.
 - **스크랩** — 정렬·뷰 전환 없이 항상 2열 앨범. 타일 하트로 해제하고 토스트
   한 번으로 되돌린다.
-- **인증** — OAuth 3종(kakao·google·apple) + 이메일. Kakao는 https 바운스
-  (`pictrip.org/oauthredirect → pictrip://`), Google은 triple-slash redirect
-  필수(이중 슬래시는 Error 400). 로그인 성공 시 동의 스냅샷 베스트에포트 기록.
+- **인증** — OAuth 2종(kakao·apple)뿐. iOS 단독 출시라 App Store 4.8이 요구하는
+  "동등한 대체 수단"을 Sign in with Apple이 담당한다. Kakao는 https 바운스
+  (`pictrip.org/oauthredirect → pictrip://`), Apple은 네이티브
+  `expo-apple-authentication`. 로그인 성공 시 동의 스냅샷 베스트에포트 기록.
   `/consent` 관리 화면은 구현돼 있으나 현재 진입 링크가 없다(미노출).
 
 ## 이미지 표시 규칙

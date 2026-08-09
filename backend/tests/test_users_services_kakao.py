@@ -78,40 +78,41 @@ async def test_authenticate_with_oauth_distinct_providers_same_sub_are_separate(
         AsyncMock(return_value=fake_claims),
     ):
         await authenticate_with_oauth(db_session, "kakao", OAuthLoginIn(idToken="x"))
-        await authenticate_with_oauth(db_session, "google", OAuthLoginIn(idToken="x"))
+        await authenticate_with_oauth(db_session, "apple", OAuthLoginIn(idToken="x"))
     users = (await db_session.scalars(select(User))).all()
     providers = (await db_session.scalars(select(UserAuthProvider))).all()
     assert len(users) == 2
-    assert {p.provider for p in providers} == {"kakao", "google"}
+    assert {p.provider for p in providers} == {"kakao", "apple"}
 
 
 @pytest.mark.asyncio
 async def test_authenticate_with_oauth_email_collision_does_not_crash(
     db_session: AsyncSession,
 ) -> None:
-    from app.modules.users.schemas import EmailSignupIn
-    from app.modules.users.services import signup_with_email
-
-    await signup_with_email(
-        db_session,
-        EmailSignupIn(email="dup@example.com", password="password123", name="Email User"),
-    )
-
-    fake_claims = OidcClaims(
-        sub="google-dup", email="dup@example.com", name="Google User", picture=None
+    kakao_claims = OidcClaims(
+        sub="kakao-dup", email="dup@example.com", name="Kakao User", picture=None
     )
     with patch(
         "app.modules.users.services.verify_oauth_id_token",
-        AsyncMock(return_value=fake_claims),
+        AsyncMock(return_value=kakao_claims),
     ):
-        pair = await authenticate_with_oauth(db_session, "google", OAuthLoginIn(idToken="x"))
+        await authenticate_with_oauth(db_session, "kakao", OAuthLoginIn(idToken="x"))
+
+    apple_claims = OidcClaims(
+        sub="apple-dup", email="dup@example.com", name="Apple User", picture=None
+    )
+    with patch(
+        "app.modules.users.services.verify_oauth_id_token",
+        AsyncMock(return_value=apple_claims),
+    ):
+        pair = await authenticate_with_oauth(db_session, "apple", OAuthLoginIn(idToken="x"))
 
     users = (await db_session.scalars(select(User))).all()
     assert len(users) == 2
     oauth_user = next(u for u in users if u.id == pair.user.id)
     assert oauth_user.email is None
     providers = (await db_session.scalars(select(UserAuthProvider))).all()
-    assert {p.provider for p in providers} == {"email", "google"}
+    assert {p.provider for p in providers} == {"kakao", "apple"}
 
 
 @pytest.mark.asyncio

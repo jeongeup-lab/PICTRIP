@@ -4,17 +4,14 @@ from datetime import UTC, datetime
 
 from redis.asyncio import Redis
 
-from app.core.db import AsyncSession, IntegrityError
+from app.core.db import AsyncSession
 from app.modules.spots.services.saved import delete_all_saved_for_user
 from app.modules.users import repositories as repo
-from app.modules.users.models import User
 from app.modules.users.oidc import verify_oauth_id_token
 from app.modules.users.schemas import (
     ConsentIn,
     ConsentOut,
     ConsentState,
-    EmailLoginIn,
-    EmailSignupIn,
     OAuthLoginIn,
     TokenPair,
     UserPublic,
@@ -24,29 +21,7 @@ from app.security.jwt import (
     mint_token_pair,
     refresh_tokens,
 )
-from app.security.passwords import hash_password, verify_password
-from app.web.errors import (
-    AuthTokenInvalid,
-    EmailAlreadyRegistered,
-    InvalidCredentials,
-)
-
-_DUMMY_PASSWORD_HASH = hash_password("pictrip-dummy-not-a-real-password")
-
-
-def _user_public(user: User) -> UserPublic:
-    return UserPublic(
-        id=user.id,
-        displayName=user.name,
-        email=user.email,
-        avatarUrl=user.profile_image_url,
-        isOnboarded=False,
-        createdAt=user.created_at,
-    )
-
-
-def _normalize_email(email: str) -> str:
-    return email.strip().lower()
+from app.web.errors import AuthTokenInvalid
 
 
 async def authenticate_with_oauth(
@@ -72,37 +47,6 @@ async def authenticate_with_oauth(
         createdAt=user.created_at,
     )
     return mint_token_pair(user_id=user.id, user=user_public)
-
-
-async def signup_with_email(session: AsyncSession, body: EmailSignupIn) -> TokenPair:
-    email = _normalize_email(body.email)
-
-    if await repo.get_active_user_by_email(session, email) is not None:
-        raise EmailAlreadyRegistered()
-
-    try:
-        user = await repo.create_email_user(
-            session, email=email, password_hash=hash_password(body.password)
-        )
-    except IntegrityError as e:
-        raise EmailAlreadyRegistered() from e
-
-    await session.commit()
-    return mint_token_pair(user_id=user.id, user=_user_public(user))
-
-
-async def login_with_email(session: AsyncSession, body: EmailLoginIn) -> TokenPair:
-    email = _normalize_email(body.email)
-    user = await repo.get_active_user_by_email(session, email)
-
-    if user is None or user.password_hash is None:
-        verify_password(body.password, _DUMMY_PASSWORD_HASH)
-        raise InvalidCredentials()
-
-    if not verify_password(body.password, user.password_hash):
-        raise InvalidCredentials()
-
-    return mint_token_pair(user_id=user.id, user=_user_public(user))
 
 
 async def get_user_public(session: AsyncSession, user_id: int) -> UserPublic:

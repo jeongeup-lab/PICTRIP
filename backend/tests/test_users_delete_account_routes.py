@@ -118,37 +118,34 @@ async def test_delete_anonymizes_unlinks_and_blocks_profile(
 
 
 @pytest.mark.asyncio
-async def test_delete_clears_password_and_blocks_email_login(
+async def test_delete_clears_a_legacy_email_password(
     client: AsyncClient, override_db_and_seed: AsyncSession
 ) -> None:
     email = f"pw-{uuid.uuid4().hex[:10]}@e.st"
-    password = "correct-horse-battery"
-
-    signup = await client.post(
-        "/v1/auth/email/signup",
-        json={"email": email, "password": password, "name": "비번유저"},
-    )
-    assert signup.status_code == 201
-    uid = signup.json()["data"]["user"]["id"]
-
-    pre = await client.post("/v1/auth/email/login", json={"email": email, "password": password})
-    assert pre.status_code == 200
+    row = (
+        await override_db_and_seed.execute(
+            text(
+                "INSERT INTO users (email, name, password_hash) "
+                "VALUES (:e, '비번유저', 'legacy-hash') RETURNING id"
+            ),
+            {"e": email},
+        )
+    ).first()
+    assert row is not None
+    uid = int(row.id)
+    await override_db_and_seed.commit()
 
     resp = await client.delete("/v1/users/me", headers=_auth(uid))
     assert resp.status_code == 204
 
-    row = (
+    after = (
         await override_db_and_seed.execute(
             text("SELECT password_hash, deleted_at FROM users WHERE id = :u"), {"u": uid}
         )
     ).first()
-    assert row is not None
-    assert row.deleted_at is not None
-    assert row.password_hash is None
-
-    post = await client.post("/v1/auth/email/login", json={"email": email, "password": password})
-    assert post.status_code == 401
-    assert post.json()["error"]["code"] == "AUTH_INVALID_CREDENTIALS"
+    assert after is not None
+    assert after.deleted_at is not None
+    assert after.password_hash is None
 
 
 @pytest.mark.asyncio

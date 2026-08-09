@@ -36,7 +36,6 @@ export default function RootLayout() {
             options={{ presentation: "fullScreenModal", headerShown: false }}
           />
           <Stack.Screen name="auth/login" options={{ presentation: "fullScreenModal" }} />
-          <Stack.Screen name="auth/email" options={{ presentation: "fullScreenModal" }} />
           <Stack.Screen name="saved" />
           <Stack.Screen name="settings" />
           <Stack.Screen name="account" />

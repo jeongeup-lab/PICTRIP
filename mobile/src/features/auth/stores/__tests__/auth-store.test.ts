@@ -4,13 +4,7 @@ import { bareClient } from "@/lib/bare-client";
 import * as storage from "@/lib/storage";
 import { getIdToken } from "@/features/auth/usecases/oauth-providers";
 import { recordConsentSnapshot } from "@/features/auth/usecases/record-consent";
-import {
-  oauthLogin,
-  emailLogin,
-  emailSignup,
-  logoutRequest,
-  deleteAccountRequest,
-} from "@/features/auth/api";
+import { oauthLogin, logoutRequest, deleteAccountRequest } from "@/features/auth/api";
 import { AppError } from "@/lib/app-error";
 
 jest.mock("@/lib/bare-client", () => ({ bareClient: { post: jest.fn() } }));
@@ -21,8 +15,6 @@ jest.mock("@/features/auth/usecases/record-consent", () => ({
 }));
 jest.mock("@/features/auth/api", () => ({
   oauthLogin: jest.fn(),
-  emailLogin: jest.fn(),
-  emailSignup: jest.fn(),
   logoutRequest: jest.fn(),
   deleteAccountRequest: jest.fn(),
 }));
@@ -137,40 +129,7 @@ describe("auth-store P3 actions", () => {
   it("loginWithOAuth propagates AppError from the backend", async () => {
     (getIdToken as jest.Mock).mockResolvedValue({ idToken: "t" });
     (oauthLogin as jest.Mock).mockRejectedValue(new AppError("OAUTH_ID_TOKEN_INVALID", "x", 401));
-    await expect(useAuthStore.getState().loginWithOAuth("google")).rejects.toBeInstanceOf(AppError);
-    expect(useAuthStore.getState().isAuthenticated).toBe(false);
-  });
-
-  it("loginWithEmail sets the session and records consent", async () => {
-    (emailLogin as jest.Mock).mockResolvedValue(pair);
-    await useAuthStore.getState().loginWithEmail("you@example.com", "secret123");
-    expect(emailLogin).toHaveBeenCalledWith("you@example.com", "secret123");
-    expect(useAuthStore.getState().isAuthenticated).toBe(true);
-    expect(storage.setRefreshToken).toHaveBeenCalledWith("ref");
-    expect(recordConsentSnapshot).toHaveBeenCalled();
-  });
-
-  it("loginWithEmail propagates AppError without a session", async () => {
-    (emailLogin as jest.Mock).mockRejectedValue(new AppError("AUTH_INVALID_CREDENTIALS", "x", 401));
-    await expect(
-      useAuthStore.getState().loginWithEmail("you@example.com", "nope"),
-    ).rejects.toBeInstanceOf(AppError);
-    expect(useAuthStore.getState().isAuthenticated).toBe(false);
-  });
-
-  it("signupWithEmail sets the session and records consent", async () => {
-    (emailSignup as jest.Mock).mockResolvedValue(pair);
-    await useAuthStore.getState().signupWithEmail("you@example.com", "secret123", "지은");
-    expect(emailSignup).toHaveBeenCalledWith("you@example.com", "secret123", "지은");
-    expect(useAuthStore.getState().isAuthenticated).toBe(true);
-    expect(recordConsentSnapshot).toHaveBeenCalled();
-  });
-
-  it("signupWithEmail propagates AppError without a session", async () => {
-    (emailSignup as jest.Mock).mockRejectedValue(new AppError("EMAIL_TAKEN", "x", 409));
-    await expect(
-      useAuthStore.getState().signupWithEmail("you@example.com", "secret123"),
-    ).rejects.toBeInstanceOf(AppError);
+    await expect(useAuthStore.getState().loginWithOAuth("apple")).rejects.toBeInstanceOf(AppError);
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
   });
 
