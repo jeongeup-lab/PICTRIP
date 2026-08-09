@@ -1,15 +1,22 @@
 import type { ReactNode } from "react";
-import { View, StyleSheet } from "react-native";
+import { View, StyleSheet, type LayoutChangeEvent } from "react-native";
 import { colors, shadows, spacing } from "@/constants/theme";
 
 const PANEL_RADIUS = 20;
 
-export function ResultPanel({ bottom, children }: { bottom: number; children: ReactNode }) {
+interface Props {
+  bottom: number;
+  onHeight: (px: number) => void;
+  children: ReactNode;
+}
+
+export function ResultPanel({ bottom, onHeight, children }: Props) {
   return (
     <View
       testID="travel-result-panel"
       style={[panelStyles.root, { bottom }]}
       pointerEvents="box-none"
+      onLayout={(event: LayoutChangeEvent) => onHeight(event.nativeEvent.layout.height)}
     >
       <View testID="travel-result-surface" style={panelStyles.surface} pointerEvents="box-none">
         {children}

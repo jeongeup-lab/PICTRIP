@@ -56,6 +56,7 @@ export default function TravelScreen() {
   const [photo, setPhoto] = useState<PhotoUpload | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [expandedAnswer, setExpandedAnswer] = useState(false);
+  const [panelPx, setPanelPx] = useState<number | null>(null);
   const [focusedIndexRaw, setFocusedIndexRaw] = useState(0);
   const [scrollToRaw, setScrollToRaw] = useState<number | null>(null);
 
@@ -104,11 +105,15 @@ export default function TravelScreen() {
     attached: photo !== null,
     chips: !panelShown,
   });
-  const panelBlock = panelShown
-    ? panelBasePx({ chips: panelChipRow.length > 0, carousel: carouselShown }) +
-      (carouselShown ? CAROUSEL_BLOCK_PX : 0)
-    : 0;
+  const panelEstimate =
+    panelBasePx({ chips: panelChipRow.length > 0, carousel: carouselShown }) +
+    (carouselShown ? CAROUSEL_BLOCK_PX : 0);
+  const panelBlock = panelShown ? (panelPx ?? panelEstimate) : 0;
   const coveredPx = dockBase + panelBlock;
+
+  const onPanelHeight = useCallback((px: number) => {
+    setPanelPx((prev) => (prev !== null && Math.abs(prev - px) < 1 ? prev : px));
+  }, []);
 
   const fit = useMemo(() => {
     const box = bounds(mapSpots);
@@ -319,7 +324,7 @@ export default function TravelScreen() {
       <SearchPulse active={busy} bottom={coveredPx} />
 
       {panelShown ? (
-        <ResultPanel bottom={dockBase}>
+        <ResultPanel bottom={dockBase} onHeight={onPanelHeight}>
           {turn ? (
             <AnswerBar
               question={turn.question}
