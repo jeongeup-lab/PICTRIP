@@ -200,6 +200,19 @@ skip minor style nits. Focus on:
 - PR flow: feature branch → PR to `dev` → address Codex review → **rebase
   merge** (the only enabled merge method — keep PR commits clean, no WIP/fixup
   noise).
+- **머지 전에 같은 파일을 건드리는 다른 열린 PR이 있는지 반드시 확인한다.** 이건
+  팀 여러 명 + 에이전트가 같은 파일을 동시에 고치는 리포다. 모르고 먼저 머지하면
+  상대 PR이 그 자리에서 충돌 상태가 된다 (실제 사고: #213을 머지해서 먼저 열려
+  있던 #212가 `feed/components` 3개 파일에서 깨졌다 — 머지 직전까지 충돌 0건이었다).
+  `pr-check`의 `overlap` 잡이 겹치는 PR을 job summary에 띄우니 머지 전에 읽을 것.
+  수동 확인은 아래 한 줄:
+  ```bash
+  gh pr view <내PR> --json files -q '.files[].path' | sort > /tmp/mine
+  gh pr list --state open --base dev --json number,title,author -q '.[]|"\(.number) \(.title)"'
+  gh pr view <상대PR> --json files -q '.files[].path' | sort | comm -12 - /tmp/mine
+  ```
+  겹치면 **먼저 열린 PR을 먼저 머지**하거나 저자와 순서를 맞춘다. 내 변경이 더
+  작으면 상대 PR이 들어간 뒤 그 위에 다시 얹는 쪽이 싸다.
 - Merging to `dev` deploys automatically: backend → CT112 (api.pictrip.org),
   mobile → EAS OTA (JS-only; native changes are silently skipped by the
   fingerprint guard), pipeline → CT111. **There is no staging — a dev merge is

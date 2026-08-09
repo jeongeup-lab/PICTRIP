@@ -43,3 +43,62 @@ jobs:
             } else {
               core.info("PR 템플릿 검증 통과");
             }
+
+  # 같은 파일을 건드리는 다른 열린 PR을 머지 전에 보이게 한다. 경고만 하고
+  # 막지는 않는다 — 같은 파일 병행 작업 자체는 정상이고, 문제는 모르고 머지하는 것.
+  overlap:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const self = context.payload.pull_request;
+            const filesOf = async (number) => {
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner, repo, pull_number: number, per_page: 100,
+              });
+              return files.map((f) => f.filename);
+            };
+
+            const mine = new Set(await filesOf(self.number));
+            const open = await github.paginate(github.rest.pulls.list, {
+              owner, repo, state: "open", base: self.base.ref, per_page: 100,
+            });
+
+            const hits = [];
+            for (const pr of open) {
+              if (pr.number === self.number) continue;
+              const shared = (await filesOf(pr.number)).filter((f) => mine.has(f));
+              if (shared.length) hits.push({ pr, shared });
+            }
+
+            if (!hits.length) {
+              core.info(`같은 파일을 건드리는 다른 열린 PR 없음 (base: ${self.base.ref})`);
+              return;
+            }
+
+            hits.sort((a, b) => b.shared.length - a.shared.length);
+            const lines = [`## ⚠️ 같은 파일을 건드리는 다른 열린 PR ${hits.length}건`, ""];
+            for (const { pr, shared } of hits) {
+              lines.push(`### #${pr.number} ${pr.title}`);
+              lines.push(`\`${pr.head.ref}\` · @${pr.user.login} · 겹치는 파일 ${shared.length}개`);
+              lines.push("");
+              for (const f of shared.slice(0, 20)) lines.push(`- \`${f}\``);
+              if (shared.length > 20) lines.push(`- …외 ${shared.length - 20}개`);
+              lines.push("");
+            }
+            lines.push("**먼저 열린 PR이 있으면 그쪽을 먼저 머지하거나, 최소한 저자와 순서를 맞추고 머지할 것.**");
+            lines.push("무시하고 머지하면 상대 PR이 충돌 상태가 된다.");
+            await core.summary.addRaw(lines.join("\n")).write();
+
+            const older = hits.filter(({ pr }) => new Date(pr.created_at) < new Date(self.created_at));
+            const label = hits.map(({ pr, shared }) => `#${pr.number}(${shared.length}개)`).join(", ");
+            core.warning(
+              `같은 파일을 건드리는 열린 PR: ${label}. ` +
+                (older.length ? `이 중 ${older.map(({ pr }) => `#${pr.number}`).join(", ")} 가 먼저 열렸다. ` : "") +
+                "머지 순서를 조율할 것 — 자세한 내용은 job summary 참고.",
+              { title: "PR 파일 겹침" },
+            );
