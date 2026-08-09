@@ -1647,4 +1647,25 @@ describe("TravelScreen keyboard", () => {
 
     expect(dockBottom(tree)).toBe(0);
   });
+
+  it("lifts the result panel with the dock so the answer stays readable", async () => {
+    useConversation.setState({ turns: [answeredTurn], busy: false });
+    const tree = await mount();
+    const resting = panelBottom(tree);
+
+    await showKeyboard(320);
+    expect(panelBottom(tree)).toBe(resting + 320);
+
+    await hideKeyboard();
+    expect(panelBottom(tree)).toBe(resting);
+  });
+
+  it("lifts the toast with the rest of the bottom stack", async () => {
+    useConversation.setState({ turns: [answeredTurn], busy: false });
+    const tree = await mount();
+    const resting = toastBottom(tree);
+
+    await showKeyboard(320);
+    expect(toastBottom(tree)).toBe(resting + 320);
+  });
 });
