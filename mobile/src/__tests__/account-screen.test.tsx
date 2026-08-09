@@ -1,5 +1,5 @@
 import renderer, { act } from "react-test-renderer";
-import { Text } from "react-native";
+import { Alert, Text } from "react-native";
 import AccountScreen from "@/app/account";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { AppError } from "@/lib/app-error";
@@ -9,6 +9,19 @@ jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
+jest.mock("@/features/saved/queries", () => ({
+  useSavedList: jest.fn(() => ({ data: [{ contentId: "1" }, { contentId: "2" }] })),
+}));
+
+const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
+
+const tapAlertButton = async (label: string) => {
+  const buttons = alertSpy.mock.calls.at(-1)?.[2] ?? [];
+  const button = buttons.find((b) => b.text === label);
+  await act(async () => {
+    button?.onPress?.();
+  });
+};
 
 const logout = jest.fn(async () => undefined);
 const deleteAccount = jest.fn(async () => undefined);
@@ -68,16 +81,40 @@ describe("AccountScreen", () => {
     expect(shown).toContain("2026.03.14");
   });
 
-  it("asks for confirmation with a delete checklist before deleting", async () => {
+  it("names what is lost, with the real scrap count", async () => {
     const tree = await mount();
     expect(tree.root.findAllByProps({ testID: "delete-confirm" })).toHaveLength(0);
 
     await press(tree, "open-delete");
-    expect(texts(tree).join("|")).toContain("저장한 모든 스크랩");
-    expect(deleteAccount).not.toHaveBeenCalled();
+    const shown = texts(tree).join("|");
+    expect(shown).toContain("스크랩 2개가 삭제돼요");
+    expect(shown).toContain("소셜 로그인 연결이 해제돼요");
+  });
 
+  it("needs a second, destructive confirmation before deleting", async () => {
+    const tree = await mount();
+    await press(tree, "open-delete");
     await press(tree, "confirm-delete");
+
+    expect(deleteAccount).not.toHaveBeenCalled();
+    const [, , buttons] = alertSpy.mock.calls.at(-1)!;
+    expect(buttons?.find((b) => b.text === "탈퇴하기")?.style).toBe("destructive");
+    expect(buttons?.find((b) => b.text === "취소")?.style).toBe("cancel");
+
+    await tapAlertButton("탈퇴하기");
     expect(deleteAccount).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the account when the sheet's primary action is pressed", async () => {
+    const tree = await mount();
+    await press(tree, "open-delete");
+    const keep = tree.root.findAll(
+      (n) => n.props.label === "계정 유지하기" && !!n.props.onPress,
+    )[0];
+    await act(async () => keep.props.onPress());
+
+    expect(tree.root.findAllByProps({ testID: "delete-confirm" })).toHaveLength(0);
+    expect(deleteAccount).not.toHaveBeenCalled();
   });
 
   it("explains an expired session by error code, not message", async () => {
@@ -86,6 +123,7 @@ describe("AccountScreen", () => {
 
     await press(tree, "open-delete");
     await press(tree, "confirm-delete");
+    await tapAlertButton("탈퇴하기");
 
     expect(texts(tree).join("|")).toContain("로그인이 만료됐어요");
   });
