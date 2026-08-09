@@ -38,7 +38,7 @@ export interface Suggestion {
   patch: RefinePatch;
 }
 
-export type AnchorAction = "food" | "cafe" | "nearby" | "crowd";
+export type AnchorAction = "food" | "cafe" | "nearby" | "crowd" | "related";
 
 export interface AskAnchor {
   contentId?: string;

@@ -12,6 +12,7 @@ interface Props {
   chips: DockChip[];
   disabled: boolean;
   inset: boolean;
+  opaque?: boolean;
   onChipPress: (chip: DockChip) => void;
 }
 
@@ -23,11 +24,13 @@ function ChipButton({
   chip,
   testID,
   disabled,
+  opaque,
   onPress,
 }: {
   chip: DockChip;
   testID: string;
   disabled: boolean;
+  opaque: boolean;
   onPress: () => void;
 }) {
   const photo = chip.kind === "photo";
@@ -38,6 +41,7 @@ function ChipButton({
       accessibilityLabel={chipLabel(chip)}
       style={({ pressed }) => [
         chipStyles.chip,
+        opaque && chipStyles.chipOpaque,
         photo && chipStyles.chipPhoto,
         (pressed || disabled) && chipStyles.pressed,
       ]}
@@ -52,7 +56,7 @@ function ChipButton({
   );
 }
 
-export function ChipRow({ chips, disabled, inset, onChipPress }: Props) {
+export function ChipRow({ chips, disabled, inset, opaque = false, onChipPress }: Props) {
   if (chips.length === 0) return null;
 
   const pinned = chips.find((chip) => chip.kind === "photo") ?? null;
@@ -69,6 +73,7 @@ export function ChipRow({ chips, disabled, inset, onChipPress }: Props) {
           chip={pinned}
           testID={PHOTO_CHIP_TEST_ID}
           disabled={disabled}
+          opaque={opaque}
           onPress={() => onChipPress(pinned)}
         />
       ) : null}
@@ -85,6 +90,7 @@ export function ChipRow({ chips, disabled, inset, onChipPress }: Props) {
             chip={chip}
             testID={`travel-chip-${index}`}
             disabled={disabled}
+            opaque={opaque}
             onPress={() => onChipPress(chip)}
           />
         ))}
@@ -110,6 +116,7 @@ export const chipStyles = StyleSheet.create({
     borderColor: colors.line,
     backgroundColor: colors.raiseStrong,
   },
+  chipOpaque: { backgroundColor: colors.inset },
   chipPhoto: { borderColor: "rgba(255,59,83,0.38)", backgroundColor: colors.accentFill },
   chipText: { fontSize: 13, fontWeight: "600", letterSpacing: -0.2, color: colors.ink },
   chipTextPhoto: { color: colors.accentText, fontWeight: "700" },

@@ -60,6 +60,13 @@ describe("buildKakaoMapHtml", () => {
   it("emits center_changed in the default (interactive) mode", () => {
     expect(buildKakaoMapHtml("TESTKEY123", { interactive: true })).toContain("center_changed");
   });
+  it("reports blank taps only when interactive", () => {
+    expect(html).toContain("post('blank_tap')");
+    expect(buildKakaoMapHtml("TESTKEY123", { interactive: false })).not.toContain("blank_tap");
+  });
+  it("keeps pin taps out of the blank tap channel", () => {
+    expect(html).toContain("ev.stopPropagation(); post('pin_tap'");
+  });
   it("locks the map and drops center_changed when non-interactive", () => {
     const locked = buildKakaoMapHtml("TESTKEY123", { interactive: false });
     expect(locked).toContain("setDraggable(false)");

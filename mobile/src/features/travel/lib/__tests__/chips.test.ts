@@ -1,4 +1,4 @@
-import { contextChips, idleChips, refineChips } from "@/features/travel/lib/chips";
+import { idleChips } from "@/features/travel/lib/chips";
 
 describe("idleChips", () => {
   it("첫 화면 칩은 근처 세 갈래로 고정이다", () => {
@@ -26,47 +26,5 @@ describe("근처 볼거리 경로", () => {
     const anchors = idleChips().filter((c) => c.kind === "anchor");
 
     expect(anchors.map((c) => c.label)).toEqual(["근처 카페", "근처 맛집"]);
-  });
-});
-
-describe("contextChips", () => {
-  it("칩마다 보고 있는 곳 이름을 앞에 단다", () => {
-    expect(contextChips("성산일출봉", false).map((c) => c.label)).toEqual([
-      "성산일출봉 근처 카페",
-      "성산일출봉 근처 맛집",
-      "성산일출봉 근처 볼거리",
-    ]);
-  });
-
-  it("한 곳 안에서는 볼거리도 앵커다 — 그 좌표 반경이 기준이다", () => {
-    expect(contextChips("성산일출봉", false).map((c) => c.action)).toEqual([
-      "cafe",
-      "food",
-      "nearby",
-    ]);
-  });
-
-  it("혼잡도를 아는 곳에만 붐빔 칩이 붙는다", () => {
-    expect(contextChips("성산일출봉", true).map((c) => c.label)).toContain("성산일출봉 오늘 붐벼?");
-    expect(contextChips("성산일출봉", false).map((c) => c.action)).not.toContain("crowd");
-  });
-
-  it("칩 라벨이 그대로 질문 문장이 된다", () => {
-    for (const chip of contextChips("우도", true)) {
-      expect(chip.label.startsWith("우도 ")).toBe(true);
-    }
-  });
-});
-
-describe("refineChips", () => {
-  it("서버 제안은 patch 칩으로 바뀐다", () => {
-    const chips = refineChips([{ label: "실내만", patch: { indoorOnly: true } }]);
-
-    expect(chips).toEqual([{ kind: "refine", label: "실내만", patch: { indoorOnly: true } }]);
-  });
-
-  it("제안이 통째로 빠진 응답에도 빈 목록을 낸다", () => {
-    expect(refineChips(undefined)).toEqual([]);
-    expect(refineChips(null)).toEqual([]);
   });
 });

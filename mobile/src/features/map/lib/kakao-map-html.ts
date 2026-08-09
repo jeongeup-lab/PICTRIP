@@ -21,6 +21,7 @@ export function buildKakaoMapHtml(jsKey: string, options: KakaoMapOptions = {}):
     ? `map.setMaxLevel(${KOREA_MAX_LEVEL});
        kakao.maps.event.addListener(map,'drag',clampCenter);
        kakao.maps.event.addListener(map,'zoom_changed',clampCenter);
+       kakao.maps.event.addListener(map,'click',function(){ post('blank_tap'); });
        kakao.maps.event.addListener(map,'idle',function(){
          clampCenter();
          var c=map.getCenter(), b=map.getBounds(), sw=b.getSouthWest(), ne=b.getNorthEast();
@@ -108,7 +109,7 @@ export function buildKakaoMapHtml(jsKey: string, options: KakaoMapOptions = {}):
       var el = pinEl(s, sel, isAnchor, anchored);
       var ov = new kakao.maps.CustomOverlay({ position:new kakao.maps.LatLng(s.mapy,s.mapx), content:el, yAnchor:1, zIndex: isAnchor?20:(sel?10:1) });
       ov.setMap(map);
-      el.addEventListener('click', function(){ post('pin_tap',{contentId:s.contentId}); });
+      el.addEventListener('click', function(ev){ ev.stopPropagation(); post('pin_tap',{contentId:s.contentId}); });
       pins.push(ov);
     });
   }
