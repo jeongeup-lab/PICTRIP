@@ -33,10 +33,7 @@
   },
   "submit": {
     "production": {
-      "ios": {
-        "ascAppId": "6778157312",
-        "groups": ["Team (Expo)"]
-      }
+      "ios": { "ascAppId": "6778157312" }
     }
   }
 }
