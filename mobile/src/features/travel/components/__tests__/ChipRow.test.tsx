@@ -7,7 +7,7 @@ import {
   PHOTO_CHIP_TEST_ID,
 } from "@/features/travel/components/ChipRow";
 import type { DockChip } from "@/features/travel/lib/dock-chips";
-import { spacing } from "@/constants/theme";
+import { colors, spacing } from "@/constants/theme";
 
 const chips: DockChip[] = [
   { kind: "photo" },
@@ -120,6 +120,16 @@ describe("ChipRow", () => {
       chipStyles.pressed.opacity,
     );
     expect(StyleSheet.flatten(host(mount())?.props.style)?.opacity).toBeUndefined();
+  });
+
+  it("불투명 모드에서는 칩 배경을 인셋 색으로 채운다", () => {
+    const host = (tree: renderer.ReactTestRenderer, testID: string) =>
+      tree.root.findAllByProps({ testID }).find((node) => typeof node.type === "string");
+    const bg = (tree: renderer.ReactTestRenderer, testID: string) =>
+      StyleSheet.flatten(host(tree, testID)?.props.style)?.backgroundColor;
+
+    expect(bg(mount({ opaque: true }), "travel-chip-0")).toBe(colors.inset);
+    expect(bg(mount(), "travel-chip-0")).toBe(colors.raiseStrong);
   });
 
   it("패널 안에서는 카드와 같은 안쪽 여백을 쓴다", () => {

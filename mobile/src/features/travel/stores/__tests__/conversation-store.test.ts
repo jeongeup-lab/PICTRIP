@@ -150,3 +150,17 @@ describe("turn ids", () => {
     expect(useConversation.getState().nextTurnId()).not.toBe(before);
   });
 });
+
+it("start는 followKey를 보존한다", () => {
+  const s = useConversation.getState();
+  s.clear();
+  s.start({ id: "t1", question: "영업시간은?", request: "", photo: null, followKey: "hours" });
+  expect(useConversation.getState().turns[0].followKey).toBe("hours");
+});
+
+it("followKey를 안 주면 null", () => {
+  const s = useConversation.getState();
+  s.clear();
+  s.start({ id: "t2", question: "q", request: "q", photo: null });
+  expect(useConversation.getState().turns[0].followKey).toBeNull();
+});

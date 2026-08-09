@@ -31,6 +31,7 @@ interface Props {
   userLocation: LatLng | null;
   onReady?: () => void;
   onPinTap: (contentId: string) => void;
+  onBlankTap?: () => void;
   onViewportChange?: (center: LatLng, bounds: Bounds) => void;
   interactive?: boolean;
   accentDot?: boolean;
@@ -45,6 +46,7 @@ export function KakaoWebMap({
   userLocation,
   onReady,
   onPinTap,
+  onBlankTap,
   onViewportChange,
   interactive = true,
   accentDot = false,
@@ -128,6 +130,8 @@ export function KakaoWebMap({
         setLoadError(human + detail);
       } else if (m.type === "pin_tap" && m.payload) {
         onPinTap(String(m.payload.contentId));
+      } else if (m.type === "blank_tap") {
+        onBlankTap?.();
       } else if (m.type === "center_changed" && m.payload) {
         const p = m.payload;
         onViewportChange?.(

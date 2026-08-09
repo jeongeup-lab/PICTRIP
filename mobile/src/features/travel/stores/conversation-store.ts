@@ -10,6 +10,8 @@ import type {
 
 export type TurnStatus = "pending" | "done" | "failed";
 
+export type FollowKey = "about" | "hours" | "closed" | "parking" | "fee" | "related";
+
 export interface Turn {
   id: string;
   question: string;
@@ -19,6 +21,7 @@ export interface Turn {
   patch: RefinePatch | null;
   anchor: AskAnchor | null;
   context: AskContext | null;
+  followKey?: FollowKey | null;
   status: TurnStatus;
   answer: AgentAnswer | null;
   errorMessage: string | null;
@@ -39,6 +42,7 @@ interface ConversationState {
     patch?: RefinePatch | null;
     anchor?: AskAnchor | null;
     context?: AskContext | null;
+    followKey?: FollowKey | null;
   }) => void;
   retry: (id: string) => void;
   resolve: (id: string, answer: AgentAnswer) => void;
@@ -69,6 +73,7 @@ export const useConversation = create<ConversationState>((set, get) => ({
     patch = null,
     anchor = null,
     context = null,
+    followKey = null,
   }) =>
     set((s) => ({
       busy: true,
@@ -84,6 +89,7 @@ export const useConversation = create<ConversationState>((set, get) => ({
           patch,
           anchor,
           context,
+          followKey,
           status: "pending",
           answer: null,
           errorMessage: null,

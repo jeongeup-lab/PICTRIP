@@ -1,8 +1,6 @@
 import { Pressable, View, Text, TextInput, StyleSheet } from "react-native";
 import { Image } from "expo-image";
 import { Icon } from "@/components/Icon";
-import { ChipRow } from "@/features/travel/components/ChipRow";
-import type { DockChip } from "@/features/travel/lib/dock-chips";
 import type { PhotoUpload } from "@/features/travel/api";
 import { colors, radii, spacing } from "@/constants/theme";
 
@@ -14,13 +12,11 @@ export const LOCATION_PRIMER_ACTION = "켜기";
 interface Props {
   value: string;
   photo: PhotoUpload | null;
-  chips: DockChip[];
   disabled: boolean;
   placeholder: string;
   locationAskable: boolean;
-  bottom: number;
   onChange: (text: string) => void;
-  onChipPress: (chip: DockChip) => void;
+  onFocus: () => void;
   onShoot: () => void;
   onClearAttach: () => void;
   onSubmit: () => void;
@@ -30,13 +26,11 @@ interface Props {
 export function TravelDock({
   value,
   photo,
-  chips,
   disabled,
   placeholder,
   locationAskable,
-  bottom,
   onChange,
-  onChipPress,
+  onFocus,
   onShoot,
   onClearAttach,
   onSubmit,
@@ -45,7 +39,7 @@ export function TravelDock({
   const ready = !disabled && (value.trim().length > 0 || photo !== null);
 
   return (
-    <View style={[dockStyles.root, { bottom }]} pointerEvents="box-none">
+    <View style={dockStyles.root} pointerEvents="box-none">
       {locationAskable && photo === null ? (
         <Pressable
           testID="travel-ask-location"
@@ -76,10 +70,6 @@ export function TravelDock({
             <Icon name="close" size={16} color={colors.ter} strokeWidth={2} />
           </Pressable>
         </View>
-      ) : chips.length > 0 ? (
-        <View style={dockStyles.chipSlot} pointerEvents="box-none">
-          <ChipRow chips={chips} disabled={disabled} inset={false} onChipPress={onChipPress} />
-        </View>
       ) : null}
 
       <View style={dockStyles.field}>
@@ -89,6 +79,7 @@ export function TravelDock({
           style={dockStyles.input}
           value={value}
           onChangeText={onChange}
+          onFocus={onFocus}
           placeholder={placeholder}
           placeholderTextColor={colors.ter}
           returnKeyType="send"
@@ -128,9 +119,6 @@ export function TravelDock({
 
 export const dockStyles = StyleSheet.create({
   root: {
-    position: "absolute",
-    left: 0,
-    right: 0,
     paddingHorizontal: spacing.md,
     paddingBottom: 12,
   },
@@ -171,7 +159,6 @@ export const dockStyles = StyleSheet.create({
   attachCopy: { flex: 1 },
   attachTitle: { fontSize: 13.5, fontWeight: "700", letterSpacing: -0.2, color: colors.ink },
   attachNote: { marginTop: 3, fontSize: 11.5, color: colors.sec },
-  chipSlot: { marginBottom: 9 },
   field: {
     flexDirection: "row",
     alignItems: "center",
