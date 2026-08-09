@@ -102,11 +102,12 @@ export default function TravelScreen() {
     ? panelChips({ answer, focused, hasCrowd: focused?.hasCrowd === true })
     : NO_CHIPS;
 
-  const dockBase = dockBasePx({
-    primer: locationAskable,
-    attached: photo !== null,
-    chips: !panelShown,
-  });
+  const dockBase =
+    dockBasePx({
+      primer: locationAskable,
+      attached: photo !== null,
+      chips: !panelShown,
+    }) + keyboardPx;
   const panelEstimate =
     panelBasePx({ chips: panelChipRow.length > 0, carousel: carouselShown }) +
     (carouselShown ? CAROUSEL_BLOCK_PX : 0);
