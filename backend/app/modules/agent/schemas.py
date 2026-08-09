@@ -9,7 +9,7 @@ ResolveStatus = Literal["matched", "ambiguous", "naver_only", "unmatched"]
 CrowdPreference = Literal["quiet", "any", "popular"]
 Mood = Literal["sea", "mountain", "lake", "island", "hanok", "night", "street"]
 DropAxis = Literal["crowd", "indoor", "near", "region", "category"]
-AnchorAction = Literal["food", "cafe", "nearby", "crowd"]
+AnchorAction = Literal["food", "cafe", "nearby", "crowd", "related"]
 TaskKind = Literal["search", "detail", "smalltalk", "unsupported"]
 DetailField = Literal["hours", "closed", "parking", "contact", "fee", "overview"]
 
@@ -35,6 +35,7 @@ ToolName = Literal[
     "title_search",
     "concentration",
     "nearby",
+    "related",
     "spot_detail",
 ]
 
