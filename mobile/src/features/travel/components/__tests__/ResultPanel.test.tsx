@@ -38,14 +38,41 @@ describe("ResultPanel", () => {
 
     expect(String(style.backgroundColor)).not.toContain("rgba");
   });
+
+  it("그림자와 모서리 클리핑을 서로 다른 뷰에 둔다", () => {
+    const tree = mount(58);
+    const outer = StyleSheet.flatten(
+      tree.root.findByProps({ testID: "travel-result-panel" }).props.style,
+    );
+    const inner = StyleSheet.flatten(
+      tree.root.findByProps({ testID: "travel-result-surface" }).props.style,
+    );
+
+    expect(outer.shadowOpacity).toBeGreaterThan(0);
+    expect(outer.overflow).toBeUndefined();
+    expect(inner.overflow).toBe("hidden");
+    expect(inner.shadowOpacity).toBeUndefined();
+  });
+
+  it("클리핑 뷰도 같은 반지름을 써서 모서리가 어긋나지 않는다", () => {
+    const tree = mount(58);
+    const outer = StyleSheet.flatten(
+      tree.root.findByProps({ testID: "travel-result-panel" }).props.style,
+    );
+    const inner = StyleSheet.flatten(
+      tree.root.findByProps({ testID: "travel-result-surface" }).props.style,
+    );
+
+    expect(inner.borderRadius).toBe(outer.borderRadius);
+  });
 });
 
 describe("패널 스타일시트와 레이아웃 상수", () => {
   it("PANEL_PAD_PX 는 패널 위아래 여백과 테두리를 합한 값이다", () => {
     expect(
-      panelStyles.root.paddingTop +
-        panelStyles.root.paddingBottom +
-        panelStyles.root.borderWidth * 2,
+      panelStyles.surface.paddingTop +
+        panelStyles.surface.paddingBottom +
+        panelStyles.surface.borderWidth * 2,
     ).toBe(PANEL_PAD_PX);
   });
 });
