@@ -62,8 +62,9 @@
 ```
 dockBase   = 46 + 12 + (첨부 ? 73 : 패널 없으면 42, 있으면 0)
                      + (프라이머 && !첨부 ? 47 : 0)
-panelBlock = 26 + 22 + 48 + (칩 있으면 33 + (캐러셀 없으면 12))
+어림값     = 26 + 22 + 48 + (칩 있으면 33 + (캐러셀 없으면 12))
                      + (질의 중 || 스팟 있으면 135)
+panelBlock = 패널 실측 높이(onLayout) ?? 어림값
 coveredPx  = dockBase + panelBlock
 ```
 
@@ -71,9 +72,14 @@ coveredPx  = dockBase + panelBlock
 - **결과가 떠 있는 동안 독은 입력 줄만 남는다**(`dockBase` = 58) — 칩을 패널이
   가져갔기 때문이다. 사진을 첨부하면 배너가 들어와 131 이 된다.
 - **첨부 중에는 프라이머를 그리지 않는다** — 둘을 동시에 더하면 독이 두 번 자란다.
-- `PANEL_HEAD_PX`·`PANEL_COPY_PX` 는 답변 블록의 **어림값**이다. 지도 여백을 잡는
-  데만 쓰고 패널을 실제로 그 높이로 자르지 않는다. `PANEL_PAD_PX` 만 스타일시트와
-  잠겨 있다(`ResultPanel.test.tsx`).
+- **패널 높이는 실측이 정본이다.** `ResultPanel` 의 `onLayout` 이 올려보낸 값이
+  `coveredPx` 에 들어가고, `panelBasePx` 는 **첫 프레임용 어림값**으로만 쓰인다.
+  답변을 펼치면 복사 영역이 42 → 최대 210 으로 자라는데, 어림값만 쓰면 토스트가
+  펼친 답변 위를 덮고 지도 `fit` 이 아래쪽 핀을 패널 뒤에 숨긴다.
+- `PANEL_HEAD_PX`·`PANEL_COPY_PX` 는 그 어림값의 재료다. `PANEL_PAD_PX` 만
+  스타일시트와 잠겨 있다(`ResultPanel.test.tsx`).
+- 실측이 `coveredPx` 를 바꿔도 패널 자신의 높이는 바뀌지 않는다 — 패널의 `bottom`
+  은 `dockBase` 라 `coveredPx` 와 무관하다. 측정 루프가 생기지 않는 이유다.
 - 지도 `fit` 패딩 = `{top: insets.top + 96, right: 40, bottom: coveredPx + 24, left: 40}`.
 - 토스트는 `coveredPx + 12`, 검색 펄스(`SearchPulse`)는 `bottom = coveredPx`.
 

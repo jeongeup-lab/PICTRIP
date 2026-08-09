@@ -3,11 +3,11 @@ import { StyleSheet, Text } from "react-native";
 import { ResultPanel, panelStyles } from "@/features/travel/components/ResultPanel";
 import { PANEL_PAD_PX } from "@/features/travel/lib/screen-layout";
 
-function mount(bottom: number) {
+function mount(bottom: number, onHeight: (px: number) => void = jest.fn()) {
   let tree: renderer.ReactTestRenderer;
   act(() => {
     tree = renderer.create(
-      <ResultPanel bottom={bottom}>
+      <ResultPanel bottom={bottom} onHeight={onHeight}>
         <Text>답변</Text>
       </ResultPanel>,
     );
@@ -52,6 +52,19 @@ describe("ResultPanel", () => {
     expect(outer.overflow).toBeUndefined();
     expect(inner.overflow).toBe("hidden");
     expect(inner.shadowOpacity).toBeUndefined();
+  });
+
+  it("레이아웃이 잡히면 실제 높이를 올려보낸다", () => {
+    const onHeight = jest.fn();
+    const tree = mount(58, onHeight);
+
+    act(() =>
+      tree.root
+        .findByProps({ testID: "travel-result-panel" })
+        .props.onLayout({ nativeEvent: { layout: { height: 312 } } }),
+    );
+
+    expect(onHeight).toHaveBeenCalledWith(312);
   });
 
   it("클리핑 뷰도 같은 반지름을 써서 모서리가 어긋나지 않는다", () => {

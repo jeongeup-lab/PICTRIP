@@ -285,6 +285,15 @@ function panelBottom(tree: renderer.ReactTestRenderer): number {
   return StyleSheet.flatten(panel.props.style).bottom as number;
 }
 
+async function layoutPanel(tree: renderer.ReactTestRenderer, height: number) {
+  const panel = tree.root.findAllByProps({ testID: "travel-result-panel" })[0];
+  await act(async () => panel.props.onLayout({ nativeEvent: { layout: { height } } }));
+}
+
+function toastBottom(tree: renderer.ReactTestRenderer): number {
+  return tree.root.findByProps({ testID: "travel-toast" }).props.bottom as number;
+}
+
 function dockBottom(tree: renderer.ReactTestRenderer): number {
   return tree.root.findByType(TravelDock).props.bottom;
 }
@@ -791,6 +800,26 @@ describe("TravelScreen dock height", () => {
     await pressChip(tree, PHOTO_CHIP_LABEL);
 
     expect(panelBottom(tree)).toBe(withPrimer - 47 + 73);
+  });
+
+  it("펼쳐서 자란 패널 높이가 지도 여백과 토스트에 반영된다", async () => {
+    const tree = await mount();
+    const dock = dockBasePx({ primer: false, attached: false, chips: false });
+    await layoutPanel(tree, 500);
+
+    expect(mapView(tree).props.fit.pad.bottom).toBe(dock + 500 + 24);
+    expect(toastBottom(tree)).toBe(dock + 500 + 12);
+  });
+
+  it("실측이 오기 전에는 어림값으로 버틴다", async () => {
+    const tree = await mount();
+
+    expect(mapView(tree).props.fit.pad.bottom).toBe(
+      dockBasePx({ primer: false, attached: false, chips: false }) +
+        panelBasePx({ chips: true, carousel: true }) +
+        CAROUSEL_BLOCK_PX +
+        24,
+    );
   });
 
   it("독이 자란 만큼 지도 여백과 토스트도 함께 밀린다", async () => {
