@@ -166,6 +166,72 @@ async def test_anchor_nearby_excludes_the_anchor_itself(db_session, client, anch
     assert [spot["contentId"] for spot in spots] == ["n1"]
 
 
+def _vec(*values: float) -> str:
+    padded = [*values, *([0.0] * (512 - len(values)))]
+    return "[" + ",".join(str(value) for value in padded) + "]"
+
+
+async def _embed(session: AsyncSession, cid: str, vec: str) -> None:
+    await session.execute(
+        text("INSERT INTO spot_embeddings (content_id, embedding) VALUES (:c, :v)"),
+        {"c": cid, "v": vec},
+    )
+
+
+@pytest.mark.integration
+async def test_anchor_related_returns_embedding_neighbours_without_itself(
+    db_session, client, anchor_seeded
+) -> None:
+    await _spot(db_session, "n2", title="만장굴", l1="NA", l2="NA01", l3=None, lat_offset=0.02)
+    await _embed(db_session, "a1", _vec(1.0, 0.0))
+    await _embed(db_session, "n1", _vec(0.9, 0.1))
+    await _embed(db_session, "n2", _vec(0.0, 1.0))
+    await db_session.flush()
+    _override(db_session)
+    try:
+        res = await _ask_anchor(client, "a1", "related")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert [step["tool"] for step in data["steps"]] == ["related"]
+    assert "김녕미로공원 연관 관광지" in data["steps"][0]["label"]
+    assert [spot["contentId"] for spot in data["spots"]] == ["n1", "n2"]
+    assert all(spot["tag"].startswith("유사도 ") for spot in data["spots"])
+    assert data["tagBasis"] == "분위기 유사도 기준"
+    assert "김녕미로공원" in "".join(part["text"] for part in data["answer"])
+    assert data["refinements"] == []
+
+
+@pytest.mark.integration
+async def test_anchor_related_without_a_content_id_is_rejected(
+    db_session, client, anchor_seeded
+) -> None:
+    _override(db_session)
+    try:
+        res = await client.post("/v1/agent/ask", json={"anchor": {"action": "related"}})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "VALIDATION_FAILED"
+
+
+@pytest.mark.integration
+async def test_anchor_related_without_an_embedding_reports_no_results(
+    db_session, client, anchor_seeded
+) -> None:
+    _override(db_session)
+    try:
+        res = await _ask_anchor(client, "a1", "related")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "AGENT_NO_RESULTS"
+
+
 @pytest.mark.integration
 async def test_anchor_crowd_answers_without_spots(db_session, client, anchor_seeded) -> None:
     _override(db_session)

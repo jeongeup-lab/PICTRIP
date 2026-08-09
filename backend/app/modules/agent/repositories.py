@@ -92,6 +92,17 @@ async def match_spots_by_vector(
     ]
 
 
+_SPOT_EMBEDDING_SQL = "SELECT embedding::text FROM spot_embeddings WHERE content_id = :cid"
+
+
+async def load_spot_embedding(session: AsyncSession, content_id: str) -> list[float] | None:
+    result = await session.execute(text(_SPOT_EMBEDDING_SQL), {"cid": content_id})
+    raw = result.scalar_one_or_none()
+    if raw is None:
+        return None
+    return [float(value) for value in raw.strip("[]").split(",")]
+
+
 _CATEGORY_CODE_SQL = """
 SELECT lcls_systm3_cd
 FROM lcls_systm_codes

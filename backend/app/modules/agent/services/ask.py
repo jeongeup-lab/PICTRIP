@@ -61,6 +61,7 @@ UNSUPPORTED_ANSWER = (
     "카드를 골라 이용시간·주차 같은 걸 물어봐 주세요."
 )
 PHOTO_BASIS = "사진 유사도 기준"
+RELATED_BASIS = "분위기 유사도 기준"
 CONTEXT_INTENT_LABEL = "앞 대화까지 보고 조건 추출"
 NEAR_PROBE_LABEL = "근처 조건 없이 다시 재보기"
 FESTIVAL_FETCH_BUDGET_SECONDS = 4.0
@@ -328,6 +329,12 @@ async def _ask_with_anchor(
         if row is None:
             raise ValidationFailed("crowd anchor requires contentId")
         return _anchor_crowd_response(row)
+    if anchor.action == "related":
+        if row is None:
+            raise ValidationFailed("related anchor requires contentId")
+        return await _anchor_related_response(
+            session, row, prior_steps=prior_steps or [], carried_intent=carried_intent
+        )
     center_lat = row.lat if row is not None else lat
     center_lng = row.lng if row is not None else lng
     if center_lat is None or center_lng is None:
@@ -424,6 +431,56 @@ def _anchor_lead(
         AnswerSegment(text=_meters_label(nearest_m), emphasis=True),
         AnswerSegment(text=" 거리예요."),
     ]
+
+
+async def _anchor_related_response(
+    session: AsyncSession,
+    row: CandidateRow,
+    *,
+    prior_steps: list[AskStep],
+    carried_intent: QueryIntent | None,
+) -> AskResponse:
+    vector = await repositories.load_spot_embedding(session, row.content_id)
+    if vector is None:
+        raise AgentNoResults()
+    matches = await repositories.match_spots_by_vector(
+        session, vector, limit=retrieve.RESULT_LIMIT + 1
+    )
+    kept = [match for match in matches if match.content_id != row.content_id]
+    kept = kept[: retrieve.RESULT_LIMIT]
+    briefs = await repositories.load_candidates_by_ids(
+        session, [match.content_id for match in kept]
+    )
+    spots = [
+        retrieve.to_card(
+            briefs[match.content_id],
+            tag=f"유사도 {round(photo_service.similarity(match) * 100)}%",
+        )
+        for match in kept
+        if match.content_id in briefs
+    ]
+    if not spots:
+        raise AgentNoResults()
+    steps = [
+        *prior_steps,
+        AskStep(tool="related", label=f"{row.title} 연관 관광지 조회", badge=f"{len(spots)}곳"),
+    ]
+    particle = "과" if detail_service.ends_with_consonant(row.title) else "와"
+    answer = [
+        AnswerSegment(text=f"「{row.title}」", emphasis=True),
+        AnswerSegment(text=f"{particle} 분위기가 비슷한 곳으로 "),
+        AnswerSegment(text=f"{len(spots)}곳 찾았어요."),
+    ]
+    logger.info("agent.anchor.done", action="related", results=len(spots))
+    return AskResponse(
+        steps=steps,
+        answer=answer,
+        spots=spots,
+        totalCount=len(spots),
+        intent=_without_unapplied_axes(carried_intent or QueryIntent()),
+        tagBasis=RELATED_BASIS,
+        refinements=[],
+    )
 
 
 def _anchor_crowd_response(row: CandidateRow) -> AskResponse:
