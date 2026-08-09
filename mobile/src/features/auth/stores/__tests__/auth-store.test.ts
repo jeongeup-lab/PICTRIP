@@ -113,10 +113,21 @@ describe("auth-store P3 actions", () => {
     (oauthLogin as jest.Mock).mockResolvedValue(pair);
     const res = await useAuthStore.getState().loginWithOAuth("kakao");
     expect(res).toBe("success");
-    expect(oauthLogin).toHaveBeenCalledWith("kakao", "t", "n");
+    expect(oauthLogin).toHaveBeenCalledWith("kakao", "t", "n", undefined);
     expect(useAuthStore.getState().isAuthenticated).toBe(true);
     expect(useAuthStore.getState().user?.id).toBe(1);
     expect(recordConsentSnapshot).toHaveBeenCalled();
+  });
+
+  it("loginWithOAuth forwards the apple authorization code to the backend", async () => {
+    (getIdToken as jest.Mock).mockResolvedValue({
+      idToken: "t",
+      nonce: "n",
+      authorizationCode: "c",
+    });
+    (oauthLogin as jest.Mock).mockResolvedValue(pair);
+    await useAuthStore.getState().loginWithOAuth("apple");
+    expect(oauthLogin).toHaveBeenCalledWith("apple", "t", "n", "c");
   });
 
   it("loginWithOAuth returns 'canceled' without calling the backend", async () => {

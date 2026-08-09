@@ -6,10 +6,12 @@ export async function oauthLogin(
   provider: string,
   idToken: string,
   nonce?: string,
+  authorizationCode?: string,
 ): Promise<TokenPair> {
   return (await bareClient.post(`/auth/oauth/${provider}`, {
     idToken,
     nonce,
+    authorizationCode,
   })) as unknown as TokenPair;
 }
 

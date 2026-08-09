@@ -15,8 +15,19 @@ describe("auth api", () => {
     expect(bareClient.post).toHaveBeenCalledWith("/auth/oauth/kakao", {
       idToken: "tok",
       nonce: "n1",
+      authorizationCode: undefined,
     });
     expect(res).toBe(pair);
+  });
+
+  it("oauthLogin posts the apple authorization code when present", async () => {
+    (bareClient.post as jest.Mock).mockResolvedValue({});
+    await oauthLogin("apple", "tok", "n1", "code-1");
+    expect(bareClient.post).toHaveBeenCalledWith("/auth/oauth/apple", {
+      idToken: "tok",
+      nonce: "n1",
+      authorizationCode: "code-1",
+    });
   });
 
   it("logoutRequest posts the refresh token", async () => {

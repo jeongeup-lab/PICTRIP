@@ -152,6 +152,9 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
   Hot/Hidden 채널(`/home/channels`) 소스.
 - Auth = denylist-only: `denyjti:{jti}` in Redis, fail-open. No session/device
   tables, no refresh rotation. access=memory, refresh=expo-secure-store.
+  로그인은 kakao·apple 2종뿐(iOS 단독 출시 · App Store 4.8). 애플은 로그인 시
+  `authorizationCode`로 refresh token을 교환해 `user_auth_providers.provider_refresh_token`
+  에 넣고, 탈퇴 시 Apple `/auth/revoke`를 부른다(실패해도 탈퇴는 진행 — 베스트에포트).
 
 ## Prohibitions
 

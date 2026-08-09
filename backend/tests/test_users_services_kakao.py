@@ -116,6 +116,69 @@ async def test_authenticate_with_oauth_email_collision_does_not_crash(
 
 
 @pytest.mark.asyncio
+async def test_apple_login_stores_the_exchanged_refresh_token(db_session: AsyncSession) -> None:
+    claims = OidcClaims(sub="apple-store-1", email=None, name=None, picture=None)
+    with (
+        patch(
+            "app.modules.users.services.verify_oauth_id_token",
+            AsyncMock(return_value=claims),
+        ),
+        patch(
+            "app.modules.users.services.apple_tokens.exchange_authorization_code",
+            AsyncMock(return_value="r-apple-new"),
+        ),
+    ):
+        await authenticate_with_oauth(
+            db_session, "apple", OAuthLoginIn(idToken="x", authorizationCode="code-1")
+        )
+
+    row = (await db_session.scalars(select(UserAuthProvider))).one()
+    assert row.provider_refresh_token == "r-apple-new"
+
+
+@pytest.mark.asyncio
+async def test_apple_login_without_authorization_code_stores_nothing(
+    db_session: AsyncSession,
+) -> None:
+    claims = OidcClaims(sub="apple-store-2", email=None, name=None, picture=None)
+    with (
+        patch(
+            "app.modules.users.services.verify_oauth_id_token",
+            AsyncMock(return_value=claims),
+        ),
+        patch(
+            "app.modules.users.services.apple_tokens.exchange_authorization_code",
+            AsyncMock(return_value="should-not-be-called"),
+        ) as exchange,
+    ):
+        await authenticate_with_oauth(db_session, "apple", OAuthLoginIn(idToken="x"))
+
+    exchange.assert_not_awaited()
+    row = (await db_session.scalars(select(UserAuthProvider))).one()
+    assert row.provider_refresh_token is None
+
+
+@pytest.mark.asyncio
+async def test_kakao_login_never_exchanges_apple_tokens(db_session: AsyncSession) -> None:
+    claims = OidcClaims(sub="kakao-no-apple", email=None, name=None, picture=None)
+    with (
+        patch(
+            "app.modules.users.services.verify_oauth_id_token",
+            AsyncMock(return_value=claims),
+        ),
+        patch(
+            "app.modules.users.services.apple_tokens.exchange_authorization_code",
+            AsyncMock(return_value="nope"),
+        ) as exchange,
+    ):
+        await authenticate_with_oauth(
+            db_session, "kakao", OAuthLoginIn(idToken="x", authorizationCode="code-1")
+        )
+
+    exchange.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_authenticate_with_oauth_savepoint_rollback_on_race(
     db_session: AsyncSession,
 ) -> None:

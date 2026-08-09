@@ -32,10 +32,30 @@ jest.mock("@/constants/oauth", () => ({
 describe("getIdToken", () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it("apple returns identityToken + raw nonce", async () => {
-    (Apple.signInAsync as jest.Mock).mockResolvedValue({ identityToken: "apple-id-tok" });
+  it("apple returns identityToken + raw nonce + authorizationCode", async () => {
+    (Apple.signInAsync as jest.Mock).mockResolvedValue({
+      identityToken: "apple-id-tok",
+      authorizationCode: "apple-auth-code",
+    });
     const res = await getIdToken("apple");
-    expect(res).toEqual({ idToken: "apple-id-tok", nonce: "raw-nonce" });
+    expect(res).toEqual({
+      idToken: "apple-id-tok",
+      nonce: "raw-nonce",
+      authorizationCode: "apple-auth-code",
+    });
+  });
+
+  it("apple omits authorizationCode when Apple returns none", async () => {
+    (Apple.signInAsync as jest.Mock).mockResolvedValue({
+      identityToken: "apple-id-tok",
+      authorizationCode: null,
+    });
+    const res = await getIdToken("apple");
+    expect(res).toEqual({
+      idToken: "apple-id-tok",
+      nonce: "raw-nonce",
+      authorizationCode: undefined,
+    });
   });
 
   it("apple maps user cancel to 'canceled'", async () => {

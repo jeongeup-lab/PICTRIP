@@ -17,6 +17,7 @@ class UserPublic(BaseModel):
 class OAuthLoginIn(BaseModel):
     idToken: str
     nonce: str | None = None
+    authorizationCode: str | None = None
 
 
 class RefreshBody(BaseModel):

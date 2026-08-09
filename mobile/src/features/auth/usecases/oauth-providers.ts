@@ -12,6 +12,7 @@ export type Provider = "kakao" | "apple";
 export interface OAuthCredential {
   idToken: string;
   nonce?: string;
+  authorizationCode?: string;
 }
 
 export type OAuthOutcome = OAuthCredential | "canceled";
@@ -51,7 +52,11 @@ async function appleLogin(): Promise<OAuthOutcome> {
       nonce: hashed,
     });
     if (!cred.identityToken) return providerError();
-    return { idToken: cred.identityToken, nonce: rawNonce };
+    return {
+      idToken: cred.identityToken,
+      nonce: rawNonce,
+      authorizationCode: cred.authorizationCode ?? undefined,
+    };
   } catch (e) {
     if (
       e &&
