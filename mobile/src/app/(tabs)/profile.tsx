@@ -7,7 +7,6 @@ import { Icon } from "@/components/Icon";
 import { ListGroup } from "@/components/ListGroup";
 import { ListRow } from "@/components/ListRow";
 import { SectionTitle } from "@/components/SectionTitle";
-import { InfoBox } from "@/components/InfoBox";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { useSavedList } from "@/features/saved/queries";
 import { SavedRail } from "@/features/saved/components/SavedRail";
@@ -20,9 +19,6 @@ import { profileStats } from "@/features/profile/lib/stats";
 import { PERM_LABEL, useAppPermissions } from "@/features/profile/hooks/use-app-permissions";
 import { APP_VERSION } from "@/lib/app-meta";
 import { colors, spacing } from "@/constants/theme";
-
-export const GUEST_NOTICE =
-  "검색 · 지도 · 사진으로 찾기는 그대로 쓸 수 있어요. 스크랩과 기록만 계정이 필요해요.";
 
 const SUPPORT_URL = "https://pictrip.org/support";
 
@@ -65,8 +61,6 @@ export default function ProfileTab() {
         )}
 
         <StatTiles stats={stats} onPressSaved={() => router.push("/saved")} />
-
-        {!isAuthenticated ? <InfoBox title="로그인 없이도 되는 것" text={GUEST_NOTICE} /> : null}
 
         {isAuthenticated ? (
           <>

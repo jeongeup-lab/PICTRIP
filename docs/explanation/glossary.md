@@ -22,7 +22,7 @@
 | **centroid (지역)** | 시군구 중심좌표 — 사전계산 없이 spots mapx/mapy 런타임 AVG. |
 | **watermark (sync)** | pipeline 증분 동기화의 `modifiedtime` 기준점. TEXT 원문으로 저장. |
 | **expand→contract** | 추가 마이그레이션 먼저, 파괴적 변경은 무참조 확인 후 별도 리비전(→ [ADR-0002](../adr/0002-expand-contract-migrations.md)). |
-| **fingerprint 가드** | EAS OTA가 네이티브 지문 일치 빌드에만 전달되는 안전장치. 네이티브 변경은 `v*` 태그로만 배포된다. |
+| **runtimeVersion** | OTA 전달 범위를 정하는 키. `policy: appVersion` 이므로 `app.json` 의 `version`(현재 `1.0.0`) 이 같은 빌드끼리 OTA를 주고받는다. 네이티브를 바꾸면 `version` 을 올려 구 빌드를 갈라놓아야 한다. |
 | **바운스 (OAuth)** | 카카오가 커스텀 스킴을 거부해 `pictrip.org/oauthredirect`가 `pictrip://`로 재전송하는 우회. |
 
 ---

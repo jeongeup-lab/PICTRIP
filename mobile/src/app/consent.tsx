@@ -1,4 +1,4 @@
-import { View, Text, Pressable, ScrollView, Linking, StyleSheet } from "react-native";
+import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -48,18 +48,17 @@ export default function ConsentScreen() {
         ) : (
           <>
             <View style={styles.group}>
-              <Pressable style={styles.row} onPress={() => Linking.openSettings()}>
+              <View style={styles.row}>
                 <View style={styles.rowMain}>
                   <Text style={styles.label}>위치정보 수집·이용 동의</Text>
                   <Text style={styles.sub}>
-                    내 주변 추천에 사용해요. 기기 설정에서 변경할 수 있어요.
+                    내 주변 추천에 사용해요. 허용 여부는 설정 › 권한에서 바꿀 수 있어요.
                   </Text>
                 </View>
                 <Text style={[styles.value, data.locationConsent && styles.valueOn]}>
-                  {data.locationConsent ? "허용" : "거부"}
+                  {data.locationConsent ? "동의함" : "동의 안 함"}
                 </Text>
-                <Icon name="chevron-right" size={20} color={colors.ter} />
-              </Pressable>
+              </View>
             </View>
 
             <View style={styles.group}>

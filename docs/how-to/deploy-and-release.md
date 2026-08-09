@@ -17,7 +17,8 @@
    ```
 
 2. **모바일 JS 변경** — dev 머지가 EAS OTA를 쏜다(`mobile-ota.yml`).
-   fingerprint 가드: 네이티브 지문이 일치하는 설치본에만 전달된다.
+   `runtimeVersion.policy: appVersion` — `app.json` 의 `version` 이 같은 설치본
+   전부에 전달된다.
 
 3. **모바일 네이티브 변경** (모듈·권한·SDK) — OTA로는 **조용히 무시**된다.
    main으로 릴리스 PR → `v*` 태그 → `mobile-deploy.yml`이 TestFlight 빌드·제출.
@@ -36,7 +37,7 @@
 | 증상 | 원인 | 해결 |
 |---|---|---|
 | OTA 후 소셜 로그인 전멸 | `eas update`는 러너 env로 번들 — `EXPO_PUBLIC_*` 미주입 | `mobile-ota.yml`의 주입 스텝이 정상인지 확인. **절대 로컬에서 맨 `eas update` 금지** |
-| 네이티브 변경이 반영 안 됨 | OTA만 나감(fingerprint skip) | `v*` 태그로 빌드 |
+| 네이티브 변경이 반영 안 됨 | OTA는 JS만 싣는다 | `v*` 태그로 빌드. 네이티브를 바꿨으면 `app.json` `version` 도 올려 구 빌드에 새 JS 가 안 가게 한다 |
 | 배포 실패 `no space left` | CT112 디스크 풀 | `pct exec 112 -- docker builder prune -af && docker image prune -af` 후 `gh run rerun --failed` |
 | 마이그레이션 얽힌 롤백 | 롤백은 이미지만 | expand→contract(→ [ADR-0002](../adr/0002-expand-contract-migrations.md)) |
 

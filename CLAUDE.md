@@ -217,8 +217,9 @@ skip minor style nits. Focus on:
   겹치면 **먼저 열린 PR을 먼저 머지**하거나 저자와 순서를 맞춘다. 내 변경이 더
   작으면 상대 PR이 들어간 뒤 그 위에 다시 얹는 쪽이 싸다.
 - Merging to `dev` deploys automatically: backend → CT112 (api.pictrip.org),
-  mobile → EAS OTA (JS-only; native changes are silently skipped by the
-  fingerprint guard), pipeline → CT111. **There is no staging — a dev merge is
+  mobile → EAS OTA (JS-only; `runtimeVersion.policy: appVersion` 이라 같은
+  `app.json` `version` 빌드 전부에 내려간다 — 네이티브를 바꿨으면 `version` 을
+  올려야 구 빌드가 새 JS 를 받지 않는다), pipeline → CT111. **There is no staging — a dev merge is
   live.**
 - `main` is the release marker: dev → main PR at milestones. `v*` tags
   (TestFlight builds via mobile-deploy) are cut from main; web (CF Pages)
