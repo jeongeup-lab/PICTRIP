@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
+import { Alert, View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -8,12 +8,21 @@ import { ListRow } from "@/components/ListRow";
 import { InfoBox } from "@/components/InfoBox";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
+import { useSavedList } from "@/features/saved/queries";
 import { AppError } from "@/lib/app-error";
 import { localDateLabel } from "@/lib/local-date";
 import { colors, spacing } from "@/constants/theme";
 
 export const DELETE_TITLE = "회원 탈퇴";
-export const DELETE_LEAD = "다음 항목이 즉시 삭제되고 되돌릴 수 없어요.";
+export const DELETE_LEAD = "탈퇴하면 다음이 즉시 사라지고 되돌릴 수 없어요.";
+
+export function deleteLosses(savedCount: number): string[] {
+  return [
+    savedCount > 0 ? `스크랩 ${savedCount}개가 삭제돼요` : "스크랩이 모두 삭제돼요",
+    "소셜 로그인 연결이 해제돼요",
+    "닉네임·이메일 등 계정 정보가 지워져요",
+  ];
+}
 
 function deleteErrorMessage(error: unknown): string {
   if (error instanceof AppError && error.code === "AUTH_TOKEN_INVALID") {
@@ -31,11 +40,13 @@ export default function AccountScreen() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const logout = useAuthStore((s) => s.logout);
   const deleteAccount = useAuthStore((s) => s.deleteAccount);
+  const { data: saved } = useSavedList();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const joined = localDateLabel(user?.createdAt);
+  const losses = deleteLosses(saved?.length ?? 0);
 
   const onLogout = async () => {
     setBusy(true);
@@ -49,12 +60,21 @@ export default function AccountScreen() {
     setError(null);
     try {
       await deleteAccount();
-      router.back();
+      Alert.alert("탈퇴가 완료됐어요", "그동안 이용해 주셔서 고마워요.", [
+        { text: "확인", onPress: () => router.replace("/(tabs)") },
+      ]);
     } catch (e) {
       setError(deleteErrorMessage(e));
     } finally {
       setBusy(false);
     }
+  };
+
+  const confirmDelete = () => {
+    Alert.alert("정말 탈퇴하시겠어요?", "삭제된 계정과 스크랩은 되돌릴 수 없어요.", [
+      { text: "취소", style: "cancel" },
+      { text: "탈퇴하기", style: "destructive", onPress: () => void onDelete() },
+    ]);
   };
 
   return (
@@ -92,6 +112,9 @@ export default function AccountScreen() {
                 onPress={() => void onLogout()}
                 testID="logout"
               />
+            </ListGroup>
+
+            <ListGroup style={styles.group}>
               <ListRow
                 icon="user-x"
                 title={DELETE_TITLE}
@@ -109,31 +132,31 @@ export default function AccountScreen() {
                 testID="delete-confirm"
               >
                 <View style={styles.checklist}>
-                  {["저장한 모든 스크랩", "계정 정보와 로그인 연결"].map((item) => (
+                  {losses.map((item) => (
                     <View key={item} style={styles.checkItem}>
-                      <Icon name="close" size={14} color={colors.accent} />
+                      <Icon name="close" size={14} color={colors.danger} />
                       <Text style={styles.checkText}>{item}</Text>
                     </View>
                   ))}
                 </View>
                 {error ? <Text style={styles.error}>{error}</Text> : null}
                 <View style={styles.actions}>
-                  <View style={styles.actionHalf}>
-                    <PrimaryButton
-                      label="취소"
-                      variant="secondary"
-                      disabled={busy}
-                      onPress={() => setConfirming(false)}
-                    />
-                  </View>
-                  <View style={styles.actionHalf}>
-                    <PrimaryButton
-                      label="탈퇴하기"
-                      disabled={busy}
-                      onPress={() => void onDelete()}
-                      testID="confirm-delete"
-                    />
-                  </View>
+                  <PrimaryButton
+                    label="계정 유지하기"
+                    disabled={busy}
+                    onPress={() => setConfirming(false)}
+                  />
+                  <Pressable
+                    style={styles.destructive}
+                    disabled={busy}
+                    onPress={confirmDelete}
+                    hitSlop={8}
+                    testID="confirm-delete"
+                  >
+                    <Text style={[styles.destructiveText, busy && styles.destructiveBusy]}>
+                      {busy ? "탈퇴 처리 중…" : "탈퇴하기"}
+                    </Text>
+                  </Pressable>
                 </View>
               </InfoBox>
             ) : null}
@@ -171,6 +194,8 @@ const styles = StyleSheet.create({
   checkItem: { flexDirection: "row", alignItems: "center", gap: 9 },
   checkText: { fontSize: 13, color: colors.sec },
   error: { marginTop: spacing.md, fontSize: 12.5, color: colors.accentText },
-  actions: { flexDirection: "row", gap: 9, marginTop: spacing.md },
-  actionHalf: { flex: 1 },
+  actions: { marginTop: spacing.md, gap: spacing.xs },
+  destructive: { alignSelf: "center", paddingVertical: 12, paddingHorizontal: spacing.lg },
+  destructiveText: { fontSize: 14.5, fontWeight: "700", color: colors.danger },
+  destructiveBusy: { opacity: 0.4 },
 });
