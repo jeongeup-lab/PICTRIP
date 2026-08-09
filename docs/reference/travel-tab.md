@@ -7,31 +7,44 @@
 > 턴별 각주 정리는 [ADR 0013](../adr/0013-travel-tab-drops-per-turn-footnotes.md),
 > 검색 아닌 답변 경로는 [ADR 0014](../adr/0014-travel-tab-answers-not-only-searches.md),
 > 시트 폐기와 지도 위 캐러셀 전환은
-> [ADR 0017](../adr/0017-travel-tab-drops-the-sheet-for-a-map-carousel.md).
+> [ADR 0017](../adr/0017-travel-tab-drops-the-sheet-for-a-map-carousel.md),
+> 세 층을 패널 하나로 합친 것은
+> [ADR 0018](../adr/0018-travel-tab-answers-in-one-rising-panel.md).
 > 색·간격 정본은 `mobile/src/constants/theme.ts`.
 
 탭은 홈 · 탐색 · **여행** · 마이 4개. 여행 탭만 이 문서의 범위다.
 
 ## 화면 구조
 
-`src/app/(tabs)/travel.tsx` 는 풀블리드 지도 위에 **떠 있는 3층**을 얹는다.
+`src/app/(tabs)/travel.tsx` 는 풀블리드 지도 위에 **패널과 독 두 층**을 얹는다.
 시트도, 스냅도, 세로 스크롤도 없다. 화면에 존재하는 대화는 **마지막 턴 하나**다.
 
 | 층 | 컴포넌트 | 세로 위치 | 조건 |
 |---|---|---|---|
 | 지도 | `features/map/components/KakaoWebMap` | 화면 전체 | 상시 |
-| 답변 바 | `features/travel/components/AnswerBar` | `top = insets.top + 7` | 턴이 있을 때만 |
-| 캐러셀 | `features/travel/components/SpotCarousel` | `bottom = dockBase` | 스팟이 있을 때. 질의 중에는 같은 자리에 `SpotCarouselSkeleton` |
+| 결과 패널 | `features/travel/components/ResultPanel` | `bottom = dockBase` | 턴이나 씨앗이 있을 때만 |
 | 독 | `features/travel/components/TravelDock` | `bottom = 0` | 상시 |
 
-세 층은 전부 `position: absolute` 이고 사이가 비어 있다. 캐러셀을 감싼 슬롯
-(`travel-carousel-slot`)은 `pointerEvents="box-none"` 이라 **칩 행 오른쪽 빈 자리,
-층 사이 간격에서 시작한 팬은 지도에 닿는다.**
+**결과 패널이 한 턴을 통째로 담는다.** 위에서부터 답변 문장(`AnswerBar`) → 가로
+카드(`SpotCarousel`, 질의 중에는 `SpotCarouselSkeleton`) → 문맥 칩(`ChipRow`)
+순이고, 셋은 같은 상자 안에 세로로 붙어 있다.
+
+패널은 **불투명**(`colors.inset` + 1px `glassBorder` + `shadows.card`)하다.
+지도는 카카오 기본 밝은 지도 그대로이므로 반투명 바탕으로는 글씨가 도로·라벨과
+겹친다([ADR 0018](../adr/0018-travel-tab-answers-in-one-rising-panel.md)).
+
+**그림자와 모서리 클리핑은 다른 뷰에 둔다.** 바깥(`travel-result-panel`)이
+배경·radius·그림자를, 안쪽(`travel-result-surface`)이 테두리·패딩·
+`overflow: hidden` 을 맡는다. iOS 는 같은 뷰의 `overflow: hidden` 으로 legacy
+`shadow*` 까지 잘라내 그림자가 실기기에서 사라진다.
+
+두 층 모두 `position: absolute` + `pointerEvents="box-none"` 이라 **패널 옆 여백,
+칩 행 오른쪽 빈 자리에서 시작한 팬은 지도에 닿는다.**
 
 ### 높이 계산 (`features/travel/lib/screen-layout.ts`)
 
-독 높이는 상수가 아니라 **상태에서 계산한다.** 프라이머와 첨부 배너가 각각 독을
-키우고, 그만큼 캐러셀 · 지도 여백 · 토스트가 함께 밀린다.
+독과 패널 높이는 상수가 아니라 **상태에서 계산한다.** 프라이머와 첨부 배너가
+독을, 칩 줄과 캐러셀이 패널을 키우고, 그만큼 지도 여백 · 토스트가 함께 밀린다.
 
 | 상수 | 값 |
 |---|---|
@@ -40,26 +53,44 @@
 | `DOCK_CHIP_ROW_PX` | 42 |
 | `DOCK_ATTACH_ROW_PX` | 73 |
 | `DOCK_PRIMER_PX` | 47 |
+| `PANEL_PAD_PX` | 26 (위 12 + 아래 12 + 테두리 2) |
+| `PANEL_HEAD_PX` · `PANEL_COPY_PX` | 22 · 48 |
+| `PANEL_CHIP_ROW_PX` · `PANEL_CHIP_GAP_PX` | 33 · 12 |
 | `CAROUSEL_BLOCK_PX` | 135 (카드 112 + 9 + 바 3 + 11) |
 | `FIT_TOP_PAD` · `FIT_SIDE_PAD` · `FIT_BOTTOM_MARGIN` | 96 · 40 · 24 |
 
 ```
-dockBase   = 46 + 12 + (첨부 ? 73 : 42) + (프라이머 && !첨부 ? 47 : 0)
-dockHeight = dockBase + (질의 중 || 스팟 있으면 135)
+dockBase   = 46 + 12 + (첨부 ? 73 : 패널 없으면 42, 있으면 0)
+                     + (프라이머 && !첨부 ? 47 : 0)
+어림값     = 26 + 22 + 48 + (칩 있으면 33 + (캐러셀 없으면 12))
+                     + (질의 중 || 스팟 있으면 135)
+panelBlock = 패널 실측 높이(onLayout) ?? 어림값
+coveredPx  = dockBase + panelBlock
 ```
 
-- 기본 `dockBase` = 100, 프라이머가 뜨면 147, 사진을 첨부하면 131.
+- 빈 화면 `dockBase` = 100(칩 줄 포함), 프라이머가 뜨면 147.
+- **결과가 떠 있는 동안 독은 입력 줄만 남는다**(`dockBase` = 58) — 칩을 패널이
+  가져갔기 때문이다. 사진을 첨부하면 배너가 들어와 131 이 된다.
 - **첨부 중에는 프라이머를 그리지 않는다** — 둘을 동시에 더하면 독이 두 번 자란다.
-- 지도 `fit` 패딩 = `{top: insets.top + 96, right: 40, bottom: dockHeight + 24, left: 40}`.
-- 토스트는 `dockHeight + 12`, 검색 펄스(`SearchPulse`)는 `bottom = dockHeight`.
+- **패널 높이는 실측이 정본이다.** `ResultPanel` 의 `onLayout` 이 올려보낸 값이
+  `coveredPx` 에 들어가고, `panelBasePx` 는 **첫 프레임용 어림값**으로만 쓰인다.
+  답변을 펼치면 복사 영역이 42 → 최대 210 으로 자라는데, 어림값만 쓰면 토스트가
+  펼친 답변 위를 덮고 지도 `fit` 이 아래쪽 핀을 패널 뒤에 숨긴다.
+- `PANEL_HEAD_PX`·`PANEL_COPY_PX` 는 그 어림값의 재료다. `PANEL_PAD_PX` 만
+  스타일시트와 잠겨 있다(`ResultPanel.test.tsx`).
+- 실측이 `coveredPx` 를 바꿔도 패널 자신의 높이는 바뀌지 않는다 — 패널의 `bottom`
+  은 `dockBase` 라 `coveredPx` 와 무관하다. 측정 루프가 생기지 않는 이유다.
+- 지도 `fit` 패딩 = `{top: insets.top + 96, right: 40, bottom: coveredPx + 24, left: 40}`.
+- 토스트는 `coveredPx + 12`, 검색 펄스(`SearchPulse`)는 `bottom = coveredPx`.
 
 ## 답변 바
 
-턴이 있을 때만 그린다. 씨앗 카드가 들어와 있으면 턴을 비우므로 답변 바도 없다.
+패널의 첫 블록이다. 턴이 있을 때만 그린다 — 씨앗 카드가 들어와 있으면 턴을
+비우므로 패널은 있고 답변 바만 없다.
 
 | 요소 | 값 |
 |---|---|
-| 바 | 좌우 14, padding 12(좌 14), radius 16, 1px `glassBorder`, `glassFill` |
+| 바 | 패널 안 좌우 14. 자체 배경·테두리 없음(패널이 바탕) |
 | 사진 썸네일 | 40×40 radius 10. 그 턴이 사진을 실어 보냈을 때만 |
 | 질문 줄 | 11/700 `ter` 1줄 말줄임 |
 | 새 대화 | 우측 `close` 16 `ter` — `travel-new-chat` |
@@ -68,6 +99,8 @@ dockHeight = dockBase + (질의 중 || 스팟 있으면 135)
 | 펼침 셰브론 | `chevron-down`/`chevron-up` 18 `ter` |
 | 대기 | 13px 링 스피너 + 단계 문구 12.5 `sec` |
 | 실패 | 왼쪽 3px `accent` 띠 + `답변을 못 받았어요` 13.5 `accentText` + 사유 + `다시 시도`(h34, radius 12, `accent`) |
+
+패널의 좌우 여백(14)은 카드 레일·칩 행과 같은 값이라 셋이 같은 왼쪽 선에 선다.
 
 ### 헤드라인과 보충이 갈리는 규칙
 
@@ -90,7 +123,7 @@ dockHeight = dockBase + (질의 중 || 스팟 있으면 135)
 
 | 요소 | 값 |
 |---|---|
-| 카드 | 296×112, radius 18, 1px `glassBorder`, `glassFill` |
+| 카드 | 296×112, radius 18, 1px `glassBorder`, `glassFill` — 패널 안쪽이라 좌우 334 중 다음 장이 36 남는다 |
 | 카드 간격 | 10 — 스냅 간격(`CARD_STRIDE`)은 306 |
 | 좌우 여백 | 14 |
 | 스냅 | `snapToOffsets`(index × 306) + `decelerationRate="fast"` |
@@ -145,16 +178,17 @@ export 하는 별도 컴포넌트로, 카드 치수(296×112, radius 18)의 `Ske
 ## 독
 
 씬 바닥에 붙는다. 위에서부터 **프라이머 → (첨부 배너 | 칩 행) → 필드**.
+**칩 행은 결과 패널이 없을 때만** 독에 있다 — 패널이 뜨면 칩은 패널 안으로 옮겨
+가고 독은 프라이머·첨부 배너·필드만 남는다.
 
 | 요소 | 값 |
 |---|---|
 | 독 | 좌우 14, 아래 패딩 12, `bottom = 0` |
 | 위치 프라이머 | h38, 아래 9, radius 12, 1px `line`, `glassFill`. `location` 15 + `위치를 켜면 내 근처로 물어볼 수 있어요` 12.5/700 `sec` + `켜기` 11.5/800 `accentText` |
 | 첨부 배너 | 아래 9, padding 8/10, radius 15, 1px `rgba(255,59,83,.32)`, `accentFill`. 46px 썸네일 + `이 사진 같은 분위기로 찾아요` 13.5/700 + `사진은 저장하지 않아요` 11.5 `sec` + `close` |
-| 칩 행 | 고정 `사진` 칩 + 가로 `ScrollView`, 칩 간격 7, 밴드 아래 여백 9 |
+| 칩 행 | `ChipRow` — 고정 `사진` 칩 + 가로 `ScrollView`, 칩 간격 7. 독에서는 아래 여백 9, 패널 안에서는 좌우 14 |
 | 칩 | h33 radius pill, 1px `line`, `raiseStrong`, 13/600 `ink` |
-| 문맥 칩 | `accentFill` + 1px `rgba(255,59,83,.38)` + `accentText` 700, `map-pin` 14 |
-| 사진 칩 | `image` 15 `accentText` + `사진` |
+| 사진 칩 | `accentFill` + 1px `rgba(255,59,83,.38)` + `accentText` 700, `image` 15 |
 | 필드 | h46 radius 13, 1px `line`, `raiseStrong`. `search` 17 → 입력 15/600 → `camera` 30×32 → 전송 32×32 radius 8 |
 | 전송 | 기본 `fillStrong`, 입력이나 첨부가 있으면 `accent` + `arrow-up` `onImage` |
 
@@ -166,45 +200,52 @@ export 하는 별도 컴포넌트로, 카드 치수(296×112, radius 18)의 `Ske
   `사진을 불러오지 못했어요…` / `카메라를 열지 못했어요…`.
 - placeholder 는 세 가지다 — 첨부 중이면 `지역이나 조건을 덧붙여 보세요`, 보고 있는
   카드가 있으면 `{제목}에 대해 물어보기`, 그 밖에는 `어디로 갈지 말해보세요`.
-- 필드에 포커스가 가면 펼쳐 둔 문맥 칩이 닫힌다.
 - 대기 중에는 필드·촬영·전송이 비활성이고 칩 탭도 무시한다.
 
 ### 칩 행 구성 (`lib/dock-chips.ts`)
 
-`DockChip` 은 세 종류다 — `photo` · `context` · `query`(`lib/chips.ts` 의 `Chip`).
+`DockChip` 은 두 종류다 — `photo` · `query`(`lib/chips.ts` 의 `Chip`). 만드는
+함수도 둘이고, 나오는 자리가 다르다.
 
-| 상태 | 칩 행 |
-|---|---|
-| 문맥 칩 **펼침** | `{제목}` (문맥, 닫기 `close` 달림) · `맛집` · `카페` · `볼거리` · `오늘 붐벼?`(`hasCrowd` 일 때만) |
-| 답 있음 · refine 있음 | `사진` · `{제목} 근처`(보고 있는 카드) · refine 칩 |
-| 답 있음 · refine 없음 | `사진` · `{제목} 근처` |
-| 답 없음 · 좌표 O | `사진` · `근처 맛집` · `근처 볼거리` · `근처 카페` · `지금 축제` |
-| 답 없음 · 좌표 X | `사진` · `지금 축제` · `사람 적은 바닷가` · `비 와도 갈 만한 실내` · `제주에서 한적한 곳` |
+| 함수 | 자리 | 칩 행 |
+|---|---|---|
+| `dockChips()` | 독 (패널 없을 때) | `사진` · `근처 카페` · `근처 맛집` · `근처 볼거리` — **고정** |
+| `panelChips()` | 패널 (카드 아래) | `사진` · `{제목} 근처 카페` · `{제목} 근처 맛집` · `{제목} 근처 볼거리` · `{제목} 오늘 붐벼?`(`hasCrowd` 일 때만) · refine 칩 |
 
+- **첫 화면 칩은 좌표로 갈리지 않는다.** 좌표가 없어도 넷 그대로 그리고, 누른
+  뒤에 위치를 묻는다([ADR 0018](../adr/0018-travel-tab-answers-in-one-rising-panel.md)).
+  `useNearbyCoords().phase` 로 세 갈래다 — `checking` 이면
+  `위치를 확인하는 중이에요`, 권한이 `undetermined`(`askable`)면 OS 요청,
+  그 밖에는 `위치를 켜면 내 근처를 찾아드려요`.
+- **좌표를 아직 모르는 구간을 거절과 섞으면 안 된다.** 권한을 이미 허용한
+  사용자에게 켜라고 말하게 된다. `phase = "checking"` 이 두 구간을 모두 덮는다 —
+  앱 진입 직후의 권한·좌표 조회, 그리고 `ask()` 가 OS 창을 띄우고 좌표를 받아올
+  때까지. `ask()` 는 `askable` 만 내리는 게 아니라 `phase` 도 `checking` 으로
+  되돌린다.
+- **문맥 칩은 세 장 다 카드 이름을 앞에 단다** — `{제목} 근처 카페` 처럼. 펼침
+  단계가 없어 한 번에 닿고, **칩 글씨가 곧 보낼 질문 문장**이다.
 - `사진` 칩은 **스크롤 밖에 고정**된 첫 칸이다 — `ScrollView` 앞의 형제로 그려서
-  칩이 아무리 많아도 밀려나가지 않는다. 사진 검색이 이 앱의 차별점이라 모든 칩
-  상태에서 손이 닿아야 한다. 존재 여부는 여전히 `dockChips` 가 정하므로 문맥 펼침
-  상태에서는 고정 자리도 비운다.
-- `근처 볼거리` 만 앵커가 아니라 `intent{nearMe}` 다 — 앵커의 attraction 술어는
-  전시·공연장을 빼기 때문이다. `지금 축제` 도 `intent{festivalOnly}` 직송이라
-  Gemini 를 타지 않는다.
-- 문맥 칩 펼침에서 **문맥 칩만 `accent`** 이고 술어(`맛집`·`카페`…)는 중립이다.
-- 답이 온 뒤에는 초기 칩으로 돌아가지 않는다. refine 이 비면 칩 행은 사진 + 문맥
-  칩만 남는다.
+  칩이 아무리 많아도 밀려나가지 않는다. 사진 검색이 이 앱의 차별점이라 결과가
+  떠 있는 동안에도 손이 닿아야 하므로 패널 칩 행에도 남긴다.
+- 초기 칩의 `근처 볼거리` 만 앵커가 아니라 `intent{nearMe}` 다 — 앵커의 attraction
+  술어는 3km 반경에 갇히기 때문이다. 문맥 칩의 `{제목} 근처 볼거리` 는 그 스팟
+  좌표가 기준이므로 앵커(`nearby`)가 맞다.
+- **카드가 0장이면 문맥 칩도 없다** — 이름을 붙일 카드가 없다. 그 턴의 칩 행은
+  `사진` + refine 뿐이다.
 
 ### 칩을 누르면 나가는 것
 
 | 칩 | 요청 |
 |---|---|
 | `photo` | 요청 없음 — 앨범을 열어 첨부만 한다 |
-| `context` | 요청 없음 — 펼침/접힘 토글 |
 | `question` | 그 문자열을 자유문으로 전송 |
-| `intent` | 준비된 `intent` 직송 (Gemini 없음) |
-| `anchor` | 보고 있는 카드가 있으면 `{contentId, action}`, 없으면 `{action}`. 좌표도 카드도 없으면 아무것도 하지 않는다 |
+| `intent` | 준비된 `intent` 직송 (Gemini 없음). `nearMe` 인데 좌표가 없으면 위치부터 묻는다 |
+| `anchor` | 보고 있는 카드가 있으면 `{contentId, action}`, 없으면 `{action}`. 좌표도 카드도 없으면 위치부터 묻는다 |
 | `refine` | 마지막 답의 `intent` + 그 칩의 `patch`. 사진 턴이면 **같은 사진을 다시 첨부해** 보낸다 |
 
-`anchor` 칩의 질문 문구는 `"{제목} {라벨}"` 이고, 카드가 없으면 제목 자리에
-`내 위치` 가 들어간다.
+**칩 라벨이 그대로 질문 문구다.** 보고 있는 카드가 있으면 라벨(`천지연 근처 맛집`)
+이 곧 턴의 `question` 이고, 카드가 없을 때만 `내 위치` 를 앞에 붙여
+`내 위치 근처 카페` 로 만든다.
 
 ## 캐러셀과 지도
 
@@ -214,7 +255,7 @@ export 하는 별도 컴포넌트로, 카드 치수(296×112, radius 18)의 `Ske
 
 | 방향 | 동작 |
 |---|---|
-| 캐러셀 → 지도 | 스냅이 끝나면 `onMomentumScrollEnd` 가 인덱스를 계산해 지도 `center` 를 그 좌표로 옮기고 `anchorId` 를 그 `contentId` 로 준다. 펼쳐 둔 문맥 칩은 닫힌다 |
+| 캐러셀 → 지도 | 스냅이 끝나면 `onMomentumScrollEnd` 가 인덱스를 계산해 지도 `center` 를 그 좌표로 옮기고 `anchorId` 를 그 `contentId` 로 준다. **문맥 칩 이름도 같이 바뀐다** |
 | 지도 → 캐러셀 | 핀 탭이 `onPinTap(contentId)` 로 오면 인덱스를 찾아 포커스를 옮기고 `scrollToOffset(index × 306, animated)` 로 그 장까지 스크롤한다. **상세로 보내지 않는다.** 목록에 없는 `contentId` 는 무시 |
 | 새 답 | 포커스가 0번으로 돌아가고 `fit` 이 전체 핀을 담는다 |
 
@@ -223,8 +264,9 @@ export 하는 별도 컴포넌트로, 카드 치수(296×112, radius 18)의 `Ske
 `buildKakaoMapHtml` 이 HTML 에 굽는다(prop 으로 넘기면 WebView 가 리마운트된다).
 카테고리 글리프·한반도 클램프는 지도 공용 규칙이다.
 
-기준점이 무엇인지는 세 곳이 동시에 말한다 — 화면 가운데의 카드, `accent` 로 켜진
-핀, 그리고 placeholder(`{제목}에 대해 물어보기`).
+기준점이 무엇인지는 네 곳이 동시에 말한다 — 화면 가운데의 카드, `accent` 로 켜진
+핀, 카드 아래 문맥 칩(`{제목} 근처 카페`…), 그리고
+placeholder(`{제목}에 대해 물어보기`).
 
 ## 상세 진입
 
@@ -239,8 +281,8 @@ export 하는 별도 컴포넌트로, 카드 치수(296×112, radius 18)의 `Ske
 스팟 상세 아래의 `AskAboutSpot`(`{제목}에 대해 물어보기`)을 누르면
 `travel/stores/anchor-store.ts` 에 그 스팟 한 장을 담고 여행 탭으로 이동한다.
 
-- 씨앗이 있으면 여행 탭은 **대화를 비우고**(`clearTurns`) 그 한 장만 캐러셀에
-  그린다. 답변 바도 `새 대화` 버튼도 없다.
+- 씨앗이 있으면 여행 탭은 **대화를 비우고**(`clearTurns`) 그 한 장만 패널 안
+  캐러셀에 그린다. 답변 바도 `새 대화` 버튼도 없다.
 - 지도는 그 스팟을 핀이자 중심으로 잡고 `anchorId` 도 그 카드다.
 - placeholder 와 문맥 칩이 그 제목을 부르므로 곧바로 `근처 카페` 를 물을 수 있다.
 - 질문을 보내면 씨앗을 비운다(`clearSeed`) — 답 위로 살아남지 않는다.
@@ -249,22 +291,23 @@ export 하는 별도 컴포넌트로, 카드 치수(296×112, radius 18)의 `Ske
 
 ## 상태
 
-| # | 상태 | 답변 바 | 캐러셀 | 독 |
-|---|---|---|---|---|
-| 1 | 빈 상태 · 좌표 O | 없음 | 없음 | 사진 · 근처 맛집 · 근처 볼거리 · 근처 카페 · 지금 축제 |
-| 2 | 빈 상태 · 좌표 X | 없음 | 없음 | (미결정이면 프라이머) 사진 · 전국 칩 4개 |
-| 3 | 사진 첨부 | 그대로 | 그대로 | 칩 행 자리를 첨부 배너가 대체, placeholder 교체 |
-| 4 | 질의 중 | 질문 + 단계 스피너 | 스켈레톤 카드 | 초기 칩으로 되돌아가고 입력·전송 비활성, 지도 위 검색 펄스 |
-| 5 | 결과 | 헤드라인 | 카드 N장 + 진행 바 | 사진 · 문맥 칩 · refine |
-| 6 | 답변 펼침 | 헤드라인 + 보충 | 그대로 | 그대로 |
-| 7 | 문맥 칩 펼침 | 그대로 | 그대로 | 문맥 칩 + 술어 칩 |
-| 8 | 사진 턴 | 좌측에 보낸 사진 40px | 카드 N장 | 5와 같음 |
-| 9 | 씨앗 카드 | 없음 | 씨앗 한 장 | 사진 · 문맥 칩 |
-| 10 | 카드 없는 답 (0곳 · 상세 · 혼잡도) | 전문(항상 펼침) | 없음 | refine 이 있을 때만, 없으면 사진 칩만 |
-| 11 | 실패 | `답변을 못 받았어요` + 사유 + `다시 시도` | 없음 | 초기 칩 |
+| # | 상태 | 패널 | 독 |
+|---|---|---|---|
+| 1 | 빈 상태 | 없음 | 사진 · 근처 카페 · 근처 맛집 · 근처 볼거리 |
+| 2 | 빈 상태 · 위치 미결정 | 없음 | 프라이머 + 1과 같은 칩 넷 |
+| 3 | 사진 첨부 | 그대로 | 칩 행 자리를 첨부 배너가 대체, placeholder 교체 |
+| 4 | 질의 중 | 질문 + 단계 스피너 → 스켈레톤 카드 → 사진 칩 | 입력 줄만, 전송 비활성, 지도 위 검색 펄스 |
+| 5 | 결과 | 헤드라인 → 카드 N장 + 진행 바 → `{제목} 근처` 칩 셋 · refine | 입력 줄만 |
+| 6 | 답변 펼침 | 헤드라인 + 보충. 카드·칩은 제자리, 패널이 위로 자란다 | 그대로 |
+| 7 | 카드 스와이프 | 칩 셋 이름이 새 카드로 교체 | placeholder 교체 |
+| 8 | 사진 턴 | 답변 바 좌측에 보낸 사진 40px | 5와 같음 |
+| 9 | 씨앗 카드 | 답변 바 없이 카드 한 장 + `{제목} 근처` 칩 셋 | 입력 줄만 |
+| 10 | 카드 없는 답 (0곳 · 상세 · 혼잡도) | 전문(항상 펼침) + 사진 칩 · refine. 카드 자리 없음 | 입력 줄만 |
+| 11 | 실패 | `답변을 못 받았어요` + 사유 + `다시 시도` | 입력 줄만 |
 
-- 10·11 은 캐러셀 자리가 비고 지도가 그만큼 더 보인다.
-- 4 는 자리를 비우지 않는다 — 스켈레톤 카드가 들어가 `dockHeight` 가 그대로이므로
+- 1·2 는 패널이 없어 지도가 화면 거의 전부다.
+- 10·11 은 카드 자리가 비어 패널이 얇아지고 지도가 그만큼 더 보인다.
+- 4 는 자리를 비우지 않는다 — 스켈레톤 카드가 들어가 패널 높이가 그대로이므로
   답이 도착해도 지도 `fit` 이 다시 튀지 않는다. 스켈레톤은 `pointerEvents="none"`
   이라 그 위에서 시작한 팬도 지도에 닿는다.
 - 4 에서 직전 결과는 화면에서 사라진다 — 답변 바는 새 질문을 이미 이름으로
@@ -276,7 +319,8 @@ export 하는 별도 컴포넌트로, 카드 치수(296×112, radius 18)의 `Ske
 
 ---
 
-관련: [ADR 0017](../adr/0017-travel-tab-drops-the-sheet-for-a-map-carousel.md) ·
+관련: [ADR 0018](../adr/0018-travel-tab-answers-in-one-rising-panel.md) ·
+[ADR 0017](../adr/0017-travel-tab-drops-the-sheet-for-a-map-carousel.md) ·
 [ADR 0014](../adr/0014-travel-tab-answers-not-only-searches.md) ·
 [ADR 0011](../adr/0011-travel-tab-chip-state-machine.md) ·
 [api](api.md) · [여행 탭 QA](../how-to/qa-travel-tab.md) ·

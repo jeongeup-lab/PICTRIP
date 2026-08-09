@@ -14,44 +14,38 @@ export type Chip =
 
 export type AnchorChip = Extract<Chip, { kind: "anchor" }>;
 
-export const ANCHOR_CHIPS: AnchorChip[] = [
-  { kind: "anchor", label: "맛집", action: "food" },
-  { kind: "anchor", label: "카페", action: "cafe" },
-  { kind: "anchor", label: "볼거리", action: "nearby" },
-  { kind: "anchor", label: "오늘 붐벼?", action: "crowd" },
-];
-
-export function anchorChips(hasCrowd: boolean): Chip[] {
-  return hasCrowd ? ANCHOR_CHIPS : ANCHOR_CHIPS.filter((chip) => chip.action !== "crowd");
-}
-
-export const FESTIVAL_CHIP: Chip = {
-  kind: "intent",
-  label: "지금 축제",
-  intent: { categoryKeywords: [], regionHints: [], festivalOnly: true },
-};
-
 export const NEARBY_ATTRACTION_CHIP: Chip = {
   kind: "intent",
   label: "근처 볼거리",
   intent: { categoryKeywords: [], regionHints: [], nearMe: true },
 };
 
-const NEARBY_IDLE_CHIPS: Chip[] = [
+export const IDLE_CHIPS: Chip[] = [
+  { kind: "anchor", label: "근처 카페", action: "cafe" },
   { kind: "anchor", label: "근처 맛집", action: "food" },
   NEARBY_ATTRACTION_CHIP,
-  { kind: "anchor", label: "근처 카페", action: "cafe" },
 ];
 
-const BASE_CHIPS: Chip[] = [
-  FESTIVAL_CHIP,
-  { kind: "question", label: "사람 적은 바닷가", question: "사람 적은 바닷가" },
-  { kind: "question", label: "비 와도 갈 만한 실내", question: "비 와도 갈 만한 실내" },
-  { kind: "question", label: "제주에서 한적한 곳", question: "제주에서 한적한 곳" },
+export function idleChips(): Chip[] {
+  return IDLE_CHIPS;
+}
+
+const CONTEXT_PREDICATES: { suffix: string; action: AnchorAction }[] = [
+  { suffix: "근처 카페", action: "cafe" },
+  { suffix: "근처 맛집", action: "food" },
+  { suffix: "근처 볼거리", action: "nearby" },
 ];
 
-export function idleChips(hasCoords: boolean = false): Chip[] {
-  return hasCoords ? [...NEARBY_IDLE_CHIPS, FESTIVAL_CHIP] : [...BASE_CHIPS];
+const CROWD_PREDICATE = "오늘 붐벼?";
+
+export function contextChips(title: string, hasCrowd: boolean): AnchorChip[] {
+  const near = CONTEXT_PREDICATES.map(({ suffix, action }) => ({
+    kind: "anchor" as const,
+    label: `${title} ${suffix}`,
+    action,
+  }));
+  if (!hasCrowd) return near;
+  return [...near, { kind: "anchor", label: `${title} ${CROWD_PREDICATE}`, action: "crowd" }];
 }
 
 export function refineChips(refinements: Suggestion[] | null | undefined): Chip[] {

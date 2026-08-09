@@ -1,7 +1,12 @@
 import renderer, { act } from "react-test-renderer";
 import { FlatList, ScrollView, StyleSheet } from "react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import TravelScreen, { ASK_PLACEHOLDER, ATTACHED_PLACEHOLDER } from "@/app/(tabs)/travel";
+import TravelScreen, {
+  ASK_PLACEHOLDER,
+  ATTACHED_PLACEHOLDER,
+  LOCATION_CHECKING,
+  LOCATION_REQUIRED,
+} from "@/app/(tabs)/travel";
 import {
   askAgent,
   type AgentAnswer,
@@ -20,11 +25,10 @@ import { PHOTO_PICK_FAILED, PHOTO_SHOOT_FAILED } from "@/features/travel/lib/age
 import {
   ATTACH_HEADLINE,
   ATTACH_NOTICE,
-  PHOTO_CHIP_LABEL,
-  PHOTO_CHIP_TEST_ID,
   TravelDock,
 } from "@/features/travel/components/TravelDock";
-import { dockBasePx } from "@/features/travel/lib/screen-layout";
+import { PHOTO_CHIP_LABEL, PHOTO_CHIP_TEST_ID } from "@/features/travel/components/ChipRow";
+import { dockBasePx, panelBasePx } from "@/features/travel/lib/screen-layout";
 
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
 jest.mock("react-native-safe-area-context", () => ({
@@ -264,6 +268,10 @@ function carousel(tree: renderer.ReactTestRenderer) {
   return tree.root.findByType(SpotCarousel);
 }
 
+function panelShown(tree: renderer.ReactTestRenderer): boolean {
+  return tree.root.findAllByProps({ testID: "travel-result-panel" }).length > 0;
+}
+
 function answerBar(tree: renderer.ReactTestRenderer) {
   return tree.root.findByType(AnswerBar);
 }
@@ -272,9 +280,18 @@ function mapView(tree: renderer.ReactTestRenderer) {
   return tree.root.findByType(KakaoWebMap);
 }
 
-function carouselBottom(tree: renderer.ReactTestRenderer): number {
-  const slot = tree.root.findAllByProps({ testID: "travel-carousel-slot" })[0];
-  return StyleSheet.flatten(slot.props.style).bottom as number;
+function panelBottom(tree: renderer.ReactTestRenderer): number {
+  const panel = tree.root.findAllByProps({ testID: "travel-result-panel" })[0];
+  return StyleSheet.flatten(panel.props.style).bottom as number;
+}
+
+async function layoutPanel(tree: renderer.ReactTestRenderer, height: number) {
+  const panel = tree.root.findAllByProps({ testID: "travel-result-panel" })[0];
+  await act(async () => panel.props.onLayout({ nativeEvent: { layout: { height } } }));
+}
+
+function toastBottom(tree: renderer.ReactTestRenderer): number {
+  return tree.root.findByProps({ testID: "travel-toast" }).props.bottom as number;
 }
 
 function dockBottom(tree: renderer.ReactTestRenderer): number {
@@ -313,28 +330,39 @@ describe("TravelScreen starter chips", () => {
     expect(input.intent).toBeUndefined();
   });
 
-  it("축제 칩은 준비된 intent 를 직송해 Gemini 를 건너뛴다", async () => {
+  it("근처 볼거리는 앵커가 아니라 intent 로 나간다 — 3km 반경에 갇히지 않는다", async () => {
     const tree = await mount();
-    await pressChip(tree, "지금 축제");
+    await pressChip(tree, "근처 볼거리");
 
     const input = askAgentMock.mock.calls[0][0];
-    expect(input.intent?.festivalOnly).toBe(true);
-    expect(input.question).toBeUndefined();
+    expect(input.intent?.nearMe).toBe(true);
+    expect(input.anchor).toBeUndefined();
   });
 
-  it("좌표가 없으면 자유문 칩으로 물러난다", async () => {
+  it("좌표가 없어도 칩 줄은 그대로다 — 누르면 그때 위치를 묻는다", async () => {
+    const askMock = jest.fn().mockResolvedValue(true);
     useNearbyCoordsMock.mockReturnValue({
       coords: null,
       phase: "unavailable",
-      askable: false,
-      ask: jest.fn(),
+      askable: true,
+      ask: askMock,
     });
     const tree = await mount();
 
-    expect(chip(tree, "근처 맛집")).toBeUndefined();
-    await pressChip(tree, "사람 적은 바닷가");
+    expect(chip(tree, "근처 맛집")).toBeDefined();
+    await pressChip(tree, "근처 맛집");
 
-    expect(askAgentMock.mock.calls[0][0].question).toBe("사람 적은 바닷가");
+    expect(askMock).toHaveBeenCalled();
+    expect(askAgentMock).not.toHaveBeenCalled();
+  });
+
+  it("첫 화면 칩은 사진 뒤에 근처 세 갈래로 고정이다", async () => {
+    const tree = await mount();
+    const labels = ["근처 카페", "근처 맛집", "근처 볼거리"];
+
+    for (const label of labels) expect(chip(tree, label)).toBeDefined();
+    expect(chip(tree, "지금 축제")).toBeUndefined();
+    expect(chip(tree, "사람 적은 바닷가")).toBeUndefined();
   });
 
   it("첫 화면 칩 줄은 고정된 사진 칩으로 시작한다", async () => {
@@ -370,7 +398,7 @@ describe("TravelScreen nearby action", () => {
     expect(turns[turns.length - 1].question).toBe("내 위치 근처 카페");
   });
 
-  it("좌표도 포커스도 없으면 근처 칩 자체가 없다", async () => {
+  it("위치를 영영 못 쓰면 근처 칩은 토스트로 이유를 말한다", async () => {
     useNearbyCoordsMock.mockReturnValue({
       coords: null,
       phase: "unavailable",
@@ -379,9 +407,28 @@ describe("TravelScreen nearby action", () => {
     });
     const tree = await mount();
 
-    expect(chip(tree, "근처 맛집")).toBeUndefined();
-    expect(chip(tree, "근처 카페")).toBeUndefined();
+    await pressChip(tree, "근처 카페");
+
     expect(askAgentMock).not.toHaveBeenCalled();
+    expect(rendered(tree)).toContain(LOCATION_REQUIRED);
+  });
+
+  it("좌표를 아직 확인하는 중이면 거절한 것처럼 말하지 않는다", async () => {
+    const askMock = jest.fn();
+    useNearbyCoordsMock.mockReturnValue({
+      coords: null,
+      phase: "checking",
+      askable: false,
+      ask: askMock,
+    });
+    const tree = await mount();
+
+    await pressChip(tree, "근처 카페");
+
+    expect(askAgentMock).not.toHaveBeenCalled();
+    expect(askMock).not.toHaveBeenCalled();
+    expect(rendered(tree)).toContain(LOCATION_CHECKING);
+    expect(rendered(tree)).not.toContain(LOCATION_REQUIRED);
   });
 
   it("위치를 아직 정하지 않았으면 켜기를 권한다", async () => {
@@ -529,6 +576,17 @@ describe("TravelScreen new chat", () => {
 
     await press(tree, "travel-new-chat");
 
+    expect(panelShown(tree)).toBe(false);
+  });
+
+  it("새 대화 뒤 다시 물으면 캐러셀이 첫 칸에서 시작한다", async () => {
+    useConversation.setState({ turns: [mapTurn], busy: false });
+    const tree = await mount();
+    await swipeTo(tree, 2);
+    await press(tree, "travel-new-chat");
+
+    await act(async () => useConversation.setState({ turns: [mapTurn], busy: false }));
+
     expect(carousel(tree).props.focusedIndex).toBe(0);
     expect(carousel(tree).props.scrollToIndex).toBeNull();
   });
@@ -618,7 +676,7 @@ describe("TravelScreen carousel focus", () => {
     const tree = await mount();
 
     expect(carousel(tree).props.focusedIndex).toBe(0);
-    expect(chip(tree, "무릉계곡 근처")).toBeDefined();
+    expect(chip(tree, "무릉계곡 근처 카페")).toBeDefined();
     expect(placeholder(tree)).toBe("무릉계곡에 대해 물어보기");
   });
 
@@ -627,46 +685,32 @@ describe("TravelScreen carousel focus", () => {
 
     await swipeTo(tree, 1);
 
-    expect(chip(tree, "천지연 근처")).toBeDefined();
-    expect(chip(tree, "무릉계곡 근처")).toBeUndefined();
+    expect(chip(tree, "천지연 근처 카페")).toBeDefined();
+    expect(chip(tree, "무릉계곡 근처 카페")).toBeUndefined();
     expect(placeholder(tree)).toBe("천지연에 대해 물어보기");
   });
 
-  it("문맥 칩을 누르면 그 카드에 대한 앵커 칩으로 펼쳐진다", async () => {
+  it("문맥 칩은 세 갈래 모두 카드 이름을 앞에 단다", async () => {
     const tree = await mount();
     await swipeTo(tree, 1);
 
-    await pressChip(tree, "천지연 근처");
-
-    expect(chip(tree, "천지연")).toBeDefined();
-    expect(chip(tree, "맛집")).toBeDefined();
-    expect(chip(tree, "카페")).toBeDefined();
+    for (const label of ["천지연 근처 카페", "천지연 근처 맛집", "천지연 근처 볼거리"]) {
+      expect(chip(tree, label)).toBeDefined();
+    }
   });
 
-  it("앵커 칩은 포커스한 카드의 contentId 로 나간다", async () => {
+  it("문맥 칩은 포커스한 카드의 contentId 로 나가고 칩 글씨가 곧 질문이다", async () => {
     const tree = await mount();
     await swipeTo(tree, 1);
-    await pressChip(tree, "천지연 근처");
 
-    await pressChip(tree, "맛집");
+    await pressChip(tree, "천지연 근처 맛집");
 
     expect(askAgentMock.mock.calls[0][0].anchor).toEqual({
       contentId: "126509",
       action: "food",
     });
     const turns = useConversation.getState().turns;
-    expect(turns[turns.length - 1].question).toBe("천지연 맛집");
-  });
-
-  it("스와이프하면 펼쳐 둔 앵커 칩이 닫힌다", async () => {
-    const tree = await mount();
-    await pressChip(tree, "무릉계곡 근처");
-    expect(chip(tree, "맛집")).toBeDefined();
-
-    await swipeTo(tree, 1);
-
-    expect(chip(tree, "맛집")).toBeUndefined();
-    expect(chip(tree, "천지연 근처")).toBeDefined();
+    expect(turns[turns.length - 1].question).toBe("천지연 근처 맛집");
   });
 
   it("포커스한 카드는 지도에서도 같은 카드를 가리킨다", async () => {
@@ -711,12 +755,12 @@ describe("TravelScreen dock height", () => {
   it("캐러셀 자리는 독 높이만큼만 위에 앉는다", async () => {
     const tree = await mount();
 
-    expect(carouselBottom(tree)).toBe(dockBasePx({ primer: false, attached: false }));
+    expect(panelBottom(tree)).toBe(dockBasePx({ primer: false, attached: false, chips: false }));
   });
 
   it("위치 프라이머가 뜨면 캐러셀을 그만큼 위로 올린다", async () => {
     const settled = await mount();
-    const low = carouselBottom(settled);
+    const low = panelBottom(settled);
     await act(async () => settled.unmount());
     mounted = null;
 
@@ -728,18 +772,18 @@ describe("TravelScreen dock height", () => {
     });
     const tree = await mount();
 
-    expect(carouselBottom(tree)).toBeGreaterThan(low);
-    expect(carouselBottom(tree) - low).toBe(47);
+    expect(panelBottom(tree)).toBeGreaterThan(low);
+    expect(panelBottom(tree) - low).toBe(47);
   });
 
   it("사진을 첨부하면 두꺼워진 배너만큼 캐러셀을 올린다", async () => {
     pickTravelPhoto.mockResolvedValueOnce(PHOTO);
     const tree = await mount();
-    const low = carouselBottom(tree);
+    const low = panelBottom(tree);
 
     await pressChip(tree, PHOTO_CHIP_LABEL);
 
-    expect(carouselBottom(tree) - low).toBe(73 - 42);
+    expect(panelBottom(tree) - low).toBe(73);
   });
 
   it("첨부 중에는 프라이머가 사라지므로 두 번 더하지 않는다", async () => {
@@ -751,11 +795,31 @@ describe("TravelScreen dock height", () => {
     });
     pickTravelPhoto.mockResolvedValueOnce(PHOTO);
     const tree = await mount();
-    const withPrimer = carouselBottom(tree);
+    const withPrimer = panelBottom(tree);
 
     await pressChip(tree, PHOTO_CHIP_LABEL);
 
-    expect(carouselBottom(tree)).toBe(withPrimer - 47 + (73 - 42));
+    expect(panelBottom(tree)).toBe(withPrimer - 47 + 73);
+  });
+
+  it("펼쳐서 자란 패널 높이가 지도 여백과 토스트에 반영된다", async () => {
+    const tree = await mount();
+    const dock = dockBasePx({ primer: false, attached: false, chips: false });
+    await layoutPanel(tree, 500);
+
+    expect(mapView(tree).props.fit.pad.bottom).toBe(dock + 500 + 24);
+    expect(toastBottom(tree)).toBe(dock + 500 + 12);
+  });
+
+  it("실측이 오기 전에는 어림값으로 버틴다", async () => {
+    const tree = await mount();
+
+    expect(mapView(tree).props.fit.pad.bottom).toBe(
+      dockBasePx({ primer: false, attached: false, chips: false }) +
+        panelBasePx({ chips: true, carousel: true }) +
+        CAROUSEL_BLOCK_PX +
+        24,
+    );
   });
 
   it("독이 자란 만큼 지도 여백과 토스트도 함께 밀린다", async () => {
@@ -860,10 +924,15 @@ describe("TravelScreen 질의 중 칩 잠금", () => {
     expect(placeholder(tree)).toBe(ASK_PLACEHOLDER);
   });
 
-  it("응답을 기다리는 동안 질의 칩도 새 질문을 내지 않는다", async () => {
+  it("응답을 기다리는 동안 문맥 칩도 새 질문을 내지 않는다", async () => {
+    useConversation.setState({
+      turns: [{ ...mapTurn, status: "pending", answer: null }],
+      busy: true,
+      activeId: "seed-map",
+    });
     const tree = await mount();
 
-    await pressChip(tree, "근처 맛집");
+    await pressChip(tree, PHOTO_CHIP_LABEL);
 
     expect(askAgentMock).not.toHaveBeenCalled();
     expect(useConversation.getState().turns).toHaveLength(1);
@@ -873,7 +942,6 @@ describe("TravelScreen 질의 중 칩 잠금", () => {
     const tree = await mount();
 
     expect(chip(tree, PHOTO_CHIP_LABEL)!.props.disabled).toBe(true);
-    expect(chip(tree, "근처 맛집")!.props.disabled).toBe(true);
   });
 });
 
@@ -909,7 +977,7 @@ describe("TravelScreen pin tap", () => {
 
     await act(async () => mapView(tree).props.onPinTap("126509"));
 
-    expect(chip(tree, "천지연 근처")).toBeDefined();
+    expect(chip(tree, "천지연 근처 카페")).toBeDefined();
   });
 
   it("지도에 없는 스팟의 핀 탭은 무시한다", async () => {
@@ -977,7 +1045,7 @@ describe("TravelScreen chip source", () => {
 
     expect(chip(tree, PHOTO_CHIP_LABEL)).toBeDefined();
     expect(chip(tree, "근처 맛집")).toBeUndefined();
-    expect(chip(tree, "사람 적은 바닷가")).toBeUndefined();
+    expect(chip(tree, "근처 카페")).toBeUndefined();
   });
 });
 
@@ -1152,7 +1220,10 @@ describe("TravelScreen map", () => {
     expect(pad.top).toBe(44 + 96);
     expect(pad.left).toBe(40);
     expect(pad.bottom).toBe(
-      dockBasePx({ primer: false, attached: false }) + CAROUSEL_BLOCK_PX + 24,
+      dockBasePx({ primer: false, attached: false, chips: false }) +
+        panelBasePx({ chips: true, carousel: true }) +
+        CAROUSEL_BLOCK_PX +
+        24,
     );
   });
 
@@ -1297,7 +1368,8 @@ describe("TravelScreen save toast", () => {
 });
 
 describe("TravelScreen carousel stability", () => {
-  it("결과가 없을 때 같은 빈 배열을 계속 넘긴다", async () => {
+  it("결과가 없는 답에도 같은 빈 배열을 계속 넘긴다", async () => {
+    useConversation.setState({ turns: [answeredTurn], busy: false });
     const tree = await mount();
     const before = carousel(tree).props.spots;
 
@@ -1342,7 +1414,7 @@ describe("TravelScreen 스팟 상세에서 넘어온 앵커", () => {
     const tree = await mount();
 
     expect(placeholder(tree)).toBe("성산일출봉에 대해 물어보기");
-    expect(chip(tree, "성산일출봉 근처")).toBeDefined();
+    expect(chip(tree, "성산일출봉 근처 카페")).toBeDefined();
   });
 
   it("씨앗 스팟을 지도 핀이자 중심으로 넘긴다", async () => {
@@ -1379,10 +1451,10 @@ describe("TravelScreen 스팟 상세에서 넘어온 앵커", () => {
     });
   });
 
-  it("씨앗도 답도 없으면 캐러셀은 아무것도 그리지 않는다", async () => {
+  it("씨앗도 답도 없으면 패널 자체가 올라오지 않는다", async () => {
     const tree = await mount();
 
-    expect(carousel(tree).props.spots).toEqual([]);
+    expect(panelShown(tree)).toBe(false);
     expect(placeholder(tree)).toBe(ASK_PLACEHOLDER);
   });
 });
@@ -1467,7 +1539,7 @@ describe("TravelScreen 이전 답이 남은 채 씨앗이 도착할 때", () => 
     expect(carousel(tree).props.focusedIndex).toBe(0);
     expect(carousel(tree).props.scrollToIndex).toBeNull();
     expect(placeholder(tree)).toBe("성산일출봉에 대해 물어보기");
-    expect(chip(tree, "성산일출봉 근처")).toBeDefined();
+    expect(chip(tree, "성산일출봉 근처 카페")).toBeDefined();
     expect(mapView(tree).props.anchorId).toBe("126511");
   });
 
@@ -1532,7 +1604,7 @@ describe("TravelScreen 이전 답이 남은 채 씨앗이 도착할 때", () => 
 
     expect(useTravelAnchor.getState().spot).toBeNull();
     expect(useConversation.getState().turns).toEqual([]);
-    expect(carousel(tree).props.spots).toEqual([]);
+    expect(panelShown(tree)).toBe(false);
     expect(placeholder(tree)).toBe(ASK_PLACEHOLDER);
   });
 });

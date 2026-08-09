@@ -110,7 +110,7 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 
 **`answer[]` 는 구체적 사실이 먼저, 조건·개수가 뒤다.** 문장은 LLM 이 아니라
 `agent/services/ask.py` 의 결정적 템플릿이 짓는다(`_lead_sentence` +
-`_scope_sentence`). 앱의 답변 바가 **첫 문장만** 접어 보여주므로 그 한 줄이
+`_scope_sentence`). 앱의 결과 패널이 **첫 문장만** 접어 보여주므로 그 한 줄이
 개수가 아니라 사실을 들어야 한다
 ([ADR 0017](../adr/0017-travel-tab-drops-the-sheet-for-a-map-carousel.md)).
 

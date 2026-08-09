@@ -29,7 +29,6 @@ const base = {
   errorMessage: null,
   expanded: false,
   collapsible: true,
-  top: 60,
   onToggle: jest.fn(),
   onClose: jest.fn(),
   onRetry: jest.fn(),

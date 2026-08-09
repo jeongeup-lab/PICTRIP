@@ -1,5 +1,5 @@
 import type { TravelSpot } from "@/features/travel/api";
-import { dockChips } from "@/features/travel/lib/dock-chips";
+import { dockChips, panelChips } from "@/features/travel/lib/dock-chips";
 
 const spot: TravelSpot = {
   contentId: "1",
@@ -12,48 +12,46 @@ const spot: TravelSpot = {
   hasCrowd: true,
 };
 
-const base = { answer: null, focused: null, expanded: false, hasCoords: false, hasCrowd: false };
+const labels = (chips: ReturnType<typeof dockChips>) =>
+  chips.flatMap((c) => (c.kind === "query" ? [c.chip.label] : []));
 
 describe("dockChips", () => {
-  it("사진 칩은 항상 맨 앞에 있다", () => {
-    expect(dockChips(base)[0]).toEqual({ kind: "photo" });
-    expect(dockChips({ ...base, focused: spot })[0]).toEqual({ kind: "photo" });
+  it("첫 화면은 사진 칩 뒤에 근처 세 갈래를 고정으로 낸다", () => {
+    const chips = dockChips();
+
+    expect(chips[0]).toEqual({ kind: "photo" });
+    expect(labels(chips)).toEqual(["근처 카페", "근처 맛집", "근처 볼거리"]);
+  });
+});
+
+describe("panelChips", () => {
+  const base = { answer: null, focused: null, hasCrowd: false };
+
+  it("사진 칩은 패널에서도 맨 앞에 남는다", () => {
+    expect(panelChips(base)[0]).toEqual({ kind: "photo" });
+    expect(panelChips({ ...base, focused: spot })[0]).toEqual({ kind: "photo" });
   });
 
-  it("보고 있는 카드가 없으면 초기 칩을 낸다", () => {
-    const labels = dockChips({ ...base, hasCoords: true }).flatMap((c) =>
-      c.kind === "query" ? [c.chip.label] : [],
-    );
-
-    expect(labels).toContain("근처 맛집");
-  });
-
-  it("보고 있는 카드가 있으면 문맥 칩이 사진 칩 다음에 온다", () => {
-    const chips = dockChips({ ...base, focused: spot });
-
-    expect(chips[1]).toEqual({ kind: "context", title: "성산일출봉", expanded: false });
-  });
-
-  it("펼치면 사진 칩이 빠지고 문맥 칩 뒤에 술어만 온다", () => {
-    const chips = dockChips({ ...base, focused: spot, expanded: true, hasCrowd: true });
-
-    expect(chips[0]).toEqual({ kind: "context", title: "성산일출봉", expanded: true });
-    expect(chips.slice(1).map((c) => (c.kind === "query" ? c.chip.label : ""))).toEqual([
-      "맛집",
-      "카페",
-      "볼거리",
-      "오늘 붐벼?",
+  it("보고 있는 카드 이름을 칩마다 붙인다", () => {
+    expect(labels(panelChips({ ...base, focused: spot }))).toEqual([
+      "성산일출봉 근처 카페",
+      "성산일출봉 근처 맛집",
+      "성산일출봉 근처 볼거리",
     ]);
   });
 
-  it("혼잡도를 모르는 곳에는 붐빔 술어를 내지 않는다", () => {
-    const chips = dockChips({ ...base, focused: spot, expanded: true, hasCrowd: false });
-
-    expect(chips.map((c) => (c.kind === "query" ? c.chip.label : ""))).not.toContain("오늘 붐벼?");
+  it("혼잡도를 아는 카드에만 붐빔 칩을 더한다", () => {
+    expect(labels(panelChips({ ...base, focused: spot, hasCrowd: true }))).toContain(
+      "성산일출봉 오늘 붐벼?",
+    );
   });
 
-  it("접힌 상태에서는 문맥 칩 뒤에 refine 칩이 붙는다", () => {
-    const chips = dockChips({
+  it("카드가 없으면 문맥 칩도 없다 — 이름을 붙일 곳이 없어서다", () => {
+    expect(labels(panelChips(base))).toEqual([]);
+  });
+
+  it("서버 제안은 문맥 칩 뒤에 붙는다", () => {
+    const chips = panelChips({
       ...base,
       focused: spot,
       answer: {
@@ -62,10 +60,6 @@ describe("dockChips", () => {
       },
     });
 
-    expect(chips.map((c) => (c.kind === "query" ? c.chip.label : ""))).toContain("사람 적은 곳만");
-  });
-
-  it("펼침은 보고 있는 카드가 있을 때만 성립한다", () => {
-    expect(dockChips({ ...base, expanded: true })[0]).toEqual({ kind: "photo" });
+    expect(labels(chips).at(-1)).toBe("사람 적은 곳만");
   });
 });

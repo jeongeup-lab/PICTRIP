@@ -53,6 +53,7 @@ export function useNearbyCoords(): UseNearbyCoords {
 
   const ask = useCallback(async () => {
     setAskable(false);
+    setPhase("checking");
     try {
       const status = await requestPermission();
       if (status !== "granted") {
