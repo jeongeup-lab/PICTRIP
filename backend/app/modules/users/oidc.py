@@ -137,17 +137,6 @@ async def verify_oauth_id_token(
     if provider == "kakao":
         c = await _verify_kakao(id_token, expected_nonce=expected_nonce)
         return OidcClaims(sub=c.sub, email=c.email, name=c.nickname, picture=c.picture)
-    if provider == "google":
-        return await _verify_generic(
-            provider="google",
-            url=settings.GOOGLE_JWKS_URL,
-            issuers=settings.GOOGLE_OIDC_ISSUERS,
-            audiences=settings.GOOGLE_CLIENT_IDS,
-            algorithms=["RS256"],
-            id_token=id_token,
-            expected_nonce=expected_nonce,
-            hash_nonce=False,
-        )
     if provider == "apple":
         return await _verify_generic(
             provider="apple",

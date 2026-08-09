@@ -86,6 +86,12 @@ async def test_oauth_kakao_bad_token_returns_401(client):
     assert resp.json()["error"]["code"] == "OAUTH_ID_TOKEN_INVALID"
 
 
+async def test_oauth_google_is_rejected_at_the_public_route(client):
+    resp = await client.post("/v1/auth/oauth/google", json={"idToken": "x"})
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "VALIDATION_FAILED"
+
+
 async def test_refresh_returns_valid_pair_without_rotation(client, patched_verify):
     login = (await client.post("/v1/auth/oauth/kakao", json={"idToken": "x"})).json()
     refresh = login["data"]["refreshToken"]

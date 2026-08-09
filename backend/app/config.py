@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, RedisDsn, computed_field, model_validator
+from pydantic import Field, PostgresDsn, RedisDsn, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["local", "staging", "production"]
@@ -61,36 +61,15 @@ class Settings(BaseSettings):
 
     KAKAO_REST_API_KEY: str = ""
     KAKAO_NATIVE_APP_KEY: str = ""
-    GOOGLE_OAUTH_CLIENT_ID_IOS: str = ""
-    GOOGLE_OAUTH_CLIENT_ID_ANDROID: str = ""
-    GOOGLE_OAUTH_CLIENT_ID_WEB: str = ""
 
     KAKAO_JWKS_URL: str = "https://kauth.kakao.com/.well-known/jwks.json"
     KAKAO_OIDC_ISSUER: str = "https://kauth.kakao.com"
     KAKAO_JWKS_CACHE_TTL_SECONDS: int = 3600
     KAKAO_JWKS_STALE_ON_ERROR_TTL_SECONDS: int = 86400
 
-    GOOGLE_CLIENT_IDS: list[str] = Field(default_factory=list)
-    GOOGLE_JWKS_URL: str = "https://www.googleapis.com/oauth2/v3/certs"
-    GOOGLE_OIDC_ISSUERS: list[str] = Field(
-        default_factory=lambda: ["accounts.google.com", "https://accounts.google.com"]
-    )
     APPLE_BUNDLE_ID: str | None = None
     APPLE_OIDC_ISSUER: str = "https://appleid.apple.com"
     APPLE_JWKS_URL: str = "https://appleid.apple.com/auth/keys"
-
-    @model_validator(mode="after")
-    def _merge_google_client_ids(self) -> Settings:
-        merged = list(self.GOOGLE_CLIENT_IDS)
-        for cid in (
-            self.GOOGLE_OAUTH_CLIENT_ID_IOS,
-            self.GOOGLE_OAUTH_CLIENT_ID_ANDROID,
-            self.GOOGLE_OAUTH_CLIENT_ID_WEB,
-        ):
-            if cid and cid not in merged:
-                merged.append(cid)
-        self.GOOGLE_CLIENT_IDS = merged
-        return self
 
     KTO_SERVICE_KEY: str = ""
     KTO_BASE_URL_KOR: str = "https://apis.data.go.kr/B551011/KorService2"
