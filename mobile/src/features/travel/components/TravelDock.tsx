@@ -1,18 +1,15 @@
-import { ScrollView, Pressable, View, Text, TextInput, StyleSheet } from "react-native";
+import { Pressable, View, Text, TextInput, StyleSheet } from "react-native";
 import { Image } from "expo-image";
 import { Icon } from "@/components/Icon";
+import { ChipRow } from "@/features/travel/components/ChipRow";
 import type { DockChip } from "@/features/travel/lib/dock-chips";
 import type { PhotoUpload } from "@/features/travel/api";
 import { colors, radii, spacing } from "@/constants/theme";
 
 export const ATTACH_HEADLINE = "이 사진 같은 분위기로 찾아요";
 export const ATTACH_NOTICE = "사진은 저장하지 않아요";
-export const PHOTO_CHIP_LABEL = "사진";
-export const PHOTO_CHIP_TEST_ID = "travel-chip-photo";
 export const LOCATION_PRIMER_TEXT = "위치를 켜면 내 근처로 물어볼 수 있어요";
 export const LOCATION_PRIMER_ACTION = "켜기";
-
-const CHIP_GAP = 7;
 
 interface Props {
   value: string;
@@ -27,54 +24,7 @@ interface Props {
   onShoot: () => void;
   onClearAttach: () => void;
   onSubmit: () => void;
-  onFocus: () => void;
   onAskLocation: () => void;
-}
-
-function chipLabel(chip: DockChip): string {
-  if (chip.kind === "photo") return PHOTO_CHIP_LABEL;
-  if (chip.kind === "context") return chip.expanded ? chip.title : `${chip.title} 근처`;
-  return chip.chip.label;
-}
-
-function ChipButton({
-  chip,
-  testID,
-  disabled,
-  onPress,
-}: {
-  chip: DockChip;
-  testID: string;
-  disabled: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={chipLabel(chip)}
-      style={({ pressed }) => [
-        dockStyles.chip,
-        chip.kind === "context" && dockStyles.chipContext,
-        (pressed || disabled) && dockStyles.pressed,
-      ]}
-      disabled={disabled}
-      onPress={onPress}
-    >
-      {chip.kind === "photo" ? (
-        <Icon name="image" size={15} color={colors.accentText} strokeWidth={1.9} />
-      ) : null}
-      {chip.kind === "context" ? (
-        <Icon name="map-pin" size={14} color={colors.accentText} strokeWidth={1.9} />
-      ) : null}
-      <Text style={[dockStyles.chipText, chip.kind === "context" && dockStyles.chipTextContext]}>
-        {chipLabel(chip)}
-      </Text>
-      {chip.kind === "context" && chip.expanded ? (
-        <Icon name="close" size={12} color={colors.accentText} strokeWidth={2.4} />
-      ) : null}
-    </Pressable>
-  );
 }
 
 export function TravelDock({
@@ -90,12 +40,9 @@ export function TravelDock({
   onShoot,
   onClearAttach,
   onSubmit,
-  onFocus,
   onAskLocation,
 }: Props) {
   const ready = !disabled && (value.trim().length > 0 || photo !== null);
-  const pinnedChip = chips.find((chip) => chip.kind === "photo") ?? null;
-  const scrollingChips = chips.filter((chip) => chip.kind !== "photo");
 
   return (
     <View style={[dockStyles.root, { bottom }]} pointerEvents="box-none">
@@ -129,35 +76,11 @@ export function TravelDock({
             <Icon name="close" size={16} color={colors.ter} strokeWidth={2} />
           </Pressable>
         </View>
-      ) : (
-        <View style={dockStyles.chipBand} pointerEvents="box-none">
-          {pinnedChip ? (
-            <ChipButton
-              chip={pinnedChip}
-              testID={PHOTO_CHIP_TEST_ID}
-              disabled={disabled}
-              onPress={() => onChipPress(pinnedChip)}
-            />
-          ) : null}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            style={dockStyles.chipTrack}
-            contentContainerStyle={dockStyles.chips}
-          >
-            {scrollingChips.map((chip, index) => (
-              <ChipButton
-                key={`${index}-${chip.kind}`}
-                chip={chip}
-                testID={`travel-chip-${index}`}
-                disabled={disabled}
-                onPress={() => onChipPress(chip)}
-              />
-            ))}
-          </ScrollView>
+      ) : chips.length > 0 ? (
+        <View style={dockStyles.chipSlot} pointerEvents="box-none">
+          <ChipRow chips={chips} disabled={disabled} inset={false} onChipPress={onChipPress} />
         </View>
-      )}
+      ) : null}
 
       <View style={dockStyles.field}>
         <Icon name="search" size={17} color={colors.ter} strokeWidth={1.9} />
@@ -166,7 +89,6 @@ export function TravelDock({
           style={dockStyles.input}
           value={value}
           onChangeText={onChange}
-          onFocus={onFocus}
           placeholder={placeholder}
           placeholderTextColor={colors.ter}
           returnKeyType="send"
@@ -249,23 +171,7 @@ export const dockStyles = StyleSheet.create({
   attachCopy: { flex: 1 },
   attachTitle: { fontSize: 13.5, fontWeight: "700", letterSpacing: -0.2, color: colors.ink },
   attachNote: { marginTop: 3, fontSize: 11.5, color: colors.sec },
-  chipBand: { flexDirection: "row", alignItems: "flex-start", gap: CHIP_GAP, marginBottom: 9 },
-  chipTrack: { flexGrow: 0, flexShrink: 1 },
-  chips: { gap: CHIP_GAP },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    height: 33,
-    paddingHorizontal: 14,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.raiseStrong,
-  },
-  chipContext: { borderColor: "rgba(255,59,83,0.38)", backgroundColor: colors.accentFill },
-  chipText: { fontSize: 13, fontWeight: "600", letterSpacing: -0.2, color: colors.ink },
-  chipTextContext: { color: colors.accentText, fontWeight: "700" },
+  chipSlot: { marginBottom: 9 },
   field: {
     flexDirection: "row",
     alignItems: "center",

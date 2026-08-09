@@ -1,6 +1,8 @@
 # 0011. 여행 탭 칩을 상태별로 다른 물건으로 분리한다
 
-- 상태: 채택
+- 상태: 채택 — 초기 칩 목록은
+  [0018](0018-travel-tab-answers-in-one-rising-panel.md) 이 좌표 분기 없는 넷으로
+  고정했다. 칩이 요청을 만드는 방식(anchor·intent·refine)은 그대로다
 - 날짜: 2026-08-04
 - 관련: [travel-tab](../reference/travel-tab.md),
   [0009 여행 탭 대화형 에이전트](0009-travel-tab-conversational-agent.md),
