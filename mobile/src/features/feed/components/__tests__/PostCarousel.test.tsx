@@ -45,6 +45,9 @@ function setMatches(matches: MatchCard[] | undefined) {
 
 const text = (r: renderer.ReactTestRenderer) => JSON.stringify(r.toJSON());
 
+const rendered = (r: renderer.ReactTestRenderer, testID: string) =>
+  text(r).split(`"testID":"${testID}"`).length - 1;
+
 let tree: renderer.ReactTestRenderer | null = null;
 
 beforeEach(() => {
@@ -62,6 +65,14 @@ async function mount() {
     tree = renderer.create(<PostCarousel post={post} />);
   });
   return tree!;
+}
+
+async function scrollTo(r: renderer.ReactTestRenderer, page: number) {
+  const list = r.root.findByType(FlatList);
+  const { offset } = list.props.getItemLayout(null, page);
+  await act(async () => {
+    list.props.onScroll({ nativeEvent: { contentOffset: { x: offset } } });
+  });
 }
 
 describe("PostCarousel", () => {
@@ -135,12 +146,53 @@ describe("PostCarousel", () => {
     (useSaveOptimistic as jest.Mock).mockReturnValue({ saved: false, toggle });
     setMatches([match()]);
     const r = await mount();
-    const stopPropagation = jest.fn();
+    await scrollTo(r, 1);
     await act(async () => {
-      r.root.findAllByProps({ testID: "match-save" })[0].props.onPress({ stopPropagation });
+      r.root.findAllByProps({ testID: "match-save" })[0].props.onPress();
     });
-    expect(stopPropagation).toHaveBeenCalled();
     expect(toggle).toHaveBeenCalled();
+  });
+
+  it("counter stays mounted across slides and only its number changes", async () => {
+    setMatches([match({ contentId: "100" }), match({ contentId: "101" })]);
+    const r = await mount();
+    expect(rendered(r, "post-counter")).toBe(1);
+    expect(text(r)).toContain("1/3");
+
+    await scrollTo(r, 2);
+    expect(rendered(r, "post-counter")).toBe(1);
+    expect(text(r)).toContain("3/3");
+    expect(text(r)).not.toContain("1/3");
+  });
+
+  it("counter follows the scroll offset before the swipe settles", async () => {
+    setMatches([match({ contentId: "100" }), match({ contentId: "101" })]);
+    const r = await mount();
+    const list = r.root.findByType(FlatList);
+    const { offset } = list.props.getItemLayout(null, 1);
+    await act(async () => {
+      list.props.onScroll({ nativeEvent: { contentOffset: { x: offset * 0.6 } } });
+    });
+    expect(text(r)).toContain("2/3");
+  });
+
+  it("top-left control swaps info for bookmark as the active slide changes", async () => {
+    setMatches([match({ contentId: "100" })]);
+    const r = await mount();
+    expect(r.root.findAllByProps({ testID: "credit-info" }).length).toBeGreaterThan(0);
+    expect(r.root.findAllByProps({ testID: "match-save" })).toHaveLength(0);
+
+    await scrollTo(r, 1);
+    expect(r.root.findAllByProps({ testID: "credit-info" })).toHaveLength(0);
+    expect(r.root.findAllByProps({ testID: "match-save" }).length).toBeGreaterThan(0);
+  });
+
+  it("keeps the card scrollable while the overlay sits above it", async () => {
+    setMatches([match({ contentId: "100" })]);
+    const r = await mount();
+    expect(r.root.findByType(FlatList).props.scrollEnabled).toBe(true);
+    await scrollTo(r, 1);
+    expect(r.root.findByType(FlatList).props.scrollEnabled).toBe(true);
   });
 
   it("match card press pushes the spot detail route", async () => {
