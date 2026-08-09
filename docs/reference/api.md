@@ -9,7 +9,7 @@
 
 | Method | Path | 목적 | 인증 |
 |---|---|---|---|
-| POST | `/auth/oauth/{provider}` | OIDC id_token → 토큰쌍 (kakao·apple) | — |
+| POST | `/auth/oauth/{provider}` | OIDC id_token → 토큰쌍 (kakao·apple). apple 은 `authorizationCode` 를 함께 받아 refresh token 을 교환·저장 | — |
 | POST | `/auth/refresh` | 슬라이딩 재발급 (denylist 확인) | refresh 본문 |
 | POST | `/auth/logout` | 멱등 로그아웃 (jti denylist) | — |
 | GET | `/users/me` | 내 프로필 | JWT |

@@ -70,6 +70,11 @@ class Settings(BaseSettings):
     APPLE_BUNDLE_ID: str | None = None
     APPLE_OIDC_ISSUER: str = "https://appleid.apple.com"
     APPLE_JWKS_URL: str = "https://appleid.apple.com/auth/keys"
+    APPLE_TEAM_ID: str = ""
+    APPLE_KEY_ID: str = ""
+    APPLE_PRIVATE_KEY: str = ""
+    APPLE_TOKEN_URL: str = "https://appleid.apple.com/auth/token"
+    APPLE_REVOKE_URL: str = "https://appleid.apple.com/auth/revoke"
 
     KTO_SERVICE_KEY: str = ""
     KTO_BASE_URL_KOR: str = "https://apis.data.go.kr/B551011/KorService2"

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
 from redis.asyncio import Redis
 
 from app.core.db import AsyncSession
 from app.modules.spots.services.saved import delete_all_saved_for_user
+from app.modules.users import apple_tokens
 from app.modules.users import repositories as repo
 from app.modules.users.oidc import verify_oauth_id_token
 from app.modules.users.schemas import (
@@ -23,6 +25,8 @@ from app.security.jwt import (
 )
 from app.web.errors import AuthTokenInvalid
 
+log = logging.getLogger("app.users.services")
+
 
 async def authenticate_with_oauth(
     session: AsyncSession, provider: str, body: OAuthLoginIn
@@ -36,6 +40,18 @@ async def authenticate_with_oauth(
         email=claims.email,
         picture=claims.picture,
     )
+
+    if provider == "apple" and body.authorizationCode:
+        refresh_token = await apple_tokens.exchange_authorization_code(body.authorizationCode)
+        if refresh_token:
+            await repo.set_provider_refresh_token(
+                session,
+                user_id=user.id,
+                provider=provider,
+                provider_user_id=claims.sub,
+                token=refresh_token,
+            )
+
     await session.commit()
 
     user_public = UserPublic(
@@ -71,6 +87,9 @@ async def delete_user_account(
 ) -> None:
     user = await repo.get_user(session, user_id)
     if user is not None and user.deleted_at is None:
+        apple_tokens_to_revoke = await repo.list_provider_refresh_tokens(
+            session, user_id, provider="apple"
+        )
         user.email = None
         user.name = None
         user.bio = None
@@ -82,6 +101,11 @@ async def delete_user_account(
         await repo.delete_auth_providers(session, user_id)
         await delete_all_saved_for_user(session, user_id=user_id)
         await session.commit()
+        for token in apple_tokens_to_revoke:
+            try:
+                await apple_tokens.revoke_refresh_token(token)
+            except Exception:
+                log.warning("apple: revoke raised during account deletion", exc_info=True)
     await deny_refresh(redis, refresh_token)
 
 
