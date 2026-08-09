@@ -106,6 +106,33 @@ describe("useNearbyCoords", () => {
     },
   );
 
+  it("권한을 물어보는 동안에도 checking 이다 — 거절과 섞이면 안 된다", async () => {
+    (location.getPermissionStatus as jest.Mock).mockResolvedValue("undetermined");
+    let grant: (status: string) => void = () => undefined;
+    (location.requestPermission as jest.Mock).mockReturnValue(
+      new Promise((resolve) => {
+        grant = resolve;
+      }),
+    );
+    const result = await mount();
+    expect(result.current().phase).toBe("unavailable");
+
+    let asking: Promise<boolean> = Promise.resolve(false);
+    await act(async () => {
+      asking = result.current().ask();
+    });
+
+    expect(result.current().phase).toBe("checking");
+    expect(result.current().askable).toBe(false);
+
+    await act(async () => {
+      grant("granted");
+      await asking;
+    });
+
+    expect(result.current().phase).toBe("ready");
+  });
+
   it("does not update state after unmount", async () => {
     let resolvePermission: (status: string) => void = () => undefined;
     (location.getPermissionStatus as jest.Mock).mockReturnValue(
