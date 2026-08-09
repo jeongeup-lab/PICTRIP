@@ -33,6 +33,11 @@
 지도는 카카오 기본 밝은 지도 그대로이므로 반투명 바탕으로는 글씨가 도로·라벨과
 겹친다([ADR 0018](../adr/0018-travel-tab-answers-in-one-rising-panel.md)).
 
+**그림자와 모서리 클리핑은 다른 뷰에 둔다.** 바깥(`travel-result-panel`)이
+배경·radius·그림자를, 안쪽(`travel-result-surface`)이 테두리·패딩·
+`overflow: hidden` 을 맡는다. iOS 는 같은 뷰의 `overflow: hidden` 으로 legacy
+`shadow*` 까지 잘라내 그림자가 실기기에서 사라진다.
+
 두 층 모두 `position: absolute` + `pointerEvents="box-none"` 이라 **패널 옆 여백,
 칩 행 오른쪽 빈 자리에서 시작한 팬은 지도에 닿는다.**
 
@@ -202,9 +207,11 @@ export 하는 별도 컴포넌트로, 카드 치수(296×112, radius 18)의 `Ske
 | `panelChips()` | 패널 (카드 아래) | `사진` · `{제목} 근처 카페` · `{제목} 근처 맛집` · `{제목} 근처 볼거리` · `{제목} 오늘 붐벼?`(`hasCrowd` 일 때만) · refine 칩 |
 
 - **첫 화면 칩은 좌표로 갈리지 않는다.** 좌표가 없어도 넷 그대로 그리고, 누른
-  뒤에 위치를 묻는다. 권한이 `undetermined` 면 OS 요청으로 가고, 막혀 있으면
-  `위치를 켜면 내 근처를 찾아드려요` 토스트를 띄운다
-  ([ADR 0018](../adr/0018-travel-tab-answers-in-one-rising-panel.md)).
+  뒤에 위치를 묻는다([ADR 0018](../adr/0018-travel-tab-answers-in-one-rising-panel.md)).
+  `useNearbyCoords().phase` 로 세 갈래다 — `checking` 이면
+  `위치를 확인하는 중이에요`, 권한이 `undetermined`(`askable`)면 OS 요청,
+  그 밖에는 `위치를 켜면 내 근처를 찾아드려요`. **진입 직후 `checking` 구간을
+  거절과 같이 다루면 안 된다** — 권한을 이미 허용한 사용자에게 잘못된 안내가 간다.
 - **문맥 칩은 세 장 다 카드 이름을 앞에 단다** — `{제목} 근처 카페` 처럼. 펼침
   단계가 없어 한 번에 닿고, **칩 글씨가 곧 보낼 질문 문장**이다.
 - `사진` 칩은 **스크롤 밖에 고정**된 첫 칸이다 — `ScrollView` 앞의 형제로 그려서

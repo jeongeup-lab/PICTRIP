@@ -45,6 +45,7 @@ const TOAST_LIFT = 12;
 const NO_SPOTS: TravelSpot[] = [];
 const NO_CHIPS: DockChip[] = [];
 
+export const LOCATION_CHECKING = "위치를 확인하는 중이에요";
 export const LOCATION_REQUIRED = "위치를 켜면 내 근처를 찾아드려요";
 export const ASK_PLACEHOLDER = "어디로 갈지 말해보세요";
 export const ATTACHED_PLACEHOLDER = "지역이나 조건을 덧붙여 보세요";
@@ -70,7 +71,12 @@ export default function TravelScreen() {
   const seeded = useTravelAnchor((s) => s.spot);
   const clearSeed = useTravelAnchor((s) => s.clear);
 
-  const { coords, askable: locationAskable, ask: askLocation } = useNearbyCoords();
+  const {
+    coords,
+    phase: locationPhase,
+    askable: locationAskable,
+    ask: askLocation,
+  } = useNearbyCoords();
   const ask = useAskAgentMutation();
 
   const lastTurn = turns.length > 0 ? turns[turns.length - 1] : null;
@@ -157,12 +163,16 @@ export default function TravelScreen() {
   );
 
   const demandCoords = useCallback(() => {
+    if (locationPhase === "checking") {
+      setToast(LOCATION_CHECKING);
+      return;
+    }
     if (locationAskable) {
       void askLocation();
       return;
     }
     setToast(LOCATION_REQUIRED);
-  }, [locationAskable, askLocation]);
+  }, [locationPhase, locationAskable, askLocation]);
 
   const onChipPress = useCallback(
     async (chip: DockChip) => {

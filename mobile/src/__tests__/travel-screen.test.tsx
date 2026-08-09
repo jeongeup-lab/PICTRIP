@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import TravelScreen, {
   ASK_PLACEHOLDER,
   ATTACHED_PLACEHOLDER,
+  LOCATION_CHECKING,
   LOCATION_REQUIRED,
 } from "@/app/(tabs)/travel";
 import {
@@ -401,6 +402,24 @@ describe("TravelScreen nearby action", () => {
 
     expect(askAgentMock).not.toHaveBeenCalled();
     expect(rendered(tree)).toContain(LOCATION_REQUIRED);
+  });
+
+  it("좌표를 아직 확인하는 중이면 거절한 것처럼 말하지 않는다", async () => {
+    const askMock = jest.fn();
+    useNearbyCoordsMock.mockReturnValue({
+      coords: null,
+      phase: "checking",
+      askable: false,
+      ask: askMock,
+    });
+    const tree = await mount();
+
+    await pressChip(tree, "근처 카페");
+
+    expect(askAgentMock).not.toHaveBeenCalled();
+    expect(askMock).not.toHaveBeenCalled();
+    expect(rendered(tree)).toContain(LOCATION_CHECKING);
+    expect(rendered(tree)).not.toContain(LOCATION_REQUIRED);
   });
 
   it("위치를 아직 정하지 않았으면 켜기를 권한다", async () => {
