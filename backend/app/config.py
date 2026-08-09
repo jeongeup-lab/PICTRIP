@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     KAKAO_REST_API_KEY: str = ""
     KAKAO_NATIVE_APP_KEY: str = ""
 
+    KAKAO_OIDC_CLIENT_IDS: list[str] = Field(default_factory=list)
     KAKAO_JWKS_URL: str = "https://kauth.kakao.com/.well-known/jwks.json"
     KAKAO_OIDC_ISSUER: str = "https://kauth.kakao.com"
     KAKAO_JWKS_CACHE_TTL_SECONDS: int = 3600

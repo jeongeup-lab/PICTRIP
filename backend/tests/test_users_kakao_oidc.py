@@ -128,9 +128,39 @@ async def test_verify_id_token_unknown_kid_with_fresh_jwks(
 
 
 @pytest.mark.asyncio
+async def test_login_audience_is_independent_of_the_local_api_key(
+    mock_kakao_jwks, kakao_signing_key, monkeypatch
+):
+    monkeypatch.setattr("app.config.settings.KAKAO_OIDC_CLIENT_IDS", ["login-client-id"])
+    monkeypatch.setattr("app.config.settings.KAKAO_REST_API_KEY", "local-api-key")
+    monkeypatch.setattr("app.config.settings.KAKAO_NATIVE_APP_KEY", "")
+    priv, _ = kakao_signing_key
+
+    claims = await verify_id_token(
+        make_kakao_id_token(sub="12345", aud="login-client-id", key=priv)
+    )
+    assert claims.sub == "12345"
+
+    with pytest.raises(OAuthIdTokenInvalid):
+        await verify_id_token(make_kakao_id_token(sub="12345", aud="local-api-key", key=priv))
+
+
+@pytest.mark.asyncio
+async def test_audience_falls_back_to_rest_key_when_oidc_ids_unset(
+    mock_kakao_jwks, kakao_signing_key, monkeypatch
+):
+    monkeypatch.setattr("app.config.settings.KAKAO_OIDC_CLIENT_IDS", [])
+    monkeypatch.setattr("app.config.settings.KAKAO_REST_API_KEY", "test-rest-api-key")
+    priv, _ = kakao_signing_key
+    claims = await verify_id_token(make_kakao_id_token(sub="12345", key=priv))
+    assert claims.sub == "12345"
+
+
+@pytest.mark.asyncio
 async def test_kakao_rejected_when_no_audience_configured(
     mock_kakao_jwks, kakao_signing_key, monkeypatch
 ):
+    monkeypatch.setattr("app.config.settings.KAKAO_OIDC_CLIENT_IDS", [])
     monkeypatch.setattr("app.config.settings.KAKAO_REST_API_KEY", "")
     monkeypatch.setattr("app.config.settings.KAKAO_NATIVE_APP_KEY", "")
     priv, _ = kakao_signing_key

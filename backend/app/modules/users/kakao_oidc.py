@@ -100,7 +100,9 @@ async def verify_id_token(token: str, *, expected_nonce: str | None = None) -> K
         log.info("verify_id_token: kid not in JWKS")
         raise OAuthIdTokenInvalid()
 
-    valid_audiences = [a for a in (settings.KAKAO_REST_API_KEY, settings.KAKAO_NATIVE_APP_KEY) if a]
+    valid_audiences = [a for a in settings.KAKAO_OIDC_CLIENT_IDS if a] or [
+        a for a in (settings.KAKAO_REST_API_KEY, settings.KAKAO_NATIVE_APP_KEY) if a
+    ]
 
     if not valid_audiences:
         log.error("verify_id_token: no configured Kakao audience — provider misconfigured")
