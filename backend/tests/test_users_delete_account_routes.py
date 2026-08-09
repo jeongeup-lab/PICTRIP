@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
@@ -115,6 +116,80 @@ async def test_delete_anonymizes_unlinks_and_blocks_profile(
     me = await client.get("/v1/users/me", headers=_auth(uid))
     assert me.status_code == 401
     assert me.json()["error"]["code"] == "AUTH_TOKEN_INVALID"
+
+
+@pytest.mark.asyncio
+async def test_delete_revokes_the_stored_apple_refresh_token(
+    client: AsyncClient, override_db_and_seed: AsyncSession
+) -> None:
+    row = (
+        await override_db_and_seed.execute(
+            text("INSERT INTO users (email, name) VALUES (NULL, '애플유저') RETURNING id")
+        )
+    ).first()
+    assert row is not None
+    uid = int(row.id)
+    await override_db_and_seed.execute(
+        text(
+            "INSERT INTO user_auth_providers "
+            "(user_id, provider, provider_user_id, provider_refresh_token) "
+            "VALUES (:u, 'apple', :pid, 'r-apple-stored')"
+        ),
+        {"u": uid, "pid": f"apple-{uuid.uuid4().hex}"},
+    )
+    await override_db_and_seed.commit()
+
+    revoked: list[str] = []
+
+    async def fake_revoke(token: str) -> bool:
+        revoked.append(token)
+        return True
+
+    with patch(
+        "app.modules.users.services.apple_tokens.revoke_refresh_token",
+        side_effect=fake_revoke,
+    ):
+        resp = await client.delete("/v1/users/me", headers=_auth(uid))
+
+    assert resp.status_code == 204
+    assert revoked == ["r-apple-stored"]
+
+
+@pytest.mark.asyncio
+async def test_delete_succeeds_even_if_apple_revoke_fails(
+    client: AsyncClient, override_db_and_seed: AsyncSession
+) -> None:
+    row = (
+        await override_db_and_seed.execute(
+            text("INSERT INTO users (email, name) VALUES (NULL, '애플유저2') RETURNING id")
+        )
+    ).first()
+    assert row is not None
+    uid = int(row.id)
+    await override_db_and_seed.execute(
+        text(
+            "INSERT INTO user_auth_providers "
+            "(user_id, provider, provider_user_id, provider_refresh_token) "
+            "VALUES (:u, 'apple', :pid, 'r-apple-bad')"
+        ),
+        {"u": uid, "pid": f"apple-{uuid.uuid4().hex}"},
+    )
+    await override_db_and_seed.commit()
+
+    with patch(
+        "app.modules.users.services.apple_tokens.revoke_refresh_token",
+        AsyncMock(side_effect=RuntimeError("apple down")),
+    ):
+        resp = await client.delete("/v1/users/me", headers=_auth(uid))
+
+    assert resp.status_code == 204
+
+    deleted_at = (
+        await override_db_and_seed.execute(
+            text("SELECT deleted_at FROM users WHERE id = :u"), {"u": uid}
+        )
+    ).scalar_one()
+    assert deleted_at is not None
 
 
 @pytest.mark.asyncio

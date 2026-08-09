@@ -71,7 +71,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loginWithOAuth: async (provider) => {
     const outcome = await getIdToken(provider);
     if (outcome === "canceled") return "canceled";
-    const pair = await oauthLogin(provider, outcome.idToken, outcome.nonce);
+    const pair = await oauthLogin(
+      provider,
+      outcome.idToken,
+      outcome.nonce,
+      outcome.authorizationCode,
+    );
     await get().setSession(pair);
     void recordConsentSnapshot().catch(() => undefined);
     return "success";

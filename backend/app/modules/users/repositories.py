@@ -92,6 +92,33 @@ async def delete_auth_providers(session: AsyncSession, user_id: int) -> None:
     await session.execute(delete(UserAuthProvider).where(UserAuthProvider.user_id == user_id))
 
 
+async def list_provider_refresh_tokens(
+    session: AsyncSession, user_id: int, *, provider: str
+) -> list[str]:
+    rows = await session.scalars(
+        select(UserAuthProvider.provider_refresh_token).where(
+            UserAuthProvider.user_id == user_id,
+            UserAuthProvider.provider == provider,
+            UserAuthProvider.provider_refresh_token.is_not(None),
+        )
+    )
+    return [token for token in rows.all() if token]
+
+
+async def set_provider_refresh_token(
+    session: AsyncSession, *, user_id: int, provider: str, provider_user_id: str, token: str
+) -> None:
+    row = await session.scalar(
+        select(UserAuthProvider).where(
+            UserAuthProvider.user_id == user_id,
+            UserAuthProvider.provider == provider,
+            UserAuthProvider.provider_user_id == provider_user_id,
+        )
+    )
+    if row is not None:
+        row.provider_refresh_token = token
+
+
 async def upsert_consent(
     session: AsyncSession,
     *,
