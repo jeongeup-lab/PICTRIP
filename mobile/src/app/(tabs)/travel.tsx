@@ -5,6 +5,8 @@ import { router } from "expo-router";
 import { Toast } from "@/components/Toast";
 import { KakaoWebMap } from "@/features/map/components/KakaoWebMap";
 import { AnswerBar } from "@/features/travel/components/AnswerBar";
+import { ChipRow } from "@/features/travel/components/ChipRow";
+import { ResultPanel } from "@/features/travel/components/ResultPanel";
 import {
   SpotCarousel,
   SpotCarouselSkeleton,
@@ -23,11 +25,16 @@ import {
 } from "@/features/travel/lib/agent-errors";
 import { composeQuestion, anchorQuestion, MY_LOCATION } from "@/features/travel/lib/question";
 import { contextFrom } from "@/features/travel/lib/conversation-context";
-import { dockChips, type DockChip } from "@/features/travel/lib/dock-chips";
+import { dockChips, panelChips, type DockChip } from "@/features/travel/lib/dock-chips";
 import { pendingSteps } from "@/features/travel/lib/pending-steps";
 import { coordsOf } from "@/features/travel/lib/distance";
 import { bounds, center, pinsFrom, placed } from "@/features/travel/lib/spot-geo";
-import { dockBasePx, mapFitPadding } from "@/features/travel/lib/screen-layout";
+import {
+  dockBasePx,
+  mapFitPadding,
+  panelBasePx,
+  PANEL_CHIP_GAP_PX,
+} from "@/features/travel/lib/screen-layout";
 import { pickTravelPhoto, shootTravelPhoto } from "@/features/travel/usecases/pick-travel-photo";
 import type { AskInput, PhotoUpload, TravelSpot } from "@/features/travel/api";
 import { colors } from "@/constants/theme";
@@ -36,7 +43,9 @@ const SAVE_COMPLETE = "여행지를 저장했어요";
 const UNSAVE_COMPLETE = "여행지 저장을 해제했어요";
 const TOAST_LIFT = 12;
 const NO_SPOTS: TravelSpot[] = [];
+const NO_CHIPS: DockChip[] = [];
 
+export const LOCATION_REQUIRED = "위치를 켜면 내 근처를 찾아드려요";
 export const ASK_PLACEHOLDER = "어디로 갈지 말해보세요";
 export const ATTACHED_PLACEHOLDER = "지역이나 조건을 덧붙여 보세요";
 
@@ -46,7 +55,6 @@ export default function TravelScreen() {
   const [photo, setPhoto] = useState<PhotoUpload | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [expandedAnswer, setExpandedAnswer] = useState(false);
-  const [expandedChips, setExpandedChips] = useState(false);
   const [focusedIndexRaw, setFocusedIndexRaw] = useState(0);
   const [scrollToRaw, setScrollToRaw] = useState<number | null>(null);
 
@@ -78,15 +86,29 @@ export default function TravelScreen() {
   const mapSpots = useMemo(() => placed(spots), [spots]);
   const pins = useMemo(() => pinsFrom(mapSpots), [mapSpots]);
 
-  const dockBase = dockBasePx({ primer: locationAskable, attached: photo !== null });
+  const panelShown = turn !== null || seeded !== null;
   const carouselShown = pending || spots.length > 0;
-  const dockHeight = dockBase + (carouselShown ? CAROUSEL_BLOCK_PX : 0);
+  const dockChipRow = panelShown ? NO_CHIPS : dockChips();
+  const panelChipRow = panelShown
+    ? panelChips({ answer, focused, hasCrowd: focused?.hasCrowd === true })
+    : NO_CHIPS;
+
+  const dockBase = dockBasePx({
+    primer: locationAskable,
+    attached: photo !== null,
+    chips: !panelShown,
+  });
+  const panelBlock = panelShown
+    ? panelBasePx({ chips: panelChipRow.length > 0, carousel: carouselShown }) +
+      (carouselShown ? CAROUSEL_BLOCK_PX : 0)
+    : 0;
+  const coveredPx = dockBase + panelBlock;
 
   const fit = useMemo(() => {
     const box = bounds(mapSpots);
     if (!box) return null;
-    return { ...box, pad: mapFitPadding({ safeTop: insets.top, dockHeight }) };
-  }, [mapSpots, insets.top, dockHeight]);
+    return { ...box, pad: mapFitPadding({ safeTop: insets.top, dockHeight: coveredPx }) };
+  }, [mapSpots, insets.top, coveredPx]);
 
   const focus = useMemo(() => {
     if (focused) return coordsOf(focused) ?? center(mapSpots) ?? coords;
@@ -113,7 +135,6 @@ export default function TravelScreen() {
   const beginTurn = useCallback(() => {
     clearSeed();
     setExpandedAnswer(false);
-    setExpandedChips(false);
     setFocusedIndexRaw(0);
     setScrollToRaw(null);
   }, [clearSeed]);
@@ -135,6 +156,14 @@ export default function TravelScreen() {
     [busy, nextTurnId, answer, focused, startTurn, beginTurn, run],
   );
 
+  const demandCoords = useCallback(() => {
+    if (locationAskable) {
+      void askLocation();
+      return;
+    }
+    setToast(LOCATION_REQUIRED);
+  }, [locationAskable, askLocation]);
+
   const onChipPress = useCallback(
     async (chip: DockChip) => {
       if (busy) return;
@@ -147,24 +176,23 @@ export default function TravelScreen() {
         }
         return;
       }
-      if (chip.kind === "context") {
-        setExpandedChips((open) => !open);
-        return;
-      }
       const inner = chip.chip;
       if (inner.kind === "question") {
         submit(inner.question, null);
         return;
       }
       if (inner.kind === "anchor") {
-        if (!focused && !coords) return;
+        if (!focused && !coords) {
+          demandCoords();
+          return;
+        }
         const anchor = focused
           ? { contentId: focused.contentId, action: inner.action }
           : { action: inner.action };
         const id = nextTurnId();
         startTurn({
           id,
-          question: anchorQuestion(focused?.title ?? MY_LOCATION, inner.label),
+          question: focused ? inner.label : anchorQuestion(MY_LOCATION, inner.label),
           request: "",
           photo: null,
           anchor,
@@ -174,6 +202,10 @@ export default function TravelScreen() {
         return;
       }
       if (inner.kind === "intent") {
+        if (inner.intent.nearMe === true && !coords) {
+          demandCoords();
+          return;
+        }
         const id = nextTurnId();
         startTurn({ id, question: inner.label, request: "", photo: null, intent: inner.intent });
         beginTurn();
@@ -195,7 +227,19 @@ export default function TravelScreen() {
       beginTurn();
       run(id, { photo: attached, intent, patch: inner.patch });
     },
-    [busy, submit, nextTurnId, focused, coords, answer, turn, startTurn, beginTurn, run],
+    [
+      busy,
+      submit,
+      nextTurnId,
+      focused,
+      coords,
+      demandCoords,
+      answer,
+      turn,
+      startTurn,
+      beginTurn,
+      run,
+    ],
   );
 
   const onShoot = useCallback(async () => {
@@ -240,17 +284,8 @@ export default function TravelScreen() {
 
   const onFocusChange = useCallback((index: number) => {
     setFocusedIndexRaw(index);
-    setExpandedChips(false);
     setScrollToRaw(null);
   }, []);
-
-  const chips = dockChips({
-    answer,
-    focused,
-    expanded: expandedChips,
-    hasCoords: coords !== null,
-    hasCrowd: focused?.hasCrowd === true,
-  });
 
   const placeholder = photo
     ? ATTACHED_PLACEHOLDER
@@ -271,49 +306,57 @@ export default function TravelScreen() {
         onPinTap={onPinTap}
       />
 
-      <SearchPulse active={busy} bottom={dockHeight} />
+      <SearchPulse active={busy} bottom={coveredPx} />
 
-      {turn ? (
-        <AnswerBar
-          question={turn.question}
-          answer={answer?.answer ?? null}
-          photoUri={turn.photo?.uri ?? null}
-          step={step}
-          errorMessage={turn.status === "failed" ? turn.errorMessage : null}
-          expanded={expandedAnswer || spots.length === 0}
-          collapsible={spots.length > 0}
-          top={insets.top + 7}
-          onToggle={() => setExpandedAnswer((open) => !open)}
-          onClose={onNewChat}
-          onRetry={onRetry}
-        />
+      {panelShown ? (
+        <ResultPanel bottom={dockBase}>
+          {turn ? (
+            <AnswerBar
+              question={turn.question}
+              answer={answer?.answer ?? null}
+              photoUri={turn.photo?.uri ?? null}
+              step={step}
+              errorMessage={turn.status === "failed" ? turn.errorMessage : null}
+              expanded={expandedAnswer || spots.length === 0}
+              collapsible={spots.length > 0}
+              onToggle={() => setExpandedAnswer((open) => !open)}
+              onClose={onNewChat}
+              onRetry={onRetry}
+            />
+          ) : null}
+
+          <View testID="travel-carousel-slot" pointerEvents="box-none">
+            {pending ? <SpotCarouselSkeleton /> : null}
+            <SpotCarousel
+              spots={spots}
+              tagBasis={answer?.tagBasis ?? null}
+              focusedIndex={focusedAt}
+              scrollToIndex={scrollToAt}
+              origin={coords}
+              onFocusChange={onFocusChange}
+              onDetail={(spot: TravelSpot) => router.push(`/spots/${spot.contentId}`)}
+              onSaveToggle={(saved) => setToast(saved ? SAVE_COMPLETE : UNSAVE_COMPLETE)}
+              onMetricPress={(tooltip) => {
+                if (tooltip) setToast(tooltip);
+              }}
+            />
+          </View>
+
+          <View style={carouselShown ? undefined : styles.chipLift} pointerEvents="box-none">
+            <ChipRow
+              chips={panelChipRow}
+              disabled={busy}
+              inset
+              onChipPress={(chip) => void onChipPress(chip)}
+            />
+          </View>
+        </ResultPanel>
       ) : null}
-
-      <View
-        testID="travel-carousel-slot"
-        style={[styles.stack, { bottom: dockBase }]}
-        pointerEvents="box-none"
-      >
-        {pending ? <SpotCarouselSkeleton /> : null}
-        <SpotCarousel
-          spots={spots}
-          tagBasis={answer?.tagBasis ?? null}
-          focusedIndex={focusedAt}
-          scrollToIndex={scrollToAt}
-          origin={coords}
-          onFocusChange={onFocusChange}
-          onDetail={(spot: TravelSpot) => router.push(`/spots/${spot.contentId}`)}
-          onSaveToggle={(saved) => setToast(saved ? SAVE_COMPLETE : UNSAVE_COMPLETE)}
-          onMetricPress={(tooltip) => {
-            if (tooltip) setToast(tooltip);
-          }}
-        />
-      </View>
 
       <TravelDock
         value={draft}
         photo={photo}
-        chips={chips}
+        chips={dockChipRow}
         disabled={busy}
         placeholder={placeholder}
         locationAskable={locationAskable}
@@ -323,14 +366,13 @@ export default function TravelScreen() {
         onShoot={() => void onShoot()}
         onClearAttach={() => setPhoto(null)}
         onSubmit={() => submit(draft, photo)}
-        onFocus={() => setExpandedChips(false)}
         onAskLocation={() => void askLocation()}
       />
 
       <Toast
         testID="travel-toast"
         message={toast}
-        bottom={dockHeight + TOAST_LIFT}
+        bottom={coveredPx + TOAST_LIFT}
         onHide={() => setToast(null)}
       />
     </View>
@@ -339,5 +381,5 @@ export default function TravelScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  stack: { position: "absolute", left: 0, right: 0 },
+  chipLift: { marginTop: PANEL_CHIP_GAP_PX },
 });

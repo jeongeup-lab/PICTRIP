@@ -1,11 +1,7 @@
 import renderer, { act } from "react-test-renderer";
-import { ScrollView, StyleSheet, Text, TextInput } from "react-native";
-import {
-  TravelDock,
-  dockStyles,
-  PHOTO_CHIP_LABEL,
-  PHOTO_CHIP_TEST_ID,
-} from "@/features/travel/components/TravelDock";
+import { Text, TextInput } from "react-native";
+import { TravelDock, dockStyles } from "@/features/travel/components/TravelDock";
+import { chipStyles, PHOTO_CHIP_TEST_ID } from "@/features/travel/components/ChipRow";
 import {
   DOCK_ATTACH_ROW_PX,
   DOCK_CHIP_ROW_PX,
@@ -17,8 +13,7 @@ import type { DockChip } from "@/features/travel/lib/dock-chips";
 
 const chips: DockChip[] = [
   { kind: "photo" },
-  { kind: "context", title: "성산일출봉", expanded: false },
-  { kind: "query", chip: { kind: "question", label: "사람 적은 곳만", question: "사람 적은 곳" } },
+  { kind: "query", chip: { kind: "anchor", label: "근처 카페", action: "cafe" } },
 ];
 
 const photo = { uri: "file://a.jpg", name: "a.jpg", type: "image/jpeg" };
@@ -36,7 +31,6 @@ const base = {
   onShoot: jest.fn(),
   onClearAttach: jest.fn(),
   onSubmit: jest.fn(),
-  onFocus: jest.fn(),
   onAskLocation: jest.fn(),
 };
 
@@ -67,81 +61,24 @@ function byId(tree: renderer.ReactTestRenderer, id: string) {
     .find((n) => typeof n.props.onPress === "function");
 }
 
-function pressableChip(tree: renderer.ReactTestRenderer, testID: string) {
-  return tree.root
-    .findAllByProps({ testID })
-    .find((node) => typeof node.props.style === "function");
-}
-
-function chipOpacity(tree: renderer.ReactTestRenderer): number | undefined {
-  const host = tree.root
-    .findAllByProps({ testID: PHOTO_CHIP_TEST_ID })
-    .find((node) => typeof node.type === "string");
-  return StyleSheet.flatten(host?.props.style)?.opacity as number | undefined;
-}
-
 describe("TravelDock", () => {
-  it("칩을 순서대로 그린다", () => {
-    const shown = texts(mount());
-
-    expect(shown).toContain("사진");
-    expect(shown).toContain("성산일출봉");
-    expect(shown).toContain("사람 적은 곳만");
-    expect(shown.indexOf("사진")).toBeLessThan(shown.indexOf("성산일출봉"));
-    expect(shown.indexOf("성산일출봉")).toBeLessThan(shown.indexOf("사람 적은 곳만"));
+  it("칩을 받으면 입력 줄 위에 칩 줄을 세운다", () => {
+    expect(texts(mount())).toContain("근처 카페");
+    expect(byId(mount(), PHOTO_CHIP_TEST_ID)).toBeDefined();
   });
 
-  it("접힌 맥락 칩은 근처를 붙이고 펼친 칩은 이름만 쓴다", () => {
-    const collapsed = mount({ chips: [{ kind: "context", title: "성산일출봉", expanded: false }] });
-    const expanded = mount({ chips: [{ kind: "context", title: "성산일출봉", expanded: true }] });
+  it("결과 패널이 칩을 가져가면 독은 입력 줄만 남는다", () => {
+    const tree = mount({ chips: [] });
 
-    expect(texts(collapsed)).toBe("성산일출봉 근처");
-    expect(texts(expanded)).toBe("성산일출봉");
-  });
-
-  it("사진 칩은 스크롤 트랙 밖에 고정으로 남는다", () => {
-    const tree = mount();
-    const track = tree.root.findByType(ScrollView);
-
-    expect(byId(tree, PHOTO_CHIP_TEST_ID)).toBeDefined();
-    expect(track.findAllByProps({ testID: PHOTO_CHIP_TEST_ID })).toHaveLength(0);
-    expect(
-      track
-        .findAll((node) => node.props.accessibilityRole === "button")
-        .map((node) => node.props.accessibilityLabel),
-    ).not.toContain(PHOTO_CHIP_LABEL);
-  });
-
-  it("고정 사진 칩을 누르면 사진 칩을 그대로 올린다", () => {
-    const onChipPress = jest.fn();
-    const tree = mount({ onChipPress });
-
-    act(() => byId(tree, PHOTO_CHIP_TEST_ID)!.props.onPress());
-
-    expect(onChipPress).toHaveBeenCalledWith({ kind: "photo" });
-  });
-
-  it("스크롤 칩은 사진 칩을 뺀 자리로 번호를 매긴다", () => {
-    const onChipPress = jest.fn();
-    const tree = mount({ onChipPress });
-
-    act(() => byId(tree, "travel-chip-0")!.props.onPress());
-
-    expect(onChipPress).toHaveBeenCalledWith(chips[1]);
-  });
-
-  it("사진 칩이 없는 상태에서는 고정 자리도 비운다", () => {
-    const tree = mount({ chips: [{ kind: "context", title: "성산일출봉", expanded: true }] });
-
-    expect(byId(tree, PHOTO_CHIP_TEST_ID)).toBeUndefined();
-    expect(byId(tree, "travel-chip-0")).toBeDefined();
+    expect(tree.root.findAllByProps({ testID: "travel-chip-row" })).toHaveLength(0);
+    expect(byId(tree, "travel-send")).toBeDefined();
   });
 
   it("첨부가 있으면 배너가 칩 행을 대신한다", () => {
     const tree = mount({ photo });
 
     expect(texts(tree)).toContain("이 사진 같은 분위기로 찾아요");
-    expect(texts(tree)).not.toContain("사람 적은 곳만");
+    expect(texts(tree)).not.toContain("근처 카페");
   });
 
   it("입력이 있으면 전송이 살아난다", () => {
@@ -171,19 +108,6 @@ describe("TravelDock", () => {
     expect(input.props.editable).toBe(false);
   });
 
-  it("응답을 기다리는 동안 고정 칩과 스크롤 칩을 함께 잠근다", () => {
-    const locked = mount({ disabled: true });
-
-    expect(pressableChip(locked, PHOTO_CHIP_TEST_ID)?.props.disabled).toBe(true);
-    expect(pressableChip(locked, "travel-chip-0")?.props.disabled).toBe(true);
-    expect(pressableChip(mount(), PHOTO_CHIP_TEST_ID)?.props.disabled).toBe(false);
-  });
-
-  it("잠긴 칩은 눌리지 않아도 흐리게 보인다", () => {
-    expect(chipOpacity(mount({ disabled: true }))).toBe(dockStyles.pressed.opacity);
-    expect(chipOpacity(mount())).toBeUndefined();
-  });
-
   it("권한을 아직 묻지 않았을 때만 프라이머를 낸다", () => {
     expect(byId(mount(), "travel-ask-location")).toBeUndefined();
     expect(byId(mount({ locationAskable: true }), "travel-ask-location")).toBeDefined();
@@ -206,14 +130,7 @@ describe("도크 스타일시트와 레이아웃 상수", () => {
   });
 
   it("칩 줄은 칩 높이에 칩 밴드 아래 여백을 더한 값이다", () => {
-    expect(dockStyles.chip.height + dockStyles.chipBand.marginBottom).toBe(DOCK_CHIP_ROW_PX);
-  });
-
-  it("고정 칩과 스크롤 트랙 어느 쪽도 칩 줄을 더 키우지 않는다", () => {
-    expect(dockStyles.chipBand.alignItems).toBe("flex-start");
-    expect(dockStyles.chipTrack.flexGrow).toBe(0);
-    expect(dockStyles.chipTrack.flexShrink).toBe(1);
-    expect(dockStyles.chips).not.toHaveProperty("paddingBottom");
+    expect(chipStyles.chip.height + dockStyles.chipSlot.marginBottom).toBe(DOCK_CHIP_ROW_PX);
   });
 
   it("첨부 줄은 썸네일에 배너 패딩·테두리·아래 여백을 더한 값이다", () => {

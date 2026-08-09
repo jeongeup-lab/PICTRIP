@@ -1,8 +1,11 @@
 # 0017. 여행 탭은 시트를 버리고 지도 위 캐러셀로 답한다
 
-- 상태: 채택
+- 상태: 채택 — 3층 배치와 문맥 칩 펼침은
+  [0018](0018-travel-tab-answers-in-one-rising-panel.md) 이 패널 하나로 합쳤다.
+  지도 위 캐러셀·카드 한 번 탭·앵커 폐기는 그대로다
 - 날짜: 2026-08-08
 - 관련: [travel-tab](../reference/travel-tab.md), [api](../reference/api.md),
+  [0018 답은 올라오는 패널 하나에](0018-travel-tab-answers-in-one-rising-panel.md),
   [0012 실제 지도·카드 탭](0012-travel-tab-live-map-and-card-tap.md),
   [0015 여행 탭은 지도 하나 위에서 돈다](0015-travel-and-profile-go-dark-on-one-map.md),
   [0016 앱 안의 지도 화면을 걷어낸다](0016-drop-the-in-app-map-screen.md)
