@@ -35,6 +35,7 @@ import {
   panelBasePx,
   PANEL_CHIP_GAP_PX,
 } from "@/features/travel/lib/screen-layout";
+import { useKeyboardHeight } from "@/features/travel/hooks/use-keyboard-height";
 import { pickTravelPhoto, shootTravelPhoto } from "@/features/travel/usecases/pick-travel-photo";
 import type { AskInput, PhotoUpload, TravelSpot } from "@/features/travel/api";
 import { colors } from "@/constants/theme";
@@ -52,6 +53,7 @@ export const ATTACHED_PLACEHOLDER = "지역이나 조건을 덧붙여 보세요"
 
 export default function TravelScreen() {
   const insets = useSafeAreaInsets();
+  const keyboardPx = useKeyboardHeight();
   const [draft, setDraft] = useState("");
   const [photo, setPhoto] = useState<PhotoUpload | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -375,7 +377,7 @@ export default function TravelScreen() {
         disabled={busy}
         placeholder={placeholder}
         locationAskable={locationAskable}
-        bottom={0}
+        bottom={keyboardPx}
         onChange={setDraft}
         onChipPress={(chip) => void onChipPress(chip)}
         onShoot={() => void onShoot()}

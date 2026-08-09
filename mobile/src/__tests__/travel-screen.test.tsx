@@ -1,5 +1,5 @@
 import renderer, { act } from "react-test-renderer";
-import { FlatList, ScrollView, StyleSheet } from "react-native";
+import { FlatList, Keyboard, ScrollView, StyleSheet } from "react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import TravelScreen, {
   ASK_PLACEHOLDER,
@@ -1606,5 +1606,45 @@ describe("TravelScreen 이전 답이 남은 채 씨앗이 도착할 때", () => 
     expect(useConversation.getState().turns).toEqual([]);
     expect(panelShown(tree)).toBe(false);
     expect(placeholder(tree)).toBe(ASK_PLACEHOLDER);
+  });
+});
+
+describe("TravelScreen keyboard", () => {
+  const handlers = new Map<string, (event: unknown) => void>();
+
+  beforeEach(() => {
+    handlers.clear();
+    jest.spyOn(Keyboard, "addListener").mockImplementation(((
+      event: string,
+      handler: (payload: unknown) => void,
+    ) => {
+      handlers.set(event, handler);
+      return { remove: () => handlers.delete(event) };
+    }) as never);
+  });
+
+  async function fire(names: string[], payload: unknown) {
+    const handler = names.map((name) => handlers.get(name)).find(Boolean);
+    await act(async () => handler?.(payload));
+  }
+
+  const showKeyboard = (height: number) =>
+    fire(["keyboardWillShow", "keyboardDidShow"], { endCoordinates: { height } });
+  const hideKeyboard = () => fire(["keyboardWillHide", "keyboardDidHide"], {});
+
+  it("lifts the dock above the keyboard so the field stays visible", async () => {
+    const tree = await mount();
+    expect(dockBottom(tree)).toBe(0);
+
+    await showKeyboard(320);
+    expect(dockBottom(tree)).toBe(320);
+  });
+
+  it("drops the dock back to the bottom when the keyboard closes", async () => {
+    const tree = await mount();
+    await showKeyboard(320);
+    await hideKeyboard();
+
+    expect(dockBottom(tree)).toBe(0);
   });
 });
