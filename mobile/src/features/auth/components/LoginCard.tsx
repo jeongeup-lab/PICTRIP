@@ -38,7 +38,6 @@ function BrandSymbol() {
         <Rect x={26} y={11.4} width={8} height={5.2} rx={1.6} fill="#fff" stroke="none" />
         <Circle cx={30} cy={14} r={1.3} fill={colors.bg} />
       </Svg>
-      <View style={styles.symDot} />
     </View>
   );
 }
@@ -90,7 +89,7 @@ export function LoginCard({ variant, onSuccess, onCancel }: Props) {
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <Text style={styles.terms}>
-        계속 진행하면{" "}
+        위 버튼을 누르면{" "}
         <Text style={styles.termsLink} onPress={() => router.push("/legal/terms")}>
           이용약관
         </Text>{" "}
@@ -98,7 +97,7 @@ export function LoginCard({ variant, onSuccess, onCancel }: Props) {
         <Text style={styles.termsLink} onPress={() => router.push("/legal/privacy")}>
           개인정보처리방침
         </Text>
-        에{"\n"}동의하는 것으로 간주돼요.
+        에{"\n"}동의합니다.
       </Text>
     </View>
   );
@@ -116,17 +115,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: spacing.lg,
-  },
-  symDot: {
-    position: "absolute",
-    right: -4,
-    bottom: -4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.accent,
-    borderWidth: 3,
-    borderColor: colors.bg,
   },
   word: { fontSize: 26, fontWeight: "800", letterSpacing: -0.8, color: colors.ink },
   tagline: { fontSize: 13.5, color: colors.sec, marginTop: spacing.xs },
