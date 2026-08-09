@@ -24,6 +24,7 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: colors.ter,
         tabBarLabelStyle: { fontSize: 10, fontWeight: "700" },
         sceneStyle: { backgroundColor: colors.bg },
+        tabBarHideOnKeyboard: true,
         tabBarStyle: { backgroundColor: colors.bg, borderTopColor: colors.line },
       }}
     >
