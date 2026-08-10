@@ -17,7 +17,7 @@ interface Props {
   locationAskable: boolean;
   onChange: (text: string) => void;
   onFocus: () => void;
-  onShoot: () => void;
+  onAttach: () => void;
   onClearAttach: () => void;
   onSubmit: () => void;
   onAskLocation: () => void;
@@ -31,7 +31,7 @@ export function TravelDock({
   locationAskable,
   onChange,
   onFocus,
-  onShoot,
+  onAttach,
   onClearAttach,
   onSubmit,
   onAskLocation,
@@ -87,12 +87,12 @@ export function TravelDock({
           editable={!disabled}
         />
         <Pressable
-          testID="travel-shoot"
+          testID="travel-attach"
           accessibilityRole="button"
-          accessibilityLabel="사진 촬영"
+          accessibilityLabel="사진 첨부"
           style={dockStyles.iconButton}
           hitSlop={4}
-          onPress={onShoot}
+          onPress={onAttach}
           disabled={disabled}
         >
           <Icon name="camera" size={17} color={colors.sec} strokeWidth={1.9} />

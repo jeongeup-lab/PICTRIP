@@ -12,6 +12,7 @@ const base = {
   keyboardPx: 0,
   dockPx: 92,
   onGrabberTap: jest.fn(),
+  onCollapse: jest.fn(),
 };
 
 function mount(props: Partial<React.ComponentProps<typeof TravelSheet>> = {}) {
@@ -47,6 +48,23 @@ describe("TravelSheet", () => {
     expect(onGrabberTap).toHaveBeenCalled();
     expect(grabber.props.accessibilityRole).toBe("button");
     expect(grabber.props.accessibilityLabel).toBe("시트 크기 전환");
+  });
+
+  it("collapsed에서는 내리기 버튼도 없다", () => {
+    const tree = mount({ snap: "collapsed" });
+
+    expect(byId(tree, "travel-sheet-collapse")).toHaveLength(0);
+  });
+
+  it("mid에서 내리기 버튼을 탭하면 onCollapse", () => {
+    const onCollapse = jest.fn();
+    const tree = mount({ snap: "mid", onCollapse });
+    const button = byId(tree, "travel-sheet-collapse")[0];
+
+    act(() => button.props.onPress());
+
+    expect(onCollapse).toHaveBeenCalled();
+    expect(button.props.accessibilityLabel).toBe("시트 내리기");
   });
 
   it("루트는 travel-sheet testID와 시트 스타일을 가진다", () => {

@@ -1,6 +1,7 @@
 import renderer, { act } from "react-test-renderer";
 import { StyleSheet, Text, type StyleProp, type ViewStyle } from "react-native";
 import { SpotCard } from "@/features/travel/components/SpotCard";
+import { RemoteImage } from "@/components/RemoteImage";
 import type { TravelSpot } from "@/features/travel/api";
 import { colors } from "@/constants/theme";
 
@@ -82,6 +83,26 @@ beforeEach(() => {
 describe("SpotCard", () => {
   it("지도 핀과 같은 번호를 단다", () => {
     expect(texts(mount({ index: 2 }))).toContain("3");
+  });
+
+  it("사진이 없으면 대체 사진을 대신 그린다", () => {
+    const tree = mount({
+      spot: { ...spot, imageUrl: null, fallbackImageUrl: "https://kto/fallback.jpg" },
+    });
+
+    expect(tree.root.findByType(RemoteImage).props.uri).toBe("https://kto/fallback.jpg");
+  });
+
+  it("실제 사진이 있으면 대체 사진을 쓰지 않는다", () => {
+    const tree = mount({
+      spot: {
+        ...spot,
+        imageUrl: "https://kto/real.jpg",
+        fallbackImageUrl: "https://kto/fallback.jpg",
+      },
+    });
+
+    expect(tree.root.findByType(RemoteImage).props.uri).toBe("https://kto/real.jpg");
   });
 
   it("거리는 칩이 아니라 지역 줄에 붙는다", () => {

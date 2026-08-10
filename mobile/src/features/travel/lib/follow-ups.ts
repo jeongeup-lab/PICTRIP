@@ -129,25 +129,30 @@ function nearBranch(input: FollowUpInput): FollowUpBlock {
 function rootBranch(input: FollowUpInput): FollowUpBlock {
   const nearAlive = nearOptionChips(input).length > 0;
   const nearChip: FollowChip = { label: "근처 뭐 있어?", action: { kind: "branch", to: "near" } };
+  const refine: FollowChip[] = (input.refinements ?? []).map((r) => ({
+    label: r.label,
+    action: { kind: "refine", label: r.label, patch: r.patch },
+  }));
   const chips: FollowChip[] = [];
   let line: string;
   if (input.contentId === null) {
     line = "내 위치 근처의 카페·맛집·볼거리를 찾아드릴 수 있어요.";
+    chips.push(...refine);
     if (nearAlive) chips.push(nearChip);
   } else if (input.isDetailTurn) {
     line = "더 궁금한 게 있으세요?";
+    chips.push(...refine);
     chips.push(...infoChips(input));
     if (nearAlive) chips.push(nearChip);
   } else {
     line = `${input.title} 근처의 카페·맛집·볼거리를 찾아드릴 수도 있고, 어떤 곳인지 더 알려드릴 수도 있어요.`;
+    chips.push(...refine);
     if (nearAlive) chips.push(nearChip);
     chips.push(...infoChips(input).slice(0, 1));
   }
-  for (const r of input.refinements ?? []) {
-    chips.push({ label: r.label, action: { kind: "refine", label: r.label, patch: r.patch } });
-  }
+  const shown = new Set(refine.map((c) => c.label));
   for (const q of input.suggestions ?? []) {
-    if (input.asked.has(`q:${q}`)) continue;
+    if (shown.has(q) || input.asked.has(`q:${q}`)) continue;
     chips.push({ label: q, action: { kind: "question", question: q } });
   }
   return { line, chips: chips.slice(0, MAX_FOLLOW_CHIPS) };

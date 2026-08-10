@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, Easing, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Icon } from "@/components/Icon";
 import { colors, shadows } from "@/constants/theme";
 import {
   SHEET_ANIM_MS,
@@ -16,10 +17,18 @@ interface Props {
   keyboardPx: number;
   dockPx: number;
   onGrabberTap: () => void;
+  onCollapse: () => void;
   children: ReactNode;
 }
 
-export function TravelSheet({ snap, keyboardPx, dockPx, onGrabberTap, children }: Props) {
+export function TravelSheet({
+  snap,
+  keyboardPx,
+  dockPx,
+  onGrabberTap,
+  onCollapse,
+  children,
+}: Props) {
   const { height: frameH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const targetHeight = sheetHeightPx({
@@ -59,15 +68,27 @@ export function TravelSheet({ snap, keyboardPx, dockPx, onGrabberTap, children }
   return (
     <Animated.View testID="travel-sheet" style={[sheetStyles.root, { height, bottom }]}>
       {snap !== "collapsed" && (
-        <Pressable
-          testID="travel-sheet-grabber"
-          accessibilityRole="button"
-          accessibilityLabel="시트 크기 전환"
-          onPress={onGrabberTap}
-          style={sheetStyles.grabberZone}
-        >
-          <View style={sheetStyles.pill} />
-        </Pressable>
+        <View style={sheetStyles.header}>
+          <Pressable
+            testID="travel-sheet-grabber"
+            accessibilityRole="button"
+            accessibilityLabel="시트 크기 전환"
+            onPress={onGrabberTap}
+            style={sheetStyles.grabberZone}
+          >
+            <View style={sheetStyles.pill} />
+          </Pressable>
+          <Pressable
+            testID="travel-sheet-collapse"
+            accessibilityRole="button"
+            accessibilityLabel="시트 내리기"
+            hitSlop={8}
+            onPress={onCollapse}
+            style={sheetStyles.collapse}
+          >
+            <Icon name="chevron-down" size={16} color={colors.ter} strokeWidth={2} />
+          </Pressable>
+        </View>
       )}
       <View style={sheetStyles.body}>{children}</View>
     </Animated.View>
@@ -86,9 +107,17 @@ export const sheetStyles = StyleSheet.create({
     borderTopColor: colors.glassBorder,
     ...shadows.sheet,
   },
+  header: {},
   grabberZone: {
     height: 20,
     alignItems: "center",
+    justifyContent: "center",
+  },
+  collapse: {
+    position: "absolute",
+    right: 14,
+    top: 0,
+    height: 20,
     justifyContent: "center",
   },
   pill: {

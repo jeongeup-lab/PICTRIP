@@ -48,7 +48,7 @@ describe("followUps 루트", () => {
     expect(b.chips.map((c) => c.label)).toEqual(["근처 뭐 있어?", "영업시간은?"]);
   });
 
-  it("refinements와 suggestions가 뒤에 붙고 5개로 캡", () => {
+  it("refinements가 맨 앞에 서고 suggestions는 뒤에 붙어 5개로 캡", () => {
     const b = followUps({
       ...base,
       refinements: [
@@ -58,13 +58,27 @@ describe("followUps 루트", () => {
       suggestions: ["야경 좋은 곳도 볼래?", "비 오는 날 코스는?"],
     });
     expect(b.chips.map((c) => c.label)).toEqual([
-      "근처 뭐 있어?",
-      "여긴 어떤 곳이야?",
       "조용한 곳만",
       "실내만",
+      "근처 뭐 있어?",
+      "여긴 어떤 곳이야?",
       "야경 좋은 곳도 볼래?",
     ]);
+    expect(b.chips[0].action).toEqual({
+      kind: "refine",
+      label: "조용한 곳만",
+      patch: { crowdPreference: "quiet" },
+    });
     expect(b.chips[4].action).toEqual({ kind: "question", question: "야경 좋은 곳도 볼래?" });
+  });
+
+  it("refinement와 같은 라벨의 suggestion은 다시 붙이지 않는다", () => {
+    const b = followUps({
+      ...base,
+      refinements: [{ label: "실내만", patch: { indoorOnly: true } }],
+      suggestions: ["실내만"],
+    });
+    expect(b.chips.filter((c) => c.label === "실내만")).toHaveLength(1);
   });
 
   it("이미 물은 suggestion은 제외", () => {
@@ -128,15 +142,15 @@ describe("포커스 스팟이 없을 때", () => {
     expect(b.chips.map((c) => c.label)).toEqual(["근처 뭐 있어?"]);
   });
 
-  it("refinements와 suggestions는 그대로 붙는다", () => {
+  it("refinements가 앞, suggestions가 뒤에 붙는다", () => {
     const b = followUps({
       ...noFocus,
       refinements: [{ label: "실내만", patch: { indoorOnly: true } }],
       suggestions: ["야경 좋은 곳도 볼래?"],
     });
     expect(b.chips.map((c) => c.label)).toEqual([
-      "근처 뭐 있어?",
       "실내만",
+      "근처 뭐 있어?",
       "야경 좋은 곳도 볼래?",
     ]);
   });

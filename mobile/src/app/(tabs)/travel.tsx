@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Keyboard, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
+import {
+  ActionSheetIOS,
+  Keyboard,
+  ScrollView,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Toast } from "@/components/Toast";
@@ -43,6 +50,9 @@ const TOAST_LIFT = 12;
 const IDLE_CHIP_LIFT = 10;
 const NO_SPOTS: TravelSpot[] = [];
 
+export const ATTACH_SHOOT_LABEL = "촬영";
+export const ATTACH_PICK_LABEL = "앨범에서 선택";
+export const ATTACH_CANCEL_LABEL = "취소";
 export const LOCATION_CHECKING = "위치를 확인하는 중이에요";
 export const LOCATION_REQUIRED = "위치를 켜면 내 근처를 찾아드려요";
 export const ASK_PLACEHOLDER = "어디로 갈지 말해보세요";
@@ -169,7 +179,7 @@ export default function TravelScreen() {
 
   const beginTurn = useCallback(() => {
     resetFocus();
-    setSnap("full");
+    setSnap("mid");
   }, [resetFocus]);
 
   const submit = useCallback(
@@ -218,10 +228,6 @@ export default function TravelScreen() {
         return;
       }
       const inner = chip.chip;
-      if (inner.kind === "question") {
-        submit(inner.question, null);
-        return;
-      }
       if (inner.kind === "anchor") {
         if (!focused && !coords) {
           demandCoords();
@@ -253,18 +259,7 @@ export default function TravelScreen() {
         run(id, { intent: inner.intent });
       }
     },
-    [
-      busy,
-      attachFromAlbum,
-      submit,
-      focused,
-      coords,
-      demandCoords,
-      nextTurnId,
-      startTurn,
-      beginTurn,
-      run,
-    ],
+    [busy, attachFromAlbum, focused, coords, demandCoords, nextTurnId, startTurn, beginTurn, run],
   );
 
   const onFollowChip = useCallback(
@@ -319,6 +314,19 @@ export default function TravelScreen() {
       setToast(PHOTO_SHOOT_FAILED);
     }
   }, []);
+
+  const onAttach = useCallback(() => {
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        options: [ATTACH_SHOOT_LABEL, ATTACH_PICK_LABEL, ATTACH_CANCEL_LABEL],
+        cancelButtonIndex: 2,
+      },
+      (choice) => {
+        if (choice === 0) void onShoot();
+        if (choice === 1) void attachFromAlbum();
+      },
+    );
+  }, [onShoot, attachFromAlbum]);
 
   const onNewChat = useCallback(() => {
     clearTurns();
@@ -411,7 +419,16 @@ export default function TravelScreen() {
         </View>
       ) : null}
 
-      <TravelSheet snap={snap} keyboardPx={keyboardPx} dockPx={dockPx} onGrabberTap={onGrabberTap}>
+      <TravelSheet
+        snap={snap}
+        keyboardPx={keyboardPx}
+        dockPx={dockPx}
+        onGrabberTap={onGrabberTap}
+        onCollapse={() => {
+          Keyboard.dismiss();
+          setSnap("collapsed");
+        }}
+      >
         {greetingShown ? (
           <ScrollView
             style={styles.slot}
@@ -453,7 +470,7 @@ export default function TravelScreen() {
           locationAskable={locationAskable}
           onChange={setDraft}
           onFocus={onInputFocus}
-          onShoot={() => void onShoot()}
+          onAttach={onAttach}
           onClearAttach={() => setPhoto(null)}
           onSubmit={() => submit(draft, photo)}
           onAskLocation={() => void askLocation()}

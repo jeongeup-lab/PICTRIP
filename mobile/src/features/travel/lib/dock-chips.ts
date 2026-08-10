@@ -7,5 +7,5 @@ function queries(chips: Chip[]): DockChip[] {
 }
 
 export function dockChips(): DockChip[] {
-  return [{ kind: "photo" }, ...queries(idleChips())];
+  return queries(idleChips());
 }

@@ -80,7 +80,11 @@ export function SpotCard({
         onPressIn={() => prefetchSpot(spot)}
         onPress={onDetail}
       >
-        <RemoteImage uri={spot.imageUrl} style={styles.thumb} radius={12} />
+        <RemoteImage
+          uri={spot.imageUrl ?? spot.fallbackImageUrl ?? null}
+          style={styles.thumb}
+          radius={12}
+        />
 
         <View style={styles.copy}>
           <View style={styles.head}>

@@ -18,7 +18,7 @@ const base = {
   locationAskable: false,
   onChange: jest.fn(),
   onFocus: jest.fn(),
-  onShoot: jest.fn(),
+  onAttach: jest.fn(),
   onClearAttach: jest.fn(),
   onSubmit: jest.fn(),
   onAskLocation: jest.fn(),

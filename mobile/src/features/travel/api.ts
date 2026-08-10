@@ -61,6 +61,7 @@ export interface TravelSpot {
   title: string;
   regionLabel: string;
   imageUrl: string | null;
+  fallbackImageUrl?: string | null;
   tag: string | null;
   lat: number | null;
   lng: number | null;

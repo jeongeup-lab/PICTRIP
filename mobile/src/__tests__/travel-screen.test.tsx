@@ -1,5 +1,5 @@
 import renderer, { act } from "react-test-renderer";
-import { Dimensions, FlatList, Keyboard, Text } from "react-native";
+import { ActionSheetIOS, Dimensions, FlatList, Keyboard, Text } from "react-native";
 import { Image as ExpoImage } from "expo-image";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import TravelScreen, {
@@ -335,6 +335,12 @@ async function pressSave(tree: renderer.ReactTestRenderer, contentId: string) {
   await press(tree, `travel-card-save-${contentId}`);
 }
 
+function chooseAttach(index: number) {
+  jest
+    .spyOn(ActionSheetIOS, "showActionSheetWithOptions")
+    .mockImplementation((_options, handler) => handler(index));
+}
+
 describe("TravelScreen 시트 스냅", () => {
   it("처음에는 접힌 시트와 플로팅 칩만 있다", async () => {
     const tree = await mount();
@@ -356,7 +362,7 @@ describe("TravelScreen 시트 스냅", () => {
     expect(chip(tree, "근처 맛집")).toBeUndefined();
   });
 
-  it("전송하는 동안 full, 답이 오면 mid 로 내려온다", async () => {
+  it("전송해도 시트는 항목이 보이는 mid 까지만 올라간다", async () => {
     let resolveAsk: (answer: AgentAnswer) => void = () => {};
     askAgentMock.mockReturnValueOnce(
       new Promise<AgentAnswer>((resolve) => {
@@ -366,23 +372,40 @@ describe("TravelScreen 시트 스냅", () => {
     const tree = await mount();
     await type(tree, "제주 계곡");
     await press(tree, "travel-send");
-    expect(snapOf(tree)).toBe("full");
+    expect(snapOf(tree)).toBe("mid");
 
     await act(async () => resolveAsk(ANSWER));
 
     expect(snapOf(tree)).toBe("mid");
   });
 
-  it("실패한 턴은 full 에 남아 재시도를 보여준다", async () => {
+  it("실패한 턴은 mid 에 남아 재시도를 보여준다", async () => {
     askAgentMock.mockRejectedValueOnce(new Error("boom"));
     const tree = await mount();
 
     await type(tree, "제주 계곡");
     await press(tree, "travel-send");
 
-    expect(snapOf(tree)).toBe("full");
+    expect(snapOf(tree)).toBe("mid");
     expect(rendered(tree)).toContain(FAIL_TITLE);
     expect(pressable(tree, "travel-retry")).toBeDefined();
+  });
+
+  it("내리기 버튼은 대화를 지키면서 시트만 접는다", async () => {
+    useConversation.setState({ turns: [mapTurn], busy: false });
+    const tree = await mount();
+    await focusInput(tree);
+    expect(snapOf(tree)).toBe("mid");
+
+    await press(tree, "travel-sheet-collapse");
+
+    expect(snapOf(tree)).toBe("collapsed");
+    expect(useConversation.getState().turns).toHaveLength(1);
+
+    await focusInput(tree);
+
+    expect(snapOf(tree)).toBe("mid");
+    expect(useConversation.getState().turns).toHaveLength(1);
   });
 
   it("그래버 탭은 full 과 mid 를 오간다", async () => {
@@ -417,7 +440,7 @@ describe("TravelScreen 시트 스냅", () => {
 
     const pulse = tree.root.findByType(SearchPulse);
     expect(pulse.props.active).toBe(true);
-    expect(pulse.props.bottom).toBe(sheetPx("full"));
+    expect(pulse.props.bottom).toBe(sheetPx("mid"));
 
     await act(async () => resolveAsk(ANSWER));
   });
@@ -555,7 +578,7 @@ describe("TravelScreen starter chips", () => {
     expect(rendered(tree)).not.toContain(LOCATION_REQUIRED);
   });
 
-  it("첫 화면 칩은 사진 뒤에 근처 세 갈래로 고정이다", async () => {
+  it("첫 화면 칩은 사진 칩 없이 근처 세 갈래와 테마 두 갈래로 고정이다", async () => {
     const tree = await mount();
     const labels = tree.root
       .findAll(
@@ -567,9 +590,34 @@ describe("TravelScreen starter chips", () => {
       )
       .map((node) => node.props.accessibilityLabel);
 
-    expect(labels[0]).toBe(PHOTO_CHIP_LABEL);
-    expect(labels).toEqual([PHOTO_CHIP_LABEL, "근처 카페", "근처 맛집", "근처 볼거리"]);
-    expect(pressable(tree, PHOTO_CHIP_TEST_ID)).toBeDefined();
+    expect(labels).toEqual(["근처 카페", "근처 맛집", "근처 볼거리", "한적한 자연", "실내 나들이"]);
+    expect(pressable(tree, PHOTO_CHIP_TEST_ID)).toBeUndefined();
+  });
+
+  it("테마 칩은 위치 없이도 바로 검색한다", async () => {
+    useNearbyCoordsMock.mockReturnValue({
+      coords: null,
+      phase: "unavailable",
+      askable: true,
+      ask: jest.fn(),
+    });
+    const tree = await mount();
+
+    await pressChip(tree, "실내 나들이");
+
+    expect(askAgentMock).toHaveBeenCalledTimes(1);
+    expect(askAgentMock.mock.calls[0][0].intent?.indoorOnly).toBe(true);
+  });
+
+  it("한적한 자연 칩은 자연 카테고리에 한산 조건을 실어 보낸다", async () => {
+    const tree = await mount();
+
+    await pressChip(tree, "한적한 자연");
+
+    const input = askAgentMock.mock.calls[0][0];
+    expect(input.intent?.categoryKeywords).toEqual(["자연"]);
+    expect(input.intent?.crowdPreference).toBe("quiet");
+    expect(input.anchor).toBeUndefined();
   });
 
   it("대화가 생기면 플로팅 칩이 사라진다", async () => {
@@ -605,10 +653,11 @@ describe("TravelScreen starter chips", () => {
 describe("TravelScreen photo attach", () => {
   it("carries the text already typed in the dock along with the photo", async () => {
     pickTravelPhoto.mockResolvedValueOnce(PHOTO);
+    chooseAttach(1);
     const tree = await mount();
     await type(tree, "제주 바다 같은 곳");
 
-    await pressChip(tree, PHOTO_CHIP_LABEL);
+    await press(tree, "travel-attach");
     await press(tree, "travel-send");
 
     expect(askAgentMock).toHaveBeenCalledTimes(1);
@@ -617,12 +666,13 @@ describe("TravelScreen photo attach", () => {
     expect(sent.photo).toEqual(PHOTO);
   });
 
-  it("촬영한 사진도 같은 첨부 경로를 탄다", async () => {
+  it("첨부 버튼에서 촬영을 고르면 카메라 경로를 탄다", async () => {
     const shot = { uri: "file://shot.jpg", name: "shot.jpg", type: "image/jpeg" };
     shootTravelPhoto.mockResolvedValueOnce(shot);
+    chooseAttach(0);
     const tree = await mount();
 
-    await press(tree, "travel-shoot");
+    await press(tree, "travel-attach");
     await press(tree, "travel-send");
 
     expect(shootTravelPhoto).toHaveBeenCalledTimes(1);
@@ -630,12 +680,24 @@ describe("TravelScreen photo attach", () => {
     expect(askAgentMock.mock.calls[0][0].photo).toEqual(shot);
   });
 
+  it("첨부 버튼에서 취소하면 아무 일도 없다", async () => {
+    chooseAttach(2);
+    const tree = await mount();
+
+    await press(tree, "travel-attach");
+
+    expect(shootTravelPhoto).not.toHaveBeenCalled();
+    expect(pickTravelPhoto).not.toHaveBeenCalled();
+    expect(tree.root.findAllByProps({ testID: "travel-attach-banner" })).toHaveLength(0);
+  });
+
   it("카메라를 열지 못하면 입력을 유지하고 오류 토스트를 보여준다", async () => {
     shootTravelPhoto.mockRejectedValueOnce(new Error("denied"));
+    chooseAttach(0);
     const tree = await mount();
     await type(tree, "제주 바다 같은 곳");
 
-    await press(tree, "travel-shoot");
+    await press(tree, "travel-attach");
 
     expect(askAgentMock).not.toHaveBeenCalled();
     expect(tree.root.findByProps({ testID: "travel-input" }).props.value).toBe("제주 바다 같은 곳");
@@ -644,8 +706,9 @@ describe("TravelScreen photo attach", () => {
 
   it("only attaches a selected photo until the user sends it", async () => {
     pickTravelPhoto.mockResolvedValueOnce(PHOTO);
+    chooseAttach(1);
     const tree = await mount();
-    await pressChip(tree, PHOTO_CHIP_LABEL);
+    await press(tree, "travel-attach");
 
     expect(askAgentMock).not.toHaveBeenCalled();
     expect(tree.root.findAllByProps({ testID: "travel-attach-banner" }).length).toBeGreaterThan(0);
@@ -658,11 +721,12 @@ describe("TravelScreen photo attach", () => {
 
   it("tells the user what sending the photo will do instead of restating the attachment", async () => {
     pickTravelPhoto.mockResolvedValueOnce(PHOTO);
+    chooseAttach(1);
     const tree = await mount();
 
     expect(placeholder(tree)).toBe(ASK_PLACEHOLDER);
 
-    await pressChip(tree, PHOTO_CHIP_LABEL);
+    await press(tree, "travel-attach");
 
     const dock = rendered(tree);
     expect(dock).toContain(ATTACH_HEADLINE);
@@ -678,10 +742,11 @@ describe("TravelScreen photo attach", () => {
 
   it("keeps the draft and shows the shared toast when picking rejects", async () => {
     pickTravelPhoto.mockRejectedValueOnce(new Error("picker failed"));
+    chooseAttach(1);
     const tree = await mount();
     await type(tree, "제주 바다 같은 곳");
 
-    await pressChip(tree, PHOTO_CHIP_LABEL);
+    await press(tree, "travel-attach");
 
     expect(askAgentMock).not.toHaveBeenCalled();
     expect(tree.root.findByProps({ testID: "travel-input" }).props.value).toBe("제주 바다 같은 곳");
@@ -690,13 +755,14 @@ describe("TravelScreen photo attach", () => {
 
   it("첨부를 지우면 배너가 사라지고 칩 줄은 그대로다", async () => {
     pickTravelPhoto.mockResolvedValueOnce(PHOTO);
+    chooseAttach(1);
     const tree = await mount();
-    await pressChip(tree, PHOTO_CHIP_LABEL);
+    await press(tree, "travel-attach");
 
     await press(tree, "travel-attach-clear");
 
     expect(tree.root.findAllByProps({ testID: "travel-attach-banner" })).toHaveLength(0);
-    expect(chip(tree, PHOTO_CHIP_LABEL)).toBeDefined();
+    expect(chip(tree, "근처 맛집")).toBeDefined();
   });
 });
 

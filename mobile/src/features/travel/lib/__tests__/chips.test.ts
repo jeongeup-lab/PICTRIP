@@ -1,8 +1,14 @@
-import { idleChips } from "@/features/travel/lib/chips";
+import { idleChips, INDOOR_OUTING_CHIP, QUIET_NATURE_CHIP } from "@/features/travel/lib/chips";
 
 describe("idleChips", () => {
-  it("첫 화면 칩은 근처 세 갈래로 고정이다", () => {
-    expect(idleChips().map((c) => c.label)).toEqual(["근처 카페", "근처 맛집", "근처 볼거리"]);
+  it("첫 화면 칩은 근처 세 갈래 뒤에 테마 두 갈래를 낸다", () => {
+    expect(idleChips().map((c) => c.label)).toEqual([
+      "근처 카페",
+      "근처 맛집",
+      "근처 볼거리",
+      "한적한 자연",
+      "실내 나들이",
+    ]);
   });
 
   it("좌표 유무가 초기 칩을 바꾸지 않는다 — 위치는 누른 뒤에 묻는다", () => {
@@ -26,5 +32,28 @@ describe("근처 볼거리 경로", () => {
     const anchors = idleChips().filter((c) => c.kind === "anchor");
 
     expect(anchors.map((c) => c.label)).toEqual(["근처 카페", "근처 맛집"]);
+  });
+});
+
+describe("테마 칩", () => {
+  it("한적한 자연은 자연 카테고리에 한산 조건을 싣는다", () => {
+    expect(QUIET_NATURE_CHIP.kind).toBe("intent");
+    if (QUIET_NATURE_CHIP.kind === "intent") {
+      expect(QUIET_NATURE_CHIP.intent.categoryKeywords).toEqual(["자연"]);
+      expect(QUIET_NATURE_CHIP.intent.crowdPreference).toBe("quiet");
+    }
+  });
+
+  it("실내 나들이는 실내 축 하나로 나간다", () => {
+    expect(INDOOR_OUTING_CHIP.kind).toBe("intent");
+    if (INDOOR_OUTING_CHIP.kind === "intent") {
+      expect(INDOOR_OUTING_CHIP.intent.indoorOnly).toBe(true);
+    }
+  });
+
+  it("테마 칩은 위치를 요구하지 않는다", () => {
+    for (const chip of [QUIET_NATURE_CHIP, INDOOR_OUTING_CHIP]) {
+      if (chip.kind === "intent") expect(chip.intent.nearMe).not.toBe(true);
+    }
   });
 });
