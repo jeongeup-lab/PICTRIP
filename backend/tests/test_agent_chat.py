@@ -17,6 +17,7 @@ from app.modules.agent.errors import AgentNoResults, AgentWriterUnavailable
 from app.modules.agent.naver import NaverBlogPost
 from app.modules.agent.schemas import (
     AgentSpotCard,
+    AnswerSegment,
     AskResponse,
     AskStep,
     ChatRequest,
@@ -35,13 +36,13 @@ PIECES = [
 ]
 
 
-def _result() -> AskResponse:
+def _result(answer: list[AnswerSegment] | None = None) -> AskResponse:
     return AskResponse(
         steps=[
             AskStep(tool="intent", label="질문에서 지역·조건 추출", badge="Gemini"),
             AskStep(tool="category_search", label="부산 관광지 조회", badge="1곳"),
         ],
-        answer=[],
+        answer=answer or [],
         spots=[
             AgentSpotCard(
                 contentId="v1",
@@ -87,9 +88,9 @@ async def _fake_blog(
     ]
 
 
-def _wire(monkeypatch, *, gemini: _FakeGemini) -> None:
+def _wire(monkeypatch, *, gemini: _FakeGemini, result: AskResponse | None = None) -> None:
     async def fake_ask(session, redis, kto, **kwargs) -> AskResponse:
-        return _result()
+        return result or _result()
 
     monkeypatch.setattr(ask_service, "ask", fake_ask)
     monkeypatch.setattr(naver, "is_configured", lambda: True)
@@ -184,11 +185,62 @@ async def test_chat_turns_an_ask_error_into_a_delta_and_a_clean_done(monkeypatch
     assert done["spots"] == []
 
 
-async def test_a_writer_failure_ends_the_stream_with_an_error_event(monkeypatch) -> None:
+def _rate_limited() -> httpx.HTTPStatusError:
+    request = httpx.Request("POST", "https://generativelanguage.googleapis.com")
+    return httpx.HTTPStatusError(
+        "429", request=request, response=httpx.Response(429, request=request)
+    )
+
+
+async def test_a_writer_that_dies_before_any_text_falls_back_to_the_ask_answer(
+    monkeypatch,
+) -> None:
+    _wire(
+        monkeypatch,
+        gemini=_FakeGemini([], error=_rate_limited()),
+        result=_result(
+            [
+                AnswerSegment(text="부산 계곡", emphasis=True),
+                AnswerSegment(text=" 조건으로 1곳이에요."),
+            ]
+        ),
+    )
+
+    events = await _collect(ChatRequest(message="부산 계곡"))
+
+    names = [name for name, _ in events]
+    assert names[-1] == "done"
+    assert "error" not in names
+    assert "delta" in names
+    deltas = "".join(event.model_dump()["text"] for name, event in events if name == "delta")
+    assert deltas == "부산 계곡 조건으로 1곳이에요."
+    done = events[-1][1].model_dump()
+    assert done["answerText"] == "부산 계곡 조건으로 1곳이에요."
+    assert [spot["contentId"] for spot in done["spots"]] == ["v1"]
+
+
+async def test_a_writer_that_dies_mid_sentence_keeps_what_it_already_streamed(
+    monkeypatch,
+) -> None:
     _wire(
         monkeypatch,
         gemini=_FakeGemini(["결론이에요.\n"], error=httpx.ReadError("boom")),
+        result=_result([AnswerSegment(text="부산 계곡 조건으로 1곳이에요.")]),
     )
+
+    events = await _collect(ChatRequest(message="부산 계곡"))
+
+    names = [name for name, _ in events]
+    assert names[-1] == "done"
+    assert "error" not in names
+    done = events[-1][1].model_dump()
+    assert done["answerText"] == "결론이에요."
+
+
+async def test_a_writer_failure_with_nothing_to_say_still_ends_with_an_error_event(
+    monkeypatch,
+) -> None:
+    _wire(monkeypatch, gemini=_FakeGemini([], error=httpx.ReadError("boom")))
 
     events = await _collect(ChatRequest(message="부산 계곡"))
 

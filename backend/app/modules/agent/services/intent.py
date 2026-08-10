@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+from dataclasses import dataclass
 from typing import Any, get_args
 
 from pydantic import ValidationError
@@ -20,6 +22,7 @@ from app.modules.agent.schemas import (
     QueryIntent,
     TaskKind,
 )
+from app.web.errors import RateLimited
 
 logger = get_logger(__name__)
 
@@ -187,6 +190,371 @@ async def extract_intent(
         task=intent.task,
     )
     return intent
+
+
+@dataclass(frozen=True, slots=True)
+class IntentOutcome:
+    intent: QueryIntent
+    fallback: bool
+
+
+async def resolve_intent(
+    question: str,
+    *,
+    prior: QueryIntent | None = None,
+    prior_spots: list[str] | None = None,
+) -> IntentOutcome:
+    try:
+        asked = (
+            await extract_intent(question, prior=prior, prior_spots=prior_spots)
+            if prior is not None or prior_spots
+            else await extract_intent(question)
+        )
+    except (AgentIntentUnavailable, RateLimited) as exc:
+        guessed = _carried(fallback_intent(question), prior)
+        logger.warning(
+            "agent.intent.fallback",
+            code=exc.code,
+            categories=len(guessed.categoryKeywords),
+            regions=len(guessed.regionHints),
+            moods=len(guessed.moodHints),
+            crowd=guessed.crowdPreference,
+            indoor=guessed.indoorOnly,
+            near=guessed.nearMe,
+        )
+        return IntentOutcome(intent=guessed, fallback=True)
+    return IntentOutcome(intent=asked, fallback=False)
+
+
+def _carried(guessed: QueryIntent, prior: QueryIntent | None) -> QueryIntent:
+    if prior is None:
+        return guessed
+    return guessed.model_copy(
+        update={
+            "categoryKeywords": guessed.categoryKeywords or list(prior.categoryKeywords),
+            "regionHints": guessed.regionHints or list(prior.regionHints),
+            "moodHints": guessed.moodHints or list(prior.moodHints),
+            "crowdPreference": (
+                guessed.crowdPreference
+                if guessed.crowdPreference != "any"
+                else prior.crowdPreference
+            ),
+        }
+    )
+
+
+NEAR_WORDS = ("근처", "가까운", "가까이", "여기서", "여기 주변", "주변", "내 위치", "인근")
+QUIET_WORDS = ("한적", "조용", "사람 적", "사람이 적", "붐비지", "북적이지", "여유")
+POPULAR_WORDS = ("핫플", "유명", "인기", "붐비는", "사람 많")
+INDOOR_WORDS = (
+    "실내",
+    "비 올",
+    "비올",
+    "비 오는",
+    "비오는",
+    "비가",
+    "우천",
+    "장마",
+    "더위",
+    "폭염",
+    "추위",
+    "한파",
+    "미세먼지",
+)
+CATEGORY_WORDS: dict[str, str] = {
+    "맛집": "맛집",
+    "밥집": "맛집",
+    "먹거리": "맛집",
+    "먹을": "맛집",
+    "음식": "맛집",
+    "식당": "식당",
+    "카페": "카페",
+    "커피": "카페",
+    "찻집": "카페",
+    "디저트": "카페",
+    "박물관": "박물관",
+    "미술관": "미술관",
+    "사찰": "사찰",
+    "템플스테이": "사찰",
+    "전망대": "전망대",
+    "수목원": "수목원",
+    "식물원": "수목원",
+    "테마파크": "테마파크",
+    "놀이공원": "테마파크",
+    "놀이동산": "테마파크",
+    "해수욕장": "해수욕장",
+    "계곡": "계곡",
+    "폭포": "폭포",
+    "온천": "온천",
+    "전통시장": "전통시장",
+    "재래시장": "전통시장",
+    "수족관": "수족관",
+    "아쿠아리움": "수족관",
+    "동물원": "동물원",
+    "공원": "공원",
+    "산책로": "산책로",
+    "둘레길": "둘레길",
+    "트레킹": "둘레길",
+    "케이블카": "케이블카",
+    "출렁다리": "출렁다리",
+    "체험마을": "체험마을",
+    "고택": "고택",
+    "역사유적": "역사유적",
+    "유적지": "역사유적",
+    "글램핑": "글램핑",
+    "캠핑장": "캠핑장",
+    "캠핑": "캠핑장",
+}
+MOOD_WORDS: dict[str, Mood] = {
+    "바다": "sea",
+    "바닷": "sea",
+    "해변": "sea",
+    "해안": "sea",
+    "오션": "sea",
+    "숲": "mountain",
+    "등산": "mountain",
+    "산림": "mountain",
+    "산속": "mountain",
+    "산길": "mountain",
+    "호수": "lake",
+    "저수지": "lake",
+    "호반": "lake",
+    "한옥": "hanok",
+    "고궁": "hanok",
+    "궁궐": "hanok",
+    "전통": "hanok",
+    "야경": "night",
+    "노을": "night",
+    "일몰": "night",
+    "야간": "night",
+    "골목": "street",
+}
+MOOD_TOKENS: dict[str, Mood] = {
+    "산": "mountain",
+    "섬": "island",
+    "밤": "night",
+    "거리": "street",
+}
+REGION_STOPWORDS = frozenset(
+    {
+        "추천",
+        "추천지",
+        "알려",
+        "알려줘",
+        "부탁",
+        "해줘",
+        "어디",
+        "어디야",
+        "어딘가",
+        "근처",
+        "가까운",
+        "여기",
+        "여기서",
+        "주변",
+        "인근",
+        "좋은",
+        "좋을",
+        "있는",
+        "있을",
+        "없나",
+        "만한",
+        "가볼",
+        "가볼만한",
+        "갈만한",
+        "즐길",
+        "볼거리",
+        "놀거리",
+        "구경",
+        "산책",
+        "마을",
+        "근교",
+        "그리고",
+        "아니면",
+        "나들이",
+        "데이트",
+        "힐링",
+        "코스",
+        "장소",
+        "여행",
+        "여행지",
+        "관광",
+        "관광지",
+        "오늘",
+        "내일",
+        "모레",
+        "주말",
+        "요즘",
+        "지금",
+        "아침",
+        "점심",
+        "저녁",
+        "하루",
+        "당일치기",
+        "날씨",
+        "사람",
+        "사람들",
+        "우리",
+        "아이",
+        "아이랑",
+        "애들",
+        "가족",
+        "친구",
+        "연인",
+        "커플",
+        "혼자",
+        "부모님",
+        "아무거나",
+        "진짜",
+        "정말",
+        "완전",
+        "그냥",
+        "조금",
+        "살짝",
+        "감사",
+        "고마워",
+        "안녕",
+        "반가워",
+        "뭔가",
+        "어떤",
+        "무슨",
+        "어때",
+        "예쁜",
+        "이쁜",
+        "멋진",
+        "분위기",
+        "사진",
+        "느낌",
+        "스팟",
+        "명소",
+        "유명",
+        "유명한",
+        "한적",
+        "조용",
+        "조용한",
+        "실내",
+        "실외",
+        "야외",
+        "시원한",
+        "따뜻한",
+    }
+)
+JOSA_SUFFIXES = (
+    "에서는",
+    "으로는",
+    "에서",
+    "으로",
+    "까지",
+    "부터",
+    "이랑",
+    "에는",
+    "에게",
+    "이나",
+    "라도",
+    "은",
+    "는",
+    "이",
+    "가",
+    "을",
+    "를",
+    "도",
+    "만",
+    "과",
+    "와",
+    "랑",
+    "의",
+    "에",
+    "쪽",
+)
+VERB_TAIL_CHARS = frozenset("요어아까죠지네다게며면고만한할은는워줘봐야세니이")
+MIN_REGION_TOKEN_CHARS = 2
+MAX_REGION_TOKEN_CHARS = 6
+MAX_FALLBACK_REGIONS = 3
+_HANGUL_SPLIT = re.compile(r"[^가-힣]+")
+
+
+def fallback_intent(question: str) -> QueryIntent:
+    asked = question.strip()[:MAX_QUESTION_CHARS]
+    if not asked:
+        return QueryIntent()
+    residual = asked
+    categories: list[str] = []
+    for trigger in _by_length(CATEGORY_WORDS):
+        if trigger in residual:
+            residual = residual.replace(trigger, " ")
+            _add(categories, CATEGORY_WORDS[trigger])
+    moods: list[Mood] = []
+    for trigger in _by_length(MOOD_WORDS):
+        if trigger in residual:
+            residual = residual.replace(trigger, " ")
+            _add(moods, MOOD_WORDS[trigger])
+    near = _mentions(asked, NEAR_WORDS)
+    indoor = _mentions(asked, INDOOR_WORDS)
+    crowd = _crowd_preference(asked)
+    for trigger in (*NEAR_WORDS, *INDOOR_WORDS, *QUIET_WORDS, *POPULAR_WORDS):
+        residual = residual.replace(trigger, " ")
+    regions = _region_hints(residual, moods)
+    return QueryIntent(
+        categoryKeywords=categories[:MAX_KEYWORDS],
+        regionHints=regions,
+        moodHints=moods,
+        crowdPreference=crowd,
+        indoorOnly=indoor,
+        nearMe=near,
+    )
+
+
+def _by_length(words: dict[str, Any]) -> list[str]:
+    return sorted(words, key=len, reverse=True)
+
+
+def _add(picked: list[Any], value: Any) -> None:
+    if value not in picked:
+        picked.append(value)
+
+
+def _mentions(asked: str, words: tuple[str, ...]) -> bool:
+    return any(word in asked for word in words)
+
+
+def _crowd_preference(asked: str) -> CrowdPreference:
+    if _mentions(asked, QUIET_WORDS):
+        return "quiet"
+    if _mentions(asked, POPULAR_WORDS):
+        return "popular"
+    return "any"
+
+
+def _region_hints(residual: str, moods: list[Mood]) -> list[str]:
+    hints: list[str] = []
+    for raw in _HANGUL_SPLIT.split(residual):
+        word = raw.strip()
+        if not word:
+            continue
+        stripped = _without_josa(word)
+        if (code := MOOD_TOKENS.get(stripped) or MOOD_TOKENS.get(word)) is not None:
+            _add(moods, code)
+            continue
+        token = stripped if len(stripped) >= MIN_REGION_TOKEN_CHARS else word
+        if _is_region_candidate(token) and len(hints) < MAX_FALLBACK_REGIONS:
+            _add(hints, token)
+    return hints[:MAX_REGION_HINTS]
+
+
+def _without_josa(token: str) -> str:
+    for suffix in JOSA_SUFFIXES:
+        if token.endswith(suffix) and len(token) > len(suffix):
+            return token[: -len(suffix)]
+    return token
+
+
+def _is_region_candidate(token: str) -> bool:
+    if not MIN_REGION_TOKEN_CHARS <= len(token) <= MAX_REGION_TOKEN_CHARS:
+        return False
+    if token in JOSA_SUFFIXES:
+        return False
+    if any(token.startswith(word) for word in REGION_STOPWORDS):
+        return False
+    return token[-1] not in VERB_TAIL_CHARS
 
 
 def _strings(raw: Any) -> list[str]:
