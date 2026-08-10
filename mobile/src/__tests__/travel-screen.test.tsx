@@ -879,9 +879,17 @@ describe("TravelScreen map", () => {
     expect(mapView(tree).props.fit).toBeNull();
   });
 
+  it("첫 진입은 시트가 열린 채라 사진 히어로가 바로 보인다", async () => {
+    const tree = await mount();
+
+    expect(snapOf(tree)).toBe("mid");
+    expect(tree.root.findAllByProps({ testID: "travel-photo-hero" }).length).toBeGreaterThan(0);
+  });
+
   it("접힌 시트가 덮는 만큼만 지도 여백을 비운다", async () => {
     useConversation.setState({ turns: [mapTurn], busy: false });
     const tree = await mount();
+    await blankTap(tree);
 
     const pad = mapView(tree).props.fit.pad;
     expect(pad.top).toBe(44 + 96);
@@ -1029,7 +1037,7 @@ describe("TravelScreen save toast", () => {
     await pressSave(tree, "conversation-1");
 
     expect(rendered(tree)).toContain("여행지를 저장했어요");
-    expect(toastBottom(tree)).toBe(sheetPx("collapsed") + 12);
+    expect(toastBottom(tree)).toBe(sheetPx("mid") + 12);
   });
 
   it("shows an unsaved toast from a card after the mutation succeeds", async () => {
@@ -1077,6 +1085,7 @@ describe("TravelScreen keyboard", () => {
   it("키보드가 올라오면 접힌 시트만큼의 지도 여백도 같이 올라간다", async () => {
     useConversation.setState({ turns: [mapTurn], busy: false });
     const tree = await mount();
+    await blankTap(tree);
     expect(mapView(tree).props.fit.pad.bottom).toBe(sheetPx("collapsed") + 24);
 
     await showKeyboard(320);

@@ -49,7 +49,7 @@ export default function TravelScreen() {
   const [draft, setDraft] = useState("");
   const [photo, setPhoto] = useState<PhotoUpload | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [snap, setSnap] = useState<SheetSnap>("collapsed");
+  const [snap, setSnap] = useState<SheetSnap>("mid");
   const [focusedAt, setFocusedAt] = useState(0);
   const [scrollToAt, setScrollToAt] = useState<number | null>(null);
 
