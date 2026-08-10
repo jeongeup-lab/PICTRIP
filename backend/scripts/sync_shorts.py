@@ -5,6 +5,7 @@ import asyncio
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import httpx
 from sqlalchemy import text
@@ -12,6 +13,7 @@ from sqlalchemy import text
 from app.config import settings
 from app.core.db import async_session_factory
 from app.core.logging import get_logger
+from app.modules.agent.llm import GeminiClient
 from app.modules.spots.services import find_nearby_spots
 
 logger = get_logger(__name__)
@@ -26,6 +28,17 @@ _SPOTS_PER_VIDEO = 8
 _SPOT_RADIUS_M = 1500
 _REGION_RADIUS_M = 6000
 _MIN_TITLE_LEN = 3
+_GEMINI_CAP = 12
+_GEMINI_SYSTEM = (
+    "너는 한국 여행 쇼츠에서 장소를 찾아내는 분석기다. 영상의 화면 자막, 간판, "
+    "나레이션, 풍경에서 등장하는 대한민국의 지역명(시·군 단위)과 관광지명을 "
+    "찾아라. 확실히 등장하는 장소만, 등장 순서대로 담아라. 없으면 빈 배열."
+)
+_GEMINI_SCHEMA = {
+    "type": "object",
+    "properties": {"places": {"type": "array", "items": {"type": "string"}}},
+    "required": ["places"],
+}
 
 _NEWS_RE = re.compile(
     r"YTN|JTBC|MBC|KBS|SBS|뉴스|News|연합|채널A|TV조선|MBN|매일경제|한국경제|OBS|YonhapNews"
@@ -102,13 +115,14 @@ def title_variants(title: str) -> list[str]:
     return [v for v in variants if len(v) >= _MIN_TITLE_LEN]
 
 
-async def yt_get(client: httpx.AsyncClient, path: str, **params: str | int) -> dict:
+async def yt_get(client: httpx.AsyncClient, path: str, **params: str | int) -> dict[str, Any]:
     params["key"] = settings.YOUTUBE_API_KEY
     for attempt in (1, 2):
         try:
             resp = await client.get(f"{_YT_BASE}/{path}", params=params)
             resp.raise_for_status()
-            return resp.json()
+            payload: dict[str, Any] = resp.json()
+            return payload
         except httpx.HTTPError:
             if attempt == 2:
                 raise
@@ -116,7 +130,9 @@ async def yt_get(client: httpx.AsyncClient, path: str, **params: str | int) -> d
     raise RuntimeError("unreachable")
 
 
-async def search_shorts(client: httpx.AsyncClient, query: str, published_after: str) -> list[dict]:
+async def search_shorts(
+    client: httpx.AsyncClient, query: str, published_after: str
+) -> list[dict[str, Any]]:
     payload = await yt_get(
         client,
         "search",
@@ -131,11 +147,14 @@ async def search_shorts(client: httpx.AsyncClient, query: str, published_after: 
         maxResults=_SEARCH_MAX_RESULTS,
         q=query,
     )
-    return payload.get("items", [])
+    items: list[dict[str, Any]] = payload.get("items", [])
+    return items
 
 
-async def fetch_details(client: httpx.AsyncClient, video_ids: list[str]) -> dict[str, dict]:
-    details: dict[str, dict] = {}
+async def fetch_details(
+    client: httpx.AsyncClient, video_ids: list[str]
+) -> dict[str, dict[str, Any]]:
+    details: dict[str, dict[str, Any]] = {}
     for start in range(0, len(video_ids), 50):
         payload = await yt_get(
             client,
@@ -221,7 +240,7 @@ async def match_spots(candidate: ShortCandidate) -> list[str]:
 
 
 def build_candidates(
-    search_hits: dict[str, SigunguEntry | None], details: dict[str, dict]
+    search_hits: dict[str, SigunguEntry | None], details: dict[str, dict[str, Any]]
 ) -> list[ShortCandidate]:
     candidates = []
     for video_id, sigungu in search_hits.items():
@@ -258,6 +277,23 @@ def build_candidates(
             )
         )
     return candidates
+
+
+def merge_places_text(candidate: ShortCandidate, places: list[str]) -> None:
+    extra = " ".join(p.strip() for p in places if p and p.strip())
+    if extra:
+        candidate.description = f"{candidate.description} {extra}".strip()
+
+
+async def gemini_places(client: GeminiClient, video_id: str) -> list[str]:
+    payload = await client.generate_json(
+        system=_GEMINI_SYSTEM,
+        user_text="이 영상에 등장하는 장소를 알려줘.",
+        video_uri=f"https://www.youtube.com/watch?v={video_id}",
+        response_schema=_GEMINI_SCHEMA,
+    )
+    places = payload.get("places", []) if isinstance(payload, dict) else []
+    return [p for p in places if isinstance(p, str)]
 
 
 def resolve_broad_sigungu(
@@ -354,21 +390,53 @@ async def main() -> None:
         "searched": len(search_hits),
         "candidates": len(candidates),
         "no_place": 0,
+        "gemini_tried": 0,
+        "gemini_resolved": 0,
         "ranked": 0,
         "matched": 0,
     }
 
     titles_cache: dict[str, list[tuple[str, str, float, float]]] = {}
-    resolved = []
-    for candidate in candidates:
+
+    async def resolve_candidate(candidate: ShortCandidate) -> bool:
         sigungu = candidate.query_sigungu or resolve_broad_sigungu(candidate, pool)
         if sigungu is None:
-            totals["no_place"] += 1
-            continue
+            return False
         if sigungu.code not in titles_cache:
             titles_cache[sigungu.code] = await load_sigungu_titles(sigungu.code)
         refine_anchor(candidate, sigungu, titles_cache[sigungu.code])
-        resolved.append(candidate)
+        return True
+
+    resolved = []
+    unresolved = []
+    for candidate in candidates:
+        if await resolve_candidate(candidate):
+            resolved.append(candidate)
+        else:
+            unresolved.append(candidate)
+
+    if unresolved and settings.GEMINI_API_KEY:
+        unresolved.sort(key=lambda c: -c.view_count)
+        gemini = GeminiClient()
+        try:
+            for candidate in unresolved[:_GEMINI_CAP]:
+                totals["gemini_tried"] += 1
+                try:
+                    places = await gemini_places(gemini, candidate.video_id)
+                except Exception as exc:
+                    logger.warning(
+                        "shorts.gemini.failed",
+                        video=candidate.video_id,
+                        error_type=type(exc).__name__,
+                    )
+                    continue
+                merge_places_text(candidate, places)
+                if await resolve_candidate(candidate):
+                    totals["gemini_resolved"] += 1
+                    resolved.append(candidate)
+        finally:
+            await gemini.aclose()
+    totals["no_place"] = len(candidates) - len(resolved)
 
     feed = rank_feed(resolved)
     totals["ranked"] = len(feed)
