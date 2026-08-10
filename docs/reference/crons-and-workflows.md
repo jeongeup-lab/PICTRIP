@@ -28,7 +28,8 @@ main = 릴리스 마커(web·CodeQL), `v*` 태그 = TestFlight(→
 | 매일 04:00 | `warm-channels.timer` (CT112) | 채널 캐시 예열 (배포 직후에도 `deploy.sh`가 호출) |
 | 매일 04:30 | `concentration-sync.yml` | 집중률 적재 (Hot/Hidden 신선도) |
 | 매일 05:00 | `img-cache-warm.yml` | 엣지 워밍 — **ct111 러너 필수**(CF 캐시는 콜로 단위, 국내망이어야 KR 콜로가 데워짐) |
-| 매일 06:00 | `gallery-backfill.yml` | 갤러리 centroid 800스팟/일 (KTO 쿼터 ~1k 중 앱 몫 ~200콜 헤드룸 산식) |
+| 매일 06:00 | `gallery-backfill.yml` | 갤러리 centroid 800스팟/일 — 2026-08-09 완주해 사실상 no-op |
+| 매일 06:00 | `detail-prewarm.yml` | `spot_details.overview` 800스팟/일 (`detailCommon2` 1콜) — 갤러리가 비운 슬롯 (→ [ADR-0019](../adr/0019-detail-prewarm-resumes-on-a-smaller-set.md)) |
 | 일 05:00 | `image-validate.yml` | 죽은 KTO 원본 교체/NULL — rewritten>0이면 재임베딩 후속 필수(→ [operate-embeddings](../how-to/operate-embeddings.md)) |
 | 월 05:00 | `docker-prune.timer` (CT112) | 디스크 풀 배포 실패 재발 방지 |
 | 월 12:00 / 13:00 | `codeql` / `weekly-deep-check` | main 스윕 / 의존성 감사(advisory) |

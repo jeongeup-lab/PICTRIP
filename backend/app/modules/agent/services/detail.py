@@ -73,6 +73,20 @@ def fact_sentence(noun: str, value: str) -> str:
     return f"{noun}{topic} {value}{copula}."
 
 
+PARKING_AVAILABLE = "주차할 수 있어요."
+PARKING_UNAVAILABLE = "주차할 수 없어요."
+_PARKING_YES = frozenset({"가능", "가능함", "있음", "주차가능", "주차 가능"})
+_PARKING_NO = frozenset({"불가", "불가능", "없음", "주차불가", "주차 불가"})
+
+
+def parking_sentence(value: str) -> str | None:
+    if value in _PARKING_YES:
+        return PARKING_AVAILABLE
+    if value in _PARKING_NO:
+        return PARKING_UNAVAILABLE
+    return None
+
+
 def field_value(intro: SpotIntroRow | None, tel: str | None, field: DetailField) -> str | None:
     if field == "contact":
         return (intro.infocenter if intro else None) or tel
@@ -104,6 +118,10 @@ def _sentence(row: SpotDetailRow, field: DetailField) -> list[AnswerSegment]:
     value = plain(raw) if raw else None
     if not value:
         return [AnswerSegment(text=f"{noun} {UNKNOWN_HINT}.")]
+    if field == "parking":
+        verdict = parking_sentence(value)
+        if verdict:
+            return [AnswerSegment(text=verdict)]
     sentence = fact_sentence(noun, value)
     head, _, tail = sentence.partition(value)
     return [
@@ -133,6 +151,7 @@ async def answer_about_spot(
     intent: QueryIntent,
     steps: list[AskStep],
 ) -> AskResponse:
+    fields = _asked(intent)
     try:
         row = await load_spot_detail(
             session,
@@ -140,12 +159,12 @@ async def answer_about_spot(
             redis,
             content_id,
             defer_refresh=kto is None,
+            require_intro=any(field != "overview" for field in fields),
         )
     except AppError as exc:
         logger.warning("agent.detail.unavailable", code=exc.code, content_id=content_id)
         raise AgentNoResults() from exc
 
-    fields = _asked(intent)
     answer: list[AnswerSegment] = [AnswerSegment(text=f"{row.title} ")]
     if row.detail_status in ("pending", "unavailable"):
         answer.append(AnswerSegment(text=f"{STALE_HINT}. 상세 화면에서 다시 확인해 주세요."))

@@ -1,8 +1,11 @@
 # 0014. 여행 탭이 검색만이 아니라 답도 한다
 
-- 상태: 채택
+- 상태: 일부 대체 — "상세 프리워밍" 기각 근거(5만 곳)가 실측 모수(11,575곳)와
+  달랐다. [0019](0019-detail-prewarm-resumes-on-a-smaller-set.md) 가 프리워밍을
+  재개한다. 나머지 결정은 그대로다
 - 날짜: 2026-08-06
-- 관련: [travel-tab](../reference/travel-tab.md), [api](../reference/api.md),
+- 관련: [0019 상세 프리워밍 재개](0019-detail-prewarm-resumes-on-a-smaller-set.md),
+  [travel-tab](../reference/travel-tab.md), [api](../reference/api.md),
   [0009 여행 탭 대화형 에이전트](0009-travel-tab-conversational-agent.md),
   [0011 칩 상태 기계](0011-travel-tab-chip-state-machine.md),
   [0012 실제 지도·카드 탭](0012-travel-tab-live-map-and-card-tap.md)

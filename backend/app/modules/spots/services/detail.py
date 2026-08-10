@@ -329,6 +329,39 @@ async def _persist_detail(
     await session.commit()
 
 
+async def persist_detail_common(
+    session: AsyncSession,
+    content_id: str,
+    content_type_id: int,
+    overview: str | None,
+    homepage: str | None,
+    tel: str | None,
+) -> None:
+    columns = {
+        "content_type_id": content_type_id,
+        "overview": overview,
+        "homepage": homepage,
+        "tel": tel,
+        "cached_at": func.now(),
+    }
+    stmt = pg_insert(SpotDetail).values(content_id=content_id, **columns)
+    stmt = stmt.on_conflict_do_update(index_elements=["content_id"], set_=columns)
+    await session.execute(stmt)
+    await session.commit()
+
+
+async def fetch_detail_common(
+    kto: KtoClient, content_id: str
+) -> tuple[str | None, str | None, str | None]:
+    items = await kto.call(KtoService.KOR, "detailCommon2", contentId=content_id)
+    common = items[0] if items else {}
+    return (
+        verbatim(common.get("overview")),
+        clean_homepage(common.get("homepage")),
+        clean_scalar(common.get("tel")),
+    )
+
+
 @dataclass(frozen=True)
 class _DetailContext:
     spot: Any
@@ -457,6 +490,12 @@ async def _fetch_kto_detail(
     return overview, homepage, tel, images, intro_data
 
 
+def _serves(cache: _DetailCache | None, *, require_intro: bool) -> bool:
+    if cache is None:
+        return False
+    return not require_intro or cache.intro_data is not None
+
+
 async def load_spot_detail(
     session: AsyncSession,
     kto: KtoClient,
@@ -464,13 +503,14 @@ async def load_spot_detail(
     content_id: str,
     *,
     defer_refresh: bool = False,
+    require_intro: bool = False,
 ) -> SpotDetailRow:
     spot = await _load_spot_context(session, content_id)
     ctx = _DetailContext(spot, spot.region_name, spot.sigungu_name, spot.category)
 
     cache = await _redis_get_detail(redis, content_id)
     redis_fresh = cache is not None and _is_fresh(cache.cached_at, spot.modified_time)
-    if not redis_fresh:
+    if not redis_fresh or not _serves(cache, require_intro=require_intro):
         detail, existing_images = await _read_cached_detail(session, content_id)
         if detail is not None:
             cache = _DetailCache(
@@ -484,7 +524,11 @@ async def load_spot_detail(
 
     await session.commit()
 
-    if cache is not None and _is_fresh(cache.cached_at, spot.modified_time):
+    if (
+        cache is not None
+        and _is_fresh(cache.cached_at, spot.modified_time)
+        and _serves(cache, require_intro=require_intro)
+    ):
         if not redis_fresh:
             await _redis_set_detail(redis, content_id, cache)
         return ctx.assemble(
