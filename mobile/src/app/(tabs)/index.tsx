@@ -1,18 +1,16 @@
 import { useCallback, useRef, useState } from "react";
-import { FlatList, View, Text, RefreshControl, StyleSheet, type ViewToken } from "react-native";
+import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useScrollToTop } from "expo-router";
 import { ChannelTiles } from "@/features/channels/components/ChannelTiles";
-import { PostCarousel } from "@/features/feed/components/PostCarousel";
-import { prefetchMatches, usePostsFeed } from "@/features/feed/posts-queries";
-import type { OverseasPost } from "@/features/feed/posts-api";
+import type { ShortsCardData } from "@/features/shorts/api";
+import { ShortsCard } from "@/features/shorts/components/ShortsCard";
+import { ShortsPlayerSheet } from "@/features/shorts/components/ShortsPlayerSheet";
+import { useShortsFeed } from "@/features/shorts/queries";
 import { Skeleton } from "@/components/Skeleton";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { queryClient } from "@/lib/query-client";
-import { makeSeed } from "@/lib/seed";
 import { colors, spacing } from "@/constants/theme";
-
-const VIEWABILITY = { itemVisiblePercentThreshold: 30 };
 
 function Header() {
   return (
@@ -23,8 +21,8 @@ function Header() {
 }
 
 export default function HomeScreen() {
-  const [seed, setSeed] = useState(() => makeSeed());
-  const listRef = useRef<FlatList<OverseasPost>>(null);
+  const listRef = useRef<FlatList<ShortsCardData>>(null);
+  const [openShort, setOpenShort] = useState<ShortsCardData | null>(null);
 
   useScrollToTop(listRef);
 
@@ -37,24 +35,13 @@ export default function HomeScreen() {
     hasNextPage,
     fetchNextPage,
     refetch,
-  } = usePostsFeed(seed);
+  } = useShortsFeed();
 
-  const posts: OverseasPost[] = data?.pages.flatMap((p) => p.items) ?? [];
+  const shorts: ShortsCardData[] = data?.pages.flatMap((p) => p.items) ?? [];
 
   const onRefresh = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: ["matches"] });
-    setSeed(makeSeed());
+    void queryClient.invalidateQueries({ queryKey: ["shorts"] });
   }, []);
-
-  const onViewableItemsChanged = useCallback(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      for (const token of viewableItems) {
-        const post = token.item as OverseasPost | undefined;
-        if (post) prefetchMatches(post.id);
-      }
-    },
-    [],
-  );
 
   const onEndReached = () => {
     if (hasNextPage && !isFetching) void fetchNextPage();
@@ -83,17 +70,15 @@ export default function HomeScreen() {
       ) : (
         <FlatList
           ref={listRef}
-          data={posts}
-          keyExtractor={(post) => String(post.id)}
+          data={shorts}
+          keyExtractor={(short) => short.videoId}
           renderItem={({ item }) => (
             <View style={styles.cardBlock}>
-              <PostCarousel post={item} />
+              <ShortsCard short={item} onOpen={setOpenShort} />
             </View>
           )}
           ListHeaderComponent={Header}
           showsVerticalScrollIndicator={false}
-          onViewableItemsChanged={onViewableItemsChanged}
-          viewabilityConfig={VIEWABILITY}
           onEndReached={onEndReached}
           onEndReachedThreshold={0.8}
           refreshControl={
@@ -105,6 +90,8 @@ export default function HomeScreen() {
           }
         />
       )}
+
+      <ShortsPlayerSheet short={openShort} onClose={() => setOpenShort(null)} />
     </SafeAreaView>
   );
 }
