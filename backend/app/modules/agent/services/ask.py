@@ -1336,6 +1336,26 @@ def _nearest_sentence(top: list[CandidateRow], *, lat: float, lng: float) -> lis
     ]
 
 
+CALM_MIX_ALL = " 모두 사람이 적은 편이에요."
+NARROW_HINT = " 마음에 드는 게 없으면 조건을 좁혀 말해주세요."
+
+
+def _calm_mix_sentence(top: list[CandidateRow]) -> list[AnswerSegment]:
+    labelled = [row for row in top if retrieve.crowd_label(row) is not None]
+    if not labelled:
+        return []
+    calm = [row for row in labelled if retrieve.crowd_label(row) == "한산"]
+    if not calm:
+        return []
+    if len(calm) == len(top):
+        return [AnswerSegment(text=CALM_MIX_ALL)]
+    return [
+        AnswerSegment(text=" 이 중 "),
+        AnswerSegment(text=f"{len(calm)}곳", emphasis=True),
+        AnswerSegment(text="은 사람이 적은 편이에요."),
+    ]
+
+
 def _answer(
     top: list[CandidateRow],
     *,
@@ -1350,7 +1370,10 @@ def _answer(
     )
     scope = _scope_sentence(top, intent=intent)
     if not lead:
-        return [*scope, AnswerSegment(text=" 마음에 드는 게 없으면 조건을 좁혀 말해주세요.")]
+        mix = _calm_mix_sentence(top)
+        if mix:
+            return [*scope, *mix]
+        return [*scope, AnswerSegment(text=NARROW_HINT)]
     return [*lead, AnswerSegment(text=" "), *scope]
 
 

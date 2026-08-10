@@ -1,4 +1,5 @@
-import { View, Text, ScrollView, StyleSheet } from "react-native";
+import { useState } from "react";
+import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import { Icon, type IconName } from "@/components/Icon";
 import { colors, spacing, radii } from "@/constants/theme";
 
@@ -12,18 +13,12 @@ interface OptionalAccess {
 
 const OPTIONAL_ACCESS: OptionalAccess[] = [
   {
-    key: "camera",
-    icon: "camera",
-    label: "카메라",
-    why: "지금 보이는 풍경을 찍어 닮은 여행지를 찾을 때 써요.",
-    whenDenied: "거부해도 저장된 사진을 골라 검색할 수 있어요.",
-  },
-  {
     key: "photo",
     icon: "photo",
-    label: "사진",
-    why: "보관함에서 직접 고른 사진 한 장만 검색에 써요.",
-    whenDenied: "앱이 보관함 전체를 읽지 않아요. 시스템 선택기에서 고른 한 장만 전달돼요.",
+    label: "사진 · 카메라",
+    why: "고른 사진 한 장으로 닮은 여행지를 찾을 때만 써요.",
+    whenDenied:
+      "앱이 보관함 전체를 읽지 않아요. 시스템 선택기에서 고른 한 장만 전달돼요. 카메라를 거부해도 저장된 사진으로 검색할 수 있어요.",
   },
   {
     key: "location",
@@ -34,7 +29,11 @@ const OPTIONAL_ACCESS: OptionalAccess[] = [
   },
 ];
 
+export const DENIED_TOGGLE_LABEL = "허용하지 않으면 어떻게 되나요?";
+
 export function AccessNotice() {
+  const [deniedOpen, setDeniedOpen] = useState(false);
+
   return (
     <ScrollView
       style={styles.root}
@@ -65,10 +64,27 @@ export function AccessNotice() {
             <View style={styles.rowMain}>
               <Text style={styles.rowLabel}>{a.label}</Text>
               <Text style={styles.rowWhy}>{a.why}</Text>
-              <Text style={styles.rowDenied}>{a.whenDenied}</Text>
+              {deniedOpen ? <Text style={styles.rowDenied}>{a.whenDenied}</Text> : null}
             </View>
           </View>
         ))}
+        <Pressable
+          testID="access-denied-toggle"
+          accessibilityRole="button"
+          accessibilityLabel={DENIED_TOGGLE_LABEL}
+          accessibilityState={{ expanded: deniedOpen }}
+          hitSlop={6}
+          onPress={() => setDeniedOpen((open) => !open)}
+          style={styles.toggle}
+        >
+          <Text style={styles.toggleText}>{DENIED_TOGGLE_LABEL}</Text>
+          <Icon
+            name={deniedOpen ? "chevron-up" : "chevron-down"}
+            size={15}
+            color={colors.ter}
+            strokeWidth={2}
+          />
+        </Pressable>
       </View>
 
       <Text style={styles.foot}>허용 여부는 기기 설정에서 언제든 바꿀 수 있어요.</Text>
@@ -110,5 +126,7 @@ const styles = StyleSheet.create({
   rowLabel: { fontSize: 14.5, fontWeight: "700", color: colors.ink },
   rowWhy: { fontSize: 13, lineHeight: 19, color: colors.sec },
   rowDenied: { fontSize: 12.5, lineHeight: 18, color: colors.ter },
+  toggle: { flexDirection: "row", alignItems: "center", gap: 4, paddingTop: 2 },
+  toggleText: { fontSize: 12.5, fontWeight: "600", letterSpacing: -0.2, color: colors.ter },
   foot: { fontSize: 12.5, lineHeight: 18, color: colors.ter, marginTop: spacing.md },
 });
