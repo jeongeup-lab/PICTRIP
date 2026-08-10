@@ -63,6 +63,7 @@ UNSUPPORTED_ANSWER = (
 PHOTO_BASIS = "사진 유사도 기준"
 RELATED_BASIS = "분위기 유사도 기준"
 CONTEXT_INTENT_LABEL = "앞 대화까지 보고 조건 추출"
+INTENT_FALLBACK_BADGE = "사전 매칭"
 NEAR_PROBE_LABEL = "근처 조건 없이 다시 재보기"
 FESTIVAL_FETCH_BUDGET_SECONDS = 4.0
 ANCHOR_RADIUS_M = 3000
@@ -191,7 +192,15 @@ async def _ask_with_photo(
                     AskStep(tool="intent", label="덧붙인 말에서 조건 추출", badge="Gemini")
                 )
             except AppError as exc:
-                logger.warning("agent.photo.intent_skipped", code=exc.code)
+                logger.warning("agent.photo.intent_fallback", code=exc.code)
+                intent = intent_service.fallback_intent(question or "")
+                steps.append(
+                    AskStep(
+                        tool="intent",
+                        label="덧붙인 말에서 조건 추출",
+                        badge=INTENT_FALLBACK_BADGE,
+                    )
+                )
 
     scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
     prefixes = scope.prefixes or pre_ota_region_prefixes
@@ -587,16 +596,15 @@ async def _ask_with_question(
         intent = refine_service.apply_patch(intent, patch)
     else:
         prior, prior_spots = _prior(context)
-        intent = (
-            await intent_service.extract_intent(question, prior=prior, prior_spots=prior_spots)
-            if prior is not None or prior_spots
-            else await intent_service.extract_intent(question)
+        outcome = await intent_service.resolve_intent(
+            question, prior=prior, prior_spots=prior_spots
         )
+        intent = outcome.intent
         steps.append(
             AskStep(
                 tool="intent",
                 label=CONTEXT_INTENT_LABEL if prior or prior_spots else "질문에서 지역·조건 추출",
-                badge="Gemini",
+                badge=INTENT_FALLBACK_BADGE if outcome.fallback else "Gemini",
             )
         )
     if intent.outOfScope:

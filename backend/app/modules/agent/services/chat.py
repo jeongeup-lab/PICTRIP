@@ -135,12 +135,22 @@ async def events(
                     parts.append(event.text)
                     yield "delta", ChatDeltaEvent(text=event.text)
         except Exception as exc:
-            logger.warning("agent.chat.writer_failed", error_type=type(exc).__name__)
-            failure = AgentWriterUnavailable()
-            yield "error", ChatErrorEvent(code=failure.code, message=failure.message)
-            return
+            logger.warning(
+                "agent.chat.writer_failed",
+                error_type=type(exc).__name__,
+                streamed=len(parts),
+            )
+            if not _written(parts) and not _deterministic_answer(result):
+                failure = AgentWriterUnavailable()
+                yield "error", ChatErrorEvent(code=failure.code, message=failure.message)
+                return
     finally:
         await _shutdown(parsed, guarded, chunks)
+
+    if not _written(parts) and (rescue := _deterministic_answer(result)):
+        logger.warning("agent.chat.writer_fallback", segments=len(result.answer))
+        parts.append(rescue)
+        yield "delta", ChatDeltaEvent(text=rescue)
 
     yield "sources", ChatSourcesEvent(items=sources)
     logger.info(
@@ -151,7 +161,7 @@ async def events(
     yield (
         "done",
         ChatDoneEvent(
-            answerText="".join(parts).strip(),
+            answerText=_written(parts),
             spots=result.spots,
             sources=sources,
             intent=result.intent,
@@ -159,6 +169,14 @@ async def events(
             traceId=get_trace_id(),
         ),
     )
+
+
+def _written(parts: list[str]) -> str:
+    return "".join(parts).strip()
+
+
+def _deterministic_answer(result: AskResponse) -> str:
+    return "".join(segment.text for segment in result.answer).strip()
 
 
 async def _shutdown(*iterators: AsyncIterator[object]) -> None:

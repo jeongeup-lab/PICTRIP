@@ -49,7 +49,7 @@ from app.modules.spots.services import (
     map_region_tokens_to_prefixes,
     map_region_tokens_to_sido,
 )
-from app.web.errors import KtoApiUnavailable
+from app.web.errors import KtoApiUnavailable, RateLimited
 
 LAT, LNG = 35.15, 129.05
 _VEC = "[" + ",".join(["0.1"] * 512) + "]"
@@ -1124,8 +1124,42 @@ async def test_photo_query_survives_intent_extraction_failure(
 
     assert res.status_code == 200
     data = res.json()["data"]
-    assert [step["tool"] for step in data["steps"]] == ["photo_match"]
+    assert [step["tool"] for step in data["steps"]] == ["intent", "photo_match"]
+    assert data["steps"][0]["badge"] == ask_service.INTENT_FALLBACK_BADGE
     assert data["spots"][0]["contentId"] == "v1"
+
+
+class _RateLimitedGemini:
+    async def generate_json(self, **kwargs):  # type: ignore[no-untyped-def]
+        raise RateLimited()
+
+
+@pytest.mark.integration
+async def test_a_rate_limited_gemini_still_searches_with_the_dictionary_intent(
+    db_session, client, seeded, monkeypatch
+) -> None:
+    monkeypatch.setattr(llm, "get_client", lambda: _RateLimitedGemini())
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={"question": "부산 계곡 조용한 곳 추천해줘"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["steps"][0]["badge"] == ask_service.INTENT_FALLBACK_BADGE
+    assert [step["tool"] for step in data["steps"]] == [
+        "intent",
+        "category_search",
+        "concentration",
+    ]
+    assert data["spots"]
+    answer = "".join(segment["text"] for segment in data["answer"])
+    assert RateLimited.message not in answer
+    assert data["intent"]["regionHints"] == ["부산"]
 
 
 @pytest.mark.integration

@@ -103,6 +103,8 @@ NO_COLOR=1 POSTGRES_DB=pictrip_test uv run pytest tests/test_agent_chat.py tests
 | 이전 대화에 새 답이 섞임 | `chat-store`의 `activeId` 가드가 늦은 이벤트를 버리는지 |
 | 재시도마다 턴이 늘어남 | `retry()`가 턴을 제자리 교체하는지 — `begin()`을 다시 타면 안 된다 |
 | 지도가 이전 턴에도 뜸 | `AssistantTurn`의 `latest` 분기 — 지도는 최신 턴 전용이다 |
+| 답변에 `요청이 너무 잦습니다` 가 보임 | Gemini 429가 새고 있다 — `resolve_intent` 폴백과 `_deterministic_answer` 구제 경로가 살아 있는지 |
+| 스텝 badge 가 `사전 매칭` | 정상이다 — Gemini 없이 사전 매칭으로 검색한 턴 |
 | 영원한 스피너 | 스트림이 done/error 없이 닫히면 `UNKNOWN` 실패 처리하는 안전망이 사는지 |
 | 출처가 질문과 무관함 | 블로그 쿼리 정제(`_blog_probes`)와 관련성 필터(`_post_matches`)가 사는지 |
 | 성질 칩 문구가 이상함 | 클라이언트는 서버 `tag`를 그대로 쓴다 — 서버 응답을 먼저 본다 |
