@@ -83,7 +83,6 @@ export interface AgentAnswer {
   totalCount: number;
   intent: QueryIntent;
   tagBasis?: string | null;
-  suggestions: string[];
   refinements?: Suggestion[];
 }
 
@@ -194,7 +193,6 @@ export interface ChatDoneEvent {
   answerText: string;
   spots: TravelSpot[];
   sources: SourceItem[];
-  suggestions: string[];
   intent: QueryIntent;
   totalCount: number;
   traceId?: string | null;
@@ -219,7 +217,6 @@ export interface ChatHandlers {
   onDelta?: (text: string) => void;
   onCards?: (event: ChatCardsEvent) => void;
   onSources?: (items: SourceItem[]) => void;
-  onSuggestions?: (items: string[]) => void;
   onDone?: (event: ChatDoneEvent) => void;
   onError?: (event: ChatErrorEvent) => void;
 }
@@ -265,8 +262,6 @@ function dispatchChatEvent(name: string, data: string, handlers: ChatHandlers): 
   else if (name === "cards") handlers.onCards?.(payload as ChatCardsEvent);
   else if (name === "sources")
     handlers.onSources?.((payload as { items: SourceItem[] }).items ?? []);
-  else if (name === "suggestions")
-    handlers.onSuggestions?.((payload as { items: string[] }).items ?? []);
   else if (name === "done") handlers.onDone?.(payload as ChatDoneEvent);
   else if (name === "error") handlers.onError?.(payload as ChatErrorEvent);
 }

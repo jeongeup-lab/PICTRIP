@@ -26,12 +26,12 @@ from app.modules.agent.schemas import (
 )
 from app.modules.agent.services import ask as ask_service
 from app.modules.agent.services import chat as chat_service
+from app.web.errors import ValidationFailed
 
 PIECES = [
     "부산 계곡이라면 여기예요.\n",
     "[[cards]]\n",
     "- **계곡-v1** 물이 맑아요.\n",
-    "[[suggest: 더 한적한 곳 | 근처 맛집]]",
 ]
 
 
@@ -110,7 +110,7 @@ async def _collect(payload: ChatRequest) -> list[tuple[str, BaseModel]]:
         await redis.aclose()
 
 
-async def test_chat_events_follow_the_step_delta_cards_sources_suggestions_done_order(
+async def test_chat_sends_cards_before_the_writer_starts_streaming(
     monkeypatch,
 ) -> None:
     _wire(monkeypatch, gemini=_FakeGemini(PIECES))
@@ -123,11 +123,10 @@ async def test_chat_events_follow_the_step_delta_cards_sources_suggestions_done_
         "step",
         "step",
         "step",
-        "delta",
         "cards",
         "delta",
+        "delta",
         "sources",
-        "suggestions",
         "done",
     ]
     steps = [event.model_dump() for name, event in events if name == "step"]
@@ -138,7 +137,6 @@ async def test_chat_events_follow_the_step_delta_cards_sources_suggestions_done_
     assert "[[" not in deltas
     done = events[-1][1].model_dump()
     assert done["answerText"] == "부산 계곡이라면 여기예요.\n- **계곡-v1** 물이 맑아요."
-    assert done["suggestions"] == ["더 한적한 곳", "근처 맛집"]
     assert done["totalCount"] == 1
     assert [spot["contentId"] for spot in done["spots"]] == ["v1"]
 
@@ -167,19 +165,6 @@ async def test_chat_sources_hold_the_grounding_blogs_plus_the_fixed_kto_row(monk
     assert blog["date"] == "20260801"
 
 
-async def test_chat_falls_back_to_refinement_labels_when_the_writer_skips_suggestions(
-    monkeypatch,
-) -> None:
-    _wire(monkeypatch, gemini=_FakeGemini(["결론이에요.\n", "\n", "팁이에요."]))
-
-    events = await _collect(ChatRequest(message="부산 계곡"))
-
-    suggestions = next(event.model_dump() for name, event in events if name == "suggestions")
-    assert suggestions["items"] == ["가까운 순으로"]
-    names = [name for name, _ in events]
-    assert names.index("cards") < names.index("sources")
-
-
 async def test_chat_turns_an_ask_error_into_a_delta_and_a_clean_done(monkeypatch) -> None:
     async def failing_ask(session, redis, kto, **kwargs) -> AskResponse:
         raise AgentNoResults()
@@ -197,7 +182,6 @@ async def test_chat_turns_an_ask_error_into_a_delta_and_a_clean_done(monkeypatch
     done = events[-1][1].model_dump()
     assert done["answerText"] == AgentNoResults.message
     assert done["spots"] == []
-    assert done["suggestions"] == []
 
 
 async def test_a_writer_failure_ends_the_stream_with_an_error_event(monkeypatch) -> None:
@@ -251,7 +235,7 @@ async def test_chat_route_streams_sse_instead_of_a_jsend_envelope(client, monkey
     events = _parse_sse(res.text)
     assert events[-1][0] == "done"
     done = events[-1][1]
-    assert set(done) >= {"answerText", "spots", "sources", "suggestions", "intent", "totalCount"}
+    assert set(done) >= {"answerText", "spots", "sources", "intent", "totalCount"}
     assert "data" not in done
     assert "meta" not in done
 
@@ -326,3 +310,16 @@ async def test_grounding_keeps_only_matching_posts(monkeypatch) -> None:
     posts = await chat_service._ground_with_blogs(result, message="정읍 맛집 추천해줘")
 
     assert [post.link for post in posts] == ["https://blog.naver.com/keep"]
+
+
+async def test_blank_message_gets_korean_guidance_not_an_internal_error(monkeypatch) -> None:
+    async def failing_ask(session, redis, kto, **kwargs) -> AskResponse:
+        raise ValidationFailed("question, photo or intent is required")
+
+    monkeypatch.setattr(ask_service, "ask", failing_ask)
+
+    events = await _collect(ChatRequest(message="   "))
+
+    assert [name for name, _ in events] == ["delta", "done"]
+    assert events[0][1].model_dump()["text"] == ask_service.BLANK_ANSWER
+    assert events[-1][1].model_dump()["answerText"] == ask_service.BLANK_ANSWER

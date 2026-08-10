@@ -14,6 +14,7 @@ export const ATTACH_NOTICE = "사진은 저장하지 않아요";
 export const ATTACH_SHOOT_LABEL = "촬영";
 export const ATTACH_PICK_LABEL = "앨범에서 선택";
 export const ATTACH_CANCEL_LABEL = "취소";
+export const MAX_MESSAGE_CHARS = 500;
 
 interface Props {
   streaming: boolean;
@@ -99,6 +100,7 @@ export function ChatComposer({ streaming, onSend, onNotice }: Props) {
           submitBehavior="blurAndSubmit"
           onSubmitEditing={submit}
           editable={!streaming}
+          maxLength={MAX_MESSAGE_CHARS}
           multiline
         />
         <Pressable

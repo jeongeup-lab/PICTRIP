@@ -59,9 +59,12 @@ class GeminiClient:
         user_text: str | None = None,
         image_bytes: bytes | None = None,
         image_mime: str | None = None,
+        video_uri: str | None = None,
         response_schema: dict[str, Any],
     ) -> Any:
         parts: list[dict[str, Any]] = []
+        if video_uri:
+            parts.append({"fileData": {"fileUri": video_uri}})
         if image_bytes:
             parts.append(
                 {

@@ -23,18 +23,17 @@ from app.modules.agent.schemas import (
     ChatRequest,
     ChatSourcesEvent,
     ChatStepEvent,
-    ChatSuggestionsEvent,
     QueryIntent,
     SourceItem,
 )
 from app.modules.agent.services import ask as ask_service
 from app.modules.agent.services import writer
-from app.web.errors import AppError
+from app.web.errors import AppError, ValidationFailed
 
 logger = get_logger(__name__)
 
 BLOG_CALL_BUDGET = 4
-BLOG_CALL_TIMEOUT_SECONDS = 2.5
+BLOG_CALL_TIMEOUT_SECONDS = 1.8
 WRITER_IDLE_TIMEOUT_SECONDS = 15.0
 GROUNDED_SPOT_LIMIT = 3
 GROUNDED_POST_LIMIT = 6
@@ -92,14 +91,14 @@ async def events(
         )
     except AppError as exc:
         logger.info("agent.chat.ask_failed", code=exc.code)
-        yield "delta", ChatDeltaEvent(text=exc.message)
+        guidance = ask_service.BLANK_ANSWER if isinstance(exc, ValidationFailed) else exc.message
+        yield "delta", ChatDeltaEvent(text=guidance)
         yield (
             "done",
             ChatDoneEvent(
-                answerText=exc.message,
+                answerText=guidance,
                 spots=[],
                 sources=[],
-                suggestions=[],
                 intent=QueryIntent(),
                 totalCount=0,
                 traceId=get_trace_id(),
@@ -110,6 +109,9 @@ async def events(
     for index, step in enumerate(result.steps):
         yield "step", ChatStepEvent(index=index, label=step.label, status="run")
         yield "step", ChatStepEvent(index=index, label=step.label, badge=step.badge, status="done")
+
+    if result.spots:
+        yield "cards", ChatCardsEvent(spots=result.spots, tagBasis=result.tagBasis)
 
     posts = await _ground_with_blogs(result, message=payload.message)
     sources = _sources(result, posts)
@@ -126,20 +128,12 @@ async def events(
     guarded = _watchdog(chunks)
     parsed = writer.parse_stream(guarded)
     parts: list[str] = []
-    suggestions: list[str] | None = None
-    cards_sent = False
     try:
         try:
             async for event in parsed:
                 if isinstance(event, writer.WriterDelta):
                     parts.append(event.text)
                     yield "delta", ChatDeltaEvent(text=event.text)
-                elif isinstance(event, writer.WriterCards):
-                    if result.spots and not cards_sent:
-                        cards_sent = True
-                        yield "cards", ChatCardsEvent(spots=result.spots, tagBasis=result.tagBasis)
-                else:
-                    suggestions = event.items
         except Exception as exc:
             logger.warning("agent.chat.writer_failed", error_type=type(exc).__name__)
             failure = AgentWriterUnavailable()
@@ -148,16 +142,11 @@ async def events(
     finally:
         await _shutdown(parsed, guarded, chunks)
 
-    if result.spots and not cards_sent:
-        yield "cards", ChatCardsEvent(spots=result.spots, tagBasis=result.tagBasis)
     yield "sources", ChatSourcesEvent(items=sources)
-    final_suggestions = suggestions if suggestions is not None else result.suggestions
-    yield "suggestions", ChatSuggestionsEvent(items=final_suggestions)
     logger.info(
         "agent.chat.done",
         results=len(result.spots),
         blogs=len(posts),
-        suggested=len(final_suggestions),
     )
     yield (
         "done",
@@ -165,7 +154,6 @@ async def events(
             answerText="".join(parts).strip(),
             spots=result.spots,
             sources=sources,
-            suggestions=final_suggestions,
             intent=result.intent,
             totalCount=result.totalCount,
             traceId=get_trace_id(),

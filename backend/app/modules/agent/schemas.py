@@ -239,15 +239,10 @@ class ChatSourcesEvent(BaseModel):
     items: list[SourceItem]
 
 
-class ChatSuggestionsEvent(BaseModel):
-    items: list[str]
-
-
 class ChatDoneEvent(BaseModel):
     answerText: str
     spots: list[AgentSpotCard]
     sources: list[SourceItem]
-    suggestions: list[str]
     intent: QueryIntent
     totalCount: int
     traceId: str | None = None

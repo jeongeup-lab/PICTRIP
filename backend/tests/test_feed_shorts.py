@@ -192,3 +192,33 @@ def test_rank_feed_caps_per_anchor_and_sorts_by_views():
     assert len(busan) == 3
     assert [c.video_id for c in busan] == ["v5", "v4", "v3"]
     assert ranked[-1].video_id == "gj"
+
+
+def test_merge_places_text_enables_broad_resolution():
+    from datetime import UTC, datetime
+
+    from scripts.sync_shorts import (
+        ShortCandidate,
+        SigunguEntry,
+        merge_places_text,
+        resolve_broad_sigungu,
+    )
+
+    pool = [
+        SigunguEntry(code="47130", name="경주시", short_name="경주", lat=35.8, lng=129.2),
+    ]
+    candidate = ShortCandidate(
+        video_id="v1",
+        title="숨은 국내 여행지 TOP10",
+        channel_title="c",
+        thumbnail_url="u",
+        view_count=100,
+        duration_sec=60,
+        published_at=datetime.now(UTC),
+        query_sigungu=None,
+    )
+    assert resolve_broad_sigungu(candidate, pool) is None
+    merge_places_text(candidate, ["  경주 대릉원 ", "", None if False else "첨성대"])
+    assert "경주" in candidate.description
+    resolved = resolve_broad_sigungu(candidate, pool)
+    assert resolved is not None and resolved.short_name == "경주"
