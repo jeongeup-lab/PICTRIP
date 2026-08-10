@@ -1,12 +1,24 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Animated, Easing, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
+import {
+  Animated,
+  Easing,
+  Pressable,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+  type GestureResponderEvent,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icon";
 import { colors, shadows } from "@/constants/theme";
 import {
+  clampToSheet,
+  settleSnap,
   SHEET_ANIM_MS,
+  SHEET_HEADER_PX,
   sheetBottomPx,
   sheetHeightPx,
+  snapHeights,
   type SheetSnap,
 } from "@/features/travel/lib/sheet-layout";
 
@@ -18,6 +30,7 @@ interface Props {
   dockPx: number;
   onGrabberTap: () => void;
   onCollapse: () => void;
+  onSnapChange: (snap: SheetSnap) => void;
   children: ReactNode;
 }
 
@@ -27,22 +40,27 @@ export function TravelSheet({
   dockPx,
   onGrabberTap,
   onCollapse,
+  onSnapChange,
   children,
 }: Props) {
   const { height: frameH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const targetHeight = sheetHeightPx({
-    snap,
+  const metrics = {
     frameH,
     insetTop: insets.top,
     insetBottom: insets.bottom,
     keyboardPx,
     dockPx,
-  });
+  };
+  const targetHeight = sheetHeightPx({ ...metrics, snap });
   const targetBottom = sheetBottomPx({ keyboardPx });
   const [height] = useState(() => new Animated.Value(targetHeight));
   const [bottom] = useState(() => new Animated.Value(targetBottom));
+  const [dragging, setDragging] = useState(false);
   const settled = useRef({ height: targetHeight, bottom: targetBottom });
+  const drag = useRef({ from: 0, startY: 0, lastY: 0, lastAt: 0 });
+
+  const heights = snapHeights(metrics);
 
   useEffect(() => {
     if (settled.current.height === targetHeight && settled.current.bottom === targetBottom) {
@@ -65,32 +83,95 @@ export function TravelSheet({
     ]).start();
   }, [height, bottom, targetHeight, targetBottom]);
 
+  const settleTo = (next: SheetSnap) => {
+    settled.current = { ...settled.current, height: heights[next] };
+    Animated.timing(height, {
+      toValue: heights[next],
+      duration: SHEET_ANIM_MS,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+    if (next !== snap) onSnapChange(next);
+  };
+
+  const onDragStart = (event: GestureResponderEvent) => {
+    const { pageY, timestamp } = event.nativeEvent;
+    setDragging(true);
+    drag.current = { from: settled.current.height, startY: pageY, lastY: pageY, lastAt: timestamp };
+    height.stopAnimation((value: number) => {
+      drag.current.from = value;
+    });
+  };
+
+  const dragHeight = (event: GestureResponderEvent) =>
+    clampToSheet(drag.current.from - (event.nativeEvent.pageY - drag.current.startY), heights);
+
+  const onDragMove = (event: GestureResponderEvent) => {
+    const { pageY, timestamp } = event.nativeEvent;
+    height.setValue(dragHeight(event));
+    if (timestamp !== drag.current.lastAt) {
+      drag.current.lastY = pageY;
+      drag.current.lastAt = timestamp;
+    }
+  };
+
+  const onDragEnd = (event: GestureResponderEvent) => {
+    const { pageY, timestamp } = event.nativeEvent;
+    const elapsed = timestamp - drag.current.lastAt;
+    setDragging(false);
+    settleTo(
+      settleSnap({
+        heights,
+        from: snap,
+        height: dragHeight(event),
+        velocityY: elapsed > 0 ? (pageY - drag.current.lastY) / elapsed : 0,
+      }),
+    );
+  };
+
+  const bare = snap === "collapsed" && !dragging;
+
   return (
-    <Animated.View testID="travel-sheet" style={[sheetStyles.root, { height, bottom }]}>
-      {snap !== "collapsed" && (
-        <View style={sheetStyles.header}>
-          <Pressable
-            testID="travel-sheet-grabber"
-            accessibilityRole="button"
-            accessibilityLabel="시트 크기 전환"
-            onPress={onGrabberTap}
-            style={sheetStyles.grabberZone}
-          >
-            <View style={sheetStyles.pill} />
-          </Pressable>
-          <Pressable
-            testID="travel-sheet-collapse"
-            accessibilityRole="button"
-            accessibilityLabel="시트 내리기"
-            hitSlop={8}
-            onPress={onCollapse}
-            style={sheetStyles.collapse}
-          >
-            <Icon name="chevron-down" size={16} color={colors.ter} strokeWidth={2} />
-          </Pressable>
-        </View>
-      )}
-      <View style={sheetStyles.body}>{children}</View>
+    <Animated.View
+      testID="travel-sheet"
+      style={[sheetStyles.root, bare && sheetStyles.rootBare, { height, bottom }]}
+    >
+      <View
+        testID="travel-sheet-header"
+        style={sheetStyles.header}
+        onStartShouldSetResponder={() => false}
+        onMoveShouldSetResponder={() => true}
+        onResponderTerminationRequest={() => false}
+        onResponderGrant={onDragStart}
+        onResponderMove={onDragMove}
+        onResponderRelease={onDragEnd}
+        onResponderTerminate={onDragEnd}
+      >
+        {bare ? null : (
+          <>
+            <Pressable
+              testID="travel-sheet-grabber"
+              accessibilityRole="button"
+              accessibilityLabel="시트 크기 전환"
+              onPress={onGrabberTap}
+              style={sheetStyles.grabberZone}
+            >
+              <View style={sheetStyles.pill} />
+            </Pressable>
+            <Pressable
+              testID="travel-sheet-collapse"
+              accessibilityRole="button"
+              accessibilityLabel="시트 내리기"
+              hitSlop={8}
+              onPress={onCollapse}
+              style={sheetStyles.collapse}
+            >
+              <Icon name="chevron-down" size={16} color={colors.ter} strokeWidth={2} />
+            </Pressable>
+          </>
+        )}
+      </View>
+      <View style={[sheetStyles.body, bare && sheetStyles.bodyBare]}>{children}</View>
     </Animated.View>
   );
 }
@@ -107,9 +188,17 @@ export const sheetStyles = StyleSheet.create({
     borderTopColor: colors.glassBorder,
     ...shadows.sheet,
   },
-  header: {},
+  rootBare: {
+    backgroundColor: "transparent",
+    borderTopWidth: 0,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  header: { height: SHEET_HEADER_PX },
   grabberZone: {
-    height: 20,
+    height: SHEET_HEADER_PX,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -117,7 +206,7 @@ export const sheetStyles = StyleSheet.create({
     position: "absolute",
     right: 14,
     top: 0,
-    height: 20,
+    height: SHEET_HEADER_PX,
     justifyContent: "center",
   },
   pill: {
@@ -132,4 +221,5 @@ export const sheetStyles = StyleSheet.create({
     borderTopRightRadius: SHEET_RADIUS,
     overflow: "hidden",
   },
+  bodyBare: { borderTopLeftRadius: 0, borderTopRightRadius: 0, overflow: "visible" },
 });

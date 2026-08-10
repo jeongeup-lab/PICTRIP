@@ -1,5 +1,7 @@
 import { View, Text, Pressable, StyleSheet } from "react-native";
+import { Image } from "expo-image";
 import { TravelerAvatar } from "@/features/travel/components/TravelerAvatar";
+import type { Mood, MoodImage } from "@/features/travel/api";
 import { colors, spacing } from "@/constants/theme";
 
 export const GREETING_LINE1 = "어떤 분위기의 여행을 꿈꾸세요?";
@@ -7,11 +9,15 @@ export const GREETING_LINE2 =
   "사진 한 장 보여주시면, 그 분위기를 닮은 우리나라 여행지를 찾아드릴게요.";
 export const ACCENT_SPAN = "그 분위기를 닮은 우리나라 여행지";
 export const SAMPLES_CAPTION = "지금 사진이 없다면, 이런 분위기는 어때요?";
-export const SAMPLE_MOODS: { label: string; question: string }[] = [
-  { label: "바다 노을", question: "바다 노을이 예쁜 여행지 알려줘" },
-  { label: "감성 골목", question: "감성적인 골목길 여행지 알려줘" },
-  { label: "숲길", question: "걷기 좋은 숲길 여행지 알려줘" },
+export const SAMPLE_MOODS: { mood: Mood; label: string; question: string }[] = [
+  { mood: "sea", label: "바다 노을", question: "바다 노을이 예쁜 여행지 알려줘" },
+  { mood: "street", label: "감성 골목", question: "감성적인 골목길 여행지 알려줘" },
+  { mood: "mountain", label: "숲길", question: "걷기 좋은 숲길 여행지 알려줘" },
 ];
+
+export function moodImageUri(images: MoodImage[] | undefined, mood: Mood): string | null {
+  return images?.find((image) => image.code === mood)?.imageUrl ?? null;
+}
 
 export const ALBUM_CTA = "앨범에서 사진 고르기";
 export const SHOOT_CTA = "카메라 촬영";
@@ -23,12 +29,13 @@ const LINE2_PREFIX = GREETING_LINE2.slice(0, accentAt);
 const LINE2_SUFFIX = GREETING_LINE2.slice(accentAt + ACCENT_SPAN.length);
 
 interface Props {
+  moodImages?: MoodImage[];
   onSample: (question: string) => void;
   onAlbum: () => void;
   onShoot: () => void;
 }
 
-export function EmptyGreeting({ onSample, onAlbum, onShoot }: Props) {
+export function EmptyGreeting({ moodImages, onSample, onAlbum, onShoot }: Props) {
   return (
     <View style={styles.root}>
       <View style={styles.greeting}>
@@ -44,22 +51,35 @@ export function EmptyGreeting({ onSample, onAlbum, onShoot }: Props) {
       </View>
       <Text style={styles.caption}>{SAMPLES_CAPTION}</Text>
       <View style={styles.tiles}>
-        {SAMPLE_MOODS.map((mood, index) => (
-          <Pressable
-            key={mood.label}
-            testID={`travel-sample-${index}`}
-            accessibilityRole="button"
-            accessibilityLabel={mood.label}
-            style={({ pressed }) => [
-              styles.tile,
-              { backgroundColor: TILE_TONES[index % TILE_TONES.length] },
-              pressed && styles.pressed,
-            ]}
-            onPress={() => onSample(mood.question)}
-          >
-            <Text style={styles.tileLabel}>{mood.label}</Text>
-          </Pressable>
-        ))}
+        {SAMPLE_MOODS.map((mood, index) => {
+          const uri = moodImageUri(moodImages, mood.mood);
+          return (
+            <Pressable
+              key={mood.label}
+              testID={`travel-sample-${index}`}
+              accessibilityRole="button"
+              accessibilityLabel={mood.label}
+              style={({ pressed }) => [
+                styles.tile,
+                { backgroundColor: TILE_TONES[index % TILE_TONES.length] },
+                pressed && styles.pressed,
+              ]}
+              onPress={() => onSample(mood.question)}
+            >
+              {uri ? (
+                <Image
+                  testID={`travel-sample-image-${index}`}
+                  source={{ uri }}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="cover"
+                  transition={180}
+                />
+              ) : null}
+              {uri ? <View style={styles.tileScrim} /> : null}
+              <Text style={styles.tileLabel}>{mood.label}</Text>
+            </Pressable>
+          );
+        })}
       </View>
       <View style={styles.ctas}>
         <Pressable
@@ -110,8 +130,17 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 76,
     borderRadius: 12,
+    overflow: "hidden",
     justifyContent: "flex-end",
     padding: spacing.sm,
+  },
+  tileScrim: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: "rgba(0,0,0,0.34)",
   },
   tileLabel: { fontSize: 11, fontWeight: "800", letterSpacing: -0.2, color: colors.onImage },
   ctas: { gap: spacing.xs },

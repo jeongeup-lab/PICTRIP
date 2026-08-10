@@ -5,14 +5,18 @@ import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-c
 import { Stack } from "expo-router";
 import { queryClient } from "@/lib/query-client";
 import { warmConnection } from "@/lib/warm-connection";
+import { applyPendingUpdate } from "@/lib/ota";
 import { AuthPromptSheet } from "@/features/auth/components/AuthPromptSheet";
 import { colors } from "@/constants/theme";
 
 export default function RootLayout() {
   useEffect(() => {
     warmConnection();
+    void applyPendingUpdate();
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") warmConnection();
+      if (state !== "active") return;
+      warmConnection();
+      void applyPendingUpdate();
     });
     return () => sub.remove();
   }, []);

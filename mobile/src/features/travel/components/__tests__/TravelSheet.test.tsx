@@ -13,6 +13,7 @@ const base = {
   dockPx: 92,
   onGrabberTap: jest.fn(),
   onCollapse: jest.fn(),
+  onSnapChange: jest.fn(),
 };
 
 function mount(props: Partial<React.ComponentProps<typeof TravelSheet>> = {}) {
@@ -29,6 +30,28 @@ function mount(props: Partial<React.ComponentProps<typeof TravelSheet>> = {}) {
 
 function byId(tree: renderer.ReactTestRenderer, id: string) {
   return tree.root.findAllByProps({ testID: id });
+}
+
+function flatten(style: unknown): Record<string, unknown> {
+  return Object.assign({}, ...[style].flat(Infinity).filter(Boolean)) as Record<string, unknown>;
+}
+
+const START_Y = 400;
+
+function touch(dy: number, at = 0) {
+  return { nativeEvent: { pageY: START_Y + dy, timestamp: at } };
+}
+
+function drag(tree: renderer.ReactTestRenderer, steps: number[]) {
+  const header = byId(tree, "travel-sheet-header")[0];
+  act(() => {
+    steps.forEach((dy, index) => {
+      const event = touch(dy, index * 16);
+      if (index === 0) header.props.onResponderGrant(event);
+      else if (index < steps.length - 1) header.props.onResponderMove(event);
+      else header.props.onResponderRelease(event);
+    });
+  });
 }
 
 describe("TravelSheet", () => {
@@ -89,5 +112,79 @@ describe("TravelSheet", () => {
     const tree = mount({ snap: "full" });
 
     expect(tree.root.findAllByType(Text).some((n) => n.props.children === "대화")).toBe(true);
+  });
+
+  it("collapsed에서는 패널 크롬을 걷어 도크만 남긴다", () => {
+    const tree = mount({ snap: "collapsed" });
+    const root = byId(tree, "travel-sheet")[0];
+
+    expect(flatten(root.props.style)).toMatchObject({
+      backgroundColor: "transparent",
+      borderTopWidth: 0,
+      borderTopLeftRadius: 0,
+      shadowOpacity: 0,
+    });
+  });
+
+  it("mid에서는 패널 크롬을 그린다", () => {
+    const tree = mount({ snap: "mid" });
+    const root = byId(tree, "travel-sheet")[0];
+
+    expect(flatten(root.props.style)).toMatchObject({
+      backgroundColor: colors.inset,
+      borderTopWidth: 1,
+      borderTopLeftRadius: 22,
+    });
+  });
+
+  it("collapsed에서도 헤더는 드래그 손잡이로 남는다", () => {
+    const tree = mount({ snap: "collapsed" });
+    const header = byId(tree, "travel-sheet-header")[0];
+
+    expect(header.props.onStartShouldSetResponder).toBeDefined();
+  });
+
+  it("헤더를 탭만 하면 자식 버튼이 먼저 받는다", () => {
+    const tree = mount({ snap: "mid" });
+    const header = byId(tree, "travel-sheet-header")[0];
+
+    expect(header.props.onStartShouldSetResponder()).toBe(false);
+    expect(header.props.onMoveShouldSetResponder()).toBe(true);
+  });
+
+  it("위로 끌어올리면 다음 스냅으로 올라간다", () => {
+    const onSnapChange = jest.fn();
+    const tree = mount({ snap: "collapsed", onSnapChange });
+
+    drag(tree, [0, -120, -300]);
+
+    expect(onSnapChange).toHaveBeenCalledWith("mid");
+  });
+
+  it("아래로 끌어내리면 다음 스냅으로 내려간다", () => {
+    const onSnapChange = jest.fn();
+    const tree = mount({ snap: "full", onSnapChange });
+
+    drag(tree, [0, 120, 300]);
+
+    expect(onSnapChange).toHaveBeenCalledWith("mid");
+  });
+
+  it("살짝만 끌고 놓으면 원래 스냅에 되돌아간다", () => {
+    const onSnapChange = jest.fn();
+    const tree = mount({ snap: "mid", onSnapChange });
+
+    drag(tree, [0, -6, -8]);
+
+    expect(onSnapChange).not.toHaveBeenCalled();
+  });
+
+  it("드래그 중에는 collapsed에서도 패널을 그린다", () => {
+    const tree = mount({ snap: "collapsed" });
+    const header = byId(tree, "travel-sheet-header")[0];
+
+    act(() => header.props.onResponderGrant(touch(0)));
+
+    expect(flatten(byId(tree, "travel-sheet")[0].props.style).backgroundColor).toBe(colors.inset);
   });
 });

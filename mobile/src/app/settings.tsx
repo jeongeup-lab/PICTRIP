@@ -7,7 +7,7 @@ import { ListRow } from "@/components/ListRow";
 import { SectionTitle } from "@/components/SectionTitle";
 import { PERM_LABEL, useAppPermissions } from "@/features/profile/hooks/use-app-permissions";
 import type { PermStatus } from "@/features/map/usecases/request-location";
-import { APP_VERSION } from "@/lib/app-meta";
+import { APP_BUILD_LABEL } from "@/lib/app-meta";
 import { colors, spacing } from "@/constants/theme";
 
 export const PHOTO_NOTICE =
@@ -69,7 +69,7 @@ export default function SettingsScreen() {
             chevron
             onPress={() => router.push("/legal")}
           />
-          <ListRow icon="info" title="앱 버전" value={APP_VERSION} />
+          <ListRow icon="info" title="앱 버전" value={APP_BUILD_LABEL} />
         </ListGroup>
       </ScrollView>
     </View>
