@@ -1,423 +1,191 @@
-import { useCallback, useMemo, useState } from "react";
-import { ActionSheetIOS, Keyboard, StyleSheet, View, useWindowDimensions } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { Icon } from "@/components/Icon";
 import { Toast } from "@/components/Toast";
-import { KakaoWebMap } from "@/features/map/components/KakaoWebMap";
-import { ChatTranscript } from "@/features/travel/components/ChatTranscript";
-import { EmptyGreeting } from "@/features/travel/components/EmptyGreeting";
-import { StarterChipRow } from "@/features/travel/components/StarterChipRow";
-import { SearchPulse } from "@/features/travel/components/SearchPulse";
-import { TravelDock } from "@/features/travel/components/TravelDock";
-import { TravelSheet } from "@/features/travel/components/TravelSheet";
-import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
+import { AssistantTurn } from "@/features/travel/components/AssistantTurn";
+import { ChatComposer } from "@/features/travel/components/ChatComposer";
+import { UserBubble } from "@/features/travel/components/UserBubble";
+import { WelcomeBubble } from "@/features/travel/components/WelcomeBubble";
 import { useKeyboardHeight } from "@/features/travel/hooks/use-keyboard-height";
-import { useAskAgentMutation, useMoodImagesQuery } from "@/features/travel/queries";
-import { useConversation, type FollowKey } from "@/features/travel/stores/conversation-store";
-import {
-  agentErrorMessage,
-  PHOTO_PICK_FAILED,
-  PHOTO_SHOOT_FAILED,
-} from "@/features/travel/lib/agent-errors";
-import { composeQuestion, anchorQuestion, MY_LOCATION } from "@/features/travel/lib/question";
+import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
 import { contextFrom } from "@/features/travel/lib/conversation-context";
-import { askedKeys, followUps, type FollowChip } from "@/features/travel/lib/follow-ups";
-import { coordsOf } from "@/features/travel/lib/distance";
-import { nearChips, type NearChip } from "@/features/travel/lib/starter-chips";
-import { bounds, center, pinsFrom, placed } from "@/features/travel/lib/spot-geo";
-import { dockBasePx, mapFitPadding } from "@/features/travel/lib/screen-layout";
-import { sheetHeightPx, type SheetSnap } from "@/features/travel/lib/sheet-layout";
-import { pickTravelPhoto, shootTravelPhoto } from "@/features/travel/usecases/pick-travel-photo";
-import type { AskInput, PhotoUpload, TravelSpot } from "@/features/travel/api";
+import { composeQuestion } from "@/features/travel/lib/question";
+import { streamChat, type PhotoUpload } from "@/features/travel/api";
+import {
+  historyOf,
+  lastDoneTurn,
+  useChat,
+  type ChatRequestSeed,
+  type ChatTurn,
+} from "@/features/travel/stores/chat-store";
+import { AppError } from "@/lib/app-error";
 import { colors, spacing } from "@/constants/theme";
 
+export const WORDMARK = "PICTRIP";
+export const NEW_CHAT_LABEL = "새 대화";
 const SAVE_COMPLETE = "여행지를 저장했어요";
 const UNSAVE_COMPLETE = "여행지 저장을 해제했어요";
-const TOAST_LIFT = 12;
-const STARTER_LIFT = 8;
-const NO_SPOTS: TravelSpot[] = [];
-
-export const ATTACH_SHOOT_LABEL = "촬영";
-export const ATTACH_PICK_LABEL = "앨범에서 선택";
-export const ATTACH_CANCEL_LABEL = "취소";
-export const LOCATION_CHECKING = "위치를 확인하는 중이에요";
-export const LOCATION_REQUIRED = "위치를 켜면 내 근처를 찾아드려요";
-export const ASK_PLACEHOLDER = "어디로 갈지 말해보세요";
-export const ATTACHED_PLACEHOLDER = "지역이나 조건을 덧붙여 보세요";
+const TOAST_LIFT = 8;
 
 export default function TravelScreen() {
   const insets = useSafeAreaInsets();
-  const { height: frameH } = useWindowDimensions();
   const keyboardPx = useKeyboardHeight();
-  const [draft, setDraft] = useState("");
-  const [photo, setPhoto] = useState<PhotoUpload | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [snap, setSnap] = useState<SheetSnap>("collapsed");
-  const [focusedAt, setFocusedAt] = useState(0);
-  const [scrollToAt, setScrollToAt] = useState<number | null>(null);
 
-  const turns = useConversation((s) => s.turns);
-  const busy = useConversation((s) => s.busy);
-  const startTurn = useConversation((s) => s.start);
-  const retryTurn = useConversation((s) => s.retry);
-  const resolveTurn = useConversation((s) => s.resolve);
-  const failTurn = useConversation((s) => s.fail);
-  const clearTurns = useConversation((s) => s.clear);
-  const nextTurnId = useConversation((s) => s.nextTurnId);
+  const turns = useChat((s) => s.turns);
+  const streaming = useChat((s) => s.streaming);
 
-  const {
-    coords,
-    phase: locationPhase,
-    askable: locationAskable,
-    ask: askLocation,
-  } = useNearbyCoords();
-  const ask = useAskAgentMutation();
-  const moodImages = useMoodImagesQuery(turns.length === 0);
+  const { coords } = useNearbyCoords();
+  const coordsRef = useRef<typeof coords>(null);
+  useEffect(() => {
+    coordsRef.current = coords;
+  }, [coords]);
 
-  const turn = turns.length > 0 ? turns[turns.length - 1] : null;
-  const answer = turn?.status === "done" ? turn.answer : null;
-  const spots = answer?.spots ?? NO_SPOTS;
-  const focused = spots[focusedAt] ?? null;
+  const listRef = useRef<FlatList<ChatTurn>>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const focusedIdRef = useRef<string | null>(null);
 
-  const mapSpots = useMemo(() => placed(spots), [spots]);
-  const pins = useMemo(() => pinsFrom(mapSpots), [mapSpots]);
-
-  const dockPx = dockBasePx({ primer: locationAskable, attached: photo !== null });
-  const sheetPx =
-    sheetHeightPx({
-      snap,
-      frameH,
-      insetTop: insets.top,
-      insetBottom: insets.bottom,
-      keyboardPx,
-      dockPx,
-    }) + keyboardPx;
-
-  const fit = useMemo(() => {
-    const box = bounds(mapSpots);
-    if (!box) return null;
-    return { ...box, pad: mapFitPadding({ safeTop: insets.top, dockHeight: sheetPx }) };
-  }, [mapSpots, insets.top, sheetPx]);
-
-  const focus = useMemo(() => {
-    if (focused) return coordsOf(focused) ?? center(mapSpots) ?? coords;
-    return center(mapSpots) ?? coords;
-  }, [focused, mapSpots, coords]);
-
-  const asked = useMemo(() => askedKeys(turns), [turns]);
-  const followUp = useMemo(() => {
-    if (!answer) return null;
-    return followUps({
-      title: focused?.title ?? MY_LOCATION,
-      contentId: focused?.contentId ?? null,
-      asked,
-      isDetailTurn: (turn?.followKey ?? null) !== null,
-      refinements: answer.refinements ?? null,
-      suggestions: answer.suggestions ?? null,
-    });
-  }, [answer, focused, asked, turn]);
-
-  const run = useCallback(
-    (id: string, input: Omit<AskInput, "coords">) => {
-      ask.mutate(
-        { ...input, coords },
-        {
-          onSuccess: (result) => {
-            resolveTurn(id, result);
-            setSnap("mid");
-          },
-          onError: (error) => failTurn(id, agentErrorMessage(error)),
-        },
-      );
-    },
-    [ask, coords, resolveTurn, failTurn],
-  );
-
-  const resetFocus = useCallback(() => {
-    setFocusedAt(0);
-    setScrollToAt(null);
+  const run = useCallback((id: string, seed: ChatRequestSeed) => {
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const store = useChat.getState();
+    streamChat(
+      {
+        message: seed.message,
+        photo: seed.photo,
+        coords: coordsRef.current,
+        clientTime: new Date().toISOString(),
+        context: seed.context,
+        history: seed.history,
+      },
+      {
+        onStep: (event) => store.applyStep(id, event),
+        onDelta: (text) => store.appendDelta(id, text),
+        onCards: (event) => store.setCards(id, event.spots, event.tagBasis ?? null),
+        onSources: (items) => store.setSources(id, items),
+        onSuggestions: (items) => store.setSuggestions(id, items),
+        onDone: (event) => store.finish(id, event),
+        onError: (event) => store.fail(id, event.code),
+      },
+      controller.signal,
+    )
+      .then(() => {
+        if (controller.signal.aborted) return;
+        const turn = useChat.getState().turns.find((t) => t.id === id);
+        if (turn?.status === "streaming") useChat.getState().fail(id, "UNKNOWN");
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        useChat.getState().fail(id, error instanceof AppError ? error.code : "UNKNOWN");
+      });
   }, []);
-
-  const beginTurn = useCallback(() => {
-    resetFocus();
-    setSnap("mid");
-  }, [resetFocus]);
 
   const submit = useCallback(
-    (text: string, attached: PhotoUpload | null, followKey: FollowKey | null = null) => {
-      if (busy) return;
-      const question = composeQuestion(text, attached !== null);
+    (text: string, photo: PhotoUpload | null) => {
+      const state = useChat.getState();
+      if (state.streaming) return;
+      const question = composeQuestion(text, photo !== null);
       if (!question) return;
-      const request = text.trim();
-      const id = nextTurnId();
-      const context = contextFrom(answer, focused?.contentId ?? null);
-      startTurn({ id, question, request, photo: attached, context, followKey });
-      setDraft("");
-      setPhoto(null);
-      beginTurn();
-      run(id, { question: request, photo: attached, context });
+      const previous = lastDoneTurn(state.turns);
+      const seed: ChatRequestSeed = {
+        message: text.trim() || null,
+        photo,
+        context: contextFrom(previous, focusedIdRef.current),
+        history: historyOf(state.turns),
+      };
+      const id = state.nextTurnId();
+      state.begin({ id, question, photoUri: photo?.uri ?? null, request: seed });
+      focusedIdRef.current = null;
+      run(id, seed);
     },
-    [busy, nextTurnId, answer, focused, startTurn, beginTurn, run],
+    [run],
   );
-
-  const demandCoords = useCallback(() => {
-    if (locationPhase === "checking") {
-      setToast(LOCATION_CHECKING);
-      return;
-    }
-    if (locationAskable) {
-      void askLocation();
-      return;
-    }
-    setToast(LOCATION_REQUIRED);
-  }, [locationPhase, locationAskable, askLocation]);
-
-  const attachFromAlbum = useCallback(async () => {
-    try {
-      const picked = await pickTravelPhoto();
-      if (picked) setPhoto(picked);
-    } catch {
-      setToast(PHOTO_PICK_FAILED);
-    }
-  }, []);
-
-  const onFollowChip = useCallback(
-    (chip: FollowChip) => {
-      const action = chip.action;
-      if (busy) return;
-      if (action.kind === "question") {
-        submit(action.question, null);
-        return;
-      }
-      if (action.kind === "detail") {
-        submit(action.question, null, action.followKey);
-        return;
-      }
-      if (action.kind === "anchor") {
-        const anchor = focused
-          ? { contentId: focused.contentId, action: action.action }
-          : { action: action.action };
-        const id = nextTurnId();
-        startTurn({ id, question: action.question, request: "", photo: null, anchor });
-        beginTurn();
-        run(id, { anchor });
-        return;
-      }
-      const intent = answer?.intent ?? null;
-      if (!intent) return;
-      if (action.patch?.nearMe === true && !coords) {
-        demandCoords();
-        return;
-      }
-      const attached = turn?.photo ?? null;
-      const id = nextTurnId();
-      startTurn({
-        id,
-        question: action.label,
-        request: "",
-        photo: attached,
-        intent,
-        patch: action.patch,
-      });
-      beginTurn();
-      run(id, { photo: attached, intent, patch: action.patch });
-    },
-    [
-      busy,
-      submit,
-      focused,
-      coords,
-      demandCoords,
-      nextTurnId,
-      startTurn,
-      beginTurn,
-      run,
-      answer,
-      turn,
-    ],
-  );
-
-  const onShoot = useCallback(async () => {
-    try {
-      const picked = await shootTravelPhoto();
-      if (picked) setPhoto(picked);
-    } catch {
-      setToast(PHOTO_SHOOT_FAILED);
-    }
-  }, []);
-
-  const onAttach = useCallback(() => {
-    ActionSheetIOS.showActionSheetWithOptions(
-      {
-        options: [ATTACH_SHOOT_LABEL, ATTACH_PICK_LABEL, ATTACH_CANCEL_LABEL],
-        cancelButtonIndex: 2,
-      },
-      (choice) => {
-        if (choice === 0) void onShoot();
-        if (choice === 1) void attachFromAlbum();
-      },
-    );
-  }, [onShoot, attachFromAlbum]);
-
-  const onNewChat = useCallback(() => {
-    clearTurns();
-    setDraft("");
-    setPhoto(null);
-    resetFocus();
-    setSnap("collapsed");
-  }, [clearTurns, resetFocus]);
-
-  const onNearChip = useCallback(
-    (chip: NearChip) => {
-      if (busy) return;
-      if (!focused && !coords) {
-        demandCoords();
-        return;
-      }
-      const anchor = focused
-        ? { contentId: focused.contentId, action: chip.action }
-        : { action: chip.action };
-      const id = nextTurnId();
-      startTurn({
-        id,
-        question: anchorQuestion(focused?.title ?? MY_LOCATION, chip.label),
-        request: "",
-        photo: null,
-        anchor,
-      });
-      beginTurn();
-      run(id, { anchor });
-    },
-    [busy, focused, coords, demandCoords, nextTurnId, startTurn, beginTurn, run],
-  );
-
-  const onMapTap = useCallback(() => {
-    Keyboard.dismiss();
-    setSnap("collapsed");
-  }, []);
 
   const onRetry = useCallback(() => {
-    if (busy || !turn) return;
-    retryTurn(turn.id);
-    beginTurn();
-    run(turn.id, {
-      question: turn.request,
-      photo: turn.photo,
-      intent: turn.intent,
-      patch: turn.patch,
-      anchor: turn.anchor,
-      context: turn.context,
-    });
-  }, [busy, turn, retryTurn, beginTurn, run]);
+    const state = useChat.getState();
+    if (state.streaming) return;
+    const turn = state.turns[state.turns.length - 1];
+    if (!turn || turn.status !== "error") return;
+    state.retry(turn.id);
+    run(turn.id, turn.request);
+  }, [run]);
 
-  const onPinTap = useCallback(
-    (contentId: string) => {
-      const at = spots.findIndex((s) => s.contentId === contentId);
-      if (at < 0) return;
-      setFocusedAt(at);
-      setScrollToAt(at);
-    },
-    [spots],
+  const onNewChat = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    focusedIdRef.current = null;
+    useChat.getState().clear();
+  }, []);
+
+  const onFocusSpot = useCallback((contentId: string | null) => {
+    focusedIdRef.current = contentId;
+  }, []);
+
+  const scrollToEnd = useCallback(() => {
+    listRef.current?.scrollToEnd({ animated: true });
+  }, []);
+
+  const renderTurn = useCallback(
+    ({ item, index }: { item: ChatTurn; index: number }) => (
+      <View style={styles.turn}>
+        <UserBubble question={item.question} photoUri={item.photoUri} />
+        <AssistantTurn
+          turn={item}
+          latest={index === turns.length - 1}
+          origin={coords}
+          onSuggestion={(text) => submit(text, null)}
+          onRetry={onRetry}
+          onDetail={(spot) => router.push(`/spots/${spot.contentId}`)}
+          onSaveToggle={(saved) => setToast(saved ? SAVE_COMPLETE : UNSAVE_COMPLETE)}
+          onNotice={(message) => setToast(message)}
+          onFocusSpot={onFocusSpot}
+        />
+      </View>
+    ),
+    [turns.length, coords, submit, onRetry, onFocusSpot],
   );
 
-  const onFocusChange = useCallback((index: number) => {
-    setFocusedAt(index);
-    setScrollToAt(null);
-  }, []);
-
-  const onGrabberTap = useCallback(() => {
-    setSnap((current) => (current === "collapsed" ? "mid" : current === "mid" ? "full" : "mid"));
-  }, []);
-
-  const onSnapChange = useCallback((next: SheetSnap) => {
-    if (next === "collapsed") Keyboard.dismiss();
-    setSnap(next);
-  }, []);
-
-  const onInputFocus = useCallback(() => {
-    setSnap((current) => (current === "collapsed" ? "mid" : current));
-  }, []);
-
-  const placeholder = photo
-    ? ATTACHED_PLACEHOLDER
-    : focused
-      ? `${focused.title}에 대해 물어보기`
-      : ASK_PLACEHOLDER;
-
-  const greetingShown = turns.length === 0 && snap !== "collapsed";
-  const starterShown = snap === "collapsed" && turns.length === 0;
+  const bottomPad = keyboardPx > 0 ? keyboardPx + spacing.xs : insets.bottom;
 
   return (
     <View style={styles.root}>
-      <KakaoWebMap
-        center={focus}
-        fit={fit}
-        pins={pins}
-        anchorId={focused?.contentId ?? null}
-        userLocation={coords}
-        onPinTap={onPinTap}
-        onBlankTap={onMapTap}
+      <View style={[styles.header, { paddingTop: insets.top + spacing.xs }]}>
+        <Pressable
+          testID="travel-new-chat"
+          accessibilityRole="button"
+          accessibilityLabel={NEW_CHAT_LABEL}
+          style={({ pressed }) => [styles.newChat, pressed && styles.pressed]}
+          hitSlop={6}
+          onPress={onNewChat}
+        >
+          <Icon name="plus" size={19} color={colors.ink} strokeWidth={2} />
+        </Pressable>
+        <Text style={styles.wordmark}>{WORDMARK}</Text>
+      </View>
+
+      <FlatList
+        ref={listRef}
+        testID="travel-transcript"
+        data={turns}
+        keyExtractor={(turn) => turn.id}
+        renderItem={renderTurn}
+        ListHeaderComponent={WelcomeBubble}
+        contentContainerStyle={styles.transcript}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        onContentSizeChange={scrollToEnd}
       />
 
-      <SearchPulse active={busy} bottom={sheetPx} />
-
-      {starterShown ? (
-        <View style={[styles.starter, { bottom: sheetPx + STARTER_LIFT }]} pointerEvents="box-none">
-          <StarterChipRow chips={nearChips()} disabled={busy} onChipPress={onNearChip} />
-        </View>
-      ) : null}
-
-      <TravelSheet
-        snap={snap}
-        keyboardPx={keyboardPx}
-        dockPx={dockPx}
-        greeting={greetingShown}
-        onGrabberTap={onGrabberTap}
-        onSnapChange={onSnapChange}
-      >
-        {greetingShown ? (
-          <View style={[styles.slot, styles.greeting]}>
-            <EmptyGreeting moodImages={moodImages.data} onPickPhoto={onAttach} />
-          </View>
-        ) : (
-          <View style={styles.slot}>
-            <ChatTranscript
-              turns={turns}
-              focusedIndex={focusedAt}
-              scrollToIndex={scrollToAt}
-              origin={coords}
-              followUp={followUp}
-              busy={busy}
-              onFollowChip={onFollowChip}
-              onFocusChange={onFocusChange}
-              onDetail={(spot) => router.push(`/spots/${spot.contentId}`)}
-              onSaveToggle={(saved) => setToast(saved ? SAVE_COMPLETE : UNSAVE_COMPLETE)}
-              onMetricPress={(tooltip) => {
-                if (tooltip) setToast(tooltip);
-              }}
-              onRetry={onRetry}
-            />
-          </View>
-        )}
-        <TravelDock
-          value={draft}
-          photo={photo}
-          disabled={busy}
-          placeholder={placeholder}
-          locationAskable={locationAskable}
-          onChange={setDraft}
-          onFocus={onInputFocus}
-          onAttach={onAttach}
-          onClearAttach={() => setPhoto(null)}
-          onSubmit={() => submit(draft, photo)}
-          onAskLocation={() => void askLocation()}
-        />
-      </TravelSheet>
+      <View style={{ paddingBottom: bottomPad }}>
+        <ChatComposer streaming={streaming} onSend={submit} onNotice={setToast} />
+      </View>
 
       <Toast
         testID="travel-toast"
         message={toast}
-        bottom={sheetPx + TOAST_LIFT}
+        bottom={bottomPad + 58 + TOAST_LIFT}
         onHide={() => setToast(null)}
       />
     </View>
@@ -426,7 +194,31 @@ export default function TravelScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  starter: { position: "absolute", left: 0, right: 0 },
-  slot: { flex: 1 },
-  greeting: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.lg },
+  header: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingBottom: spacing.sm,
+  },
+  wordmark: {
+    fontSize: 16,
+    fontWeight: "800",
+    letterSpacing: 2.5,
+    color: colors.onImage,
+  },
+  newChat: {
+    position: "absolute",
+    left: spacing.md,
+    bottom: spacing.xs,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.fill,
+  },
+  pressed: { opacity: 0.7 },
+  turn: { gap: spacing.sm },
+  transcript: { paddingTop: spacing.sm, paddingBottom: spacing.lg, gap: spacing.lg },
 });

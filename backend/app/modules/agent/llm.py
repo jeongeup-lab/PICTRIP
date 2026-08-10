@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
@@ -91,6 +92,59 @@ class GeminiClient:
             if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
                 raise RateLimited() from exc
             raise AgentIntentUnavailable() from exc
+
+    async def stream_text(
+        self, *, system: str, user_text: str, temperature: float = 0.4
+    ) -> AsyncIterator[str]:
+        body = {
+            "systemInstruction": {"parts": [{"text": system}]},
+            "contents": [{"role": "user", "parts": [{"text": user_text}]}],
+            "generationConfig": {"temperature": temperature},
+        }
+        response = await self._open_stream(body)
+        try:
+            async for line in response.aiter_lines():
+                piece = _stream_piece(line)
+                if piece:
+                    yield piece
+        finally:
+            await response.aclose()
+
+    @retry(
+        retry=retry_if_exception(_is_transient),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=0.5, max=4),
+        reraise=True,
+    )
+    async def _open_stream(self, body: dict[str, Any]) -> httpx.Response:
+        request = self._client.build_request(
+            "POST",
+            f"/models/{settings.GEMINI_MODEL}:streamGenerateContent",
+            params={"alt": "sse"},
+            json=body,
+        )
+        response = await self._client.send(request, stream=True)
+        if response.status_code >= 400:
+            await response.aread()
+            await response.aclose()
+            response.raise_for_status()
+        return response
+
+
+def _stream_piece(line: str) -> str | None:
+    if not line.startswith("data:"):
+        return None
+    payload = line[len("data:") :].strip()
+    if not payload or payload == "[DONE]":
+        return None
+    try:
+        parts = json.loads(payload)["candidates"][0]["content"]["parts"]
+    except (json.JSONDecodeError, KeyError, IndexError, TypeError):
+        return None
+    if not isinstance(parts, list):
+        return None
+    texts = [part["text"] for part in parts if isinstance(part, dict) and "text" in part]
+    return "".join(texts) or None
 
 
 _client: GeminiClient | None = None

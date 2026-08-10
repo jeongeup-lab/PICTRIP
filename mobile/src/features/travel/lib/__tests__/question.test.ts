@@ -1,8 +1,4 @@
-import {
-  anchorQuestion,
-  composeQuestion,
-  PHOTO_ONLY_QUESTION,
-} from "@/features/travel/lib/question";
+import { composeQuestion, PHOTO_ONLY_QUESTION } from "@/features/travel/lib/question";
 
 describe("composeQuestion", () => {
   it("trims the typed question", () => {
@@ -19,11 +15,5 @@ describe("composeQuestion", () => {
 
   it("refuses an empty submit with no attachment", () => {
     expect(composeQuestion("", false)).toBeNull();
-  });
-});
-
-describe("anchorQuestion", () => {
-  it("prefixes the chip label with the anchored spot", () => {
-    expect(anchorQuestion("김녕미로공원", "근처 맛집")).toBe("김녕미로공원 근처 맛집");
   });
 });

@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, TypeVar
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import ValidationError
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, ValidationError
 from starlette.datastructures import UploadFile
 from starlette.formparsers import MultiPartParser
 
 from app.core.db import DbSession
 from app.core.redis import RedisDep
 from app.kto.client import KtoDep
-from app.modules.agent.schemas import AskRequest
+from app.modules.agent.schemas import AskRequest, ChatRequest
 from app.modules.agent.services import ask as ask_service
+from app.modules.agent.services import chat as chat_service
 from app.modules.agent.services import moods as moods_service
 from app.modules.agent.services.photo import MAX_IMAGE_BYTES
 from app.web.envelope import ok
@@ -23,6 +25,8 @@ FORM_OVERHEAD_BYTES = 64 * 1024
 MAX_BODY_BYTES = MAX_IMAGE_BYTES + FORM_OVERHEAD_BYTES
 
 MultiPartParser.spool_max_size = MAX_BODY_BYTES
+
+PayloadT = TypeVar("PayloadT", bound=BaseModel)
 
 router = APIRouter(tags=["AGT · travel agent"])
 
@@ -55,6 +59,30 @@ async def agent_ask(
     return ok(result)
 
 
+@router.post(
+    "/agent/chat",
+    summary="여행 탭 채팅 — 자유문·사진 → SSE 스트리밍 답변",
+    dependencies=[Depends(rate_limit(bucket="agent_chat", limit=10, window_seconds=60))],
+)
+async def agent_chat(
+    request: Request, session: DbSession, redis: RedisDep, kto: KtoDep
+) -> StreamingResponse:
+    fields, image_bytes, image_mime = await _read_fields(request)
+    payload = _parse(fields, ChatRequest, label="chat")
+    return StreamingResponse(
+        chat_service.stream(
+            session,
+            redis,
+            kto,
+            payload=payload,
+            image_bytes=image_bytes,
+            image_mime=image_mime,
+        ),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @router.get(
     "/agent/mood-images",
     summary="분위기별 대표 사진 — 여행 탭 시작 화면 타일",
@@ -76,6 +104,11 @@ async def _buffer_capped(request: Request) -> None:
 
 
 async def _read_payload(request: Request) -> tuple[AskRequest, bytes | None, str | None]:
+    fields, image_bytes, image_mime = await _read_fields(request)
+    return _parse(fields, AskRequest, label="ask"), image_bytes, image_mime
+
+
+async def _read_fields(request: Request) -> tuple[dict[str, Any], bytes | None, str | None]:
     await _buffer_capped(request)
     content_type = request.headers.get("content-type", "")
     if content_type.startswith("multipart/"):
@@ -91,28 +124,28 @@ async def _read_payload(request: Request) -> tuple[AskRequest, bytes | None, str
             for key, value in form.multi_items()
             if key != "photo" and isinstance(value, str) and value != ""
         }
-        for key in ("intent", "patch", "anchor", "context"):
+        for key in ("intent", "patch", "anchor", "context", "history"):
             raw = fields.get(key)
             if isinstance(raw, str):
                 try:
                     fields[key] = json.loads(raw)
                 except json.JSONDecodeError as exc:
                     raise ValidationFailed(f"invalid {key} json") from exc
-        return _parse(fields), image_bytes, image_mime
+        return fields, image_bytes, image_mime
     try:
         body = await request.json()
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise ValidationFailed("invalid json body") from exc
     if not isinstance(body, dict):
         raise ValidationFailed("body must be an object")
-    return _parse(body), None, None
+    return body, None, None
 
 
-def _parse(raw: dict[str, Any]) -> AskRequest:
+def _parse(raw: dict[str, Any], model: type[PayloadT], *, label: str) -> PayloadT:
     try:
-        return AskRequest.model_validate(raw)
+        return model.model_validate(raw)
     except ValidationError as exc:
-        raise ValidationFailed("invalid ask payload") from exc
+        raise ValidationFailed(f"invalid {label} payload") from exc
 
 
 async def _read_capped(upload: UploadFile) -> bytes:
