@@ -19,7 +19,7 @@ import { TravelDock } from "@/features/travel/components/TravelDock";
 import { TravelSheet } from "@/features/travel/components/TravelSheet";
 import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
 import { useKeyboardHeight } from "@/features/travel/hooks/use-keyboard-height";
-import { useAskAgentMutation } from "@/features/travel/queries";
+import { useAskAgentMutation, useMoodImagesQuery } from "@/features/travel/queries";
 import { useConversation, type FollowKey } from "@/features/travel/stores/conversation-store";
 import { useTravelAnchor } from "@/features/travel/stores/anchor-store";
 import {
@@ -91,6 +91,7 @@ export default function TravelScreen() {
     ask: askLocation,
   } = useNearbyCoords();
   const ask = useAskAgentMutation();
+  const moodImages = useMoodImagesQuery(turns.length === 0 && !seeded);
 
   const lastTurn = turns.length > 0 ? turns[turns.length - 1] : null;
   const turn = seeded ? null : lastTurn;
@@ -377,6 +378,11 @@ export default function TravelScreen() {
     setSnap((current) => (current === "full" ? "mid" : "full"));
   }, []);
 
+  const onSnapChange = useCallback((next: SheetSnap) => {
+    if (next === "collapsed") Keyboard.dismiss();
+    setSnap(next);
+  }, []);
+
   const onInputFocus = useCallback(() => {
     setSnap((current) => (current === "collapsed" ? "mid" : current));
   }, []);
@@ -406,7 +412,7 @@ export default function TravelScreen() {
 
       {idleChipsShown ? (
         <View
-          style={[styles.idleChips, { bottom: dockPx + IDLE_CHIP_LIFT }]}
+          style={[styles.idleChips, { bottom: sheetPx + IDLE_CHIP_LIFT }]}
           pointerEvents="box-none"
         >
           <ChipRow
@@ -424,6 +430,7 @@ export default function TravelScreen() {
         keyboardPx={keyboardPx}
         dockPx={dockPx}
         onGrabberTap={onGrabberTap}
+        onSnapChange={onSnapChange}
         onCollapse={() => {
           Keyboard.dismiss();
           setSnap("collapsed");
@@ -437,6 +444,7 @@ export default function TravelScreen() {
             showsVerticalScrollIndicator={false}
           >
             <EmptyGreeting
+              moodImages={moodImages.data}
               onSample={(question) => submit(question, null)}
               onAlbum={() => void attachFromAlbum()}
               onShoot={() => void onShoot()}

@@ -376,6 +376,40 @@ async def load_random_attraction_images(
     ]
 
 
+@dataclass(frozen=True)
+class MoodImageRow:
+    code: str
+    image_url: str
+    cpyrht_div_cd: str | None
+
+
+_MOOD_IMAGE_SQL = """
+SELECT DISTINCT ON (moods.code)
+       moods.code,
+       spots.first_image_url AS image_url,
+       spots.cpyrht_div_cd
+FROM moods
+JOIN spot_moods sm ON sm.mood_id = moods.id
+JOIN spots ON spots.content_id = sm.content_id
+WHERE moods.code = ANY(CAST(:codes AS text[]))
+  AND spots.content_type_id = 12
+  AND spots.show_flag = 1
+  AND spots.first_image_url IS NOT NULL
+  AND spots.first_image_url <> ''
+ORDER BY moods.code, random()
+"""
+
+
+async def load_mood_images(session: AsyncSession, codes: list[str]) -> list[MoodImageRow]:
+    if not codes:
+        return []
+    result = await session.execute(text(_MOOD_IMAGE_SQL), {"codes": codes})
+    return [
+        MoodImageRow(code=row.code, image_url=row.image_url, cpyrht_div_cd=row.cpyrht_div_cd)
+        for row in result
+    ]
+
+
 async def load_candidates_by_ids(
     session: AsyncSession, content_ids: list[str]
 ) -> dict[str, CandidateRow]:

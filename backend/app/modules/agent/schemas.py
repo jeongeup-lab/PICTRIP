@@ -96,6 +96,15 @@ class Suggestion(BaseModel):
     patch: RefinePatch
 
 
+class MoodImage(BaseModel):
+    code: Mood
+    imageUrl: str
+
+
+class MoodImagesResponse(BaseModel):
+    images: list[MoodImage]
+
+
 PRE_OTA_REGION_PREFIXES: dict[str, tuple[str, ...]] = {
     "all": (),
     "capital": ("서울", "경기", "인천"),

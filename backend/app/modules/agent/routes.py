@@ -13,6 +13,7 @@ from app.core.redis import RedisDep
 from app.kto.client import KtoDep
 from app.modules.agent.schemas import AskRequest
 from app.modules.agent.services import ask as ask_service
+from app.modules.agent.services import moods as moods_service
 from app.modules.agent.services.photo import MAX_IMAGE_BYTES
 from app.web.envelope import ok
 from app.web.errors import ImageInvalid, ValidationFailed
@@ -52,6 +53,15 @@ async def agent_ask(
         legacy_client=payload.region is not None,
     )
     return ok(result)
+
+
+@router.get(
+    "/agent/mood-images",
+    summary="분위기별 대표 사진 — 여행 탭 시작 화면 타일",
+    dependencies=[Depends(rate_limit(bucket="agent_moods", limit=30, window_seconds=60))],
+)
+async def agent_mood_images(session: DbSession) -> dict[str, Any]:
+    return ok(await moods_service.mood_images(session))
 
 
 async def _buffer_capped(request: Request) -> None:

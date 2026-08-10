@@ -17,7 +17,7 @@ import { GuestHero } from "@/features/profile/components/GuestHero";
 import { StatTiles } from "@/features/profile/components/StatTiles";
 import { profileStats } from "@/features/profile/lib/stats";
 import { PERM_LABEL, useAppPermissions } from "@/features/profile/hooks/use-app-permissions";
-import { APP_VERSION } from "@/lib/app-meta";
+import { APP_BUILD_LABEL } from "@/lib/app-meta";
 import { colors, spacing } from "@/constants/theme";
 
 const SUPPORT_URL = "https://pictrip.org/support";
@@ -128,7 +128,7 @@ export default function ProfileTab() {
             chevron
             onPress={() => void WebBrowser.openBrowserAsync(SUPPORT_URL)}
           />
-          <ListRow icon="info" title="앱 버전" value={APP_VERSION} />
+          <ListRow icon="info" title="앱 버전" value={APP_BUILD_LABEL} />
         </ListGroup>
       </ScrollView>
     </View>

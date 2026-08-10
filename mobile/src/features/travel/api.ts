@@ -143,6 +143,16 @@ function askBody(input: AskInput): Record<string, unknown> {
   return body;
 }
 
+export interface MoodImage {
+  code: Mood;
+  imageUrl: string;
+}
+
+export async function fetchMoodImages(): Promise<MoodImage[]> {
+  const result = (await api.get("/agent/mood-images")) as unknown as { images: MoodImage[] };
+  return result.images;
+}
+
 export async function askAgent(input: AskInput): Promise<AgentAnswer> {
   const photo = input.photo ?? null;
   if (photo) {
