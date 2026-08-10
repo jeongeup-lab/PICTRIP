@@ -826,8 +826,12 @@ async def test_an_origin_search_does_not_claim_conditions_it_never_applied(monke
     async def fake_briefs(session, content_ids):  # type: ignore[no-untyped-def]
         return {}
 
+    async def fake_images(session, limit):  # type: ignore[no-untyped-def]
+        return []
+
     monkeypatch.setattr(ask_service, "find_nearby_spots", fake_nearby)
     monkeypatch.setattr(repositories, "load_candidates_by_ids", fake_briefs)
+    monkeypatch.setattr(repositories, "load_random_attraction_images", fake_images)
 
     answer = await ask_service._ask_around(
         None,  # type: ignore[arg-type]
@@ -1077,8 +1081,12 @@ async def test_the_origin_itself_is_not_offered_as_its_own_neighbour(monkeypatch
     async def fake_briefs(session, content_ids):  # type: ignore[no-untyped-def]
         return {}
 
+    async def fake_images(session, limit):  # type: ignore[no-untyped-def]
+        return []
+
     monkeypatch.setattr(ask_service, "find_nearby_spots", fake_nearby)
     monkeypatch.setattr(repositories, "load_candidates_by_ids", fake_briefs)
+    monkeypatch.setattr(repositories, "load_random_attraction_images", fake_images)
 
     answer = await ask_service._ask_around(
         None,  # type: ignore[arg-type]

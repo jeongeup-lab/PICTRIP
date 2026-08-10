@@ -8,7 +8,7 @@ from redis.asyncio import Redis
 from app.core.db import AsyncSession
 from app.core.logging import get_logger
 from app.kto.client import KtoClient
-from app.kto.display import t1_display_url
+from app.kto.display import T1_TILE_WIDTH, t1_display_url
 from app.modules.agent import repositories
 from app.modules.agent.errors import (
     AgentFestivalUnavailable,
@@ -362,6 +362,7 @@ async def _ask_with_anchor(
         )
     rated = await repositories.load_candidates_by_ids(session, [n.content_id for n in kept])
     spots = [_anchor_card(near, has_crowd=_has_crowd(rated.get(near.content_id))) for near in kept]
+    await _fill_missing_card_images(session, spots)
     steps = [*(prior_steps or [])]
     steps.append(
         AskStep(tool="nearby", label=f"{origin} 주변 {noun} 조회", badge=f"{len(spots)}곳")
@@ -515,6 +516,21 @@ def _anchor_crowd_response(row: CandidateRow) -> AskResponse:
 
 def _has_crowd(row: CandidateRow | None) -> bool:
     return row is not None and row.concentration_rate is not None
+
+
+async def _fill_missing_card_images(session: AsyncSession, spots: list[AgentSpotCard]) -> None:
+    missing = [card for card in spots if not card.imageUrl]
+    if not missing:
+        return
+    pool = await repositories.load_random_attraction_images(session, len(missing))
+    urls = [
+        url
+        for url in (t1_display_url(r.image_url, r.cpyrht_div_cd, width=T1_TILE_WIDTH) for r in pool)
+        if url
+    ]
+    for card, url in zip(missing, urls, strict=False):
+        card.imageUrl = None
+        card.fallbackImageUrl = url
 
 
 def _anchor_card(row: NearbySpotRow, *, has_crowd: bool) -> AgentSpotCard:
@@ -1018,6 +1034,7 @@ async def _ask_around(
         return empty_anchor_response(origin, action, prior_steps=steps, intent=intent)
     rated = await repositories.load_candidates_by_ids(session, [n.content_id for n in kept])
     spots = [_anchor_card(near, has_crowd=_has_crowd(rated.get(near.content_id))) for near in kept]
+    await _fill_missing_card_images(session, spots)
     walked = [
         *steps,
         AskStep(tool="nearby", label=f"{origin} 주변 {noun} 조회", badge=f"{len(kept)}곳"),

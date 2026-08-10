@@ -34,6 +34,7 @@ async def _spot(
     l3: str | None,
     content_type: int = 12,
     lat_offset: float = 0.0,
+    image: str = "http://kto/i.jpg",
 ) -> None:
     await session.execute(
         text(
@@ -41,12 +42,13 @@ async def _spot(
             "first_image_url, show_flag, mapx, mapy, lcls_systm1, lcls_systm2, "
             "lcls_systm3) "
             "VALUES (:cid, :ctype, :t, '제주특별자치도 제주시 구좌읍 1', "
-            "'http://kto/i.jpg', 1, :lng, :lat, :l1, :l2, :l3)"
+            ":img, 1, :lng, :lat, :l1, :l2, :l3)"
         ),
         {
             "cid": cid,
             "ctype": content_type,
             "t": title,
+            "img": image,
             "lng": ANCHOR_LNG,
             "lat": ANCHOR_LAT + lat_offset,
             "l1": l1,
@@ -139,6 +141,35 @@ async def test_anchor_food_returns_nearby_restaurants_sorted_by_distance(
     assert all(ask_service._is_distance_tag(spot["tag"]) for spot in data["spots"])
     assert data["refinements"] == []
     assert data["suggestions"] == []
+
+
+@pytest.mark.integration
+async def test_a_photoless_anchor_card_borrows_a_random_attraction_image(
+    db_session, client, anchor_seeded
+) -> None:
+    await _spot(
+        db_session,
+        "f9",
+        title="사진없는식당",
+        l1="FD",
+        l2="FD01",
+        l3=None,
+        content_type=39,
+        lat_offset=0.002,
+        image="",
+    )
+    _override(db_session)
+    try:
+        res = await _ask_anchor(client, "a1", "food")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    cards = {spot["contentId"]: spot for spot in res.json()["data"]["spots"]}
+    assert cards["f9"]["imageUrl"] is None
+    assert cards["f9"]["fallbackImageUrl"]
+    assert cards["f1"]["imageUrl"]
+    assert cards["f1"]["fallbackImageUrl"] is None
 
 
 @pytest.mark.integration

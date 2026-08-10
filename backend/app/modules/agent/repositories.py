@@ -345,6 +345,37 @@ async def find_rated_content_ids(session: AsyncSession, content_ids: list[str]) 
     return {row.content_id for row in result}
 
 
+@dataclass(frozen=True)
+class AttractionImageRow:
+    image_url: str
+    cpyrht_div_cd: str | None
+
+
+_RANDOM_ATTRACTION_IMAGE_SQL = """
+SELECT spots.first_image_url AS image_url,
+       spots.cpyrht_div_cd
+FROM spots
+WHERE spots.content_type_id = 12
+  AND spots.show_flag = 1
+  AND spots.first_image_url IS NOT NULL
+  AND spots.first_image_url <> ''
+ORDER BY random()
+LIMIT :lim
+"""
+
+
+async def load_random_attraction_images(
+    session: AsyncSession, limit: int
+) -> list[AttractionImageRow]:
+    if limit <= 0:
+        return []
+    result = await session.execute(text(_RANDOM_ATTRACTION_IMAGE_SQL), {"lim": limit})
+    return [
+        AttractionImageRow(image_url=row.image_url, cpyrht_div_cd=row.cpyrht_div_cd)
+        for row in result
+    ]
+
+
 async def load_candidates_by_ids(
     session: AsyncSession, content_ids: list[str]
 ) -> dict[str, CandidateRow]:

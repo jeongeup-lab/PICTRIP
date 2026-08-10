@@ -8,6 +8,7 @@ from app.modules.agent.services import refine as refine_service
 MAX_SUGGESTIONS = 3
 ALL_AXES: frozenset[DropAxis] = frozenset(get_args(DropAxis))
 WIDEN_REGION_LABEL = "지역 넓히기"
+ZOOM_OUT_LABEL = "다른 지역도 보기"
 
 
 def category_noun(intent: QueryIntent) -> str:
@@ -49,7 +50,12 @@ def derive(
         chips.append(Suggestion(label="실내만", patch=RefinePatch(indoorOnly=True)))
     if "near" in axes and has_coords and not intent.nearMe:
         chips.append(Suggestion(label="가까운 순으로", patch=RefinePatch(nearMe=True)))
-    return chips[:MAX_SUGGESTIONS]
+    if not _region_releasable(intent, axes, has_coords=has_coords):
+        return chips[:MAX_SUGGESTIONS]
+    return [
+        *chips[: MAX_SUGGESTIONS - 1],
+        Suggestion(label=ZOOM_OUT_LABEL, patch=RefinePatch(drop="region")),
+    ]
 
 
 def _region_releasable(intent: QueryIntent, axes: frozenset[DropAxis], *, has_coords: bool) -> bool:

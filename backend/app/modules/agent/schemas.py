@@ -154,6 +154,7 @@ class AgentSpotCard(BaseModel):
     title: str
     regionLabel: str
     imageUrl: str | None = None
+    fallbackImageUrl: str | None = None
     tag: str | None = None
     lat: float | None = None
     lng: float | None = None

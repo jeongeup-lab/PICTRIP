@@ -1719,7 +1719,10 @@ async def test_refine_request_skips_the_llm_and_keeps_prior_axes(
     assert data["intent"]["regionHints"] == ["부산"]
     assert [step["tool"] for step in data["steps"]] == ["category_search", "concentration"]
     assert [spot["contentId"] for spot in data["spots"]] == ["v1", "v2", "v3"]
-    assert [chip["label"] for chip in data["refinements"]] == ["유명한 곳으로"]
+    assert [chip["label"] for chip in data["refinements"]] == [
+        "유명한 곳으로",
+        "다른 지역도 보기",
+    ]
 
 
 @pytest.mark.integration
@@ -1785,7 +1788,7 @@ async def test_photo_refine_reads_the_multipart_intent_and_skips_the_llm(
     assert [step["tool"] for step in data["steps"]] == ["photo_match"]
     assert [spot["contentId"] for spot in data["spots"]] == ["j1"]
     assert data["intent"]["regionHints"] == ["제주"]
-    assert data["refinements"] == []
+    assert [chip["label"] for chip in data["refinements"]] == ["다른 지역도 보기"]
 
 
 @pytest.mark.integration
@@ -1805,13 +1808,14 @@ async def test_suggestions_stay_plain_labels_of_the_refinements(
     assert res.status_code == 200
     data = res.json()["data"]
     assert data["refinements"]
-    assert all(chip["patch"]["drop"] is None for chip in data["refinements"])
     assert all(isinstance(label, str) for label in data["suggestions"])
-    assert data["suggestions"] == [chip["label"] for chip in data["refinements"]]
+    assert data["suggestions"] == [
+        chip["label"] for chip in data["refinements"] if chip["patch"]["drop"] is None
+    ]
 
 
 @pytest.mark.integration
-async def test_a_result_turn_carries_no_condition_release_chip(
+async def test_a_result_turn_ends_with_one_zoom_out_chip(
     db_session, client, seeded, monkeypatch
 ) -> None:
     monkeypatch.setattr(intent_service, "extract_intent", _forbidden_intent([]))
@@ -1829,8 +1833,12 @@ async def test_a_result_turn_carries_no_condition_release_chip(
 
     assert res.status_code == 200
     data = res.json()["data"]
-    assert [chip for chip in data["refinements"] if chip["patch"]["drop"] is not None] == []
-    assert data["suggestions"] == [chip["label"] for chip in data["refinements"]]
+    drops = [chip for chip in data["refinements"] if chip["patch"]["drop"] is not None]
+    assert [chip["label"] for chip in drops] == [suggest_service.ZOOM_OUT_LABEL]
+    assert data["refinements"][-1]["patch"]["drop"] == "region"
+    assert data["suggestions"] == [
+        chip["label"] for chip in data["refinements"] if chip["patch"]["drop"] is None
+    ]
 
 
 @pytest.mark.integration
@@ -1867,7 +1875,9 @@ async def test_photo_suggestions_stay_plain_labels_of_the_refinements(
     data = res.json()["data"]
     assert data["refinements"]
     assert all(isinstance(label, str) for label in data["suggestions"])
-    assert data["suggestions"] == [chip["label"] for chip in data["refinements"]]
+    assert data["suggestions"] == [
+        chip["label"] for chip in data["refinements"] if chip["patch"]["drop"] is None
+    ]
 
 
 @pytest.mark.integration
@@ -2422,15 +2432,15 @@ def test_suggestions_drop_the_distance_axis_once_near_me_is_on() -> None:
     assert [c.label for c in chips] == ["사람 적은 곳만", "실내만"]
 
 
-def test_a_thin_turn_offers_no_condition_release_chip() -> None:
+def test_a_thin_turn_still_ends_with_the_zoom_out_chip() -> None:
     chips = suggest_service.derive(
         QueryIntent(crowdPreference="quiet", regionHints=["제주"]),
         has_coords=False,
         result_count=2,
     )
 
-    assert [c.label for c in chips] == ["유명한 곳으로", "실내만"]
-    assert all(c.patch.drop is None for c in chips)
+    assert [c.label for c in chips] == ["유명한 곳으로", "실내만", "다른 지역도 보기"]
+    assert chips[-1].patch.drop == "region"
 
 
 def test_result_chips_do_not_depend_on_how_thin_the_result_is() -> None:
@@ -2460,7 +2470,7 @@ def test_suggestions_are_capped_at_three() -> None:
     )
 
     assert len(chips) == 3
-    assert [c.label for c in chips] == ["사람 적은 곳만", "실내만", "가까운 순으로"]
+    assert [c.label for c in chips] == ["사람 적은 곳만", "실내만", "다른 지역도 보기"]
 
 
 class _StubKto:
