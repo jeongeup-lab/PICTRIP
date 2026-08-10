@@ -13,8 +13,6 @@ const base = {
   dockPx: 92,
   onGrabberTap: jest.fn(),
   greeting: false,
-  canReset: false,
-  onReset: jest.fn(),
   onSnapChange: jest.fn(),
 };
 
@@ -99,16 +97,11 @@ describe("TravelSheet", () => {
     expect(tree.root.findAllByType(Text).some((n) => n.props.children === "대화")).toBe(true);
   });
 
-  it("collapsed에서는 패널 크롬을 걷어 도크만 남긴다", () => {
+  it("collapsed 에서도 시트 배경을 유지해 도크가 지도에 묻히지 않는다", () => {
     const tree = mount({ snap: "collapsed" });
-    const root = byId(tree, "travel-sheet")[0];
 
-    expect(flatten(root.props.style)).toMatchObject({
-      backgroundColor: "transparent",
-      borderTopWidth: 0,
-      borderTopLeftRadius: 0,
-      shadowOpacity: 0,
-    });
+    expect(byId(tree, "travel-sheet-grabber").length).toBeGreaterThan(0);
+    expect(sheetStyles.root.backgroundColor).toBeDefined();
   });
 
   it("mid에서는 패널 크롬을 그린다", () => {

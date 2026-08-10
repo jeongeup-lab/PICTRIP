@@ -626,9 +626,12 @@ describe("TravelScreen carousel focus", () => {
 
     expect(placeholder(tree)).toBe("천지연에 대해 물어보기");
 
-    await pressFollow(tree, "여긴 어떤 곳이야?");
+    await pressFollow(tree, "근처 카페");
 
-    expect(askAgentMock.mock.calls[0][0].question).toBe("천지연은 어떤 곳이야?");
+    expect(askAgentMock.mock.calls[0][0].anchor).toEqual({
+      contentId: "126509",
+      action: "cafe",
+    });
   });
 
   it("포커스한 카드는 지도에서도 같은 카드를 가리킨다", async () => {
@@ -683,25 +686,13 @@ describe("TravelScreen carousel focus", () => {
 });
 
 describe("TravelScreen follow-up chips", () => {
-  it("검색 답에는 결과를 다루는 칩만 붙는다", async () => {
+  it("답이 내려앉으면 근처 세 갈래가 붙는다", async () => {
     useConversation.setState({ turns: [mapTurn], busy: false });
     const tree = await mount();
 
-    expect(followChip(tree, "여긴 어떤 곳이야?")).toBeDefined();
-    expect(followChip(tree, "연관 관광지는?")).toBeUndefined();
-  });
-
-  it("정보 칩은 followKey 와 초점 문맥을 실어 보낸다", async () => {
-    useConversation.setState({ turns: [mapTurn], busy: false });
-    const tree = await mount();
-
-    await pressFollow(tree, "여긴 어떤 곳이야?");
-
-    const input = askAgentMock.mock.calls[0][0];
-    expect(input.question).toBe("무릉계곡은 어떤 곳이야?");
-    expect(input.context.focusContentId).toBe("126508");
-    const turns = useConversation.getState().turns;
-    expect(turns[turns.length - 1].followKey).toBe("about");
+    expect(followChip(tree, "근처 카페")).toBeDefined();
+    expect(followChip(tree, "근처 맛집")).toBeDefined();
+    expect(followChip(tree, "근처 볼거리")).toBeDefined();
   });
 
   it("서버 refinement 는 intent + patch 로 나간다", async () => {
@@ -772,22 +763,6 @@ describe("TravelScreen follow-up chips", () => {
     expect(input.photo).toEqual(PHOTO);
     expect(input.intent).toEqual(INTENT);
     expect(input.patch).toEqual({ indoorOnly: true });
-  });
-
-  it("서버 suggestion 은 질문 그대로 나간다", async () => {
-    const suggestTurn: Turn = {
-      ...mapTurn,
-      id: "suggest",
-      answer: { ...mapTurn.answer!, refinements: [], suggestions: ["야경 좋은 곳도 볼래?"] },
-    };
-    useConversation.setState({ turns: [suggestTurn], busy: false });
-    const tree = await mount();
-
-    await pressFollow(tree, "야경 좋은 곳도 볼래?");
-
-    const input = askAgentMock.mock.calls[0][0];
-    expect(input.question).toBe("야경 좋은 곳도 볼래?");
-    expect(input.context.intent).toEqual(INTENT);
   });
 });
 
@@ -879,17 +854,16 @@ describe("TravelScreen map", () => {
     expect(mapView(tree).props.fit).toBeNull();
   });
 
-  it("첫 진입은 시트가 열린 채라 사진 히어로가 바로 보인다", async () => {
+  it("첫 진입은 접힌 시트 + 지도 위 스타터 칩이다", async () => {
     const tree = await mount();
 
-    expect(snapOf(tree)).toBe("mid");
-    expect(tree.root.findAllByProps({ testID: "travel-photo-hero" }).length).toBeGreaterThan(0);
+    expect(snapOf(tree)).toBe("collapsed");
+    expect(tree.root.findAllByProps({ testID: "travel-starter-0" }).length).toBeGreaterThan(0);
   });
 
   it("접힌 시트가 덮는 만큼만 지도 여백을 비운다", async () => {
     useConversation.setState({ turns: [mapTurn], busy: false });
     const tree = await mount();
-    await blankTap(tree);
 
     const pad = mapView(tree).props.fit.pad;
     expect(pad.top).toBe(44 + 96);
@@ -1037,7 +1011,7 @@ describe("TravelScreen save toast", () => {
     await pressSave(tree, "conversation-1");
 
     expect(rendered(tree)).toContain("여행지를 저장했어요");
-    expect(toastBottom(tree)).toBe(sheetPx("mid") + 12);
+    expect(toastBottom(tree)).toBe(sheetPx("collapsed") + 12);
   });
 
   it("shows an unsaved toast from a card after the mutation succeeds", async () => {
@@ -1085,7 +1059,6 @@ describe("TravelScreen keyboard", () => {
   it("키보드가 올라오면 접힌 시트만큼의 지도 여백도 같이 올라간다", async () => {
     useConversation.setState({ turns: [mapTurn], busy: false });
     const tree = await mount();
-    await blankTap(tree);
     expect(mapView(tree).props.fit.pad.bottom).toBe(sheetPx("collapsed") + 24);
 
     await showKeyboard(320);
