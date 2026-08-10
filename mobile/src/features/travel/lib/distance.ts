@@ -9,6 +9,7 @@ export interface DistanceReading {
 
 const METERS_IN_KM = 1000;
 const NEAR_KM = 10;
+const MAX_LABEL_KM = 600;
 
 export function coordsOf(spot: TravelSpot): LatLng | null {
   return spot.lat !== null && spot.lng !== null ? { lat: spot.lat, lng: spot.lng } : null;
@@ -29,7 +30,7 @@ export function distanceReading(km: number): DistanceReading {
 
 export function distanceLabel(tag: string | null, distanceKm: number | null): string | null {
   if (isDistanceTag(tag)) return tag;
-  if (distanceKm === null) return null;
+  if (distanceKm === null || distanceKm > MAX_LABEL_KM) return null;
   const reading = distanceReading(distanceKm);
   return `${reading.value}${reading.unit}`;
 }

@@ -265,3 +265,64 @@ async def test_chat_route_rejects_an_invalid_payload_with_jsend_before_streaming
 
     assert res.status_code == 422
     assert res.json()["error"]["code"] == "VALIDATION_FAILED"
+
+
+def test_blog_probe_strips_brackets_and_wide_region() -> None:
+    result = _result()
+    result.spots[0].title = "[백년가게]대일정"
+    result.spots[0].regionLabel = "전북특별자치도 정읍시"
+
+    probes = chat_service._blog_probes(result, message="정읍 맛집 추천해줘")
+
+    assert probes[0].query == "정읍시 대일정"
+    assert probes[0].terms == ("대일정", "정읍시")
+    assert probes[-1].query == "정읍 맛집"
+
+
+def test_unrelated_blog_posts_are_dropped() -> None:
+    related = NaverBlogPost(
+        title="정읍시 대일정 다녀왔어요",
+        link="https://blog.naver.com/a",
+        description="정갈한 한식",
+        postdate="20260801",
+    )
+    unrelated = NaverBlogPost(
+        title="노인일자리 신청방법 총정리",
+        link="https://blog.naver.com/b",
+        description="고용노동부 안내",
+        postdate="20260801",
+    )
+
+    assert chat_service._post_matches(related, ("대일정", "정읍시")) is True
+    assert chat_service._post_matches(unrelated, ("대일정", "정읍시")) is False
+
+
+async def test_grounding_keeps_only_matching_posts(monkeypatch) -> None:
+    result = _result()
+    result.spots[0].title = "대일정"
+    result.spots[0].regionLabel = "전북특별자치도 정읍시"
+
+    async def mixed_blog(
+        client: httpx.AsyncClient, query: str, *, display: int = 5
+    ) -> list[NaverBlogPost]:
+        return [
+            NaverBlogPost(
+                title="정읍시 대일정 밥상",
+                link="https://blog.naver.com/keep",
+                description="한식",
+                postdate="20260801",
+            ),
+            NaverBlogPost(
+                title="강소기업 명단 정리",
+                link="https://blog.naver.com/drop",
+                description="채용 공고",
+                postdate="20240502",
+            ),
+        ]
+
+    monkeypatch.setattr(naver, "is_configured", lambda: True)
+    monkeypatch.setattr(naver, "search_blog", mixed_blog)
+
+    posts = await chat_service._ground_with_blogs(result, message="정읍 맛집 추천해줘")
+
+    assert [post.link for post in posts] == ["https://blog.naver.com/keep"]

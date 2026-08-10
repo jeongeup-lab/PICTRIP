@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 
 import httpx
 from pydantic import BaseModel
@@ -37,6 +39,12 @@ WRITER_IDLE_TIMEOUT_SECONDS = 15.0
 GROUNDED_SPOT_LIMIT = 3
 GROUNDED_POST_LIMIT = 6
 HISTORY_TAIL = 4
+TOPIC_WORD_LIMIT = 4
+BRACKETED = re.compile("[\\[(\uff08\u3010][^\\])\uff09\u3011]*[\\])\uff09\u3011]")
+QUESTION_TAIL = re.compile(
+    r"(추천\s*해?\s*줘|추천해주세요|알려\s*줘|알려주세요|찾아\s*줘|찾아주세요|"
+    r"어디야|어디\s*있어|있을까|해줘|하고\s*싶어|좀|요\?|\?|!)"
+)
 KTO_SOURCE = SourceItem(
     kind="kto", title="한국관광공사 TourAPI", url="https://api.visitkorea.or.kr"
 )
@@ -185,28 +193,65 @@ async def _watchdog(chunks: AsyncIterator[str]) -> AsyncIterator[str]:
 async def _ground_with_blogs(
     result: AskResponse, *, message: str | None
 ) -> list[naver.NaverBlogPost]:
-    queries: list[str] = []
-    for card in result.spots[:GROUNDED_SPOT_LIMIT]:
-        queries.append(" ".join(part for part in (card.title, card.regionLabel) if part))
-    cleaned = (message or "").strip()
-    if cleaned:
-        queries.append(cleaned)
-    queries = queries[:BLOG_CALL_BUDGET]
-    if not queries or not naver.is_configured():
+    probes = _blog_probes(result, message=message)
+    if not probes or not naver.is_configured():
         return []
     timeout = httpx.Timeout(BLOG_CALL_TIMEOUT_SECONDS, connect=BLOG_CALL_TIMEOUT_SECONDS)
     async with httpx.AsyncClient(timeout=timeout) as client:
-        batches = await asyncio.gather(*(_blog_call(client, query) for query in queries))
+        batches = await asyncio.gather(*(_blog_call(client, probe.query) for probe in probes))
     posts: list[naver.NaverBlogPost] = []
     seen: set[str] = set()
-    for batch in batches:
+    for probe, batch in zip(probes, batches, strict=True):
         for post in batch:
             key = post.link or post.title
-            if key in seen:
+            if key in seen or not _post_matches(post, probe.terms):
                 continue
             seen.add(key)
             posts.append(post)
     return posts[:GROUNDED_POST_LIMIT]
+
+
+@dataclass(slots=True)
+class _BlogProbe:
+    query: str
+    terms: tuple[str, ...]
+
+
+def _blog_probes(result: AskResponse, *, message: str | None) -> list[_BlogProbe]:
+    probes: list[_BlogProbe] = []
+    for card in result.spots[:GROUNDED_SPOT_LIMIT]:
+        name = _plain_title(card.title)
+        if not name:
+            continue
+        area = _short_region(card.regionLabel)
+        query = f"{area} {name}".strip() if area else name
+        probes.append(_BlogProbe(query=query, terms=tuple(part for part in (name, area) if part)))
+    topic = _topic_query(message)
+    if topic:
+        probes.append(_BlogProbe(query=topic, terms=tuple(topic.split())))
+    return probes[:BLOG_CALL_BUDGET]
+
+
+def _plain_title(title: str) -> str:
+    return BRACKETED.sub(" ", title).strip()
+
+
+def _short_region(label: str) -> str:
+    parts = [part for part in label.split() if part]
+    return parts[-1] if parts else ""
+
+
+def _topic_query(message: str | None) -> str:
+    cleaned = QUESTION_TAIL.sub(" ", (message or "").strip())
+    words = [word for word in cleaned.split() if len(word) > 1][:TOPIC_WORD_LIMIT]
+    return " ".join(words)
+
+
+def _post_matches(post: naver.NaverBlogPost, terms: tuple[str, ...]) -> bool:
+    if not terms:
+        return False
+    haystack = f"{post.title} {post.description or ''}"
+    return any(term and term in haystack for term in terms)
 
 
 async def _blog_call(client: httpx.AsyncClient, query: str) -> list[naver.NaverBlogPost]:
