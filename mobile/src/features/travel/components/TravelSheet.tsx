@@ -4,13 +4,11 @@ import {
   Easing,
   Pressable,
   StyleSheet,
-  Text,
   View,
   useWindowDimensions,
   type GestureResponderEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Icon } from "@/components/Icon";
 import { colors, shadows } from "@/constants/theme";
 import {
   clampToSheet,
@@ -25,16 +23,12 @@ import {
 
 const SHEET_RADIUS = 22;
 
-export const RESET_LABEL = "새 대화";
-
 interface Props {
   snap: SheetSnap;
   keyboardPx: number;
   dockPx: number;
   greeting: boolean;
-  canReset: boolean;
   onGrabberTap: () => void;
-  onReset: () => void;
   onSnapChange: (snap: SheetSnap) => void;
   children: ReactNode;
 }
@@ -44,9 +38,7 @@ export function TravelSheet({
   keyboardPx,
   dockPx,
   greeting,
-  canReset,
   onGrabberTap,
-  onReset,
   children,
   onSnapChange,
 }: Props) {
@@ -137,13 +129,8 @@ export function TravelSheet({
     );
   };
 
-  const bare = snap === "collapsed" && !dragging;
-
   return (
-    <Animated.View
-      testID="travel-sheet"
-      style={[sheetStyles.root, bare && sheetStyles.rootBare, { height, bottom }]}
-    >
+    <Animated.View testID="travel-sheet" style={[sheetStyles.root, { height, bottom }]}>
       <View
         testID="travel-sheet-header"
         style={sheetStyles.header}
@@ -162,23 +149,10 @@ export function TravelSheet({
           onPress={onGrabberTap}
           style={sheetStyles.grabberZone}
         >
-          <View style={[sheetStyles.pill, bare && sheetStyles.pillBare]} />
+          <View style={sheetStyles.pill} />
         </Pressable>
-        {canReset && !bare ? (
-          <Pressable
-            testID="travel-sheet-reset"
-            accessibilityRole="button"
-            accessibilityLabel={RESET_LABEL}
-            hitSlop={8}
-            onPress={onReset}
-            style={sheetStyles.reset}
-          >
-            <Icon name="plus" size={15} color={colors.ter} strokeWidth={2} />
-            <Text style={sheetStyles.resetText}>{RESET_LABEL}</Text>
-          </Pressable>
-        ) : null}
       </View>
-      <View style={[sheetStyles.body, bare && sheetStyles.bodyBare]}>{children}</View>
+      <View style={sheetStyles.body}>{children}</View>
     </Animated.View>
   );
 }
@@ -195,14 +169,6 @@ export const sheetStyles = StyleSheet.create({
     borderTopColor: colors.glassBorder,
     ...shadows.sheet,
   },
-  rootBare: {
-    backgroundColor: "transparent",
-    borderTopWidth: 0,
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
   header: { height: SHEET_HEADER_PX },
   grabberZone: {
     height: SHEET_HEADER_PX,
@@ -215,22 +181,10 @@ export const sheetStyles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: colors.fillStrong,
   },
-  pillBare: { backgroundColor: colors.onImage, opacity: 0.55 },
-  reset: {
-    position: "absolute",
-    right: 12,
-    top: 0,
-    height: SHEET_HEADER_PX,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-  },
-  resetText: { fontSize: 12, fontWeight: "600", letterSpacing: -0.2, color: colors.ter },
   body: {
     flex: 1,
     borderTopLeftRadius: SHEET_RADIUS,
     borderTopRightRadius: SHEET_RADIUS,
     overflow: "hidden",
   },
-  bodyBare: { borderTopLeftRadius: 0, borderTopRightRadius: 0, overflow: "visible" },
 });

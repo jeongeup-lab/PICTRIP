@@ -6,6 +6,7 @@ import { Toast } from "@/components/Toast";
 import { KakaoWebMap } from "@/features/map/components/KakaoWebMap";
 import { ChatTranscript } from "@/features/travel/components/ChatTranscript";
 import { EmptyGreeting } from "@/features/travel/components/EmptyGreeting";
+import { StarterChipRow } from "@/features/travel/components/StarterChipRow";
 import { SearchPulse } from "@/features/travel/components/SearchPulse";
 import { TravelDock } from "@/features/travel/components/TravelDock";
 import { TravelSheet } from "@/features/travel/components/TravelSheet";
@@ -18,10 +19,11 @@ import {
   PHOTO_PICK_FAILED,
   PHOTO_SHOOT_FAILED,
 } from "@/features/travel/lib/agent-errors";
-import { composeQuestion, MY_LOCATION } from "@/features/travel/lib/question";
+import { composeQuestion, anchorQuestion, MY_LOCATION } from "@/features/travel/lib/question";
 import { contextFrom } from "@/features/travel/lib/conversation-context";
 import { askedKeys, followUps, type FollowChip } from "@/features/travel/lib/follow-ups";
 import { coordsOf } from "@/features/travel/lib/distance";
+import { nearChips, type NearChip } from "@/features/travel/lib/starter-chips";
 import { bounds, center, pinsFrom, placed } from "@/features/travel/lib/spot-geo";
 import { dockBasePx, mapFitPadding } from "@/features/travel/lib/screen-layout";
 import { sheetHeightPx, type SheetSnap } from "@/features/travel/lib/sheet-layout";
@@ -32,6 +34,7 @@ import { colors, spacing } from "@/constants/theme";
 const SAVE_COMPLETE = "여행지를 저장했어요";
 const UNSAVE_COMPLETE = "여행지 저장을 해제했어요";
 const TOAST_LIFT = 12;
+const STARTER_LIFT = 8;
 const NO_SPOTS: TravelSpot[] = [];
 
 export const ATTACH_SHOOT_LABEL = "촬영";
@@ -49,7 +52,7 @@ export default function TravelScreen() {
   const [draft, setDraft] = useState("");
   const [photo, setPhoto] = useState<PhotoUpload | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [snap, setSnap] = useState<SheetSnap>("mid");
+  const [snap, setSnap] = useState<SheetSnap>("collapsed");
   const [focusedAt, setFocusedAt] = useState(0);
   const [scrollToAt, setScrollToAt] = useState<number | null>(null);
 
@@ -264,6 +267,30 @@ export default function TravelScreen() {
     setSnap("collapsed");
   }, [clearTurns, resetFocus]);
 
+  const onNearChip = useCallback(
+    (chip: NearChip) => {
+      if (busy) return;
+      if (!focused && !coords) {
+        demandCoords();
+        return;
+      }
+      const anchor = focused
+        ? { contentId: focused.contentId, action: chip.action }
+        : { action: chip.action };
+      const id = nextTurnId();
+      startTurn({
+        id,
+        question: anchorQuestion(focused?.title ?? MY_LOCATION, chip.label),
+        request: "",
+        photo: null,
+        anchor,
+      });
+      beginTurn();
+      run(id, { anchor });
+    },
+    [busy, focused, coords, demandCoords, nextTurnId, startTurn, beginTurn, run],
+  );
+
   const onMapTap = useCallback(() => {
     Keyboard.dismiss();
     setSnap("collapsed");
@@ -317,7 +344,8 @@ export default function TravelScreen() {
       ? `${focused.title}에 대해 물어보기`
       : ASK_PLACEHOLDER;
 
-  const greetingShown = turns.length === 0;
+  const greetingShown = turns.length === 0 && snap !== "collapsed";
+  const starterShown = snap === "collapsed" && turns.length === 0;
 
   return (
     <View style={styles.root}>
@@ -333,13 +361,17 @@ export default function TravelScreen() {
 
       <SearchPulse active={busy} bottom={sheetPx} />
 
+      {starterShown ? (
+        <View style={[styles.starter, { bottom: sheetPx + STARTER_LIFT }]} pointerEvents="box-none">
+          <StarterChipRow chips={nearChips()} disabled={busy} onChipPress={onNearChip} />
+        </View>
+      ) : null}
+
       <TravelSheet
         snap={snap}
         keyboardPx={keyboardPx}
         dockPx={dockPx}
         greeting={greetingShown}
-        canReset={turns.length > 0}
-        onReset={onNewChat}
         onGrabberTap={onGrabberTap}
         onSnapChange={onSnapChange}
       >
@@ -394,6 +426,7 @@ export default function TravelScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
+  starter: { position: "absolute", left: 0, right: 0 },
   slot: { flex: 1 },
   greeting: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.lg },
 });

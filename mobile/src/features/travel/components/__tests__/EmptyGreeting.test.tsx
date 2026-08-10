@@ -36,6 +36,12 @@ function texts(tree: renderer.ReactTestRenderer): string[] {
 }
 
 describe("EmptyGreeting", () => {
+  it("사진 뒤에 이미지를 깔지 않는다", () => {
+    const { tree } = mount({ moodImages: MOOD_IMAGES });
+
+    expect(byId(tree, "travel-collage-0")).toHaveLength(0);
+  });
+
   it("헤드라인 두 줄을 보여준다", () => {
     const { tree } = mount();
 
@@ -58,20 +64,6 @@ describe("EmptyGreeting", () => {
     act(() => byId(tree, "travel-photo-hero")[0].props.onPress());
 
     expect(onPickPhoto).toHaveBeenCalledTimes(1);
-  });
-
-  it("무드 이미지가 오면 콜라주 세 장을 깐다", () => {
-    const { tree } = mount({ moodImages: MOOD_IMAGES });
-
-    expect(byId(tree, "travel-collage-0").length).toBeGreaterThan(0);
-    expect(byId(tree, "travel-collage-2").length).toBeGreaterThan(0);
-  });
-
-  it("무드 이미지가 없어도 히어로는 그려진다", () => {
-    const { tree } = mount();
-
-    expect(byId(tree, "travel-collage-0")).toHaveLength(0);
-    expect(byId(tree, "travel-photo-hero").length).toBeGreaterThan(0);
   });
 });
 
