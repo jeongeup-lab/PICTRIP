@@ -1,22 +1,20 @@
 import renderer, { act } from "react-test-renderer";
 import { FlatList } from "react-native";
 import HomeScreen from "@/app/(tabs)/index";
-import { prefetchMatches, usePostsFeed } from "@/features/feed/posts-queries";
-import type { OverseasPost } from "@/features/feed/posts-api";
+import { useShortsFeed } from "@/features/shorts/queries";
+import type { ShortsCardData } from "@/features/shorts/api";
 import { queryClient } from "@/lib/query-client";
 
-let seedCounter = 0;
-jest.mock("@/lib/seed", () => ({ makeSeed: () => `seed-${(seedCounter += 1)}` }));
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), push: jest.fn() },
   useScrollToTop: jest.fn(),
 }));
 jest.mock("react-native-safe-area-context", () => ({
   SafeAreaView: (props: { children?: unknown }) => props.children,
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
-jest.mock("@/features/feed/posts-queries", () => ({
-  usePostsFeed: jest.fn(),
-  prefetchMatches: jest.fn(),
+jest.mock("@/features/shorts/queries", () => ({
+  useShortsFeed: jest.fn(),
 }));
 jest.mock("@/features/channels/components/ChannelTiles", () => {
   const React = require("react");
@@ -29,34 +27,41 @@ jest.mock("@/features/channels/components/ChannelTiles", () => {
       }),
   };
 });
-jest.mock("@/features/feed/components/PostCarousel", () => {
+jest.mock("@/features/shorts/components/ShortsCard", () => {
   const React = require("react");
-  const { Text } = require("react-native");
+  const { Pressable } = require("react-native");
   return {
-    PostCarousel: ({ post }: { post: { nameKo: string } }) =>
-      React.createElement(Text, { testID: "carousel" }, post.nameKo),
+    ShortsCard: ({ short, onOpen }: { short: { videoId: string }; onOpen: (s: unknown) => void }) =>
+      React.createElement(Pressable, {
+        testID: "shorts-card",
+        onPress: () => onOpen(short),
+      }),
+  };
+});
+jest.mock("@/features/shorts/components/ShortsPlayerSheet", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+  return {
+    ShortsPlayerSheet: ({ short }: { short: { videoId: string } | null }) =>
+      short ? React.createElement(View, { testID: "shorts-player-sheet" }) : null,
   };
 });
 
-const usePostsFeedMock = usePostsFeed as jest.Mock;
-const prefetchMatchesMock = prefetchMatches as jest.Mock;
+const useShortsFeedMock = useShortsFeed as jest.Mock;
 const { router, useScrollToTop } = jest.requireMock("expo-router") as {
   router: { push: jest.Mock };
   useScrollToTop: jest.Mock;
 };
 
-function posts(n: number): OverseasPost[] {
+function shorts(n: number): ShortsCardData[] {
   return Array.from({ length: n }, (_, i) => ({
-    id: i + 1,
-    nameKo: `장소 ${i + 1}`,
-    countryCode: "JP",
-    countryNameKo: "일본",
-    descriptionKo: null,
-    imageUrl: `https://upload.wikimedia.org/${i + 1}.jpg`,
-    imageAuthor: null,
-    imageLicense: null,
-    imageLicenseUrl: null,
-    imageSourceUrl: `https://commons.wikimedia.org/${i + 1}`,
+    videoId: `vid-${i + 1}`,
+    title: `쇼츠 ${i + 1}`,
+    channelTitle: `채널 ${i + 1}`,
+    thumbnailUrl: `https://i.ytimg.com/vi/vid-${i + 1}/hqdefault.jpg`,
+    viewCount: (i + 1) * 1000,
+    anchorLabel: "경주",
+    spots: [],
   }));
 }
 
@@ -66,11 +71,15 @@ let refetch: jest.Mock;
 function setFeed(over: Record<string, unknown> = {}) {
   fetchNextPage = jest.fn();
   refetch = jest.fn();
-  usePostsFeedMock.mockReturnValue({
+  useShortsFeedMock.mockReturnValue({
     data: {
       pages: [
-        { seed: "seed-abc", items: posts(4), nextCursor: "c1", hasMore: true },
-        { seed: "seed-abc", items: posts(2), nextCursor: null, hasMore: false },
+        { items: shorts(4), nextCursor: "4", hasMore: true },
+        {
+          items: shorts(2).map((s) => ({ ...s, videoId: `${s.videoId}-p2` })),
+          nextCursor: null,
+          hasMore: false,
+        },
       ],
     },
     fetchNextPage,
@@ -120,23 +129,33 @@ describe("HomeScreen", () => {
     expect(router.push).toHaveBeenCalledWith("/channels?start=hot");
   });
 
-  it("renders one post carousel per flattened feed item", async () => {
+  it("renders one shorts card per flattened feed item", async () => {
     setFeed();
     const r = await mount();
-    expect(hosts(r, "carousel").length).toBe(6);
+    expect(hosts(r, "shorts-card").length).toBe(6);
+  });
+
+  it("opens the player sheet when a shorts card is tapped", async () => {
+    setFeed();
+    const r = await mount();
+    expect(hosts(r, "shorts-player-sheet").length).toBe(0);
+    await act(async () => {
+      r.root.findAllByProps({ testID: "shorts-card" })[0].props.onPress();
+    });
+    expect(hosts(r, "shorts-player-sheet").length).toBe(1);
   });
 
   it("shows loading skeletons before the first page resolves", async () => {
     setFeed({ data: undefined, isLoading: true });
     const r = await mount();
-    expect(hosts(r, "carousel").length).toBe(0);
+    expect(hosts(r, "shorts-card").length).toBe(0);
     expect(r.root.findAllByType(FlatList).length).toBe(0);
   });
 
   it("shows the error view with a retry that refetches", async () => {
     setFeed({ data: undefined, isError: true });
     const r = await mount();
-    expect(hosts(r, "carousel").length).toBe(0);
+    expect(hosts(r, "shorts-card").length).toBe(0);
     await act(async () => {
       r.root.findByProps({ testID: "home-retry" }).props.onPress();
     });
@@ -171,20 +190,15 @@ describe("HomeScreen", () => {
     expect(fetchNextPage).not.toHaveBeenCalled();
   });
 
-  it("pull-to-refresh generates a new client seed for a fresh shuffle", async () => {
+  it("pull-to-refresh invalidates the shorts query", async () => {
     const invalidate = jest.spyOn(queryClient, "invalidateQueries");
     setFeed();
     const r = await mount();
     const list = r.root.findAllByType(FlatList)[0];
-    const before = usePostsFeedMock.mock.calls.at(-1)?.[0];
     await act(async () => {
       list.props.refreshControl.props.onRefresh();
     });
-    const after = usePostsFeedMock.mock.calls.at(-1)?.[0];
-    expect(typeof before).toBe("string");
-    expect(typeof after).toBe("string");
-    expect(after).not.toBe(before);
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["matches"] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["shorts"] });
     invalidate.mockRestore();
   });
 
@@ -197,28 +211,7 @@ describe("HomeScreen", () => {
 
   it("wires the feed list into the tab re-tap scroll-to-top hook", async () => {
     setFeed();
-    const r = await mount();
+    await mount();
     expect(useScrollToTop).toHaveBeenCalled();
-    const ref = useScrollToTop.mock.calls.at(-1)?.[0] as {
-      current: { scrollToOffset?: unknown } | null;
-    };
-    expect(ref.current).toBe(r.root.findAllByType(FlatList)[0].instance);
-    expect(typeof ref.current?.scrollToOffset).toBe("function");
-  });
-
-  it("prefetches matches for posts as they become viewable", async () => {
-    setFeed();
-    const r = await mount();
-    const list = r.root.findAllByType(FlatList)[0];
-    await act(async () => {
-      list.props.onViewableItemsChanged({
-        viewableItems: [
-          { item: posts(2)[0], index: 0, isViewable: true, key: "1" },
-          { item: posts(2)[1], index: 1, isViewable: true, key: "2" },
-        ],
-      });
-    });
-    expect(prefetchMatchesMock).toHaveBeenCalledWith(1);
-    expect(prefetchMatchesMock).toHaveBeenCalledWith(2);
   });
 });

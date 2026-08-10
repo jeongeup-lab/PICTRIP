@@ -47,7 +47,8 @@ export type IconName =
   | "heart-off"
   | "settings"
   | "users"
-  | "tag";
+  | "tag"
+  | "play";
 
 interface IconProps {
   name: IconName;
@@ -118,6 +119,7 @@ const PATHS: Record<IconName, IconSpec> = {
     rects: [{ x: 3, y: 5, width: 18, height: 14, rx: 3.5 }],
   },
   check: { d: "M4.5 12.5l4.6 4.6L19.5 6.7" },
+  play: { d: "M9 6.2v11.6l9.4-5.8z", fill: true },
   calendar: {
     d: "M4 10.5h16M8.5 4v4M15.5 4v4",
     rects: [{ x: 4, y: 6, width: 16, height: 14, rx: 2 }],

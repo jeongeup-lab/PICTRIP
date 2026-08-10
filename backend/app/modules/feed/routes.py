@@ -8,6 +8,7 @@ from app.core.db import DbSession
 from app.core.redis import RedisDep
 from app.kto.client import KtoDep
 from app.kto.display import t1_display_url
+from app.modules.feed.repositories import ShortRow
 from app.modules.feed.schemas import (
     ChannelCard,
     ChannelCardsResponse,
@@ -16,8 +17,11 @@ from app.modules.feed.schemas import (
     MatchCard,
     MatchesResponse,
     PostsResponse,
+    ShortsCard,
+    ShortsResponse,
+    ShortsSpotCard,
 )
-from app.modules.feed.services import channels, matching, posts
+from app.modules.feed.services import channels, matching, posts, shorts
 from app.web.envelope import ok
 
 router = APIRouter(tags=["feed"])
@@ -43,6 +47,45 @@ async def explore(
 ) -> dict[str, Any]:
     page = await posts.list_posts(session, seed=seed, cursor=cursor, limit=limit)
     return ok(_to_response(page))
+
+
+@router.get("/shorts")
+async def shorts_feed(
+    session: DbSession,
+    cursor: str | None = Query(None),
+    limit: int = Query(6, ge=1, le=20),
+) -> dict[str, Any]:
+    page = await shorts.list_shorts(session, cursor=cursor, limit=limit)
+    return ok(
+        ShortsResponse(
+            items=[_shorts_card(page, row) for row in page.items],
+            nextCursor=page.next_cursor,
+            hasMore=page.has_more,
+        )
+    )
+
+
+def _shorts_card(page: shorts.ShortsPageRow, row: ShortRow) -> ShortsCard:
+    cards = []
+    for spot in page.spots_by_video.get(row.video_id, []):
+        region_name, sigungu_name = page.region_by_content.get(spot.content_id, (None, None))
+        cards.append(
+            ShortsSpotCard(
+                contentId=spot.content_id,
+                title=spot.title,
+                regionLabel=" ".join(p for p in (region_name, sigungu_name) if p),
+                imageUrl=t1_display_url(spot.first_image_url, spot.cpyrht_div_cd),
+            )
+        )
+    return ShortsCard(
+        videoId=row.video_id,
+        title=row.title,
+        channelTitle=row.channel_title,
+        thumbnailUrl=row.thumbnail_url,
+        viewCount=row.view_count,
+        anchorLabel=row.anchor_label,
+        spots=cards,
+    )
 
 
 @router.get("/overseas/{overseas_id}/matches")
