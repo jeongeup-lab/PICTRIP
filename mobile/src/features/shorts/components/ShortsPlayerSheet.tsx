@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import YoutubePlayer from "react-native-youtube-iframe";
+import { WebView } from "react-native-webview";
 import { Icon } from "@/components/Icon";
 import { RemoteImage } from "@/components/RemoteImage";
 import { Skeleton } from "@/components/Skeleton";
@@ -22,11 +22,26 @@ interface Props {
   onClose: () => void;
 }
 
+const PLAYER_BASE_URL = "https://pictrip.org";
+
+function playerHtml(videoId: string): string {
+  const params = `autoplay=1&playsinline=1&rel=0&loop=1&playlist=${videoId}`;
+  return [
+    "<!doctype html><html><head>",
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    "<style>html,body{margin:0;background:#000;height:100%;overflow:hidden}",
+    "iframe{width:100%;height:100%;border:0}</style></head><body>",
+    `<iframe src="https://www.youtube.com/embed/${videoId}?${params}"`,
+    ' allow="autoplay; encrypted-media" allowfullscreen></iframe></body></html>',
+  ].join("");
+}
+
 export function ShortsPlayerSheet({ short, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const [playerReady, setPlayerReady] = useState(false);
   const playerHeight = Math.round(windowHeight * 0.54);
+  const playerWidth = Math.round((playerHeight * 9) / 16);
 
   const close = () => {
     setPlayerReady(false);
@@ -48,13 +63,18 @@ export function ShortsPlayerSheet({ short, onClose }: Props) {
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <View style={[styles.player, { height: playerHeight }]}>
           {short ? (
-            <YoutubePlayer
-              videoId={short.videoId}
-              height={playerHeight}
-              play
-              onReady={() => setPlayerReady(true)}
-              webViewProps={{ allowsInlineMediaPlayback: true }}
-              initialPlayerParams={{ loop: true, modestbranding: true }}
+            <WebView
+              source={{ html: playerHtml(short.videoId), baseUrl: PLAYER_BASE_URL }}
+              style={{ width: playerWidth, height: playerHeight, backgroundColor: "#000000" }}
+              allowsInlineMediaPlayback
+              mediaPlaybackRequiresUserAction={false}
+              onShouldStartLoadWithRequest={(request) =>
+                !request.isTopFrame ||
+                request.url.startsWith(PLAYER_BASE_URL) ||
+                request.url.startsWith("about:")
+              }
+              onLoadEnd={() => setPlayerReady(true)}
+              scrollEnabled={false}
             />
           ) : null}
           {!playerReady ? (
@@ -114,7 +134,7 @@ function SpotRow({ spot, onPress }: { spot: ShortsSpot; onPress: () => void }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  player: { backgroundColor: "#000000" },
+  player: { backgroundColor: "#000000", alignItems: "center" },
   playerLoading: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   close: {
     position: "absolute",
