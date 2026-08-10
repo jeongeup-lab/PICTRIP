@@ -12,8 +12,6 @@ import { PhotoViewer } from "@/features/spots/components/PhotoViewer";
 import { LocationSection } from "@/features/spots/components/LocationSection";
 import { VisitSection } from "@/features/spots/components/VisitSection";
 import { NearbyRail } from "@/features/spots/components/NearbyRail";
-import { AskAboutSpot } from "@/features/travel/components/AskAboutSpot";
-import { useTravelAnchor } from "@/features/travel/stores/anchor-store";
 import { colors, spacing } from "@/constants/theme";
 
 export default function SpotScreen() {
@@ -21,7 +19,6 @@ export default function SpotScreen() {
   const { data, isLoading, isError, refetch, isPlaceholderData } = useSpot(contentId);
   const { saved, toggle: onToggleSave } = useSaveOptimistic(contentId);
   const [galleryOpen, setGalleryOpen] = useState(false);
-  const pickAnchor = useTravelAnchor((s) => s.pick);
   const recordRecent = useRecentSpots((s) => s.record);
 
   useEffect(() => {
@@ -53,21 +50,6 @@ export default function SpotScreen() {
 
   const onViewAll = () => {
     if (galleryImages.length > 0) setGalleryOpen(true);
-  };
-
-  const onAskAbout = () => {
-    if (!data) return;
-    pickAnchor({
-      contentId: data.contentId,
-      title: data.title,
-      regionLabel:
-        [data.regionName, data.sigunguName].filter(Boolean).join(" ") || data.addr1 || "",
-      imageUrl: data.firstImageUrl,
-      tag: null,
-      lat: data.mapy,
-      lng: data.mapx,
-    });
-    router.navigate("/(tabs)/travel");
   };
 
   if (isError && !data) {
@@ -132,7 +114,6 @@ export default function SpotScreen() {
             <View style={styles.band} />
             <LocationSection spot={data} />
             <VisitSection title={data.title} onShare={onShare} onScrap={onToggleSave} />
-            <AskAboutSpot title={data.title} onPress={onAskAbout} />
           </>
         )}
 

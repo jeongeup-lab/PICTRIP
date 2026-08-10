@@ -12,7 +12,9 @@ const base = {
   keyboardPx: 0,
   dockPx: 92,
   onGrabberTap: jest.fn(),
-  onCollapse: jest.fn(),
+  greeting: false,
+  canReset: false,
+  onReset: jest.fn(),
   onSnapChange: jest.fn(),
 };
 
@@ -55,12 +57,6 @@ function drag(tree: renderer.ReactTestRenderer, steps: number[]) {
 }
 
 describe("TravelSheet", () => {
-  it("collapsed에서는 그래버가 없다", () => {
-    const tree = mount({ snap: "collapsed" });
-
-    expect(byId(tree, "travel-sheet-grabber")).toHaveLength(0);
-  });
-
   it("mid에서는 그래버가 있고 탭하면 onGrabberTap", () => {
     const onGrabberTap = jest.fn();
     const tree = mount({ snap: "mid", onGrabberTap });
@@ -73,21 +69,10 @@ describe("TravelSheet", () => {
     expect(grabber.props.accessibilityLabel).toBe("시트 크기 전환");
   });
 
-  it("collapsed에서는 내리기 버튼도 없다", () => {
+  it("collapsed에서도 그래버는 남아 시트가 있다는 걸 알린다", () => {
     const tree = mount({ snap: "collapsed" });
 
-    expect(byId(tree, "travel-sheet-collapse")).toHaveLength(0);
-  });
-
-  it("mid에서 내리기 버튼을 탭하면 onCollapse", () => {
-    const onCollapse = jest.fn();
-    const tree = mount({ snap: "mid", onCollapse });
-    const button = byId(tree, "travel-sheet-collapse")[0];
-
-    act(() => button.props.onPress());
-
-    expect(onCollapse).toHaveBeenCalled();
-    expect(button.props.accessibilityLabel).toBe("시트 내리기");
+    expect(byId(tree, "travel-sheet-grabber").length).toBeGreaterThan(0);
   });
 
   it("루트는 travel-sheet testID와 시트 스타일을 가진다", () => {

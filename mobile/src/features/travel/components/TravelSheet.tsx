@@ -4,6 +4,7 @@ import {
   Easing,
   Pressable,
   StyleSheet,
+  Text,
   View,
   useWindowDimensions,
   type GestureResponderEvent,
@@ -24,12 +25,16 @@ import {
 
 const SHEET_RADIUS = 22;
 
+export const RESET_LABEL = "새 대화";
+
 interface Props {
   snap: SheetSnap;
   keyboardPx: number;
   dockPx: number;
+  greeting: boolean;
+  canReset: boolean;
   onGrabberTap: () => void;
-  onCollapse: () => void;
+  onReset: () => void;
   onSnapChange: (snap: SheetSnap) => void;
   children: ReactNode;
 }
@@ -38,10 +43,12 @@ export function TravelSheet({
   snap,
   keyboardPx,
   dockPx,
+  greeting,
+  canReset,
   onGrabberTap,
-  onCollapse,
-  onSnapChange,
+  onReset,
   children,
+  onSnapChange,
 }: Props) {
   const { height: frameH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -51,6 +58,7 @@ export function TravelSheet({
     insetBottom: insets.bottom,
     keyboardPx,
     dockPx,
+    greeting,
   };
   const targetHeight = sheetHeightPx({ ...metrics, snap });
   const targetBottom = sheetBottomPx({ keyboardPx });
@@ -147,29 +155,28 @@ export function TravelSheet({
         onResponderRelease={onDragEnd}
         onResponderTerminate={onDragEnd}
       >
-        {bare ? null : (
-          <>
-            <Pressable
-              testID="travel-sheet-grabber"
-              accessibilityRole="button"
-              accessibilityLabel="시트 크기 전환"
-              onPress={onGrabberTap}
-              style={sheetStyles.grabberZone}
-            >
-              <View style={sheetStyles.pill} />
-            </Pressable>
-            <Pressable
-              testID="travel-sheet-collapse"
-              accessibilityRole="button"
-              accessibilityLabel="시트 내리기"
-              hitSlop={8}
-              onPress={onCollapse}
-              style={sheetStyles.collapse}
-            >
-              <Icon name="chevron-down" size={16} color={colors.ter} strokeWidth={2} />
-            </Pressable>
-          </>
-        )}
+        <Pressable
+          testID="travel-sheet-grabber"
+          accessibilityRole="button"
+          accessibilityLabel="시트 크기 전환"
+          onPress={onGrabberTap}
+          style={sheetStyles.grabberZone}
+        >
+          <View style={[sheetStyles.pill, bare && sheetStyles.pillBare]} />
+        </Pressable>
+        {canReset && !bare ? (
+          <Pressable
+            testID="travel-sheet-reset"
+            accessibilityRole="button"
+            accessibilityLabel={RESET_LABEL}
+            hitSlop={8}
+            onPress={onReset}
+            style={sheetStyles.reset}
+          >
+            <Icon name="plus" size={15} color={colors.ter} strokeWidth={2} />
+            <Text style={sheetStyles.resetText}>{RESET_LABEL}</Text>
+          </Pressable>
+        ) : null}
       </View>
       <View style={[sheetStyles.body, bare && sheetStyles.bodyBare]}>{children}</View>
     </Animated.View>
@@ -202,19 +209,23 @@ export const sheetStyles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  collapse: {
-    position: "absolute",
-    right: 14,
-    top: 0,
-    height: SHEET_HEADER_PX,
-    justifyContent: "center",
-  },
   pill: {
     width: 44,
     height: 5,
     borderRadius: 3,
     backgroundColor: colors.fillStrong,
   },
+  pillBare: { backgroundColor: colors.onImage, opacity: 0.55 },
+  reset: {
+    position: "absolute",
+    right: 12,
+    top: 0,
+    height: SHEET_HEADER_PX,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  resetText: { fontSize: 12, fontWeight: "600", letterSpacing: -0.2, color: colors.ter },
   body: {
     flex: 1,
     borderTopLeftRadius: SHEET_RADIUS,

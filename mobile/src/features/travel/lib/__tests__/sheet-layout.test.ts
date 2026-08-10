@@ -20,8 +20,8 @@ describe("sheet-layout", () => {
   it("mid는 프레임의 58%", () => {
     expect(sheetHeightPx({ ...metrics, snap: "mid" })).toBe(Math.round(844 * 0.58));
   });
-  it("full은 프레임의 88%", () => {
-    expect(sheetHeightPx({ ...metrics, snap: "full" })).toBe(Math.round(844 * 0.88));
+  it("full은 프레임의 76%", () => {
+    expect(sheetHeightPx({ ...metrics, snap: "full" })).toBe(Math.round(844 * 0.76));
   });
   it("키보드가 있으면 남는 높이로 클램프", () => {
     expect(sheetHeightPx({ ...frame, snap: "full", keyboardPx: 336, dockPx: 72 })).toBe(

@@ -157,13 +157,11 @@ function FollowUps({
             onPress={() => onFollowChip(chip)}
             style={({ pressed }) => [
               styles.chip,
-              chip.muted ? styles.chipMuted : styles.chipAccent,
+              styles.chipAccent,
               (pressed || busy) && styles.pressed,
             ]}
           >
-            <Text style={chip.muted ? styles.chipMutedText : styles.chipAccentText}>
-              {chip.label}
-            </Text>
+            <Text style={styles.chipAccentText}>{chip.label}</Text>
           </Pressable>
         ))}
       </View>
