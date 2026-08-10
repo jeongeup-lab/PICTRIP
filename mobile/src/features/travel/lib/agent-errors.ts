@@ -23,3 +23,8 @@ export function agentErrorMessage(error: unknown): string {
   if (!(error instanceof AppError)) return FALLBACK;
   return MESSAGES[error.code] ?? FALLBACK;
 }
+
+export function agentErrorMessageForCode(code: string | null): string {
+  if (!code) return FALLBACK;
+  return MESSAGES[code as ErrorCode] ?? FALLBACK;
+}

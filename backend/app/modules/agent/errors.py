@@ -21,6 +21,12 @@ class AgentFestivalUnavailable(AppError):
     message = "축제 정보를 가져오지 못했어요. 잠시 후 다시 시도해 주세요."
 
 
+class AgentWriterUnavailable(AppError):
+    code = "AGENT_WRITER_UNAVAILABLE"
+    http_status = 502
+    message = "답변을 쓰다가 끊겼어요. 잠시 후 다시 시도해 주세요."
+
+
 class AgentOutOfScope(AppError):
     code = "AGENT_OUT_OF_SCOPE"
     http_status = 422

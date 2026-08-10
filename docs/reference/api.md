@@ -23,7 +23,8 @@
 | GET | `/overseas/{id}/matches` | 해외→국내 매칭 3곳 | — |
 | GET | `/home/channels` | 채널 메타 (가용성 포함) | — |
 | GET | `/home/channels/{key}` | 채널 카드 (`around`는 lat/lng 필요) | — |
-| POST | `/agent/ask` | 여행 탭 질의 — 자유문·사진·intent → 단계+답변+스팟 (아래) | — |
+| POST | `/agent/chat` | 여행 탭 대화 — SSE 스트리밍, LLM 산문 + 카드 + 출처 (아래) | — |
+| POST | `/agent/ask` | 구 여행 탭 질의 — 단일 JSON 응답. **구 OTA 클라이언트 전용, OTA 완료 시 폐기** (아래) | — |
 | GET | `/map/nearby` | 내 주변 (bbox+카테고리, ≤30) | — |
 | GET | `/map/region` | 좌표→행정구역 라벨 (fail-open null) | — |
 | GET | `/map/regions-tree` | 시도·시군구 트리 (centroid 포함, 24h 캐시) | — |
@@ -43,10 +44,47 @@
 상태/트리거, 이력, 헬스, overseas 목록·`is_hidden` 토글). 서명 쿠키 세션,
 `admin_users` 인증. `images` 모듈은 공개 엔드포인트 0(임베딩 잡 전용).
 
+## `POST /agent/chat`
+
+여행 탭의 대화 진입점 ([ADR 0020](../adr/0020-travel-tab-chat-first-llm-writer.md)).
+검색은 `/agent/ask`와 같은 결정적 파이프라인이고, **답변 산문만 Gemini Flash가
+스트리밍**으로 쓴다. 근거는 네이버 블로그 검색(≤4콜, 콜당 2.5s, 실패 무해)으로
+보강한다. 사진이 붙으면 multipart(`photo` 필드, `/agent/ask`와 동일 규칙),
+아니면 JSON. rate-limit 10/분/IP.
+
+**요청** — `{message, lat, lng, clientTime, context, history}`. `context`는
+기존 `AskContext`(조회 연속성), `history`는 라이터용 대화 요약(≤8개,
+`{role, text ≤500자, spotIds ≤8}`), `clientTime`은 시간대 인지용 ISO 문자열.
+
+**응답** — `text/event-stream` (`Cache-Control: no-cache`,
+`X-Accel-Buffering: no`). **JSend 봉투의 예외다** — 스트림 시작 전 오류만 기존
+AppError/JSend(422 등)로 나간다.
+
+| event | data | 비고 |
+|---|---|---|
+| `step` | `{index, label, badge?, status}` | 같은 index로 `run`→`done` 갱신 |
+| `delta` | `{text}` | 산문 조각. `**굵게**` · `- ` 불릿만 |
+| `cards` | `{spots, tagBasis?}` | 라이터의 `[[cards]]` 마커 위치에서 1회. spots가 비면 미방출 |
+| `sources` | `{items: [{kind, title, url?, date?}]}` | 실제 사용한 블로그 + (spots 있을 때) KTO 고정 행 |
+| `suggestions` | `{items}` | ≤3, 각 ≤20자. 라이터 `[[suggest:…]]` 우선, 없으면 refinements 라벨 |
+| `done` | `{answerText, spots, sources, suggestions, intent, totalCount, traceId?}` | 재시도·저장용 조립본 |
+| `error` | `{code, message}` | 스트림 중 실패 (`AGENT_WRITER_UNAVAILABLE` 등) |
+
+마커(`[[cards]]` · `[[suggest: a | b | c]]`)는 서버가 소비하고 클라이언트에
+노출하지 않는다. 조회가 `AppError`(결과 없음 등)를 내면 그 안내 문구를
+`delta`로 흘리고 빈 `spots`로 정상 `done` 한다. 라이터가 15초 무응답이거나
+예외를 내면 `error` 이벤트 후 종료하고, 클라이언트는 같은 입력으로 재시도한다.
+
+라이터 규칙: 도구 결과에 있는 사실만 쓴다(스팟 목록 밖 장소명·영업시간·전화·
+가격 금지), 별점·평점 표현 금지, 해요체, 이모지 금지. 카드는 서버 데이터로만
+조립되므로 장소 환각이 화면에 도달하지 않는다.
+
 ## `POST /agent/ask`
 
-여행 탭의 유일한 질의 표면. 자유문·사진·직전 턴의 의도를 한 요청으로 받아 한 번에
+구 여행 탭의 질의 표면. 자유문·사진·직전 턴의 의도를 한 요청으로 받아 한 번에
 응답한다(스트리밍 없음 — [ADR 0009](../adr/0009-travel-tab-conversational-agent.md)).
+신규 JS는 `/agent/chat`을 쓰고, 이 엔드포인트는 **구 OTA 클라이언트가 남아 있는
+동안만** 존치한다 ([ADR 0020](../adr/0020-travel-tab-chat-first-llm-writer.md)).
 사진이 붙으면 `multipart/form-data`, 아니면 JSON. rate-limit 20/분/IP.
 
 **요청** — `question` · `photo` · `intent` · `anchor` **넷 중 하나 이상**이

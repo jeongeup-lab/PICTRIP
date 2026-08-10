@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated, Literal, get_args
 
 from pydantic import BaseModel, Field, StringConstraints, computed_field
@@ -22,6 +23,9 @@ MAX_HINT_TOKENS = 4
 MAX_CONTEXT_SPOTS = 8
 MAX_TITLE_CHARS = 255
 MAX_DETAIL_FIELDS = 6
+MAX_MESSAGE_CHARS = 500
+MAX_HISTORY_ITEMS = 8
+MAX_HISTORY_SPOT_IDS = 8
 
 IntentText = Annotated[str, StringConstraints(max_length=MAX_TEXT_CHARS)]
 
@@ -147,6 +151,33 @@ class AskRequest(BaseModel):
         return list(PRE_OTA_REGION_PREFIXES.get(self.region or "all", ()))
 
 
+class ChatHistoryItem(BaseModel):
+    role: Literal["user", "assistant"]
+    text: Annotated[str, StringConstraints(max_length=MAX_MESSAGE_CHARS)]
+    spotIds: list[Annotated[str, StringConstraints(min_length=1, max_length=32)]] = Field(
+        default_factory=list, max_length=MAX_HISTORY_SPOT_IDS
+    )
+
+
+class ChatRequest(BaseModel):
+    message: Annotated[str, StringConstraints(max_length=MAX_MESSAGE_CHARS)] | None = None
+    lat: float | None = Field(None, ge=-90.0, le=90.0)
+    lng: float | None = Field(None, ge=-180.0, le=180.0)
+    clientTime: datetime | None = None
+    context: AskContext | None = None
+    history: list[ChatHistoryItem] = Field(default_factory=list, max_length=MAX_HISTORY_ITEMS)
+
+
+SourceKind = Literal["naver_blog", "kto", "kakao"]
+
+
+class SourceItem(BaseModel):
+    kind: SourceKind
+    title: str
+    url: str | None = None
+    date: str | None = None
+
+
 class AskStep(BaseModel):
     tool: ToolName
     label: str
@@ -186,3 +217,42 @@ class AskResponse(BaseModel):
         return [
             refinement.label for refinement in self.refinements if refinement.patch.drop is None
         ]
+
+
+class ChatStepEvent(BaseModel):
+    index: int
+    label: str
+    badge: str | None = None
+    status: Literal["run", "done"]
+
+
+class ChatDeltaEvent(BaseModel):
+    text: str
+
+
+class ChatCardsEvent(BaseModel):
+    spots: list[AgentSpotCard]
+    tagBasis: str | None = None
+
+
+class ChatSourcesEvent(BaseModel):
+    items: list[SourceItem]
+
+
+class ChatSuggestionsEvent(BaseModel):
+    items: list[str]
+
+
+class ChatDoneEvent(BaseModel):
+    answerText: str
+    spots: list[AgentSpotCard]
+    sources: list[SourceItem]
+    suggestions: list[str]
+    intent: QueryIntent
+    totalCount: int
+    traceId: str | None = None
+
+
+class ChatErrorEvent(BaseModel):
+    code: str
+    message: str
