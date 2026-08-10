@@ -259,7 +259,7 @@ def test_blog_probe_strips_brackets_and_wide_region() -> None:
     probes = chat_service._blog_probes(result, message="정읍 맛집 추천해줘")
 
     assert probes[0].query == "정읍시 대일정"
-    assert probes[0].terms == ("대일정", "정읍시")
+    assert probes[0].terms == ("대일정",)
     assert probes[-1].query == "정읍 맛집"
 
 
@@ -277,8 +277,8 @@ def test_unrelated_blog_posts_are_dropped() -> None:
         postdate="20260801",
     )
 
-    assert chat_service._post_matches(related, ("대일정", "정읍시")) is True
-    assert chat_service._post_matches(unrelated, ("대일정", "정읍시")) is False
+    assert chat_service._post_matches(related, ("대일정",)) is True
+    assert chat_service._post_matches(unrelated, ("대일정",)) is False
 
 
 async def test_grounding_keeps_only_matching_posts(monkeypatch) -> None:
@@ -323,3 +323,15 @@ async def test_blank_message_gets_korean_guidance_not_an_internal_error(monkeypa
     assert [name for name, _ in events] == ["delta", "done"]
     assert events[0][1].model_dump()["text"] == ask_service.BLANK_ANSWER
     assert events[-1][1].model_dump()["answerText"] == ask_service.BLANK_ANSWER
+
+
+def test_region_alone_does_not_keep_an_off_topic_post() -> None:
+    off_topic = NaverBlogPost(
+        title="노인일자리 신청방법",
+        link="https://blog.naver.com/c",
+        description="정읍 지역 접수처 안내",
+        postdate="20260801",
+    )
+
+    assert chat_service._post_matches(off_topic, ("정읍", "맛집")) is False
+    assert chat_service._post_matches(off_topic, ("정읍", "일자리")) is True

@@ -213,7 +213,7 @@ def _blog_probes(result: AskResponse, *, message: str | None) -> list[_BlogProbe
             continue
         area = _short_region(card.regionLabel)
         query = f"{area} {name}".strip() if area else name
-        probes.append(_BlogProbe(query=query, terms=tuple(part for part in (name, area) if part)))
+        probes.append(_BlogProbe(query=query, terms=(name,)))
     topic = _topic_query(message)
     if topic:
         probes.append(_BlogProbe(query=topic, terms=tuple(topic.split())))
@@ -239,7 +239,7 @@ def _post_matches(post: naver.NaverBlogPost, terms: tuple[str, ...]) -> bool:
     if not terms:
         return False
     haystack = f"{post.title} {post.description or ''}"
-    return any(term and term in haystack for term in terms)
+    return all(term in haystack for term in terms)
 
 
 async def _blog_call(client: httpx.AsyncClient, query: str) -> list[naver.NaverBlogPost]:
