@@ -1,0 +1,234 @@
+name: agent-detail-coverage
+# 여행 탭 follow-up 칩(어떤 곳/영업시간/주차/이용요금/연관 관광지) 유용성 실측 —
+# CT112 라이브 api 컨테이너에 exec 해서 CT110 DB를 조회한다. 쓰기 없음.
+# 재는 것: spot_details 캐시 커버리지 · _extract_intro 필드별 non-empty 비율 ·
+# 값의 실제 쓸모(무의미 상용구 비중) · 연관 관광지 칩이 쓰는 임베딩 커버리지.
+# KTO 콜 없음(쿼터 무영향). 워크플로 파일만 바뀌므로 backend-deploy 는 돌지 않는다.
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: agent-detail-coverage
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: [self-hosted, ct112]
+    steps:
+      - run: |
+          set -euo pipefail
+          cid="$(docker ps -q --filter "publish=8000" | head -n1)"
+          if [ -z "$cid" ]; then echo "api container not found on :8000"; exit 1; fi
+          docker exec -i "$cid" python - <<'PY'
+          import asyncio
+          from collections import Counter
+
+          from sqlalchemy import text
+
+          from app.core.db import async_session_factory
+          from app.modules.spots.services import attraction_category_sql
+          from app.modules.spots.services.detail import _extract_intro
+          from app.modules.spots.text import to_plain_text
+
+          ELIGIBLE = (
+              "spots.show_flag = 1 "
+              "AND spots.first_image_url IS NOT NULL AND spots.first_image_url <> '' "
+              "AND ({attraction})"
+          ).format(attraction=attraction_category_sql())
+
+          # follow-ups.ts 의 infoChips 5종이 실제로 읽는 필드
+          CHIP_FIELDS = [
+              ("about", "여긴 어떤 곳이야?", "overview"),
+              ("hours", "영업시간은?", "usetime"),
+              ("parking", "주차는 돼?", "parking"),
+              ("fee", "이용요금은?", "usefee"),
+              ("contact", "(문의)", "infocenter"),
+              ("closed", "(쉬는 날)", "restdate"),
+          ]
+
+          # 값이 있어도 답이 안 되는 상용구
+          BOILERPLATE = ("없음", "-", "무", "해당없음", "해당 없음", "미정", "정보없음", "없읍")
+
+
+          def head(title: str) -> None:
+              print(f"\n=== {title} ===", flush=True)
+
+
+          def useful(value: str | None) -> bool:
+              if not value:
+                  return False
+              plain = to_plain_text(value).strip()
+              return bool(plain) and plain not in BOILERPLATE
+
+
+          async def probe_cache(session) -> None:
+              head("1. spot_details 캐시 커버리지 (attraction 모수 기준)")
+              row = await session.execute(
+                  text(
+                      "SELECT count(*) AS eligible,"
+                      "       count(sd.content_id) AS cached,"
+                      "       count(*) FILTER (WHERE sd.intro_data IS NOT NULL"
+                      "                        AND sd.intro_data <> '{}'::jsonb) AS with_intro,"
+                      "       count(*) FILTER (WHERE sd.overview IS NOT NULL"
+                      "                        AND sd.overview <> '') AS with_overview"
+                      "  FROM spots"
+                      "  LEFT JOIN spot_details sd ON sd.content_id = spots.content_id"
+                      f" WHERE {ELIGIBLE}"
+                  )
+              )
+              eligible, cached, with_intro, with_overview = row.one()
+
+              def pct(n: int) -> str:
+                  return f"{(n / eligible * 100 if eligible else 0):.1f}%"
+
+              print(f"  eligible attraction spots : {eligible}")
+              print(f"  spot_details 캐시 보유     : {cached}  ({pct(cached)})")
+              print(f"  intro_data 비어있지 않음   : {with_intro}  ({pct(with_intro)})")
+              print(f"  overview 비어있지 않음     : {with_overview}  ({pct(with_overview)})")
+              print("  (캐시 미보유 스팟은 질문 시 KTO 3콜을 라이브로 부른다 — 4~8s 지연 위험)")
+
+              head("2. content_type_id 별 캐시 분포")
+              rows = await session.execute(
+                  text(
+                      "SELECT spots.content_type_id,"
+                      "       count(*) AS eligible,"
+                      "       count(sd.content_id) AS cached"
+                      "  FROM spots"
+                      "  LEFT JOIN spot_details sd ON sd.content_id = spots.content_id"
+                      f" WHERE {ELIGIBLE}"
+                      " GROUP BY 1 ORDER BY 2 DESC"
+                  )
+              )
+              for ctype, eligible_n, cached_n in rows:
+                  share = (cached_n / eligible_n * 100) if eligible_n else 0.0
+                  print(f"  type {ctype:<4} eligible {eligible_n:>6}  cached {cached_n:>6}  ({share:>5.1f}%)")
+
+
+          async def probe_fields(session) -> None:
+              head("3. 칩별 필드 커버리지 — _extract_intro 를 그대로 태워서 실측")
+              rows = await session.execute(
+                  text(
+                      "SELECT spots.content_type_id, sd.intro_data, sd.overview, sd.tel"
+                      "  FROM spots"
+                      "  JOIN spot_details sd ON sd.content_id = spots.content_id"
+                      f" WHERE {ELIGIBLE}"
+                  )
+              )
+              per_type: dict[int, Counter] = {}
+              totals: Counter = Counter()
+              seen = 0
+              for ctype, intro_data, overview, tel in rows:
+                  seen += 1
+                  counter = per_type.setdefault(int(ctype), Counter())
+                  counter["_n"] += 1
+                  totals["_n"] += 1
+                  intro = _extract_intro(int(ctype), intro_data)
+                  values = {
+                      "overview": overview,
+                      "usetime": intro.usetime if intro else None,
+                      "usefee": intro.usefee if intro else None,
+                      "parking": intro.parking if intro else None,
+                      "restdate": intro.restdate if intro else None,
+                      "infocenter": (intro.infocenter if intro else None) or tel,
+                  }
+                  for key, value in values.items():
+                      if useful(value):
+                          counter[key] += 1
+                          totals[key] += 1
+
+              print(f"  표본(캐시 보유 attraction spots) : {seen}\n")
+              print(f"  {'칩':<18} {'필드':<12} {'유효':>8} {'비율':>7}")
+              for _, label, field in CHIP_FIELDS:
+                  n = totals[field]
+                  share = (n / seen * 100) if seen else 0.0
+                  verdict = "  ← 삭제 후보" if share < 30 else ""
+                  print(f"  {label:<18} {field:<12} {n:>8} {share:>6.1f}%{verdict}")
+
+              head("4. content_type_id 별 필드 커버리지")
+              header = "  type  n      " + "".join(f"{f:>12}" for _, _, f in CHIP_FIELDS)
+              print(header)
+              for ctype in sorted(per_type, key=lambda t: -per_type[t]["_n"]):
+                  counter = per_type[ctype]
+                  n = counter["_n"]
+                  cells = "".join(
+                      f"{(counter[f] / n * 100 if n else 0):>11.1f}%" for _, _, f in CHIP_FIELDS
+                  )
+                  print(f"  {ctype:<5} {n:<6}{cells}")
+
+
+          async def probe_values(session) -> None:
+              head("5. 값이 실제로 답이 되는가 — usetime/parking/usefee 상위 값")
+              rows = await session.execute(
+                  text(
+                      "SELECT spots.content_type_id, sd.intro_data"
+                      "  FROM spots"
+                      "  JOIN spot_details sd ON sd.content_id = spots.content_id"
+                      f" WHERE {ELIGIBLE} AND sd.intro_data IS NOT NULL"
+                  )
+              )
+              buckets: dict[str, Counter] = {"usetime": Counter(), "parking": Counter(), "usefee": Counter()}
+              for ctype, intro_data in rows:
+                  intro = _extract_intro(int(ctype), intro_data)
+                  if intro is None:
+                      continue
+                  for field in buckets:
+                      raw = getattr(intro, field, None)
+                      if not raw:
+                          continue
+                      buckets[field][to_plain_text(raw).strip()[:60]] += 1
+              for field, counter in buckets.items():
+                  print(f"\n  [{field}] distinct {len(counter)} · 상위 12")
+                  for value, n in counter.most_common(12):
+                      print(f"    {n:>6}  {value}")
+
+
+          async def probe_related(session) -> None:
+              head("6. '연관 관광지는?' 칩 — spot_embeddings 커버리지")
+              print("  이 칩은 KTO TarRlteTar 가 아니라 CLIP 임베딩 이웃으로 답한다")
+              print("  (ask.py::_anchor_related_response → load_spot_embedding).")
+              print("  임베딩이 없으면 AgentNoResults 로 즉시 실패한다.\n")
+              row = await session.execute(
+                  text(
+                      "SELECT count(*) AS eligible,"
+                      "       count(se.content_id) AS embedded"
+                      "  FROM spots"
+                      "  LEFT JOIN spot_embeddings se ON se.content_id = spots.content_id"
+                      f" WHERE {ELIGIBLE}"
+                  )
+              )
+              eligible, embedded = row.one()
+              share = (embedded / eligible * 100) if eligible else 0.0
+              print(f"  eligible attraction spots : {eligible}")
+              print(f"  임베딩 보유               : {embedded}  ({share:.1f}%)")
+              print(f"  → 칩이 그냥 실패할 확률   : {100 - share:.1f}%")
+
+              rows = await session.execute(
+                  text(
+                      "SELECT spots.content_type_id,"
+                      "       count(*) AS eligible,"
+                      "       count(se.content_id) AS embedded"
+                      "  FROM spots"
+                      "  LEFT JOIN spot_embeddings se ON se.content_id = spots.content_id"
+                      f" WHERE {ELIGIBLE}"
+                      " GROUP BY 1 ORDER BY 2 DESC"
+                  )
+              )
+              print("\n  content_type_id 별:")
+              for ctype, eligible_n, embedded_n in rows:
+                  pct = (embedded_n / eligible_n * 100) if eligible_n else 0.0
+                  print(f"    type {ctype:<4} eligible {eligible_n:>6}  embedded {embedded_n:>6}  ({pct:>5.1f}%)")
+
+
+          async def main() -> None:
+              async with async_session_factory() as session:
+                  await probe_cache(session)
+                  await probe_fields(session)
+                  await probe_values(session)
+                  await probe_related(session)
+              print("\n--- probe done (read-only) ---")
+
+
+          asyncio.run(main())
+          PY

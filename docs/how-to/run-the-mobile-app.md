@@ -41,7 +41,7 @@
 | 전 화면 API 404 | 빌드에 `EXPO_PUBLIC_API_BASE_URL` 미인라인 + 폴백 경로 문제 | 오리진 로그에서 `/v1` 없는 404 확인이 진단 기준 |
 | 카카오/구글 로그인 실패 | `EXPO_PUBLIC_*` 키 미주입 | eas.json env 확인(→ [deploy-and-release](deploy-and-release.md)) |
 | 지도 빈 화면 | SDK 로드 실패 | RN 오버레이의 HTTP 상태 확인(동적 로드 재프로브가 표시) |
-| 네이티브 모듈 에러 | 새 네이티브 dep 추가 | 금지 — Expo SDK 56 핀 유지(`CLAUDE.md`) |
+| 네이티브 모듈 에러 | 새 네이티브 dep 추가 | Expo SDK 56 호환 버전으로 맞추고 `npx expo install` 사용 · OTA 로는 안 나가므로 `version` 올려 `v*` 빌드 |
 
 ---
 관련: [deploy-and-release](deploy-and-release.md) · [product](../explanation/product.md)

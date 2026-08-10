@@ -139,7 +139,9 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
   변경분을 올리면 그 스팟만 다시 받는다.
 - Embedding columns are `halfvec(512)` (`spot_embeddings.embedding`,
   `users.taste_vector`). Cast vector literals: `... <=> $1::halfvec(512)`.
-- Related-spots (TarRlteTar) are Redis-only: key `rlte:{contentId}`, TTL 1h.
+- 연관 관광지(agent `related` 앵커)는 KTO TarRlteTar 가 아니라 `spot_embeddings`
+  이웃 검색이다 (`agent/services/ask.py::_anchor_related_response`). 임베딩이 없는
+  스팟은 `AgentNoResults` 로 실패한다. 구 `rlte:{contentId}` Redis 캐시는 제거됨.
 - `hnsw.ef_search = 80` is an asyncpg `server_settings` in `app/core/db.py`.
 - Home feed is `GET /feed`: 해외 게시물 커서 페이지네이션 → 스와이프 시
   `GET /overseas/{id}/matches`로 국내 매칭 3곳. 구 `/home/feed`(히어로+레일)·
@@ -172,8 +174,10 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
 - **DO NOT modify KTO `overview` text** — store and display verbatim.
 - **DO NOT put secrets in code or commits** — `.env` only; mobile gets only
   `EXPO_PUBLIC_*`.
-- **DO NOT add emoji or new native modules to mobile** — use line-SVG `<Icon>` /
-  `expo-symbols`. Map = KakaoWebMap (WebView + JS SDK), never `@react-native-kakao/map`.
+- **DO NOT add emoji to mobile** — use line-SVG `<Icon>` / `expo-symbols`.
+  Map = KakaoWebMap (WebView + JS SDK), never `@react-native-kakao/map`.
+- 네이티브 모듈 추가는 허용한다 — Expo SDK 56 호환 여부를 먼저 확인하고,
+  추가하면 OTA 로는 안 나가므로 `app.json` `version` 을 올려 `v*` 빌드로 낸다.
 - **DO NOT add `sync_runs` to backend Alembic** — pipeline owns it.
 - **DO NOT write code comments** — 코드에 주석을 달지 않는다. 의도는 이름·구조로
   드러내고, 문맥은 커밋 메시지/PR에 남긴다. (shebang·라이선스 헤더 등 도구가 요구하는
