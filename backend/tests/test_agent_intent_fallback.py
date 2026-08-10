@@ -6,7 +6,8 @@ import pytest
 
 from app.modules.agent import llm
 from app.modules.agent.errors import AgentIntentUnavailable
-from app.modules.agent.schemas import QueryIntent
+from app.modules.agent.schemas import AskContext, AskContextSpot, QueryIntent
+from app.modules.agent.services import ask as ask_service
 from app.modules.agent.services import intent as intent_service
 from app.web.errors import RateLimited
 
@@ -157,3 +158,28 @@ async def test_a_healthy_gemini_still_owns_the_intent(monkeypatch) -> None:
     assert outcome.fallback is False
     assert outcome.intent.categoryKeywords == ["박물관"]
     assert outcome.intent.indoorOnly is True
+
+
+def test_demonstratives_do_not_become_region_hints() -> None:
+    guessed = intent_service.fallback_intent("거기 근처 카페도 있어?")
+
+    assert guessed.regionHints == []
+    assert guessed.nearMe is True
+    assert "카페" in guessed.categoryKeywords
+
+
+def test_an_unresolvable_region_hint_does_not_veto_the_origin_anchor() -> None:
+    context = AskContext(
+        intent=QueryIntent(regionHints=["정읍"]),
+        spots=[AskContextSpot(contentId="479904", title="정읍사공원")],
+        focusContentId="479904",
+    )
+    guessed = QueryIntent(categoryKeywords=["카페"], regionHints=["거기"], nearMe=True)
+
+    vetoed = ask_service._origin_anchor(guessed, context, region_named=True)
+    kept = ask_service._origin_anchor(guessed, context, region_named=False)
+
+    assert vetoed is None
+    assert kept is not None
+    assert kept.contentId == "479904"
+    assert kept.action == "cafe"
