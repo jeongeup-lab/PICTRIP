@@ -116,6 +116,24 @@ async def events(
     posts = await _ground_with_blogs(result, message=payload.message)
     sources = _sources(result, posts)
 
+    if _llm_is_down(result):
+        logger.warning("agent.chat.writer_skipped", results=len(result.spots))
+        rescue = _deterministic_answer(result) or ask_service.NO_AXIS_ANSWER
+        yield "delta", ChatDeltaEvent(text=rescue)
+        yield "sources", ChatSourcesEvent(items=sources)
+        yield (
+            "done",
+            ChatDoneEvent(
+                answerText=rescue,
+                spots=result.spots,
+                sources=sources,
+                intent=result.intent,
+                totalCount=result.totalCount,
+                traceId=get_trace_id(),
+            ),
+        )
+        return
+
     system, user_text = writer.build_prompt(
         question=(payload.message or "").strip() or None,
         intent=result.intent,
@@ -277,3 +295,7 @@ def _sources(result: AskResponse, posts: list[naver.NaverBlogPost]) -> list[Sour
     if result.spots:
         items.append(KTO_SOURCE)
     return items
+
+
+def _llm_is_down(result: AskResponse) -> bool:
+    return any(step.badge == ask_service.INTENT_FALLBACK_BADGE for step in result.steps)

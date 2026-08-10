@@ -337,6 +337,13 @@ MOOD_TOKENS: dict[str, Mood] = {
 }
 REGION_STOPWORDS = frozenset(
     {
+        "심심",
+        "뭐해",
+        "누구",
+        "고마",
+        "감사",
+        "미안",
+        "반가",
         "추천",
         "추천지",
         "알려",
@@ -416,7 +423,6 @@ REGION_STOPWORDS = frozenset(
         "그냥",
         "조금",
         "살짝",
-        "감사",
         "고마워",
         "안녕",
         "반가워",
@@ -478,10 +484,90 @@ MAX_FALLBACK_REGIONS = 3
 _HANGUL_SPLIT = re.compile(r"[^가-힣]+")
 
 
+UNSUPPORTED_WORDS = (
+    "예약",
+    "티켓",
+    "항공",
+    "비행기",
+    "숙소",
+    "호텔",
+    "펜션",
+    "길찾기",
+    "가는 법",
+    "가는법",
+    "교통",
+    "지하철",
+    "버스",
+    "기차",
+    "렌트",
+    "날씨",
+    "환율",
+    "주식",
+    "코인",
+    "병원",
+    "약국",
+    "은행",
+    "편의점",
+    "주유소",
+    "마트",
+    "관공서",
+    "선물",
+    "일정 짜",
+    "코스 짜",
+    "번역",
+)
+SMALLTALK_WORDS = (
+    "안녕",
+    "고마워",
+    "감사",
+    "반가",
+    "잘가",
+    "미안",
+    "사랑해",
+    "심심",
+    "뭐해",
+    "누구야",
+    "이름이 뭐",
+    "ㅋㅋ",
+    "ㅎㅎ",
+    "ㅇㅇ",
+)
+OVERSEAS_WORDS = (
+    "파리",
+    "도쿄",
+    "오사카",
+    "교토",
+    "후쿠오카",
+    "삿포로",
+    "뉴욕",
+    "런던",
+    "방콕",
+    "다낭",
+    "하노이",
+    "발리",
+    "하와이",
+    "괌",
+    "세부",
+    "상하이",
+    "베이징",
+    "타이베이",
+    "홍콩",
+    "싱가포르",
+    "로마",
+    "바르셀로나",
+    "시드니",
+    "두바이",
+)
+
+
 def fallback_intent(question: str) -> QueryIntent:
     asked = question.strip()[:MAX_QUESTION_CHARS]
     if not asked:
         return QueryIntent()
+    if _mentions(asked, OVERSEAS_WORDS):
+        return QueryIntent(outOfScope=True)
+    if _mentions(asked, UNSUPPORTED_WORDS):
+        return QueryIntent(task="unsupported")
     residual = asked
     categories: list[str] = []
     for trigger in _by_length(CATEGORY_WORDS):
@@ -499,6 +585,8 @@ def fallback_intent(question: str) -> QueryIntent:
     for trigger in (*NEAR_WORDS, *INDOOR_WORDS, *QUIET_WORDS, *POPULAR_WORDS):
         residual = residual.replace(trigger, " ")
     regions = _region_hints(residual, moods)
+    if not categories and not moods and not regions and _mentions(asked, SMALLTALK_WORDS):
+        return QueryIntent(task="smalltalk")
     return QueryIntent(
         categoryKeywords=categories[:MAX_KEYWORDS],
         regionHints=regions,
