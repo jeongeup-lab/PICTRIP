@@ -1,0 +1,1414 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PICTRIP — 해외 사진을 넘기다, 닮은 국내 여행지를 만난다</title>
+<meta name="description" content="해외 여행 사진 피드를 넘기면 닮은 분위기의 국내 관광지를 찾아주는 추천 서비스. 한국관광공사 TourAPI + CLIP 이미지 임베딩. 2026 관광 데이터 활용 공모전 출품작." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+:root{
+  /* app tokens — mobile/src/constants/theme.ts */
+  --bg:#14161A; --inset:#1A1D22; --skeleton:#22262C; --raiseStrong:rgba(48,52,60,.60);
+  --ink:#F4F5F7; --sec:rgba(235,238,245,.62); --ter:rgba(235,238,245,.34);
+  --line:rgba(255,255,255,.11); --fill:rgba(255,255,255,.06); --fillStrong:rgba(255,255,255,.10); --raise:rgba(255,255,255,.05);
+  --control:rgba(12,14,18,.55);
+  --glassFill:rgba(30,33,39,.72); --glassBorder:rgba(255,255,255,.16);
+  --accent:#FF3B53; --accentText:#FF8494; --accentFill:rgba(255,59,83,.18);
+  --onImage:#fff; --onDim:rgba(255,255,255,.85); --onLight:#171719;
+  --land:#23262C; --water:#0B3042; --coast:#155069; --road:#32373F; --roadTop:#4D545E;
+  --pos:#6FDC8C; --caution:#FFC46B;
+  /* page-only */
+  --page:#0F1114; --page2:#121418; --label:#8A9099; --rule:rgba(255,255,255,.09);
+  --serif:"Noto Serif KR",'Apple SD Gothic Neo',"Batang",serif;
+  --sans:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo',"Segoe UI","Malgun Gothic",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Consolas,monospace;
+  --k:.80;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  background:var(--page);color:var(--ink);font-family:var(--sans);
+  line-height:1.7;word-break:keep-all;overflow-x:hidden;-webkit-font-smoothing:antialiased;
+}
+a{color:inherit}
+img{display:block;max-width:100%}
+.wrap{max-width:1200px;margin:0 auto;padding:0 32px}
+:focus-visible{outline:2px solid var(--accentText);outline-offset:3px}
+
+.eyebrow{
+  font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.16em;
+  color:var(--label);text-transform:uppercase;
+}
+.serif{font-family:var(--serif);font-weight:700;letter-spacing:-.02em}
+
+/* ================= masthead ================= */
+.mast{position:fixed;top:0;left:0;right:0;z-index:60;transition:background .35s,border-color .35s}
+.mast.stuck{background:rgba(15,17,20,.82);backdrop-filter:blur(16px);border-bottom:1px solid var(--rule)}
+.mast .wrap{display:flex;align-items:center;justify-content:space-between;height:62px;gap:16px}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:13px;letter-spacing:.26em;font-weight:500}
+.brand i{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px rgba(255,59,83,.9)}
+.chapters{display:flex;gap:26px}
+.chapters a{
+  font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--label);
+  text-decoration:none;transition:color .3s;padding:4px 0;border-bottom:1px solid transparent;
+}
+.chapters a:hover{color:var(--sec)}
+.chapters a.on{color:var(--ink);border-bottom-color:var(--accent)}
+@media (max-width:900px){.chapters{display:none}}
+
+/* ================= opening ================= */
+/* ---- cover ---- */
+.cover{
+  position:relative;min-height:100svh;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center;padding:110px 24px 96px;overflow:hidden;
+}
+.cover::before{
+  content:"";position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);
+  width:min(1180px,140vw);height:min(1180px,140vw);pointer-events:none;
+  background:radial-gradient(closest-side,rgba(255,59,83,.20),transparent 68%);
+}
+.cover > *{position:relative;z-index:1}
+.glyph{
+  position:relative;width:clamp(112px,min(18vw,26vh),264px);height:clamp(112px,min(18vw,26vh),264px);
+  margin-bottom:clamp(22px,3vw,40px);
+}
+.glyph::before{
+  content:"";position:absolute;inset:-26%;border-radius:50%;
+  background:radial-gradient(closest-side,rgba(255,59,83,.34),transparent 70%);
+}
+/* ---- 로고 (좌표는 원본 아이콘에서 실측, IoU .992) ---- */
+.fig{position:relative;z-index:2;width:100%;height:100%;overflow:visible}
+.fig .man{fill:none;stroke:#fff;stroke-width:54;stroke-linecap:round;stroke-linejoin:round}
+.fig use{fill:#fff;stroke:none}
+.fig .man,.fig .rarm,.fig .larm,.fig .legl,.fig .legr,.fig .cam,.fig .hover{transform-box:view-box}
+.fig .man{transform-origin:405px 888px}
+.fig .rarm{transform-origin:423px 387px}
+.fig .larm{transform-origin:413px 398px}
+.fig .legl,.fig .legr{transform-origin:405px 629px}
+.fig .cam{transform-origin:629px 305px}
+
+/* 한 번 뛰어 사진 한 장을 집는다 */
+.cover.intro .man{animation:manJump 1.7s cubic-bezier(.42,0,.22,1) both}
+.cover.intro .rarm{animation:armSwing 1.7s cubic-bezier(.42,0,.22,1) both}
+.cover.intro .larm{animation:larmSwing 1.7s cubic-bezier(.42,0,.22,1) both}
+.cover.intro .legl{animation:legLeft 1.7s ease-in-out both}
+.cover.intro .legr{animation:legRight 1.7s ease-in-out both}
+.cover.intro .cam{animation:camPick 1.7s cubic-bezier(.42,0,.22,1) both}
+.cover.intro .hover{animation:hover 1.7s ease-in-out both}
+@keyframes manJump{
+  0%,14%{transform:translateY(0) scaleY(1)}
+  20%{transform:translateY(22px) scaleY(.93)}
+  34%{transform:translateY(-245px) scaleY(1.04)}
+  50%{transform:translateY(-110px) scaleY(1.02)}
+  62%{transform:translateY(0) scaleY(.90)}
+  72%{transform:translateY(0) scaleY(1.03)}
+  100%{transform:translateY(0) scaleY(1)}
+}
+@keyframes armSwing{
+  0%,14%{transform:rotate(80deg)}
+  20%{transform:rotate(95deg)}
+  34%{transform:rotate(-16deg)}
+  50%{transform:rotate(-6deg)}
+  62%{transform:rotate(10deg)}
+  78%,100%{transform:rotate(0)}
+}
+@keyframes larmSwing{
+  0%,14%{transform:rotate(0)}
+  20%{transform:rotate(20deg)}
+  34%{transform:rotate(-28deg)}
+  62%{transform:rotate(8deg)}
+  80%,100%{transform:rotate(0)}
+}
+@keyframes legLeft{0%,20%{transform:rotate(0)}34%{transform:rotate(15deg)}58%,100%{transform:rotate(0)}}
+@keyframes legRight{0%,20%{transform:rotate(0)}34%{transform:rotate(-15deg)}58%,100%{transform:rotate(0)}}
+@keyframes camPick{
+  0%{opacity:0;transform:translate(0,-245px) rotate(7deg) scale(.62)}
+  8%,30%{opacity:1;transform:translate(0,-245px) rotate(7deg) scale(.62)}
+  34%{opacity:1;transform:translate(0,-245px) rotate(0) scale(1)}
+  50%{transform:translate(0,-110px) rotate(0) scale(1)}
+  62%,100%{transform:translate(0,0) rotate(0) scale(1)}
+}
+@keyframes hover{0%{transform:translateY(0)}15%{transform:translateY(-11px)}30%,100%{transform:translateY(0)}}
+
+.cover .wordmark,.cover .tagline,.cover .rule,.cover .entry,.cover .scrollcue{
+  transition:opacity .8s cubic-bezier(.2,.7,.3,1),transform .8s cubic-bezier(.2,.7,.3,1);
+}
+.cover .tagline{transition-delay:.09s}
+.cover .rule{transition-delay:.17s}
+.cover .entry{transition-delay:.25s}
+.cover .scrollcue{transition-delay:.45s}
+.cover.intro .wordmark,.cover.intro .tagline,.cover.intro .rule,
+.cover.intro .entry,.cover.intro .scrollcue{opacity:0;transform:translateY(16px)}
+.cover .glyph::before{transition:opacity .9s ease}
+.cover.intro .glyph::before{opacity:0}
+
+.wordmark{
+  font-size:clamp(46px,min(10vw,14vh),140px);font-weight:800;letter-spacing:.045em;line-height:.94;
+  margin-bottom:clamp(16px,2.2vw,28px);
+}
+.tagline{
+  font-family:var(--serif);font-weight:500;
+  font-size:clamp(17px,min(3vw,4.4vh),38px);letter-spacing:-.02em;line-height:1.35;color:var(--ink);
+}
+.rule{
+  width:clamp(120px,22vw,300px);height:1px;background:linear-gradient(90deg,transparent,var(--accent),transparent);
+  margin:clamp(26px,3.6vw,44px) auto clamp(18px,2.4vw,28px);
+}
+.entry{
+  font-family:var(--mono);font-size:clamp(11.5px,1.35vw,16px);font-weight:400;
+  letter-spacing:.12em;color:var(--sec);line-height:1.7;
+}
+.scrollcue{
+  position:absolute;left:50%;bottom:32px;transform:translateX(-50%);z-index:1;
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.22em;color:var(--label);
+}
+.scrollcue i{width:1px;height:38px;background:linear-gradient(var(--ter),transparent);animation:cue 2.2s ease-in-out infinite}
+@keyframes cue{0%,100%{opacity:.22;transform:scaleY(.55)}50%{opacity:1;transform:scaleY(1)}}
+
+/* ---- thesis ---- */
+.open{position:relative;min-height:82svh;display:flex;align-items:center;padding:80px 0 96px;overflow:hidden}
+.open::before{
+  content:"";position:absolute;left:-14%;top:-24%;width:70vw;height:88vh;pointer-events:none;
+  background:radial-gradient(closest-side,rgba(255,59,83,.12),transparent 70%);
+}
+.open .wrap{position:relative;z-index:1}
+.kicker{display:flex;align-items:center;gap:14px;margin-bottom:34px}
+.kicker i{height:1px;width:60px;background:var(--accent)}
+h1{
+  font-family:var(--serif);font-weight:700;font-size:clamp(38px,6.6vw,76px);
+  line-height:1.12;letter-spacing:-.035em;margin-bottom:30px;
+}
+h1 em{font-style:normal;color:var(--accentText)}
+.lede{font-size:clamp(15.5px,1.7vw,18px);color:var(--sec);max-width:560px;line-height:1.85}
+
+/* ================= chapters ================= */
+.chapter{position:relative;border-top:1px solid var(--rule)}
+.chapter:nth-of-type(even){background:var(--page2)}
+.pin{position:relative;min-height:100svh;display:flex;align-items:center;padding:104px 0;overflow:hidden}
+.pin::before{
+  content:"";position:absolute;width:820px;height:820px;top:50%;transform:translateY(-50%);
+  pointer-events:none;background:radial-gradient(closest-side,rgba(255,59,83,.11),transparent 72%);
+}
+.chapter.a .pin::before{right:-260px}
+.chapter.b .pin::before{left:-260px}
+.duo{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:clamp(40px,6vw,96px);align-items:center;width:100%}
+.chapter.b .duo{grid-template-columns:auto minmax(0,1fr)}
+.chapter.b .col{order:2}
+.chapter.b .stage{order:1}
+.col{max-width:460px}
+.chapter.b .col{justify-self:start}
+
+.slug{display:flex;align-items:baseline;gap:12px;margin-bottom:22px}
+.slug .tab{
+  font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--accentText);
+  border:1px solid rgba(255,59,83,.32);background:var(--accentFill);border-radius:4px;padding:3px 8px;
+}
+.slug .route{font-family:var(--mono);font-size:11px;color:var(--label);letter-spacing:.02em}
+.chapter h2{
+  font-family:var(--serif);font-weight:700;font-size:clamp(30px,4.3vw,54px);
+  line-height:1.16;letter-spacing:-.035em;margin-bottom:26px;
+}
+.beats{position:relative;min-height:190px}
+.beat{
+  position:absolute;left:0;right:0;top:0;opacity:0;transform:translateY(14px);pointer-events:none;
+  transition:opacity .5s ease,transform .5s ease;
+}
+.beat.on{opacity:1;transform:none;pointer-events:auto}
+.beat p{font-size:15.5px;color:var(--sec);line-height:1.85}
+.beat p + p{margin-top:12px}
+.beat p b{color:var(--ink);font-weight:600}
+.beat .note{
+  display:block;margin-top:18px;padding-left:14px;border-left:1px solid var(--accent);
+  font-family:var(--mono);font-size:11.5px;line-height:1.75;color:var(--label);letter-spacing:.01em;
+}
+.beatnav{display:flex;gap:8px;margin-top:24px}
+.beatnav button{width:30px;padding:7px 0;border:0;background:none;cursor:pointer;display:block}
+.beatnav button::before{content:"";display:block;height:2px;background:var(--rule);transition:background .4s}
+.beatnav button.on::before{background:var(--accent)}
+.beatnav button:hover::before{background:var(--label)}
+.path{
+  font-size:13.5px;color:var(--label);margin:-8px 0 24px;display:flex;gap:9px;align-items:baseline;
+}
+.path::before{content:"↳";color:var(--accent);font-size:13px}
+.path b{color:var(--sec);font-weight:600}
+.hint{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;color:var(--label);
+  display:flex;align-items:center;gap:8px;
+}
+.hint::before{content:"";width:16px;height:1px;background:var(--accent)}
+
+/* ================= phone ================= */
+.stage{display:flex;flex-direction:column;align-items:center;gap:16px;position:relative}
+.device{
+  position:relative;
+  width:calc(390px * var(--k) + 22px);
+  height:calc(844px * var(--k) + 22px);
+  border-radius:calc(56px * var(--k) + 11px);
+  padding:11px;
+  background:linear-gradient(155deg,#31353D,#0C0E11 58%);
+  box-shadow:0 50px 90px rgba(0,0,0,.66),0 0 0 1px rgba(255,255,255,.09),inset 0 0 0 1px rgba(255,255,255,.05);
+}
+.viewport{
+  position:absolute;inset:11px;border-radius:calc(56px * var(--k));overflow:hidden;background:var(--bg);
+}
+.screen{
+  width:390px;height:844px;transform:scale(var(--k));transform-origin:top left;
+  display:flex;flex-direction:column;position:relative;background:var(--bg);
+  font-size:14px;line-height:1.4;
+}
+.rail{
+  position:absolute;right:-16px;top:14%;bottom:14%;width:2px;background:var(--rule);border-radius:2px;
+}
+.rail em{display:block;width:2px;height:22%;background:var(--accent);border-radius:2px;transform:translateY(0)}
+@media (max-width:1080px){:root{--k:.68}}
+@media (max-width:940px){
+  .duo,.chapter.b .duo{grid-template-columns:1fr;gap:40px;justify-items:center}
+  .chapter.b .col,.chapter.b .stage{order:initial}
+  .chapter.b .col{justify-self:center}
+  .col{max-width:600px}
+  .rail{display:none}
+  :root{--k:.74}
+  .pin{min-height:auto;padding:74px 0}
+  .beats{min-height:0!important}
+  .beat{position:static;opacity:1;transform:none;pointer-events:auto}
+  .beat + .beat{margin-top:18px}
+  .beatnav{display:none}
+}
+@media (min-width:941px) and (max-height:880px){:root{--k:.68}}
+@media (min-width:941px) and (max-height:790px){:root{--k:.60}}
+@media (min-width:941px) and (max-height:700px){:root{--k:.52}}
+@media (max-width:520px){:root{--k:.62}}
+
+/* ---- app chrome ---- */
+.sbar{flex:none;height:47px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 24px 6px}
+.sbar .clock{font-size:15px;font-weight:600;letter-spacing:-.2px}
+.sbar .sig{display:flex;align-items:center;gap:4px}
+.sbar .sig i{width:3px;border-radius:1px;background:var(--onDim)}
+.sbar .sig i:nth-child(1){height:5px}.sbar .sig i:nth-child(2){height:7px}
+.sbar .sig i:nth-child(3){height:9px}.sbar .sig i:nth-child(4){height:11px}
+.sbar .batt{width:24px;height:12px;border:1px solid var(--onDim);border-radius:3.5px;position:relative;margin-left:3px}
+.sbar .batt::after{content:"";position:absolute;inset:2px;right:7px;background:var(--onDim);border-radius:1.5px}
+.topbar{
+  flex:none;padding:14px 20px;text-align:center;border-bottom:1px solid var(--line);
+}
+.topbar b{font-size:20px;font-weight:800;letter-spacing:-.5px;color:var(--ink)}
+.vp{
+  flex:1;min-height:0;position:relative;overflow-y:auto;overflow-x:hidden;
+  scrollbar-width:none;-ms-overflow-style:none;
+}
+.vp::-webkit-scrollbar{width:0;height:0}
+.vp.locked{overflow:hidden}
+.tabbar{
+  flex:none;display:flex;padding:8px 0 30px;border-top:1px solid var(--line);background:var(--bg);
+}
+.tabitem{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--ter)}
+.tabitem.on{color:var(--accentText)}
+.tabitem svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.tabitem.on svg{stroke-width:2}
+.tabitem span{font-size:10px;font-weight:700}
+
+/* ---- channel tiles (86x110 r14) ---- */
+.tiles{display:flex;gap:10px;padding:14px 16px 10px}
+.tile{flex:none;width:86px;height:110px;border-radius:14px;overflow:hidden;position:relative;background:var(--inset)}
+.tile img{width:100%;height:100%;object-fit:cover}
+.tile.seen{opacity:.55}
+.tile .scrim{position:absolute;inset:0;background:linear-gradient(rgba(16,14,18,0),rgba(16,14,18,.68))}
+.tile b{position:absolute;left:0;right:0;bottom:8px;text-align:center;font-size:11.5px;font-weight:800;color:var(--onImage)}
+.tile.around{background:linear-gradient(#FFEEF1,#FFDCE2);display:flex;align-items:center;justify-content:center}
+.tile.around svg{width:26px;height:26px;fill:none;stroke:var(--accentText);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.tile.around b{color:var(--accentText)}
+.tile .newdot{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:4px;background:var(--accent);border:1.5px solid var(--onImage)}
+
+/* ---- post carousel (w-32, h520, r16) ---- */
+.postblock{padding-bottom:32px}
+.pcard{
+  position:relative;margin:0 16px;height:520px;border-radius:16px;overflow:hidden;background:var(--inset);
+  box-shadow:0 10px 24px rgba(0,0,0,.55);
+}
+.ptrack{display:flex;height:100%;transition:transform .6s cubic-bezier(.62,.02,.24,1)}
+.pslide{flex:0 0 100%;height:100%;position:relative;background:var(--skeleton)}
+.pslide img{width:100%;height:100%;object-fit:cover}
+.pscrim{position:absolute;inset:0}
+.pscrim.hero{background:linear-gradient(rgba(20,18,22,.42),rgba(20,18,22,0) 42%,rgba(20,18,22,.18) 68%,rgba(20,18,22,.72))}
+.pscrim.match{background:linear-gradient(rgba(20,18,22,.28),rgba(20,18,22,.05) 50%,rgba(20,18,22,.78))}
+.pmeta{position:absolute;left:20px;right:20px;bottom:22px}
+.pmeta .hname{font-size:24px;font-weight:800;letter-spacing:-.5px;color:var(--onImage);line-height:1.25}
+.pmeta .crow{display:flex;align-items:center;gap:8px;margin-top:8px}
+.pmeta .crow i{width:1px;height:13px;background:var(--onDim)}
+.pmeta .crow span{font-size:13px;font-weight:600;color:var(--onDim)}
+.pmeta .hdesc{font-size:14.5px;line-height:21px;color:var(--onImage);margin-top:10px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pmeta .mrow{display:flex;align-items:flex-start;gap:7px}
+.pmeta .mno{font-size:15px;font-weight:800;color:var(--onDim);position:relative;top:-3px}
+.pmeta .mname{font-size:22px;font-weight:800;letter-spacing:-.4px;color:var(--onImage);line-height:1.24}
+.pmeta .mchip{
+  display:inline-flex;align-items:center;height:26px;padding:0 11px;border-radius:13px;margin-top:8px;
+  background:var(--glassFill);border:1px solid var(--glassBorder);font-size:12.5px;font-weight:600;color:var(--onImage);
+}
+.pmeta .mov{font-size:14px;line-height:20px;color:var(--onDim);margin-top:10px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pbtn{
+  position:absolute;top:14px;left:14px;width:32px;height:32px;border-radius:16px;
+  background:var(--glassFill);border:1px solid var(--glassBorder);display:flex;align-items:center;justify-content:center;
+}
+.pbtn svg{width:18px;height:18px;fill:none;stroke:var(--onImage);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.pcount{
+  position:absolute;top:14px;right:14px;height:28px;padding:0 11px;border-radius:14px;background:var(--control);
+  display:flex;align-items:center;font-size:12px;font-weight:700;color:var(--onImage);
+}
+.pdots{display:flex;justify-content:center;gap:6px;margin-top:12px}
+.pdots i{width:6px;height:6px;border-radius:3px;background:var(--line)}
+.pdots i.on{background:var(--ink)}
+.pcredit{
+  position:absolute;left:14px;right:14px;top:54px;font-size:10.5px;line-height:1.5;color:rgba(255,255,255,.86);
+  background:rgba(6,8,12,.6);border:1px solid rgba(255,255,255,.14);border-radius:9px;padding:6px 9px;
+}
+.pcredit a{color:#fff;text-decoration:underline;text-underline-offset:2px}
+
+/* ---- explore grid (GAP 2, unit=(w-4)/3, big=2x2) ---- */
+.exgrid{display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:calc((390px - 4px) / 3);gap:2px}
+.exgrid .t{position:relative;overflow:hidden;background:var(--skeleton)}
+.exgrid .t img{width:100%;height:100%;object-fit:cover}
+.exgrid .t.big{grid-column:span 2;grid-row:span 2}
+.exscrim{
+  position:sticky;top:0;height:92px;margin-bottom:-92px;z-index:2;pointer-events:none;
+  background:linear-gradient(rgba(20,18,22,.55),rgba(20,18,22,0));
+}
+
+/* ---- 마이 (profile) ---- */
+.pnav{height:50px;display:flex;align-items:center;justify-content:flex-end;padding:0 20px}
+.pnav svg{width:20px;height:20px;fill:none;stroke:var(--ink);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.phero{
+  margin:10px 14px 0;border-radius:20px;border:1px solid var(--line);background:var(--raise);
+  display:flex;align-items:center;gap:13px;padding:16px;
+}
+.phero .av{
+  width:54px;height:54px;border-radius:27px;flex:none;background:var(--fill);
+  border:1px solid var(--glassBorder);display:flex;align-items:center;justify-content:center;
+}
+.phero .av svg{width:26px;height:26px;fill:none;stroke:var(--sec);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.phero .txt{flex:1;min-width:0}
+.phero .nm{display:block;font-size:18px;font-weight:800;letter-spacing:-.4px;color:var(--ink)}
+.phero .em{display:block;margin-top:3px;font-size:12.5px;color:var(--sec)}
+.phero .bg{
+  margin-top:8px;display:inline-flex;align-items:center;gap:5px;border-radius:999px;
+  border:1px solid var(--line);background:var(--glassFill);padding:3px 9px;
+  font-size:10.5px;font-weight:800;letter-spacing:.2px;color:var(--ink);
+}
+.phero .bg svg{width:10px;height:10px;fill:none;stroke:var(--ink);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.phero .chev{width:18px;height:18px;fill:none;stroke:var(--ter);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ptiles{display:flex;gap:8px;padding:12px 14px 0}
+.ptile{
+  flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;padding:13px 0;
+  border-radius:15px;border:1px solid var(--line);background:var(--raise);
+}
+.ptile svg{width:19px;height:19px;fill:none;stroke:var(--ink);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ptile.acc svg{stroke:var(--accent);color:var(--accent)}
+.ptile b{font-size:16px;font-weight:800;letter-spacing:-.3px;color:var(--ink)}
+.ptile span{font-size:11px;font-weight:700;color:var(--sec)}
+.psec{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:20px 20px 9px;
+}
+.psec .t{font-size:13px;font-weight:800;letter-spacing:-.1px;color:var(--sec)}
+.psec .a{display:flex;align-items:center;gap:2px;font-size:12.5px;font-weight:700;color:var(--sec)}
+.psec .a svg{width:14px;height:14px;fill:none;stroke:var(--sec);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.prail{display:flex;gap:12px;padding:0 20px 14px;overflow:hidden}
+.prail .it{width:96px;flex:none}
+.prail .it img{width:96px;height:96px;border-radius:8px;object-fit:cover;background:var(--inset)}
+.prail .it b{display:block;font-size:12.5px;font-weight:600;margin-top:7px;color:var(--ink);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prail .it span{display:block;font-size:11.5px;color:var(--ter);margin-top:2px}
+.pgroup{margin:0 14px;border-radius:16px;border:1px solid var(--line);background:var(--raise);overflow:hidden}
+.prow{display:flex;align-items:center;gap:11px;min-height:52px;padding:12px 14px;position:relative}
+.prow + .prow::before{content:"";position:absolute;left:52px;right:0;top:0;height:1px;background:var(--line)}
+.prow .ic{width:20px;display:flex;justify-content:center;flex:none}
+.prow .ic svg{width:17px;height:17px;fill:none;stroke:var(--sec);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.prow .tt{flex:1;font-size:14.5px;font-weight:600;color:var(--ink)}
+.prow .vv{font-size:13px;font-weight:600;color:var(--sec)}
+.prow .vv.on{color:var(--pos)}
+.prow .cv{width:17px;height:17px;fill:none;stroke:var(--ter);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* ---- story viewer (#141216, centered 520 card) ---- */
+.story{position:absolute;inset:0;background:#141216}
+.stcard{
+  position:absolute;left:16px;right:16px;top:50%;transform:translateY(-50%);height:520px;
+  border-radius:16px;overflow:hidden;
+}
+.stcard img{width:100%;height:100%;object-fit:cover}
+.stcard .sscrim{position:absolute;inset:0;background:linear-gradient(rgba(20,18,22,.28),rgba(20,18,22,.05) 50%,rgba(20,18,22,.78))}
+.sttop{position:absolute;top:0;left:0;right:0;padding:59px 16px 0}
+.segs{display:flex;gap:4px}
+.segs i{flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,.28);overflow:hidden}
+.segs i em{display:block;height:100%;background:var(--onImage);opacity:.32}
+.segs i.past em{opacity:1}
+.segs i.now em{opacity:.55}
+.strow{display:flex;align-items:center;justify-content:space-between;margin-top:14px}
+.strow .lbl{font-size:16px;font-weight:800;color:var(--onImage)}
+.strow .x{width:32px;height:32px;border-radius:16px;background:var(--glassFill);border:1px solid var(--glassBorder);
+  display:flex;align-items:center;justify-content:center}
+.strow .x svg{width:18px;height:18px;fill:none;stroke:var(--onImage);stroke-width:1.9;stroke-linecap:round}
+.stmeta{position:absolute;left:36px;right:36px;top:50%;transform:translateY(-50%);height:520px;
+  display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:22px;gap:12px}
+.stbadges{display:flex;align-items:center;gap:8px}
+.strank{width:38px;height:38px;border-radius:19px;background:var(--glassFill);border:1px solid var(--glassBorder);
+  display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:800;color:var(--onImage)}
+.sttag{height:26px;padding:0 12px;border-radius:13px;background:var(--glassFill);border:1px solid var(--glassBorder);
+  display:flex;align-items:center;font-size:12.5px;font-weight:700;color:var(--onImage)}
+.stname{font-size:26px;font-weight:800;letter-spacing:-.5px;color:var(--onImage);line-height:1.2}
+.streg{font-size:14px;font-weight:600;color:var(--onDim)}
+.stline{font-size:13.5px;line-height:20px;font-weight:600;color:var(--onImage)}
+.stacts{display:flex;align-items:center;gap:10px;margin-top:4px}
+.stsave{display:flex;align-items:center;gap:7px;height:48px;padding:0 18px;border-radius:24px;
+  background:var(--glassFill);border:1px solid var(--glassBorder);font-size:15px;font-weight:700;color:var(--onImage)}
+.stsave svg{width:20px;height:20px;fill:none;stroke:var(--onImage);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.stdetail{flex:1;height:48px;border-radius:24px;background:var(--onImage);color:var(--onLight);
+  display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800}
+
+/* ---- spot detail ---- */
+.dhero{position:relative;padding-bottom:22px;background:var(--skeleton)}
+.dhero > img{position:absolute;left:0;right:0;top:0;bottom:-56px;width:100%;height:calc(100% + 56px);object-fit:cover}
+.dhero .hscrim{position:absolute;inset:0;background:linear-gradient(rgba(20,18,22,.5),rgba(20,18,22,.62))}
+.dnav{position:relative;display:flex;justify-content:space-between;padding:14px 14px 0}
+.dnav b{width:44px;height:44px;border-radius:22px;background:var(--control);display:flex;align-items:center;justify-content:center}
+.dnav svg{width:22px;height:22px;fill:none;stroke:var(--onImage);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.dtitle{position:relative;text-align:center;font-size:28px;font-weight:800;letter-spacing:-.6px;color:var(--onImage);margin-top:26px;padding:0 24px;line-height:1.24}
+.dsubline{position:relative;text-align:center;font-size:16px;font-weight:600;color:var(--onDim);margin-top:12px}
+.ddesc{position:relative;text-align:center;font-size:15px;line-height:24px;color:var(--onImage);margin:18px 26px 0}
+.dstrip{position:relative;display:flex;gap:8px;padding:0 20px;margin-top:18px}
+.dstrip img,.dstrip .plus{width:64px;height:64px;border-radius:8px;object-fit:cover;background:var(--skeleton);flex:none}
+.dstrip .plus{background:var(--glassFill);border:1px solid var(--glassBorder);display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:700;color:var(--onImage)}
+.dsect{padding:24px 20px 0}
+.dsect .ttl{font-size:19px;font-weight:800;letter-spacing:-.4px;color:var(--ink);margin-bottom:12px}
+.dsect .ov{font-size:14.5px;line-height:23px;color:var(--sec)}
+.dsect .more{font-size:13px;font-weight:700;color:var(--accentText);margin-top:12px}
+.dmap{height:170px;border-radius:8px;overflow:hidden;background:var(--inset);border:1px solid var(--fillStrong);
+  margin-bottom:12px;position:relative}
+.dmap::before{content:"";position:absolute;inset:0;background:
+  linear-gradient(112deg,transparent 44%,var(--road) 44%,var(--road) 46.4%,transparent 46.4%),
+  linear-gradient(28deg,transparent 62%,var(--roadTop) 62%,var(--roadTop) 63.3%,transparent 63.3%),
+  linear-gradient(76deg,transparent 20%,var(--road) 20%,var(--road) 22%,transparent 22%),
+  radial-gradient(closest-side at 86% 92%,var(--coast),var(--water) 68%);background-color:var(--land)}
+.dmap .dot{position:absolute;left:50%;top:48%;transform:translate(-50%,-50%);width:14px;height:14px;border-radius:7px;
+  background:var(--accent);box-shadow:0 0 0 5px rgba(255,59,83,.24),0 0 18px rgba(255,59,83,.8)}
+.dlinks{display:flex;gap:10px;margin-bottom:6px}
+.dlink{flex:1;height:48px;border-radius:8px;background:var(--inset);display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:700;color:var(--ink)}
+.dlink.acc{background:var(--accentFill);color:var(--accentText)}
+.dinfo{margin-top:2px}
+.drow{display:flex;align-items:center;gap:11px;padding:13px 0;border-bottom:1px solid rgba(112,115,124,.12)}
+.drow:last-child{border-bottom:0}
+.drow svg{width:18px;height:18px;fill:none;stroke:var(--ter);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.drow .val{flex:1;font-size:14.5px;color:var(--ink);line-height:1.45}
+.drow .cp{border:1px solid rgba(112,115,124,.22);border-radius:6px;padding:4px 9px;font-size:12.5px;font-weight:700;color:var(--sec)}
+
+/* ---- travel ---- */
+.tmap{position:absolute;inset:0;background:var(--land)}
+.tmap::before{content:"";position:absolute;inset:0;background:
+  linear-gradient(74deg,transparent 22%,var(--road) 22%,var(--road) 24.4%,transparent 24.4%),
+  linear-gradient(148deg,transparent 52%,var(--road) 52%,var(--road) 54%,transparent 54%),
+  linear-gradient(16deg,transparent 70%,var(--roadTop) 70%,var(--roadTop) 71.4%,transparent 71.4%),
+  linear-gradient(96deg,transparent 36%,var(--road) 36%,var(--road) 37.8%,transparent 37.8%),
+  radial-gradient(closest-side at 8% 96%,var(--coast),var(--water) 60%)}
+.tpin{position:absolute;width:13px;height:13px;border-radius:7px;background:var(--accent);
+  box-shadow:0 0 0 5px rgba(255,59,83,.2),0 0 14px rgba(255,59,83,.85)}
+.tpanel{position:absolute;left:10px;right:10px;bottom:118px;border-radius:20px;background:var(--inset);
+  border:1px solid var(--glassBorder);padding:12px 0;box-shadow:0 12px 34px rgba(0,0,0,.6)}
+.tanswer{font-size:14px;line-height:21px;font-weight:600;color:var(--ink);padding:0 14px 12px}
+.tcards{display:flex;gap:10px;padding:0 14px;overflow:hidden}
+.tcard{flex:none;width:296px;height:112px;border-radius:18px;border:1px solid var(--glassBorder);
+  background:var(--glassFill);display:flex;gap:12px;padding:10px;position:relative}
+.tcard .th{width:92px;height:92px;border-radius:12px;object-fit:cover;flex:none;background:var(--skeleton)}
+.tcard .cp{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center}
+.tcard .hd{display:flex;align-items:center;gap:7px;padding-right:26px}
+.tcard .bdg{width:20px;height:20px;border-radius:10px;background:var(--ink);color:var(--bg);
+  display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex:none}
+.tcard .bdg.foc{background:var(--accent);color:var(--onImage)}
+.tcard .ttl{font-size:15px;font-weight:700;letter-spacing:-.35px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tcard .rgn{margin-top:3px;font-size:12.5px;letter-spacing:-.2px;color:var(--sec)}
+.tcard .rw{display:flex;align-items:center;gap:6px;margin-top:7px}
+.tcard .met{display:flex;align-items:center;gap:4px;height:22px;padding:0 8px;border-radius:7px;
+  border:1px solid var(--line);background:var(--fill);font-size:11.5px;font-weight:700;color:var(--sec)}
+.tcard .det{display:flex;align-items:center;gap:2px;height:24px;margin-left:auto;padding:0 8px 0 10px;
+  border-radius:8px;border:1px solid var(--line);font-size:11.5px;font-weight:700;color:var(--sec)}
+.tcard .fav{position:absolute;top:8px;right:8px;width:26px;height:26px;display:flex;align-items:center;justify-content:center}
+.tcard .fav svg{width:17px;height:17px;fill:none;stroke:var(--ter);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.tdock{position:absolute;left:0;right:0;bottom:12px;padding:0 14px}
+.tattach{display:flex;align-items:center;gap:10px;margin-bottom:9px;padding:8px 10px;border-radius:15px;
+  border:1px solid rgba(255,59,83,.32);background:var(--accentFill)}
+.tattach img{width:46px;height:46px;border-radius:11px;object-fit:cover;flex:none;background:var(--skeleton)}
+.tattach .cp{flex:1;min-width:0}
+.tattach .cp b{display:block;font-size:13.5px;font-weight:700;letter-spacing:-.2px;color:var(--ink)}
+.tattach .cp span{display:block;margin-top:3px;font-size:11.5px;color:var(--sec)}
+.tattach .x{color:var(--ter);font-size:16px;line-height:1}
+.tchips{display:flex;gap:7px;margin-bottom:9px;overflow:hidden}
+.tchip{flex:none;display:flex;align-items:center;gap:6px;height:33px;padding:0 14px;border-radius:999px;
+  border:1px solid var(--line);background:var(--raiseStrong);font-size:13px;font-weight:600;letter-spacing:-.2px;color:var(--ink)}
+.tchip.photo{border-color:rgba(255,59,83,.38);background:var(--accentFill);color:var(--accentText);font-weight:700}
+.tchip svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.tfield{display:flex;align-items:center;gap:9px;height:46px;padding:0 6px 0 13px;border-radius:13px;
+  border:1px solid var(--line);background:var(--raiseStrong)}
+.tfield .ph{flex:1;min-width:0;font-size:15px;font-weight:600;letter-spacing:-.2px;color:var(--ter);
+  white-space:nowrap;overflow:hidden}
+.tfield svg{width:17px;height:17px;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.tfield .i1{stroke:var(--ter)}
+.tfield .i2{stroke:var(--sec)}
+.tfield .snd{width:32px;height:32px;border-radius:8px;background:var(--accent);display:flex;align-items:center;justify-content:center;flex:none}
+.tfield .snd svg{stroke:var(--onImage);stroke-width:2.3}
+
+/* ---- 결론 문장 ---- */
+.lede b{color:var(--ink);font-weight:600}
+.lede + .lede{margin-top:16px}
+.answer-line{
+  position:relative;margin-top:clamp(30px,4vw,44px);padding-left:22px;max-width:600px;
+  font-family:var(--serif);font-weight:700;letter-spacing:-.025em;
+  font-size:clamp(21px,2.9vw,36px);line-height:1.4;color:var(--ink);
+}
+.answer-line::before{
+  content:"";position:absolute;left:0;top:.24em;bottom:.24em;width:2px;background:var(--accent);
+}
+
+/* ================= colophon ================= */
+footer{border-top:1px solid var(--rule);padding:52px 0 72px;background:var(--page)}
+.fnote{font-size:12.5px;color:var(--sec);line-height:1.85;max-width:800px}
+.fnote b{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--label);display:block;margin-bottom:8px}
+.fnote a{color:var(--accentText)}
+.fcredit{margin-top:28px;font-size:11px;color:var(--label);line-height:1.95;max-width:940px}
+.fcredit a{color:var(--sec)}
+.fcredit b{display:block;font-family:var(--mono);font-size:10.5px;font-weight:400;
+  letter-spacing:.14em;color:var(--sec);margin:18px 0 6px}
+.fcredit b:first-child{margin-top:0}
+.flinks{display:flex;gap:20px;flex-wrap:wrap;margin-top:30px;font-family:var(--mono);font-size:11.5px}
+.flinks a{color:var(--label);text-decoration:none;transition:color .3s}
+.flinks a:hover{color:var(--ink)}
+
+.rv{opacity:0;transform:translateY(20px);transition:opacity .8s cubic-bezier(.2,.7,.3,1),transform .8s cubic-bezier(.2,.7,.3,1)}
+.rv.in{opacity:1;transform:none}
+.rv.d1{transition-delay:.09s}.rv.d2{transition-delay:.18s}
+
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}
+  .cover.intro .wordmark,.cover.intro .tagline,.cover.intro .rule,
+  .cover.intro .entry,.cover.intro .scrollcue{opacity:1;transform:none}
+  .cover.intro .glyph::before{opacity:1}
+  .rv{opacity:1;transform:none}
+  .pin{min-height:auto;padding:80px 0}
+  .beat{position:static;opacity:1;transform:none;margin-bottom:18px}
+  .beats{min-height:0!important}
+  .beatnav{display:none}
+  .vp{overflow-y:auto}
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.6 12 3.4l9 7.2"/><path d="M5.6 9.6V20h12.8V9.6"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.3 16.3 21 21"/></symbol>
+<symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2v-9a8 8 0 0 1 8-8h2a8 8 0 0 1 8 7z"/></symbol>
+<symbol id="i-person" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.2"/></symbol>
+<symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 3.8h12v16.4l-6-4.4-6 4.4z"/></symbol>
+<symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.3 7-11.2A7 7 0 0 0 5 9.8C5 14.7 12 21 12 21z"/><circle cx="12" cy="9.8" r="2.6"/></symbol>
+<symbol id="i-back" viewBox="0 0 24 24"><path d="M15 4.5 7.5 12l7.5 7.5"/></symbol>
+<symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15.5V4.2M8 8l4-3.8L16 8"/><path d="M5 14v5.8h14V14"/></symbol>
+<symbol id="i-cam" viewBox="0 0 24 24"><path d="M3.5 8.5h3.2l1.4-2.2h7.8l1.4 2.2h3.2v10H3.5z"/><circle cx="12" cy="13" r="3.4"/></symbol>
+<symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19.5V5M5.5 11.5 12 5l6.5 6.5"/></symbol>
+<symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M12 7v5.4l3.4 2"/></symbol>
+<symbol id="i-phone" viewBox="0 0 24 24"><path d="M6.4 3.6h3l1.6 4-2 1.4a11 11 0 0 0 6 6l1.4-2 4 1.6v3c0 .9-.7 1.6-1.6 1.6A16.4 16.4 0 0 1 4.8 5.2c0-.9.7-1.6 1.6-1.6z"/></symbol>
+<symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2.4"/><circle cx="9" cy="10" r="1.6"/><path d="m4.5 16.5 4.6-4.2 4 3.4 2.6-2 3.8 3.3"/></symbol>
+<symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7.4-4.6-7.4-9.4A4.1 4.1 0 0 1 12 8a4.1 4.1 0 0 1 7.4 2.6C19.4 15.4 12 20 12 20z"/></symbol>
+<symbol id="i-chev" viewBox="0 0 24 24"><path d="m9.5 5 7 7-7 7"/></symbol>
+<symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.3"/><path d="M12 3.4v2.1M12 18.5v2.1M20.6 12h-2.1M5.5 12H3.4M18.1 5.9l-1.5 1.5M7.4 16.6l-1.5 1.5M18.1 18.1l-1.5-1.5M7.4 7.4 5.9 5.9"/></symbol>
+<symbol id="i-heartfill" viewBox="0 0 24 24"><path d="M12 20s-7.4-4.6-7.4-9.4A4.1 4.1 0 0 1 12 8a4.1 4.1 0 0 1 7.4 2.6C19.4 15.4 12 20 12 20z" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.6" y="5.2" width="16.8" height="15.2" rx="2.6"/><path d="M8 3.2v3.6M16 3.2v3.6M3.6 10h16.8"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.2 5 6v6c0 4.4 3 7.4 7 8.8 4-1.4 7-4.4 7-8.8V6z"/><path d="m9 12 2.2 2.2L15.3 10"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.6 4.6 4.6L19 7.8"/></symbol>
+<symbol id="i-trend" viewBox="0 0 24 24"><path d="M3.5 16.5 9 11l4 4 7.5-7.5"/><path d="M15.5 7.5h5v5"/></symbol>
+</defs></svg>
+
+<header class="mast" id="mast">
+  <div class="wrap">
+    <div class="brand"><i></i>PICTRIP</div>
+    <nav class="chapters">
+      <a href="#ch1">홈 피드</a>
+      <a href="#ch2">채널</a>
+      <a href="#chex">탐색</a>
+      <a href="#ch3">스팟 상세</a>
+      <a href="#ch4">여행</a>
+      <a href="#ch5">마이</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ============ opening ============ -->
+<section class="cover intro" id="cover">
+  <noscript><style>.cover.intro .wordmark,.cover.intro .tagline,.cover.intro .rule,.cover.intro .entry,.cover.intro .scrollcue,.cover.intro .glyph::before{opacity:1!important;transform:none!important}</style></noscript>
+  <span class="glyph"><svg class="fig" viewBox="0 0 1024 1024" role="img" aria-labelledby="figTitle">
+    <title id="figTitle">PICTRIP 로고, 사진 한 장을 집어 드는 사람</title>
+    <defs>
+      <path id="camShape" fill-rule="evenodd" d="M574 248H684a34 34 0 0 1 34 34v47a34 34 0 0 1-34 34H574a34 34 0 0 1-34-34v-47a34 34 0 0 1 34-34Zm84 57a29 29 0 1 0-58 0 29 29 0 1 0 58 0Z"/>
+    </defs>
+    <g class="man">
+      <circle class="head" cx="405" cy="216" r="80"/>
+      <path class="torso" d="M405 314V629"/>
+      <path class="larm" d="M413 398 304 530"/>
+      <path class="legl" d="M405 629 293 888"/>
+      <path class="legr" d="M405 629 517 888"/>
+      <path class="rarm" d="M423 387 554 326"/>
+    </g>
+    <g class="cam"><g class="hover"><use href="#camShape"/></g></g>
+  </svg></span>
+  <div class="wordmark">PICTRIP</div>
+  <p class="tagline">사진으로 찾는 국내 여행지</p>
+  <div class="rule"></div>
+  <p class="entry">2026 한국관광공사 관광 데이터 활용 공모전</p>
+  <div class="scrollcue"><span>SCROLL</span><i></i></div>
+</section>
+
+<section class="open">
+  <div class="wrap">
+    <div class="kicker"><i></i><span class="eyebrow">기획 의도</span></div>
+    <h1>이름을 모르면,<br /><em>검색할 수 없습니다</em></h1>
+    <p class="lede">
+      한국관광공사가 전국 관광지 <b>6만 8천 곳</b>을 OpenAPI로 열어뒀습니다.
+      그런데 검색창은 이름을 아는 사람에게만 열립니다. 이미 아는 곳을 한 번 더
+      찾을 뿐, 나머지는 데이터베이스에 그대로 남습니다.
+    </p>
+    <p class="lede">
+      그래서 입력을 바꿨습니다. 검색어 대신 사진입니다. 해외 여행 사진을 넘기다 보면
+      그 장면과 가장 가까운 국내 관광지가 뒤따라 나옵니다.
+    </p>
+    <p class="answer-line">이름을 몰라도,<br />닿을 수 있도록</p>
+  </div>
+</section>
+
+<!-- ============ ch1 홈 피드 ============ -->
+<section class="chapter a" id="ch1">
+  <div class="pin">
+    <div class="wrap duo">
+      <div class="col">
+        <div class="slug"><span class="tab">홈</span><span class="route">(tabs)/index</span></div>
+        <h2>홈 탭에는<br />이런 게 들어 있습니다</h2>
+        <p class="path">앱을 열면 <b>가장 먼저</b> 보이는 화면</p>
+        <div class="beats" data-beats>
+          <div class="beat on">
+            <p>맨 위에 채널 타일이 가로로 놓이고, 그 아래부터 해외 게시물이 세로로 이어집니다.
+               카드 한 장에 사진 한 장입니다. 사진 밑에는 지명과 나라, 그리고 원문 설명 두 줄이 붙습니다.</p>
+            <p>왼쪽 위 동그란 버튼을 누르면 그 사진의 저작자와 라이선스가 뜹니다.
+               Wikimedia Commons에서 가져온 사진이라 표기해야 합니다.</p>
+            <span class="note">GET /v1/feed, seed와 커서로 한 번에 여섯 개</span>
+          </div>
+          <div class="beat">
+            <p>카드를 옆으로 밀면 국내 관광지 세 곳이 차례로 나옵니다. 오른쪽 위 숫자와
+               아래 점이 같이 움직여서 지금 몇 번째인지 알려줍니다.</p>
+            <p>매칭은 미리 받아두지 않습니다. 사용자가 밀기 시작한 다음에 요청을 보냅니다.
+               <b>유사도 점수는 넣지 않았습니다.</b> 코사인 거리를 백분율로 바꾸면
+               없던 정확도가 생긴 것처럼 보입니다.</p>
+            <span class="note">GET /v1/overseas/{id}/matches, 결과는 여섯 시간 캐시</span>
+          </div>
+          <div class="beat">
+            <p>아래로 내리면 다음 게시물이 이어지고, 끝에 닿으면 커서로 다음 묶음을 붙입니다.
+               화면을 당겨 새로고침하면 seed가 바뀌어서 순서와 조합이 다시 짜입니다.</p>
+            <p>오른쪽 화면은 실제 서비스 응답입니다. 어떤 게시물을 보여줄지는 우리가 골랐지만,
+               매칭 결과는 손대지 않았습니다.</p>
+            <span class="note">성당은 성당으로, 목조 성곽은 한옥으로 이어졌습니다</span>
+          </div>
+        </div>
+        <div class="beatnav" data-beatnav><i class="on"></i><i></i><i></i></div>
+      </div>
+
+      <div class="stage">
+        <div class="device" aria-hidden="true">
+          <div class="viewport">
+            <div class="screen">
+              <div class="sbar"><span class="clock">9:41</span>
+                <span class="sig"><i></i><i></i><i></i><i></i><span class="batt"></span></span></div>
+              <div class="topbar"><b>PICTRIP</b></div>
+              <div class="vp"><div class="vpin" data-scroll>
+                <div class="tiles">
+                  <div class="tile around"><svg><use href="#i-pin"/></svg><b>내 주변</b></div>
+                  <div class="tile"><img src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/04/3527004_image1_1.jpg" alt="" loading="lazy" /><div class="scrim"></div><b>인기</b><div class="newdot"></div></div>
+                  <div class="tile"><img src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/94/3526894_image1_1.jpg" alt="" loading="lazy" /><div class="scrim"></div><b>숨은 명소</b><div class="newdot"></div></div>
+                  <div class="tile seen"><img src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/11/3078011_image1_1.jpg" alt="" loading="lazy" /><div class="scrim"></div><b>축제</b></div>
+                  <div class="tile"><img src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/49/4054849_image1_1.jpg" alt="" loading="lazy" /><div class="scrim"></div><b>스냅</b><div class="newdot"></div></div>
+                </div>
+                <div id="feed"></div>
+              </div></div>
+              <div class="tabbar">
+                <div class="tabitem on"><svg><use href="#i-home"/></svg><span>홈</span></div>
+                <div class="tabitem"><svg><use href="#i-search"/></svg><span>탐색</span></div>
+                <div class="tabitem"><svg><use href="#i-chat"/></svg><span>여행</span></div>
+                <div class="tabitem"><svg><use href="#i-person"/></svg><span>마이</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="rail"><em data-rail></em></div>
+        </div>
+        <p class="hint">커서를 화면 안에 두고 스크롤해 보세요</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ch2 채널 ============ -->
+<section class="chapter b" id="ch2">
+  <div class="pin">
+    <div class="wrap duo">
+      <div class="col">
+        <div class="slug"><span class="tab">홈</span><span class="route">/channels</span></div>
+        <h2>매일 여섯 갈래로<br />다시 열립니다</h2>
+        <p class="path">홈 맨 위의 <b>타일을 탭</b>하면 열리는 화면</p>
+        <div class="beats" style="min-height:0">
+          <div class="beat on" style="position:static">
+            <p>상단 타일을 탭하면 스토리 뷰어가 열립니다. 좌우를 탭해 카드를 넘기고,
+               옆으로 밀어 <b>채널을 갈아탑니다</b>. 아래로 내리면 닫힙니다.</p>
+            <p><b>인기</b>와 <b>숨은 명소</b>는 관광지 밀집도를 매일 새벽 다시 계산해 채웁니다.
+               같은 데이터라도 어제와 오늘이 다릅니다.</p>
+            <span class="note">
+              내 주변 · 인기 · 숨은 명소 · 축제 · 반려동물 · 스냅<br />
+              이 가운데 위치 권한을 쓰는 건 「내 주변」 하나입니다
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="device" aria-hidden="true">
+          <div class="viewport">
+            <div class="screen">
+              <div class="sbar"><span class="clock">9:41</span>
+                <span class="sig"><i></i><i></i><i></i><i></i><span class="batt"></span></span></div>
+              <div class="vp">
+                <div class="story">
+                  <div class="stcard">
+                    <img id="stImg" src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/15/3531515_image1_1.jpg" alt="궷물오름" loading="lazy" />
+                    <div class="sscrim"></div>
+                  </div>
+                  <div class="sttop">
+                    <div class="segs" id="segs"></div>
+                    <div class="strow">
+                      <span class="lbl">숨은 명소</span>
+                      <span class="x"><svg><use href="#i-close"/></svg></span>
+                    </div>
+                  </div>
+                  <div class="stmeta">
+                    <div class="stbadges">
+                      <span class="strank" id="stRank">2</span>
+                      <span class="sttag">숨은 명소</span>
+                    </div>
+                    <div class="stname" id="stName">궷물오름</div>
+                    <div class="streg" id="stReg">제주특별자치도 제주시</div>
+                    <div class="stline" id="stLine">산이 높지 않고 둘러보는 게 오랜 시간이 걸리지도 않아 가벼운 마음으로 걸을 수 있는 오름이다.</div>
+                    <div class="stacts">
+                      <span class="stsave"><svg><use href="#i-bookmark"/></svg>저장</span>
+                      <span class="stdetail">자세히 보기</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 탐색 ============ -->
+<section class="chapter a" id="chex">
+  <div class="pin">
+    <div class="wrap duo">
+      <div class="col">
+        <div class="slug"><span class="tab">탐색</span><span class="route">(tabs)/explore</span></div>
+        <h2>한 장씩이 아니라,<br />한꺼번에</h2>
+        <p class="path">아래 탭바에서 <b>탐색</b>을 누르면 열리는 화면</p>
+        <div class="beats" data-beats>
+          <div class="beat on">
+            <p>홈이 게시물을 한 장씩 넘긴다면, 탐색은 같은 해외 게시물을
+               <b>2px 간격 모자이크</b>로 몰아 보여줍니다. 사진만 남기고 글자를 전부 걷어냈습니다.</p>
+            <p>큰 타일 하나에 작은 타일 둘, 그다음 3열 한 줄. 이 리듬이 반복됩니다.</p>
+            <span class="note">GET /v1/explore, 홈과 같은 소스에서 한 번에 서른 개</span>
+          </div>
+          <div class="beat">
+            <p>타일을 누르면 그 자리에서 모달이 열리고 <b>홈과 같은 캐러셀</b>이 뜹니다.
+               닮은 국내 3곳까지 화면을 옮기지 않고 확인합니다.</p>
+            <p>훑다가 눈에 걸리는 게 있으면 거기서 멈추면 됩니다.</p>
+            <span class="note">탐색에서도 매칭 조회는 스와이프 시점에 시작합니다</span>
+          </div>
+          <div class="beat">
+            <p>끝까지 내리면 다음 30개를 커서로 이어붙입니다. 당겨서 새로고침하면
+               seed가 바뀌어 <b>배열 자체가 새로 짜입니다</b>.</p>
+            <p>사진은 전부 Wikimedia Commons 원본을 URL로 참조합니다. 내려받아 다시 호스팅하지 않습니다.</p>
+            <span class="note">저작자·라이선스·원본 링크는 페이지 맨 아래에 전부 적었습니다</span>
+          </div>
+        </div>
+        <div class="beatnav" data-beatnav><i class="on"></i><i></i><i></i></div>
+      </div>
+
+      <div class="stage">
+        <div class="device" aria-hidden="true">
+          <div class="viewport">
+            <div class="screen">
+              <div class="sbar"><span class="clock">9:41</span>
+                <span class="sig"><i></i><i></i><i></i><i></i><span class="batt"></span></span></div>
+              <div class="vp">
+                <div class="exscrim"></div>
+                <div class="vpin" data-scroll><div class="exgrid" id="exgrid"></div></div>
+              </div>
+              <div class="tabbar">
+                <div class="tabitem"><svg><use href="#i-home"/></svg><span>홈</span></div>
+                <div class="tabitem on"><svg><use href="#i-search"/></svg><span>탐색</span></div>
+                <div class="tabitem"><svg><use href="#i-chat"/></svg><span>여행</span></div>
+                <div class="tabitem"><svg><use href="#i-person"/></svg><span>마이</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="rail"><em data-rail></em></div>
+        </div>
+        <p class="hint">커서를 화면 안에 두고 스크롤해 보세요</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ch3 스팟 상세 ============ -->
+<section class="chapter b" id="ch3">
+  <div class="pin">
+    <div class="wrap duo">
+      <div class="col">
+        <div class="slug"><span class="tab">스택</span><span class="route">/spots/[contentId]</span></div>
+        <h2>설명은 원문 그대로,<br />길찾기는 지도 앱으로</h2>
+        <p class="path">매칭 카드나 스토리의 <b>자세히 보기</b>를 탭하면 열리는 화면</p>
+        <div class="beats" data-beats>
+          <div class="beat on">
+            <p>히어로는 대표 사진 위에 제목과 지역, 그리고 설명의 <b>첫 문장</b>만 얹습니다.
+               나머지 사진은 아래 스트립에 3장, 남은 건 <b>+N</b>으로 접습니다.</p>
+            <span class="note">detailCommon2, 조회 시점에 받아 90일 캐시</span>
+          </div>
+          <div class="beat">
+            <p>「소개」는 한국관광공사가 준 <b>overview 원문 그대로</b>입니다. 요약하지 않습니다. 다시 쓰지도 않습니다.
+               공공누리 제3유형(변경금지)이 요구하는 그대로입니다.</p>
+            <p>5줄이 넘으면 접고 「더보기」를 붙입니다. 자르는 건 되지만 고치는 건 안 됩니다.</p>
+            <span class="note">spots.modified_time 비교로 바뀐 스팟만 다시 받습니다</span>
+          </div>
+          <div class="beat">
+            <p>「위치」의 지도는 <b>비대화형 프리뷰</b>입니다. 탭하면 카카오 지도로 나갑니다.
+               길찾기는 지도 앱이 더 잘합니다.</p>
+            <p>주소·운영시간·전화는 그 아래 정보행으로 보여줍니다. 주소는 눌러서 복사합니다.</p>
+            <span class="note">앱 안에 별도 지도 화면은 두지 않았습니다</span>
+          </div>
+        </div>
+        <div class="beatnav" data-beatnav><i class="on"></i><i></i><i></i></div>
+      </div>
+
+      <div class="stage">
+        <div class="device" aria-hidden="true">
+          <div class="viewport">
+            <div class="screen">
+              <div class="sbar"><span class="clock">9:41</span>
+                <span class="sig"><i></i><i></i><i></i><i></i><span class="batt"></span></span></div>
+              <div class="vp"><div class="vpin" data-scroll>
+                <div class="dhero">
+                  <img src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/92/3388592_image1_1.JPG" alt="원동성당" loading="lazy" />
+                  <div class="hscrim"></div>
+                  <div class="dnav">
+                    <b><svg><use href="#i-back"/></svg></b>
+                    <b><svg><use href="#i-share"/></svg></b>
+                  </div>
+                  <div class="dtitle">원동성당</div>
+                  <div class="dsubline">문화시설 · 강원특별자치도 원주시</div>
+                  <div class="ddesc">원동성당은 1913년에 지어진 천주교 성당으로 6.25 전쟁 때 건물이 불에 타 전소하여 1954년 시멘트 벽돌로 재건하였다.</div>
+                  <div class="dstrip">
+                    <img src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/82/3387182_image1_1.JPG" alt="" loading="lazy" />
+                    <img src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/49/4054849_image1_1.jpg" alt="" loading="lazy" />
+                    <img src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/11/3089911_image1_1.JPG" alt="" loading="lazy" />
+                    <span class="plus">+6</span>
+                  </div>
+                </div>
+                <div class="dsect">
+                  <div class="ttl">소개</div>
+                  <p class="ov">원동성당은 1913년에 지어진 천주교 성당으로 6.25 전쟁 때 건물이 불에 타 전소하여 1954년 시멘트 벽돌로 재건하였다. 1950년 6월 25일 한국전쟁이 발발하고 원주 지역이 여러 차례 주인이 바뀌는 격전지가 되면서 성당 건물이 크게 훼손되었으며, 휴전 이후 신자들의 힘으로 다시 세워 오늘에 이른다.</p>
+                  <div class="more">더보기</div>
+                </div>
+                <div class="dsect">
+                  <div class="ttl">위치</div>
+                  <div class="dmap"><span class="dot"></span></div>
+                  <div class="dlinks">
+                    <span class="dlink acc">네이버 지도</span>
+                    <span class="dlink">카카오 지도</span>
+                  </div>
+                  <div class="dinfo">
+                    <div class="drow"><svg><use href="#i-pin"/></svg><span class="val">강원특별자치도 원주시 원일로 27</span><span class="cp">복사</span></div>
+                    <div class="drow"><svg><use href="#i-clock"/></svg><span class="val">상시 개방</span></div>
+                    <div class="drow"><svg><use href="#i-phone"/></svg><span class="val" style="color:var(--accentText);text-decoration:underline">033-742-2225</span></div>
+                  </div>
+                </div>
+                <div style="height:40px"></div>
+              </div></div>
+              <div class="tabbar">
+                <div class="tabitem on"><svg><use href="#i-home"/></svg><span>홈</span></div>
+                <div class="tabitem"><svg><use href="#i-search"/></svg><span>탐색</span></div>
+                <div class="tabitem"><svg><use href="#i-chat"/></svg><span>여행</span></div>
+                <div class="tabitem"><svg><use href="#i-person"/></svg><span>마이</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="rail"><em data-rail></em></div>
+        </div>
+        <p class="hint">커서를 화면 안에 두고 스크롤해 보세요</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ch4 여행 ============ -->
+<section class="chapter a" id="ch4">
+  <div class="pin">
+    <div class="wrap duo">
+      <div class="col">
+        <div class="slug"><span class="tab">여행</span><span class="route">(tabs)/travel</span></div>
+        <h2>말로 물어도,<br />답은 데이터에서 고릅니다</h2>
+        <p class="path">아래 탭바에서 <b>여행</b>을 누르면 열리는 화면</p>
+        <div class="beats" style="min-height:0">
+          <div class="beat on" style="position:static">
+            <p>자유 문장에서 <b>의도만</b> 뽑습니다. 지역, 카테고리, 조건 정도입니다. 장소를 고르는 일은
+               전부 결정적인 SQL과 벡터 검색이 합니다. 없는 장소를 지어내지 않습니다.</p>
+            <p>사진을 붙여 물어볼 수도 있습니다. 그 사진은 <b>서버에 저장하지 않습니다</b>.
+               메모리에서 임베딩만 뽑고 바이트는 그대로 버립니다. 앱에도 그렇게 적어뒀습니다.</p>
+            <span class="note">POST /v1/agent/ask, 의도 추출에만 생성모델을 씁니다</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="device" aria-hidden="true">
+          <div class="viewport">
+            <div class="screen">
+              <div class="sbar"><span class="clock">9:41</span>
+                <span class="sig"><i></i><i></i><i></i><i></i><span class="batt"></span></span></div>
+              <div class="vp">
+                <div class="tmap">
+                  <span class="tpin" style="left:24%;top:30%"></span>
+                  <span class="tpin" style="left:62%;top:19%"></span>
+                  <span class="tpin" style="left:45%;top:44%"></span>
+                </div>
+                <div class="tpanel">
+                  <div class="tanswer">능선이 트인 조용한 산으로 골랐어요. 케이블카가 있는 곳도 하나 넣었습니다.</div>
+                  <div class="tcards">
+                    <div class="tcard">
+                      <img class="th" src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/11/3078011_image1_1.jpg" alt="" loading="lazy" />
+                      <div class="cp">
+                        <div class="hd"><span class="bdg foc">1</span><span class="ttl">울산 12경</span></div>
+                        <div class="rgn">울산광역시 중구</div>
+                        <div class="rw">
+                          <span class="met"><svg style="width:13px;height:13px;fill:none;stroke:var(--ter);stroke-width:1.9"><use href="#i-trend"/></svg>인기</span>
+                          <span class="det">상세보기<svg style="width:12px;height:12px;fill:none;stroke:var(--ter);stroke-width:2"><use href="#i-chev"/></svg></span>
+                        </div>
+                      </div>
+                      <span class="fav"><svg><use href="#i-heart"/></svg></span>
+                    </div>
+                    <div class="tcard">
+                      <img class="th" src="https://img.pictrip.org/t1/1620/c449c39b8d415da7378d40f77845f2257fd15d85f6770d20d38444deccad1550/tong.visitkorea.or.kr/cms/resource/80/3565980_image1_1.jpg" alt="" loading="lazy" />
+                      <div class="cp">
+                        <div class="hd"><span class="bdg">2</span><span class="ttl">설악산 케이블카</span></div>
+                        <div class="rgn">강원특별자치도 속초시</div>
+                        <div class="rw"><span class="det">상세보기<svg style="width:12px;height:12px;fill:none;stroke:var(--ter);stroke-width:2"><use href="#i-chev"/></svg></span></div>
+                      </div>
+                      <span class="fav"><svg><use href="#i-heart"/></svg></span>
+                    </div>
+                  </div>
+                </div>
+                <div class="tdock">
+                  <div class="tattach">
+                    <img src="https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/d/df/Schynige_Platte.jpg/1280px-Schynige_Platte.jpg" alt="" loading="lazy" />
+                    <div class="cp"><b>이 사진 같은 분위기로 찾아요</b><span>사진은 저장하지 않아요</span></div>
+                    <span class="x">&times;</span>
+                  </div>
+                  <div class="tchips">
+                    <span class="tchip photo"><svg><use href="#i-image"/></svg>사진</span>
+                    <span class="tchip">내 주변</span>
+                    <span class="tchip">조용한 곳</span>
+                  </div>
+                  <div class="tfield">
+                    <svg class="i1"><use href="#i-search"/></svg>
+                    <span class="ph">능선이 트인 조용한 산</span>
+                    <svg class="i2"><use href="#i-cam"/></svg>
+                    <span class="snd"><svg><use href="#i-up"/></svg></span>
+                  </div>
+                </div>
+              </div>
+              <div class="tabbar">
+                <div class="tabitem"><svg><use href="#i-home"/></svg><span>홈</span></div>
+                <div class="tabitem"><svg><use href="#i-search"/></svg><span>탐색</span></div>
+                <div class="tabitem on"><svg><use href="#i-chat"/></svg><span>여행</span></div>
+                <div class="tabitem"><svg><use href="#i-person"/></svg><span>마이</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+
+<!-- ============ ch5 마이 ============ -->
+<section class="chapter b" id="ch5">
+  <div class="pin">
+    <div class="wrap duo">
+      <div class="col">
+        <div class="slug"><span class="tab">마이</span><span class="route">(tabs)/profile</span></div>
+        <h2>모아둔 곳이<br />기록이 됩니다</h2>
+        <p class="path">아래 탭바에서 <b>마이</b>를 누르면 열리는 화면</p>
+        <div class="beats" data-beats>
+          <div class="beat on">
+            <p>마음에 든 곳을 저장하면 전부 여기로 모입니다. 맨 위 세 칸이
+               <b>스크랩 수 · 다녀본 지역 수 · 함께한 날</b>을 요약합니다.</p>
+            <p>저장한 곳은 가로 레일로 훑고, 「전체」를 누르면 2열 앨범으로 펼쳐집니다.</p>
+            <span class="note">누르는 즉시 화면에 반영하고, 실패하면 되돌립니다</span>
+          </div>
+          <div class="beat">
+            <p>로그인이 필요한 <b>유일한 행동이 저장</b>입니다. 나머지는 전부 계정 없이 씁니다.</p>
+            <p>로그아웃 상태에서는 이 화면이 로그인 카드로 바뀌고, 저장을 누른 순간에만
+               시트가 떠서 로그인 후 <b>보류된 저장이 이어집니다</b>.</p>
+            <span class="note">카카오, 구글, 애플, 이메일 네 가지로 들어옵니다</span>
+          </div>
+          <div class="beat">
+            <p>권한과 약관은 한 자리에 모았습니다. 위치 권한 상태를 그대로 보여주고,
+               끄고 켜는 건 <b>OS 설정으로 넘깁니다</b>.</p>
+            <p>탈퇴하면 계정은 익명화하고 연결된 소셜 로그인과 토큰을 함께 폐기합니다.</p>
+            <span class="note">동의 이력은 시점 스냅샷으로 남깁니다</span>
+          </div>
+        </div>
+        <div class="beatnav" data-beatnav></div>
+      </div>
+
+      <div class="stage">
+        <div class="device" aria-hidden="true">
+          <div class="viewport">
+            <div class="screen">
+              <div class="sbar"><span class="clock">9:41</span>
+                <span class="sig"><i></i><i></i><i></i><i></i><span class="batt"></span></span></div>
+              <div class="vp"><div class="vpin">
+                <div class="pnav"><svg><use href="#i-gear"/></svg></div>
+                <div class="phero">
+                  <span class="av"><svg><use href="#i-person"/></svg></span>
+                  <span class="txt">
+                    <span class="nm">여행자</span>
+                    <span class="em">wnstjs671@gmail.com</span>
+                    <span class="bg"><svg><use href="#i-check"/></svg>2026년 3월 가입</span>
+                  </span>
+                  <svg class="chev"><use href="#i-chev"/></svg>
+                </div>
+                <div class="ptiles">
+                  <div class="ptile acc"><svg><use href="#i-heartfill"/></svg><b>12</b><span>스크랩</span></div>
+                  <div class="ptile"><svg><use href="#i-pin"/></svg><b>5</b><span>지역</span></div>
+                  <div class="ptile"><svg><use href="#i-cal"/></svg><b>148</b><span>함께한 날</span></div>
+                </div>
+                <div class="psec"><span class="t">스크랩</span>
+                  <span class="a">전체 12<svg><use href="#i-chev"/></svg></span></div>
+                <div class="prail">
+                  <div class="it"><img src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/92/3388592_image1_1.JPG" alt="" loading="lazy" /><b>원동성당</b><span>문화시설</span></div>
+                  <div class="it"><img src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/15/3531515_image1_1.jpg" alt="" loading="lazy" /><b>궷물오름</b><span>자연</span></div>
+                  <div class="it"><img src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/49/4054849_image1_1.jpg" alt="" loading="lazy" /><b>가톨릭 목포 성지</b><span>문화시설</span></div>
+                  <div class="it"><img src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/04/3527004_image1_1.jpg" alt="" loading="lazy" /><b>높은오름</b><span>자연</span></div>
+                </div>
+                <div class="psec"><span class="t">설정</span></div>
+                <div class="pgroup">
+                  <div class="prow"><span class="ic"><svg><use href="#i-person"/></svg></span><span class="tt">계정</span><svg class="cv"><use href="#i-chev"/></svg></div>
+                  <div class="prow"><span class="ic"><svg><use href="#i-pin"/></svg></span><span class="tt">위치 권한</span><span class="vv on">허용됨</span><svg class="cv"><use href="#i-chev"/></svg></div>
+                  <div class="prow"><span class="ic"><svg><use href="#i-gear"/></svg></span><span class="tt">권한 설정</span><svg class="cv"><use href="#i-chev"/></svg></div>
+                  <div class="prow"><span class="ic"><svg><use href="#i-shield"/></svg></span><span class="tt">약관·정책</span><svg class="cv"><use href="#i-chev"/></svg></div>
+                  <div class="prow"><span class="ic"><svg><use href="#i-check"/></svg></span><span class="tt">동의 관리</span><svg class="cv"><use href="#i-chev"/></svg></div>
+                  <div class="prow"><span class="ic"><svg><use href="#i-chat"/></svg></span><span class="tt">문의</span><svg class="cv"><use href="#i-chev"/></svg></div>
+                  <div class="prow"><span class="ic"><svg><use href="#i-info"/></svg></span><span class="tt">앱 버전</span><span class="vv">1.0.0</span></div>
+                </div>
+                <div style="height:32px"></div>
+              </div></div>
+              <div class="tabbar">
+                <div class="tabitem"><svg><use href="#i-home"/></svg><span>홈</span></div>
+                <div class="tabitem"><svg><use href="#i-search"/></svg><span>탐색</span></div>
+                <div class="tabitem"><svg><use href="#i-chat"/></svg><span>여행</span></div>
+                <div class="tabitem on"><svg><use href="#i-person"/></svg><span>마이</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="rail"><em data-rail></em></div>
+        </div>
+        <p class="hint">커서를 화면 안에 두고 스크롤해 보세요</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<footer>
+  <div class="wrap">
+    <p class="fnote">
+      <b>출처표시</b>
+      본 서비스는 한국관광공사의 「국문 관광정보 서비스(TourAPI)」를 공공데이터포털을 통해 제공받아
+      이용하며, 해당 관광정보·사진은 공공누리 제1유형(출처표시) 및 제3유형(출처표시+변경금지)에 따라
+      개방된 한국관광공사의 공공저작물입니다.
+      출처: 한국관광공사, 대한민국 구석구석(<a href="https://kto.visitkorea.or.kr" rel="noopener noreferrer">kto.visitkorea.or.kr</a>) /
+      공공데이터포털(<a href="https://www.data.go.kr/data/15101578/openapi.do" rel="noopener noreferrer">data.go.kr</a>).
+      한국관광공사는 본 서비스를 후원하거나 본 서비스와 제휴·특수한 관계에 있지 않습니다.
+    </p>
+    <div class="fcredit" id="credits"></div>
+    <div class="flinks">
+      <a href="https://pictrip.org">pictrip.org</a>
+      <a href="https://pictrip.org/legal/terms">이용약관</a>
+      <a href="https://pictrip.org/legal/privacy">개인정보처리방침</a>
+      <a href="https://pictrip.org/legal/data-sources">데이터 출처 고지</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+const PAIRS = [
+ {name:"잘츠부르크 대성당",country:"오스트리아",
+  desc:"17세기에 오스트리아 잘츠부르크에 지어진 바로크 양식의 종교 건물로 잘츠부르크 대교구의 대성당이다.",
+  img:"https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Salzburg_cathedral_frontview01.jpg/1280px-Salzburg_cathedral_frontview01.jpg",
+  author:"Sir James",license:"CC BY-SA 3.0",
+  licenseUrl:"http://creativecommons.org/licenses/by-sa/3.0/",
+  sourceUrl:"https://commons.wikimedia.org/wiki/File:Salzburg%20cathedral%20frontview01.jpg",
+  matches:[
+   {t:"가톨릭 목포 성지",r:"전라남도 목포시",o:"",img:"https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/49/4054849_image1_1.jpg"},
+   {t:"원동성당",r:"강원특별자치도 원주시",o:"원동성당은 1913년에 지어진 천주교 성당으로 6.25 전쟁 때 건물이 불에 타 전소하여 1954년 시멘트 벽돌로 재건하였다.",img:"https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/92/3388592_image1_1.JPG"},
+   {t:"성내동 성당",r:"강원특별자치도 삼척시",o:"성내동 성당 (옛 삼척 성당)은 1949년 설립되었으며, 현재의 성당은 1957년 삼척 시내를 굽어보는 동산 위에 건립되었다.",img:"https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/82/3387182_image1_1.JPG"}]},
+ {name:"마쓰야마성",country:"일본",
+  desc:"일본 오카야마현 다카하시시에 위치한 성.",
+  img:"https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Bitchu_Matsuyama_Castle_1.JPG/1280px-Bitchu_Matsuyama_Castle_1.JPG",
+  author:"Reggaeman",license:"CC BY-SA 3.0",
+  licenseUrl:"http://creativecommons.org/licenses/by-sa/3.0/",
+  sourceUrl:"https://commons.wikimedia.org/wiki/File:Bitchu%20Matsuyama%20Castle%201.JPG",
+  matches:[
+   {t:"첨백당",r:"대구광역시 동구",o:"",img:"https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/11/3089911_image1_1.JPG"},
+   {t:"안동 고성이씨 탑동파 종택",r:"경상북도 안동시",o:"",img:"https://img.pictrip.org/t1/1620/ac9edad93c5e6d5a7799bfbbd85ef3cef601f4ef3b6a9027e8f7801b0108c8ef/tong.visitkorea.or.kr/cms/resource/91/3535891_image1_1.jpg"},
+   {t:"해풍부원군윤택영댁재실",r:"서울특별시 중구",o:"",img:"https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/48/3083948_image1_1.JPG"}]},
+ {name:"반다이산",country:"일본",
+  desc:"일본 후쿠시마현에 위치한 산이다. 일본백명산 중 하나로, 현재도 활동하는 활화산으로 알려져 있다.",
+  img:"https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Mt.Bandai_10.jpg/1280px-Mt.Bandai_10.jpg",
+  author:"Σ64",license:"CC BY 3.0",
+  licenseUrl:"https://creativecommons.org/licenses/by/3.0",
+  sourceUrl:"https://commons.wikimedia.org/wiki/File:Mt.Bandai%2010.jpg",
+  matches:[
+   {t:"궷물오름",r:"제주특별자치도 제주시",o:"제주시 애월읍 유수암리에 있는 궷물오름은 산이 높지 않고 둘러보는 게 오랜 시간이 걸리지도 않아 가벼운 마음으로 걸을 수 있는 오름이다.",img:"https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/15/3531515_image1_1.jpg"},
+   {t:"높은오름",r:"제주특별자치도 제주시",o:"",img:"https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/04/3527004_image1_1.jpg"},
+   {t:"개오름",r:"제주특별자치도 서귀포시",o:"",img:"https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/94/3526894_image1_1.jpg"}]}
+];
+
+const STORY = [
+ {rank:1,name:"높은오름",reg:"제주특별자치도 제주시",line:"주변 일대에서 유일하게 우뚝 솟아 사방이 트인 오름이다.",
+  img:"https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/04/3527004_image1_1.jpg"},
+ {rank:2,name:"궷물오름",reg:"제주특별자치도 제주시",line:"산이 높지 않고 둘러보는 게 오랜 시간이 걸리지도 않아 가벼운 마음으로 걸을 수 있는 오름이다.",
+  img:"https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/15/3531515_image1_1.jpg"},
+ {rank:3,name:"개오름",reg:"제주특별자치도 서귀포시",line:"완만한 등성이가 길게 이어져 걷는 내내 시야가 낮게 열린다.",
+  img:"https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/94/3526894_image1_1.jpg"},
+ {rank:4,name:"성내동 성당",reg:"강원특별자치도 삼척시",line:"1957년 삼척 시내를 굽어보는 동산 위에 건립되었다.",
+  img:"https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/82/3387182_image1_1.JPG"},
+ {rank:5,name:"가톨릭 목포 성지",reg:"전라남도 목포시",line:"바다를 등지고 앉은 언덕 위 성지.",
+  img:"https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/49/4054849_image1_1.jpg"}
+];
+
+const EXPLORE = [{"n": "하겐베크 동물원", "c": "독일", "img": "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/f/f5/Ehemaliger_Haupteingang_Hagenbeck.jpg/1280px-Ehemaliger_Haupteingang_Hagenbeck.jpg", "a": "An-d", "l": "CC BY-SA 3.0", "lu": "https://creativecommons.org/licenses/by-sa/3.0", "su": "https://commons.wikimedia.org/wiki/File:Ehemaliger%20Haupteingang%20Hagenbeck.jpg"}, {"n": "뉴캐슬성", "c": "영국", "img": "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/3/3d/Newcastle_schloss.jpg/1280px-Newcastle_schloss.jpg", "a": "작자 미상", "l": "CC BY-SA 3.0", "lu": "http://creativecommons.org/licenses/by-sa/3.0/", "su": "https://commons.wikimedia.org/wiki/File:Newcastle%20schloss.jpg"}, {"n": "발할라", "c": "독일", "img": "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/b/b0/Walhalla-Memorial_01.jpg/1280px-Walhalla-Memorial_01.jpg", "a": "SimonWaldherr", "l": "CC BY-SA 4.0", "lu": "https://creativecommons.org/licenses/by-sa/4.0", "su": "https://commons.wikimedia.org/wiki/File:Walhalla-Memorial%2001.jpg"}, {"n": "스코틀랜드 국립 초상화 미술관", "c": "영국", "img": "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/7/70/Scottish_National_Portrait_Gallery.jpg", "a": "Original uploader was Maccoinnich at en.wikipedia", "l": "CC BY-SA 3.0", "lu": "http://creativecommons.org/licenses/by-sa/3.0/", "su": "https://commons.wikimedia.org/wiki/File:Scottish%20National%20Portrait%20Gallery.jpg"}, {"n": "꼬 로아", "c": "베트남", "img": "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/2/27/Citadelle_de_C%E1%BB%95_Loa.jpg/1280px-Citadelle_de_C%E1%BB%95_Loa.jpg", "a": "ZiYouXunLu", "l": "CC BY-SA 3.0", "lu": "https://creativecommons.org/licenses/by-sa/3.0", "su": "https://commons.wikimedia.org/wiki/File:Citadelle%20de%20C%E1%BB%95%20Loa.jpg"}, {"n": "카르케미시", "c": "튀르키예", "img": "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/5/5a/Museum_of_Anatolian_Civilizations091.jpg", "a": "Georges Jansoone (JoJan)", "l": "CC BY-SA 3.0", "lu": "http://creativecommons.org/licenses/by-sa/3.0/", "su": "https://commons.wikimedia.org/wiki/File:Museum%20of%20Anatolian%20Civilizations091.jpg"}, {"n": "반룡성 유적", "c": "중국", "img": "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/a/ad/Lijiazui_Site_at_Panlong_City_National_Archaeological_Park.jpg/1280px-Lijiazui_Site_at_Panlong_City_National_Archaeological_Park.jpg", "a": "Geographyinitiative", "l": "CC BY-SA 4.0", "lu": "https://creativecommons.org/licenses/by-sa/4.0", "su": "https://commons.wikimedia.org/wiki/File:Lijiazui%20Site%20at%20Panlong%20City%20National%20Archaeological%20Park.jpg"}, {"n": "이코마산", "c": "일본", "img": "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/5/51/Mount_Ikoma.jpg/1280px-Mount_Ikoma.jpg", "a": "Mass Ave 975 at en.wikipedia", "l": "CC BY-SA 3.0", "lu": "https://creativecommons.org/licenses/by-sa/3.0", "su": "https://commons.wikimedia.org/wiki/File:Mount%20Ikoma.jpg"}, {"n": "로스산", "c": "프랑스", "img": "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/1/15/Mont_Ross_-_Archipel_des_Kerguelen.jpg/1280px-Mont_Ross_-_Archipel_des_Kerguelen.jpg", "a": "Cousin jf", "l": "CC BY-SA 4.0", "lu": "https://creativecommons.org/licenses/by-sa/4.0", "su": "https://commons.wikimedia.org/wiki/File:Mont%20Ross%20-%20Archipel%20des%20Kerguelen.jpg"}, {"n": "왈리비 홀란드", "c": "네덜란드", "img": "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/d/d5/Walibi_Holland_-_Maingate.jpg/1280px-Walibi_Holland_-_Maingate.jpg", "a": "SGeerlings", "l": "CC BY-SA 4.0", "lu": "https://creativecommons.org/licenses/by-sa/4.0", "su": "https://commons.wikimedia.org/wiki/File:Walibi%20Holland%20-%20Maingate.jpg"}, {"n": "오다니성", "c": "일본", "img": "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/3/35/Odanij10.jpg", "a": "投稿者が撮影", "l": "Public domain", "lu": "", "su": "https://commons.wikimedia.org/wiki/File:Odanij10.jpg"}, {"n": "킹다 카", "c": "미국", "img": "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/c/ca/Kingda_Ka.jpg/1280px-Kingda_Ka.jpg", "a": "Dusso Janladde", "l": "CC BY-SA 3.0", "lu": "http://creativecommons.org/licenses/by-sa/3.0/", "su": "https://commons.wikimedia.org/wiki/File:Kingda%20Ka.jpg"}, {"n": "월리스 컬렉션", "c": "영국", "img": "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/2/23/Manchester_House%2C_home_of_the_Wallace_Collectiion.jpg/1280px-Manchester_House%2C_home_of_the_Wallace_Collectiion.jpg", "a": "Peter Clarke", "l": "CC BY-SA 3.0", "lu": "https://creativecommons.org/licenses/by-sa/3.0", "su": "https://commons.wikimedia.org/wiki/File:Manchester%20House%2C%20home%20of%20the%20Wallace%20Collectiion.jpg"}, {"n": "러시모어산", "c": "미국", "img": "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/8/87/Mount_Rushmore_detail_view_%28100MP%29.jpg/1280px-Mount_Rushmore_detail_view_%28100MP%29.jpg", "a": "Thomas Wolf, www.foto-tw.de", "l": "CC BY-SA 3.0", "lu": "https://creativecommons.org/licenses/by-sa/3.0", "su": "https://commons.wikimedia.org/wiki/File:Mount%20Rushmore%20detail%20view%20%28100MP%29.jpg"}, {"n": "기자의 대피라미드", "c": "이집트", "img": "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Kheops-Pyramid.jpg/1280px-Kheops-Pyramid.jpg", "a": "Nina", "l": "CC BY 2.5", "lu": "https://creativecommons.org/licenses/by/2.5", "su": "https://commons.wikimedia.org/wiki/File:Kheops-Pyramid.jpg"}, {"n": "풀라이산", "c": "말레이시아", "img": "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/b/b0/Mount_Pulai_from_Pulai_river.JPG/1280px-Mount_Pulai_from_Pulai_river.JPG", "a": "Peter in s", "l": "CC0", "lu": "http://creativecommons.org/publicdomain/zero/1.0/deed.en", "su": "https://commons.wikimedia.org/wiki/File:Mount%20Pulai%20from%20Pulai%20river.JPG"}, {"n": "산타 마리아 델라 스칼라 미술관", "c": "이탈리아", "img": "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/e/eb/Facade_Santa_Maria_della_Scala.jpg/1280px-Facade_Santa_Maria_della_Scala.jpg", "a": "Jastrow", "l": "Public domain", "lu": "", "su": "https://commons.wikimedia.org/wiki/File:Facade%20Santa%20Maria%20della%20Scala.jpg"}, {"n": "도미티아 가도", "c": "스페인", "img": "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/d/d6/Ambrussum_voies_marqu%C3%A9es_10-04-2006.jpg/1280px-Ambrussum_voies_marqu%C3%A9es_10-04-2006.jpg", "a": "Benoît Strepenne", "l": "CC BY 2.5", "lu": "https://creativecommons.org/licenses/by/2.5", "su": "https://commons.wikimedia.org/wiki/File:Ambrussum%20voies%20marqu%C3%A9es%2010-04-2006.jpg"}, {"n": "카라칼라 욕장", "c": "이탈리아", "img": "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Apodyterium_at_Baths_of_Caracalla.jpg/1280px-Apodyterium_at_Baths_of_Caracalla.jpg", "a": "Ethan Doyle White", "l": "CC BY-SA 4.0", "lu": "https://creativecommons.org/licenses/by-sa/4.0", "su": "https://commons.wikimedia.org/wiki/File:Apodyterium%20at%20Baths%20of%20Caracalla.jpg"}, {"n": "슈라바스티", "c": "인도", "img": "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/a/a9/Twinmiracle.jpg/1280px-Twinmiracle.jpg", "a": "myself", "l": "CC BY-SA 2.5", "lu": "https://creativecommons.org/licenses/by-sa/2.5", "su": "https://commons.wikimedia.org/wiki/File:Twinmiracle.jpg"}, {"n": "바르셀로나 수족관", "c": "스페인", "img": "https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/1/1a/Queen_Angelfish_14-05-2009_15-24-48.JPG/1280px-Queen_Angelfish_14-05-2009_15-24-48.JPG", "a": "Paul Hermans", "l": "CC BY-SA 3.0", "lu": "https://creativecommons.org/licenses/by-sa/3.0", "su": "https://commons.wikimedia.org/wiki/File:Queen%20Angelfish%2014-05-2009%2015-24-48.JPG"}];
+
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- feed (ch1) ---------- */
+function slidesHTML(p){
+  const hero =
+    '<div class="pslide"><img src="'+esc(p.img)+'" alt="'+esc(p.name)+'" loading="lazy" />' +
+    '<div class="pscrim hero"></div><div class="pmeta">' +
+    '<div class="hname">'+esc(p.name)+'</div>' +
+    '<div class="crow"><i></i><span>'+esc(p.country)+'</span></div>' +
+    '<div class="hdesc">'+esc(p.desc)+'</div></div></div>';
+  const ms = p.matches.map((m,i) =>
+    '<div class="pslide"><img src="'+esc(m.img)+'" alt="'+esc(m.t)+'" loading="lazy" />' +
+    '<div class="pscrim match"></div><div class="pmeta">' +
+    '<div class="mrow"><span class="mno">'+(i+1)+'</span><span class="mname">'+esc(m.t)+'</span></div>' +
+    '<div><span class="mchip">'+esc(m.r)+'</span></div>' +
+    (m.o ? '<div class="mov">'+esc(m.o)+'</div>' : '') +
+    '</div></div>').join('');
+  return hero + ms;
+}
+
+$('feed').innerHTML = PAIRS.map((p,n) =>
+  '<div class="postblock"><div class="pcard" data-post="'+n+'">' +
+    '<div class="ptrack">'+slidesHTML(p)+'</div>' +
+    '<div class="pbtn" data-pbtn><svg><use href="#i-info"/></svg></div>' +
+    '<div class="pcount">1/4</div>' +
+    '<div class="pcredit">'+esc(p.author)+' · <a href="'+esc(p.licenseUrl)+'" rel="noopener noreferrer">'+esc(p.license)+'</a>' +
+    ' · <a href="'+esc(p.sourceUrl)+'" rel="noopener noreferrer">원본</a></div>' +
+  '</div><div class="pdots"><i class="on"></i><i></i><i></i><i></i></div></div>'
+).join('');
+
+const posts = [...document.querySelectorAll('.pcard')].map(card => ({
+  card,
+  track: card.querySelector('.ptrack'),
+  btn: card.querySelector('[data-pbtn]'),
+  count: card.querySelector('.pcount'),
+  credit: card.querySelector('.pcredit'),
+  dots: [...card.parentElement.querySelectorAll('.pdots i')],
+  idx: 0
+}));
+
+function stepPost(p){
+  p.idx = (p.idx + 1) % 4;
+  p.track.style.transform = 'translateX(' + (-100 * p.idx) + '%)';
+  p.count.textContent = (p.idx + 1) + '/4';
+  p.dots.forEach((d,i) => d.classList.toggle('on', i === p.idx));
+  const hero = p.idx === 0;
+  p.credit.style.display = hero ? 'block' : 'none';
+  p.btn.innerHTML = hero ? '<svg><use href="#i-info"/></svg>' : '<svg><use href="#i-bookmark"/></svg>';
+}
+
+/* ---------- cover: 한 번 뛰어 사진을 집는다 ---------- */
+(function coverIntro(){
+  const cover = $('cover');
+  if (reduce){ cover.classList.remove('intro'); return; }
+  setTimeout(() => cover.classList.remove('intro'), 1550);
+})();
+
+/* ---------- explore grid: big at every 6th block start ---------- */
+$('exgrid').innerHTML = EXPLORE.map((it,i) =>
+  '<div class="t' + (i % 6 === 0 ? ' big' : '') + '">' +
+  '<img src="'+esc(it.img)+'" alt="'+esc(it.n)+' — '+esc(it.c)+'" loading="lazy" /></div>'
+).join('');
+
+/* ---------- story (ch2) ---------- */
+$('segs').innerHTML = STORY.map(() => '<i><em></em></i>').join('');
+let stIdx = 1;
+function paintStory(){
+  const c = STORY[stIdx];
+  $('stImg').src = c.img; $('stImg').alt = c.name;
+  $('stRank').textContent = c.rank;
+  $('stName').textContent = c.name;
+  $('stReg').textContent = c.reg;
+  $('stLine').textContent = c.line;
+  [...$('segs').children].forEach((s,i) => {
+    s.className = i < stIdx ? 'past' : i === stIdx ? 'now' : '';
+  });
+}
+paintStory();
+
+/* ---------- 폰 안 스크롤이 설명을 이끈다 ---------- */
+const screens = [...document.querySelectorAll('.chapter')].map(sec => {
+  const vp = sec.querySelector('.vp');
+  if (!vp) return null;
+  return {
+    vp,
+    rail: sec.querySelector('[data-rail]'),
+    beats: [...sec.querySelectorAll('.beat')],
+    navBox: sec.querySelector('[data-beatnav]'),
+    nav: []
+  };
+}).filter(Boolean);
+
+function progressOf(c){
+  const range = c.vp.scrollHeight - c.vp.clientHeight;
+  return range > 4 ? clamp(c.vp.scrollTop / range, 0, 1) : 0;
+}
+
+function syncScreen(c){
+  const p = progressOf(c);
+  if (c.rail) c.rail.style.transform = 'translateY(' + (p * 354) + '%)';
+  if (c.beats.length > 1){
+    const b = clamp(Math.floor(p * c.beats.length), 0, c.beats.length - 1);
+    c.beats.forEach((el,i) => el.classList.toggle('on', i === b));
+    c.nav.forEach((el,i) => el.classList.toggle('on', i === b));
+  }
+}
+
+for (const c of screens){
+  if (c.beats.length > 1 && c.navBox){
+    c.navBox.innerHTML = c.beats
+      .map((_,i) => '<button type="button" aria-label="설명 ' + (i+1) + '번으로"></button>').join('');
+    c.nav = [...c.navBox.children];
+    c.nav.forEach((btn,i) => btn.addEventListener('click', () => {
+      const range = c.vp.scrollHeight - c.vp.clientHeight;
+      const target = range * clamp((i + .5) / c.beats.length, 0, 1);
+      c.vp.scrollTo({top: target, behavior: reduce ? 'auto' : 'smooth'});
+    }));
+  }
+  c.vp.addEventListener('scroll', () => syncScreen(c), {passive:true});
+  syncScreen(c);
+}
+
+function onScroll(){
+  $('mast').classList.toggle('stuck', scrollY > 24);
+}
+
+/* ---------- misc ---------- */
+const cred = (name, author, license, licenseUrl, sourceUrl) =>
+  esc(name) + ': ' + esc(author) +
+  (license ? ', ' + (licenseUrl
+    ? '<a href="'+esc(licenseUrl)+'" rel="noopener noreferrer">'+esc(license)+'</a>'
+    : esc(license)) : '') +
+  (sourceUrl ? ' (<a href="'+esc(sourceUrl)+'" rel="noopener noreferrer">원본</a>)' : '');
+
+$('credits').innerHTML =
+  '<b>해외 게시물 사진 — Wikimedia Commons</b>' +
+  PAIRS.map(p => cred(p.name, p.author, p.license, p.licenseUrl, p.sourceUrl)).join(' · ') +
+  (EXPLORE.length ? ' · ' + EXPLORE.map(it => cred(it.n, it.a, it.l, it.lu, it.su)).join(' · ') : '') +
+  '<b style="margin-top:14px">국내 관광지 사진 — 한국관광공사</b>' +
+  '「국문 관광정보 서비스(TourAPI)」, 공공누리 제1유형·제3유형.';
+
+function sizeBeats(){
+  document.querySelectorAll('.beats[data-beats]').forEach(box => {
+    if (innerWidth <= 940){ box.style.minHeight = ''; return; }
+    let tallest = 0;
+    box.querySelectorAll('.beat').forEach(b => { tallest = Math.max(tallest, b.offsetHeight); });
+    if (tallest) box.style.minHeight = tallest + 'px';
+  });
+}
+
+const relayout = () => { sizeBeats(); screens.forEach(syncScreen); onScroll(); };
+addEventListener('scroll', onScroll, {passive:true});
+addEventListener('resize', relayout);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(relayout);
+relayout();
+
+if (!reduce){
+
+  const io = new IntersectionObserver(es => {
+    es.forEach(e => { if (e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
+  }, {threshold:.2});
+  document.querySelectorAll('.rv').forEach(el => io.observe(el));
+
+  let feedTimer = null;
+  new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting && !feedTimer) feedTimer = setInterval(() => posts.forEach(stepPost), 2800);
+    else if (!e.isIntersecting && feedTimer){ clearInterval(feedTimer); feedTimer = null; }
+  }), {threshold:.2}).observe($('ch1'));
+
+  let stTimer = null;
+  new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting && !stTimer) stTimer = setInterval(() => {
+      stIdx = (stIdx + 1) % STORY.length; paintStory();
+    }, 3000);
+    else if (!e.isIntersecting && stTimer){ clearInterval(stTimer); stTimer = null; }
+  }), {threshold:.3}).observe($('ch2'));
+
+  const links = [...document.querySelectorAll('.chapters a')];
+  const spy = new IntersectionObserver(es => es.forEach(e => {
+    if (!e.isIntersecting) return;
+    links.forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + e.target.id));
+  }), {rootMargin:'-40% 0px -55% 0px'});
+  ['ch1','ch2','chex','ch3','ch4','ch5'].forEach(id => spy.observe($(id)));
+} else {
+  document.querySelectorAll('.rv').forEach(el => el.classList.add('in'));
+}
+</script>
+</body>
+</html>
