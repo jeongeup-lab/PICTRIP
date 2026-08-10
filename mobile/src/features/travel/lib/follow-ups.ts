@@ -1,10 +1,7 @@
 import type { AnchorAction, Suggestion } from "@/features/travel/api";
 import type { FollowKey, Turn } from "@/features/travel/stores/conversation-store";
 
-export type FollowBranch = "root" | "near";
-
 export type FollowAction =
-  | { kind: "branch"; to: FollowBranch }
   | { kind: "anchor"; action: AnchorAction; question: string }
   | { kind: "detail"; followKey: FollowKey; question: string }
   | { kind: "refine"; label: string; patch: Suggestion["patch"] }
@@ -13,7 +10,6 @@ export type FollowAction =
 export interface FollowChip {
   label: string;
   action: FollowAction;
-  muted?: boolean;
 }
 
 export interface FollowUpBlock {
@@ -21,7 +17,12 @@ export interface FollowUpBlock {
   chips: FollowChip[];
 }
 
-export const MAX_FOLLOW_CHIPS = 5;
+export const MAX_FOLLOW_CHIPS = 3;
+export const SEARCH_LINE = "결과를 더 좁혀볼까요?";
+export const DETAIL_LINE = "여기서 더 찾아볼까요?";
+export const ABOUT_LABEL = "여긴 어떤 곳이야?";
+export const RELATED_LABEL = "연관 관광지는?";
+export const NEAR_FOOD_LABEL = "근처 맛집";
 
 export function askedKeys(turns: Turn[]): Set<string> {
   const keys = new Set<string>();
@@ -42,122 +43,64 @@ export function askedKeys(turns: Turn[]): Set<string> {
 interface FollowUpInput {
   title: string;
   contentId: string | null;
-  categoryGroup: string | null;
-  hasCrowd: boolean;
-  branch: FollowBranch;
   asked: ReadonlySet<string>;
   isDetailTurn: boolean;
   refinements: Suggestion[] | null;
   suggestions: string[] | null;
 }
 
-const NEAR_OPTIONS: { action: AnchorAction; label: string; excludeGroup: string | null }[] = [
-  { action: "cafe", label: "카페", excludeGroup: "cafe" },
-  { action: "food", label: "맛집", excludeGroup: "food" },
-  { action: "nearby", label: "볼거리", excludeGroup: null },
-];
-
-function infoChips(input: FollowUpInput): FollowChip[] {
-  const id = input.contentId ?? "";
-  const t = input.title;
-  const entries: { key: string; chip: FollowChip }[] = [
-    {
-      key: `detail:about:${id}`,
-      chip: {
-        label: "여긴 어떤 곳이야?",
-        action: { kind: "detail", followKey: "about", question: `${t}은 어떤 곳이야?` },
-      },
-    },
-    {
-      key: `detail:hours:${id}`,
-      chip: {
-        label: "영업시간은?",
-        action: { kind: "detail", followKey: "hours", question: `${t} 영업시간 알려줘` },
-      },
-    },
-    {
-      key: `anchor:related:${id}`,
-      chip: {
-        label: "연관 관광지는?",
-        action: { kind: "anchor", action: "related", question: `${t} 연관 관광지는?` },
-      },
-    },
-    {
-      key: `detail:parking:${id}`,
-      chip: {
-        label: "주차는 돼?",
-        action: { kind: "detail", followKey: "parking", question: `${t} 주차 돼?` },
-      },
-    },
-    {
-      key: `detail:fee:${id}`,
-      chip: {
-        label: "이용요금은?",
-        action: { kind: "detail", followKey: "fee", question: `${t} 이용요금 알려줘` },
-      },
-    },
-  ];
-  return entries.filter((e) => !input.asked.has(e.key)).map((e) => e.chip);
+function aboutChip(input: FollowUpInput): FollowChip | null {
+  const id = input.contentId;
+  if (id === null || input.asked.has(`detail:about:${id}`)) return null;
+  return {
+    label: ABOUT_LABEL,
+    action: { kind: "detail", followKey: "about", question: `${input.title}은 어떤 곳이야?` },
+  };
 }
 
-function nearOptionChips(input: FollowUpInput): FollowChip[] {
-  const id = input.contentId ?? "";
-  return NEAR_OPTIONS.filter(
-    (o) =>
-      !input.asked.has(`anchor:${o.action}:${id}`) &&
-      (o.excludeGroup === null || o.excludeGroup !== input.categoryGroup),
-  ).map((o) => ({
-    label: o.label,
-    action: { kind: "anchor", action: o.action, question: `${input.title} 근처 ${o.label}` },
-  }));
+function relatedChip(input: FollowUpInput): FollowChip | null {
+  const id = input.contentId;
+  if (id === null || input.asked.has(`anchor:related:${id}`)) return null;
+  return {
+    label: RELATED_LABEL,
+    action: { kind: "anchor", action: "related", question: `${input.title} 연관 관광지는?` },
+  };
 }
 
-function nearBranch(input: FollowUpInput): FollowUpBlock {
-  const id = input.contentId ?? "";
-  const chips = nearOptionChips(input);
-  if (input.hasCrowd && !input.asked.has(`anchor:crowd:${id}`)) {
-    chips.push({
-      label: "지금 붐벼?",
-      action: { kind: "anchor", action: "crowd", question: `${input.title} 지금 붐벼?` },
-    });
-  }
-  const capped = chips.slice(0, MAX_FOLLOW_CHIPS);
-  capped.push({ label: "‹ 뒤로", action: { kind: "branch", to: "root" } });
-  return { line: "어떤 곳부터 찾아볼까요?", chips: capped };
+function nearFoodChip(input: FollowUpInput): FollowChip | null {
+  const id = input.contentId;
+  if (id === null || input.asked.has(`anchor:food:${id}`)) return null;
+  return {
+    label: NEAR_FOOD_LABEL,
+    action: { kind: "anchor", action: "food", question: `${input.title} 근처 맛집` },
+  };
 }
 
-function rootBranch(input: FollowUpInput): FollowUpBlock {
-  const nearAlive = nearOptionChips(input).length > 0;
-  const nearChip: FollowChip = { label: "근처 뭐 있어?", action: { kind: "branch", to: "near" } };
-  const refine: FollowChip[] = (input.refinements ?? []).map((r) => ({
+function refineChips(input: FollowUpInput): FollowChip[] {
+  return (input.refinements ?? []).map((r) => ({
     label: r.label,
     action: { kind: "refine", label: r.label, patch: r.patch },
   }));
+}
+
+function suggestionChips(input: FollowUpInput, shown: ReadonlySet<string>): FollowChip[] {
   const chips: FollowChip[] = [];
-  let line: string;
-  if (input.contentId === null) {
-    line = "내 위치 근처의 카페·맛집·볼거리를 찾아드릴 수 있어요.";
-    chips.push(...refine);
-    if (nearAlive) chips.push(nearChip);
-  } else if (input.isDetailTurn) {
-    line = "더 궁금한 게 있으세요?";
-    chips.push(...refine);
-    chips.push(...infoChips(input));
-    if (nearAlive) chips.push(nearChip);
-  } else {
-    line = `${input.title} 근처의 카페·맛집·볼거리를 찾아드릴 수도 있고, 어떤 곳인지 더 알려드릴 수도 있어요.`;
-    chips.push(...refine);
-    if (nearAlive) chips.push(nearChip);
-    chips.push(...infoChips(input).slice(0, 1));
-  }
-  const shown = new Set(refine.map((c) => c.label));
   for (const q of input.suggestions ?? []) {
     if (shown.has(q) || input.asked.has(`q:${q}`)) continue;
     chips.push({ label: q, action: { kind: "question", question: q } });
   }
-  return { line, chips: chips.slice(0, MAX_FOLLOW_CHIPS) };
+  return chips;
+}
+
+function compact(chips: (FollowChip | null)[]): FollowChip[] {
+  return chips.filter((chip): chip is FollowChip => chip !== null);
 }
 
 export function followUps(input: FollowUpInput): FollowUpBlock {
-  return input.branch === "near" ? nearBranch(input) : rootBranch(input);
+  const chips = input.isDetailTurn
+    ? compact([relatedChip(input), nearFoodChip(input), ...refineChips(input)])
+    : compact([...refineChips(input), aboutChip(input)]);
+  const shown = new Set(chips.map((chip) => chip.label));
+  const line = input.isDetailTurn ? DETAIL_LINE : SEARCH_LINE;
+  return { line, chips: [...chips, ...suggestionChips(input, shown)].slice(0, MAX_FOLLOW_CHIPS) };
 }

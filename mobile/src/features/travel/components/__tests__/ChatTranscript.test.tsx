@@ -125,7 +125,12 @@ describe("ChatTranscript", () => {
       turns: [doneTurn],
       followUp: {
         line: "어떤 곳부터 찾아볼까요?",
-        chips: [{ label: "카페", action: { kind: "branch", to: "near" } }],
+        chips: [
+          {
+            label: "연관 관광지는?",
+            action: { kind: "anchor", action: "related", question: "연관 관광지는?" },
+          },
+        ],
       },
     });
     expect(texts(tree)).toContain("어떤 곳부터 찾아볼까요?");
@@ -162,7 +167,12 @@ describe("ChatTranscript", () => {
       busy: true,
       followUp: {
         line: "어떤 곳부터 찾아볼까요?",
-        chips: [{ label: "카페", action: { kind: "branch", to: "near" } }],
+        chips: [
+          {
+            label: "연관 관광지는?",
+            action: { kind: "anchor", action: "related", question: "연관 관광지는?" },
+          },
+        ],
       },
     });
     expect(byId(tree, "travel-follow-0")[0].props.disabled).toBe(true);
@@ -173,7 +183,12 @@ describe("ChatTranscript", () => {
       turns: [{ ...doneTurn, status: "pending", answer: null }],
       followUp: {
         line: "어떤 곳부터 찾아볼까요?",
-        chips: [{ label: "카페", action: { kind: "branch", to: "near" } }],
+        chips: [
+          {
+            label: "연관 관광지는?",
+            action: { kind: "anchor", action: "related", question: "연관 관광지는?" },
+          },
+        ],
       },
     });
     expect(texts(tree)).not.toContain("어떤 곳부터 찾아볼까요?");

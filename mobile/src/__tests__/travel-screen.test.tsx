@@ -16,21 +16,15 @@ import {
 } from "@/features/travel/api";
 import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
 import { useConversation, type Turn } from "@/features/travel/stores/conversation-store";
-import { useTravelAnchor } from "@/features/travel/stores/anchor-store";
 import { KakaoWebMap } from "@/features/map/components/KakaoWebMap";
 import { ChatTranscript, FAIL_TITLE } from "@/features/travel/components/ChatTranscript";
-import {
-  EmptyGreeting,
-  GREETING_LINE1,
-  SAMPLE_MOODS,
-} from "@/features/travel/components/EmptyGreeting";
+import { EmptyGreeting, GREETING_LINE1 } from "@/features/travel/components/EmptyGreeting";
 import { SpotCarousel } from "@/features/travel/components/SpotCarousel";
 import { SearchPulse } from "@/features/travel/components/SearchPulse";
 import { TravelSheet } from "@/features/travel/components/TravelSheet";
 import { CARD_STRIDE } from "@/features/travel/components/SpotCard";
 import { PHOTO_PICK_FAILED, PHOTO_SHOOT_FAILED } from "@/features/travel/lib/agent-errors";
 import { ATTACH_HEADLINE, ATTACH_NOTICE } from "@/features/travel/components/TravelDock";
-import { PHOTO_CHIP_LABEL, PHOTO_CHIP_TEST_ID } from "@/features/travel/components/ChipRow";
 import { dockBasePx } from "@/features/travel/lib/screen-layout";
 import { sheetHeightPx, type SheetSnap } from "@/features/travel/lib/sheet-layout";
 
@@ -127,16 +121,6 @@ const PINNED: TravelSpot[] = [
   },
 ];
 
-const SEED: TravelSpot = {
-  contentId: "126511",
-  title: "성산일출봉",
-  regionLabel: "제주 서귀포시",
-  imageUrl: null,
-  tag: null,
-  lat: 33.46,
-  lng: 126.94,
-};
-
 const answeredTurn: Turn = {
   id: "seed-1",
   question: "여름에 시원한 계곡",
@@ -193,7 +177,6 @@ let client: QueryClient;
 beforeEach(() => {
   jest.clearAllMocks();
   useConversation.getState().clear();
-  useTravelAnchor.getState().clear();
   useNearbyCoordsMock.mockReturnValue({
     coords: COORDS,
     phase: "ready",
@@ -252,12 +235,6 @@ function chip(tree: renderer.ReactTestRenderer, label: string) {
         typeof node.props.onPress === "function",
     )
     .find((node) => node.props.accessibilityLabel === label);
-}
-
-async function pressChip(tree: renderer.ReactTestRenderer, label: string) {
-  const node = chip(tree, label);
-  if (!node) throw new Error(`no chip labeled ${label}`);
-  await act(async () => node.props.onPress());
 }
 
 function followChip(tree: renderer.ReactTestRenderer, label: string) {
@@ -323,10 +300,6 @@ async function swipeTo(tree: renderer.ReactTestRenderer, index: number) {
   );
 }
 
-async function seed(spot: TravelSpot) {
-  await act(async () => useTravelAnchor.setState({ spot }));
-}
-
 async function blankTap(tree: renderer.ReactTestRenderer) {
   await act(async () => mapView(tree).props.onBlankTap());
 }
@@ -342,15 +315,6 @@ function chooseAttach(index: number) {
 }
 
 describe("TravelScreen 시트 스냅", () => {
-  it("처음에는 접힌 시트와 플로팅 칩만 있다", async () => {
-    const tree = await mount();
-
-    expect(snapOf(tree)).toBe("collapsed");
-    expect(pressable(tree, "travel-sheet-grabber")).toBeUndefined();
-    expect(chip(tree, "근처 맛집")).toBeDefined();
-    expect(rendered(tree)).not.toContain(GREETING_LINE1);
-  });
-
   it("입력에 포커스하면 시트가 올라오고 그리팅이 보인다", async () => {
     const tree = await mount();
 
@@ -391,23 +355,6 @@ describe("TravelScreen 시트 스냅", () => {
     expect(pressable(tree, "travel-retry")).toBeDefined();
   });
 
-  it("내리기 버튼은 대화를 지키면서 시트만 접는다", async () => {
-    useConversation.setState({ turns: [mapTurn], busy: false });
-    const tree = await mount();
-    await focusInput(tree);
-    expect(snapOf(tree)).toBe("mid");
-
-    await press(tree, "travel-sheet-collapse");
-
-    expect(snapOf(tree)).toBe("collapsed");
-    expect(useConversation.getState().turns).toHaveLength(1);
-
-    await focusInput(tree);
-
-    expect(snapOf(tree)).toBe("mid");
-    expect(useConversation.getState().turns).toHaveLength(1);
-  });
-
   it("그래버 탭은 full 과 mid 를 오간다", async () => {
     const tree = await mount();
     await focusInput(tree);
@@ -417,13 +364,6 @@ describe("TravelScreen 시트 스냅", () => {
     expect(snapOf(tree)).toBe("full");
 
     await press(tree, "travel-sheet-grabber");
-    expect(snapOf(tree)).toBe("mid");
-  });
-
-  it("상세에서 씨앗을 물고 들어오면 mid 로 열린다", async () => {
-    useTravelAnchor.setState({ spot: SEED });
-    const tree = await mount();
-
     expect(snapOf(tree)).toBe("mid");
   });
 
@@ -447,18 +387,6 @@ describe("TravelScreen 시트 스냅", () => {
 });
 
 describe("TravelScreen 지도 탭", () => {
-  it("지도를 탭하면 대화를 비우고 시트를 접는다", async () => {
-    useConversation.setState({ turns: [mapTurn], busy: false });
-    const tree = await mount();
-
-    await blankTap(tree);
-
-    expect(useConversation.getState().turns).toEqual([]);
-    expect(snapOf(tree)).toBe("collapsed");
-    expect(chip(tree, "근처 맛집")).toBeDefined();
-    expect(placeholder(tree)).toBe(ASK_PLACEHOLDER);
-  });
-
   it("응답을 기다리는 동안에는 대화를 지키고 키보드만 내린다", async () => {
     const dismiss = jest.spyOn(Keyboard, "dismiss").mockImplementation(() => {});
     useConversation.setState({ turns: [pendingTurn], busy: true, activeId: pendingTurn.id });
@@ -470,23 +398,25 @@ describe("TravelScreen 지도 탭", () => {
     expect(useConversation.getState().turns).toHaveLength(1);
   });
 
-  it("씨앗도 지도 탭으로 비운다", async () => {
-    useTravelAnchor.setState({ spot: SEED });
-    const tree = await mount();
-
-    await blankTap(tree);
-
-    expect(useTravelAnchor.getState().spot).toBeNull();
-    expect(snapOf(tree)).toBe("collapsed");
-  });
-
-  it("새 대화 뒤 다시 물으면 캐러셀이 첫 칸에서 시작한다", async () => {
+  it("지도 탭은 대화도 포커스도 건드리지 않고 시트만 접는다", async () => {
     useConversation.setState({ turns: [mapTurn], busy: false });
     const tree = await mount();
     await swipeTo(tree, 2);
+
     await blankTap(tree);
 
-    await act(async () => useConversation.setState({ turns: [mapTurn], busy: false }));
+    expect(snapOf(tree)).toBe("collapsed");
+    expect(useConversation.getState().turns).toHaveLength(1);
+    expect(carousel(tree).props.focusedIndex).toBe(2);
+  });
+
+  it("새 질문을 보내면 캐러셀이 첫 칸에서 다시 시작한다", async () => {
+    useConversation.setState({ turns: [mapTurn], busy: false });
+    const tree = await mount();
+    await swipeTo(tree, 2);
+
+    await type(tree, "다른 곳 알려줘");
+    await press(tree, "travel-send");
 
     expect(carousel(tree).props.focusedIndex).toBe(0);
     expect(carousel(tree).props.scrollToIndex).toBeNull();
@@ -501,152 +431,6 @@ describe("TravelScreen 지도 탭", () => {
 
     expect(useConversation.getState().turns).toHaveLength(1);
     expect(carousel(tree).props.focusedIndex).toBe(1);
-  });
-});
-
-describe("TravelScreen starter chips", () => {
-  it("좌표가 있으면 근처 칩이 스팟 없는 앵커로 나간다", async () => {
-    const tree = await mount();
-    await pressChip(tree, "근처 맛집");
-
-    expect(askAgentMock).toHaveBeenCalledTimes(1);
-    const input = askAgentMock.mock.calls[0][0];
-    expect(input.anchor).toEqual({ action: "food" });
-    expect(input.coords).toEqual(COORDS);
-    expect(input.question).toBeUndefined();
-    expect(input.intent).toBeUndefined();
-    const turns = useConversation.getState().turns;
-    expect(turns[turns.length - 1].question).toBe("내 위치 근처 맛집");
-  });
-
-  it("근처 볼거리는 앵커가 아니라 intent 로 나간다 — 3km 반경에 갇히지 않는다", async () => {
-    const tree = await mount();
-    await pressChip(tree, "근처 볼거리");
-
-    const input = askAgentMock.mock.calls[0][0];
-    expect(input.intent?.nearMe).toBe(true);
-    expect(input.anchor).toBeUndefined();
-  });
-
-  it("좌표가 없어도 칩 줄은 그대로다 — 누르면 그때 위치를 묻는다", async () => {
-    const askMock = jest.fn().mockResolvedValue(true);
-    useNearbyCoordsMock.mockReturnValue({
-      coords: null,
-      phase: "unavailable",
-      askable: true,
-      ask: askMock,
-    });
-    const tree = await mount();
-
-    expect(chip(tree, "근처 맛집")).toBeDefined();
-    await pressChip(tree, "근처 맛집");
-
-    expect(askMock).toHaveBeenCalled();
-    expect(askAgentMock).not.toHaveBeenCalled();
-  });
-
-  it("위치를 영영 못 쓰면 근처 칩은 토스트로 이유를 말한다", async () => {
-    useNearbyCoordsMock.mockReturnValue({
-      coords: null,
-      phase: "unavailable",
-      askable: false,
-      ask: jest.fn(),
-    });
-    const tree = await mount();
-
-    await pressChip(tree, "근처 카페");
-
-    expect(askAgentMock).not.toHaveBeenCalled();
-    expect(rendered(tree)).toContain(LOCATION_REQUIRED);
-  });
-
-  it("좌표를 아직 확인하는 중이면 거절한 것처럼 말하지 않는다", async () => {
-    const askMock = jest.fn();
-    useNearbyCoordsMock.mockReturnValue({
-      coords: null,
-      phase: "checking",
-      askable: false,
-      ask: askMock,
-    });
-    const tree = await mount();
-
-    await pressChip(tree, "근처 카페");
-
-    expect(askAgentMock).not.toHaveBeenCalled();
-    expect(askMock).not.toHaveBeenCalled();
-    expect(rendered(tree)).toContain(LOCATION_CHECKING);
-    expect(rendered(tree)).not.toContain(LOCATION_REQUIRED);
-  });
-
-  it("첫 화면 칩은 사진 칩 없이 근처 세 갈래와 테마 두 갈래로 고정이다", async () => {
-    const tree = await mount();
-    const labels = tree.root
-      .findAll(
-        (node) =>
-          typeof node.props.testID === "string" &&
-          node.props.testID.startsWith("travel-chip-") &&
-          typeof node.props.onPress === "function" &&
-          typeof node.props.accessibilityLabel === "string",
-      )
-      .map((node) => node.props.accessibilityLabel);
-
-    expect(labels).toEqual(["근처 카페", "근처 맛집", "근처 볼거리", "한적한 자연", "실내 나들이"]);
-    expect(pressable(tree, PHOTO_CHIP_TEST_ID)).toBeUndefined();
-  });
-
-  it("테마 칩은 위치 없이도 바로 검색한다", async () => {
-    useNearbyCoordsMock.mockReturnValue({
-      coords: null,
-      phase: "unavailable",
-      askable: true,
-      ask: jest.fn(),
-    });
-    const tree = await mount();
-
-    await pressChip(tree, "실내 나들이");
-
-    expect(askAgentMock).toHaveBeenCalledTimes(1);
-    expect(askAgentMock.mock.calls[0][0].intent?.indoorOnly).toBe(true);
-  });
-
-  it("한적한 자연 칩은 자연 카테고리에 한산 조건을 실어 보낸다", async () => {
-    const tree = await mount();
-
-    await pressChip(tree, "한적한 자연");
-
-    const input = askAgentMock.mock.calls[0][0];
-    expect(input.intent?.categoryKeywords).toEqual(["자연"]);
-    expect(input.intent?.crowdPreference).toBe("quiet");
-    expect(input.anchor).toBeUndefined();
-  });
-
-  it("대화가 생기면 플로팅 칩이 사라진다", async () => {
-    useConversation.setState({ turns: [answeredTurn], busy: false });
-    const tree = await mount();
-
-    expect(chip(tree, "근처 맛집")).toBeUndefined();
-    expect(chip(tree, PHOTO_CHIP_LABEL)).toBeUndefined();
-  });
-
-  it("위치를 아직 정하지 않았으면 켜기를 권한다", async () => {
-    const askMock = jest.fn().mockResolvedValue(true);
-    useNearbyCoordsMock.mockReturnValue({
-      coords: null,
-      phase: "unavailable",
-      askable: true,
-      ask: askMock,
-    });
-    const tree = await mount();
-
-    await press(tree, "travel-ask-location");
-
-    expect(askMock).toHaveBeenCalled();
-  });
-
-  it("이미 허용된 위치는 다시 조르지 않는다", async () => {
-    const tree = await mount();
-
-    expect(tree.root.findAllByProps({ testID: "travel-ask-location" })).toHaveLength(0);
   });
 });
 
@@ -753,7 +537,7 @@ describe("TravelScreen photo attach", () => {
     expect(rendered(tree)).toContain(PHOTO_PICK_FAILED);
   });
 
-  it("첨부를 지우면 배너가 사라지고 칩 줄은 그대로다", async () => {
+  it("첨부를 지우면 배너가 사라진다", async () => {
     pickTravelPhoto.mockResolvedValueOnce(PHOTO);
     chooseAttach(1);
     const tree = await mount();
@@ -762,47 +546,10 @@ describe("TravelScreen photo attach", () => {
     await press(tree, "travel-attach-clear");
 
     expect(tree.root.findAllByProps({ testID: "travel-attach-banner" })).toHaveLength(0);
-    expect(chip(tree, "근처 맛집")).toBeDefined();
   });
 });
 
 describe("TravelScreen empty greeting", () => {
-  it("샘플 무드를 누르면 그 문장이 질문으로 나간다", async () => {
-    const tree = await mount();
-    await focusInput(tree);
-
-    await press(tree, "travel-sample-0");
-
-    expect(askAgentMock).toHaveBeenCalledTimes(1);
-    expect(askAgentMock.mock.calls[0][0].question).toBe(SAMPLE_MOODS[0].question);
-    expect(snapOf(tree)).toBe("mid");
-    const turns = useConversation.getState().turns;
-    expect(turns[turns.length - 1].question).toBe(SAMPLE_MOODS[0].question);
-  });
-
-  it("앨범 CTA 는 사진을 골라 독 배너에 붙인다", async () => {
-    pickTravelPhoto.mockResolvedValueOnce(PHOTO);
-    const tree = await mount();
-    await focusInput(tree);
-
-    await press(tree, "travel-empty-album");
-
-    expect(askAgentMock).not.toHaveBeenCalled();
-    expect(tree.root.findAllByProps({ testID: "travel-attach-banner" }).length).toBeGreaterThan(0);
-  });
-
-  it("촬영 CTA 는 카메라 경로를 탄다", async () => {
-    const shot = { uri: "file://shot.jpg", name: "shot.jpg", type: "image/jpeg" };
-    shootTravelPhoto.mockResolvedValueOnce(shot);
-    const tree = await mount();
-    await focusInput(tree);
-
-    await press(tree, "travel-empty-shoot");
-
-    expect(shootTravelPhoto).toHaveBeenCalledTimes(1);
-    expect(tree.root.findAllByProps({ testID: "travel-attach-banner" }).length).toBeGreaterThan(0);
-  });
-
   it("대화가 생기면 그리팅 대신 트랜스크립트가 선다", async () => {
     useConversation.setState({ turns: [mapTurn], busy: false });
     const tree = await mount();
@@ -936,44 +683,12 @@ describe("TravelScreen carousel focus", () => {
 });
 
 describe("TravelScreen follow-up chips", () => {
-  it("답이 내려앉으면 루트 후속 칩이 붙는다", async () => {
+  it("검색 답에는 결과를 다루는 칩만 붙는다", async () => {
     useConversation.setState({ turns: [mapTurn], busy: false });
     const tree = await mount();
 
-    expect(followChip(tree, "근처 뭐 있어?")).toBeDefined();
     expect(followChip(tree, "여긴 어떤 곳이야?")).toBeDefined();
-  });
-
-  it("근처 분기로 들어갔다 뒤로 나올 수 있다", async () => {
-    useConversation.setState({ turns: [mapTurn], busy: false });
-    const tree = await mount();
-
-    await pressFollow(tree, "근처 뭐 있어?");
-
-    expect(askAgentMock).not.toHaveBeenCalled();
-    for (const label of ["카페", "맛집", "볼거리", "‹ 뒤로"]) {
-      expect(followChip(tree, label)).toBeDefined();
-    }
-
-    await pressFollow(tree, "‹ 뒤로");
-
-    expect(followChip(tree, "근처 뭐 있어?")).toBeDefined();
-  });
-
-  it("근처 칩은 포커스한 카드의 앵커로 나가고 라벨 문장이 말풍선이 된다", async () => {
-    useConversation.setState({ turns: [mapTurn], busy: false });
-    const tree = await mount();
-
-    await pressFollow(tree, "근처 뭐 있어?");
-    await pressFollow(tree, "카페");
-
-    expect(askAgentMock).toHaveBeenCalledTimes(1);
-    expect(askAgentMock.mock.calls[0][0].anchor).toEqual({
-      contentId: "126508",
-      action: "cafe",
-    });
-    const turns = useConversation.getState().turns;
-    expect(turns[turns.length - 1].question).toBe("무릉계곡 근처 카페");
+    expect(followChip(tree, "연관 관광지는?")).toBeUndefined();
   });
 
   it("정보 칩은 followKey 와 초점 문맥을 실어 보낸다", async () => {
@@ -987,36 +702,6 @@ describe("TravelScreen follow-up chips", () => {
     expect(input.context.focusContentId).toBe("126508");
     const turns = useConversation.getState().turns;
     expect(turns[turns.length - 1].followKey).toBe("about");
-  });
-
-  it("이미 물은 정보는 빠지고 연관 관광지는 앵커로 나간다", async () => {
-    const aboutTurn: Turn = {
-      ...answeredTurn,
-      id: "asked-about",
-      followKey: "about",
-      context: { spots: [], focusContentId: "126508" },
-    };
-    const hoursTurn: Turn = {
-      ...answeredTurn,
-      id: "asked-hours",
-      followKey: "hours",
-      context: { spots: [], focusContentId: "126508" },
-    };
-    useConversation.setState({ turns: [aboutTurn, hoursTurn, mapTurn], busy: false });
-    const tree = await mount();
-
-    expect(followChip(tree, "여긴 어떤 곳이야?")).toBeUndefined();
-    expect(followChip(tree, "영업시간은?")).toBeUndefined();
-    expect(followChip(tree, "연관 관광지는?")).toBeDefined();
-
-    await pressFollow(tree, "연관 관광지는?");
-
-    expect(askAgentMock.mock.calls[0][0].anchor).toEqual({
-      contentId: "126508",
-      action: "related",
-    });
-    const turns = useConversation.getState().turns;
-    expect(turns[turns.length - 1].question).toBe("무릉계곡 연관 관광지는?");
   });
 
   it("서버 refinement 는 intent + patch 로 나간다", async () => {
@@ -1041,6 +726,31 @@ describe("TravelScreen follow-up chips", () => {
     expect(input.question).toBeFalsy();
     const turns = useConversation.getState().turns;
     expect(turns[turns.length - 1].question).toBe("실내만");
+  });
+
+  it("가까운 순 refinement 는 좌표가 없으면 먼저 위치를 묻는다", async () => {
+    useNearbyCoordsMock.mockReturnValue({
+      coords: null,
+      phase: "denied",
+      askable: false,
+      ask: jest.fn(),
+    });
+    const nearTurn: Turn = {
+      ...mapTurn,
+      id: "near",
+      answer: {
+        ...mapTurn.answer!,
+        suggestions: [],
+        refinements: [{ label: "가까운 순으로", patch: { nearMe: true } }],
+      },
+    };
+    useConversation.setState({ turns: [nearTurn], busy: false });
+    const tree = await mount();
+
+    await pressFollow(tree, "가까운 순으로");
+
+    expect(askAgentMock).not.toHaveBeenCalled();
+    expect(rendered(tree)).toContain(LOCATION_REQUIRED);
   });
 
   it("사진 턴의 refinement 는 원본 사진을 끌고 간다", async () => {
@@ -1078,31 +788,6 @@ describe("TravelScreen follow-up chips", () => {
     const input = askAgentMock.mock.calls[0][0];
     expect(input.question).toBe("야경 좋은 곳도 볼래?");
     expect(input.context.intent).toEqual(INTENT);
-  });
-
-  it("결과가 없는 검색 답은 정보 분기가 아니라 루트 후속으로 남는다", async () => {
-    useConversation.setState({ turns: [answeredTurn], busy: false });
-    const tree = await mount();
-
-    expect(rendered(tree)).toContain("내 위치 근처의 카페·맛집·볼거리를 찾아드릴 수 있어요.");
-    expect(rendered(tree)).not.toContain("더 궁금한 게 있으세요?");
-    expect(followChip(tree, "여긴 어떤 곳이야?")).toBeUndefined();
-    expect(followChip(tree, "근처 뭐 있어?")).toBeDefined();
-    expect(followChip(tree, "실내만")).toBeDefined();
-  });
-
-  it("followKey 턴 뒤에는 정보 분기가 열린다", async () => {
-    const detailTurn: Turn = {
-      ...mapTurn,
-      id: "seed-detail",
-      followKey: "about",
-      context: { spots: [], focusContentId: "126508" },
-    };
-    useConversation.setState({ turns: [detailTurn], busy: false });
-    const tree = await mount();
-
-    expect(rendered(tree)).toContain("더 궁금한 게 있으세요?");
-    expect(followChip(tree, "영업시간은?")).toBeDefined();
   });
 });
 
@@ -1363,124 +1048,6 @@ describe("TravelScreen save toast", () => {
     const out = rendered(tree);
     expect(out).not.toContain("여행지를 저장했어요");
     expect(out).not.toContain("여행지 저장을 해제했어요");
-  });
-});
-
-describe("TravelScreen 스팟 상세에서 넘어온 앵커", () => {
-  it("씨앗 스팟을 지도 핀이자 중심으로 넘긴다", async () => {
-    useTravelAnchor.setState({ spot: SEED });
-    const tree = await mount();
-
-    expect(mapView(tree).props.pins.map((p: { contentId: string }) => p.contentId)).toEqual([
-      "126511",
-    ]);
-    expect(mapView(tree).props.center).toEqual({ lat: 33.46, lng: 126.94 });
-    expect(mapView(tree).props.anchorId).toBe("126511");
-  });
-
-  it("씨앗 스팟 이름으로 플레이스홀더를 세우고 그리팅을 연다", async () => {
-    useTravelAnchor.setState({ spot: SEED });
-    const tree = await mount();
-
-    expect(placeholder(tree)).toBe("성산일출봉에 대해 물어보기");
-    expect(rendered(tree)).toContain(GREETING_LINE1);
-  });
-
-  it("질문을 보내면 씨앗을 비워 답 위로 살아남지 않는다", async () => {
-    useTravelAnchor.setState({ spot: SEED });
-    const tree = await mount();
-    await type(tree, "근처 카페");
-    await press(tree, "travel-send");
-
-    expect(useTravelAnchor.getState().spot).toBeNull();
-    expect(rendered(tree)).not.toContain("성산일출봉");
-  });
-
-  it("씨앗 스팟을 문맥 초점으로 실어 보낸다", async () => {
-    useTravelAnchor.setState({ spot: SEED });
-    const tree = await mount();
-    await type(tree, "근처 카페");
-    await press(tree, "travel-send");
-
-    expect(askAgentMock.mock.calls[0][0].context).toEqual({
-      spots: [],
-      focusContentId: "126511",
-    });
-  });
-
-  it("이전 답이 남은 채 씨앗이 오면 낡은 대화를 걷어낸다", async () => {
-    useConversation.setState({ turns: [mapTurn], busy: false });
-    useTravelAnchor.setState({ spot: SEED });
-    const tree = await mount();
-
-    expect(useConversation.getState().turns).toEqual([]);
-    expect(mapView(tree).props.pins.map((p: { contentId: string }) => p.contentId)).toEqual([
-      "126511",
-    ]);
-    expect(placeholder(tree)).toBe("성산일출봉에 대해 물어보기");
-    expect(rendered(tree)).not.toContain("제주에서 한적한 곳");
-  });
-
-  it("3번째 카드를 보던 중 씨앗이 와도 씨앗을 초점으로 잡는다", async () => {
-    useConversation.setState({ turns: [mapTurn], busy: false });
-    const tree = await mount();
-    await swipeTo(tree, 2);
-    expect(carousel(tree).props.focusedIndex).toBe(2);
-
-    await seed(SEED);
-
-    expect(placeholder(tree)).toBe("성산일출봉에 대해 물어보기");
-    expect(mapView(tree).props.anchorId).toBe("126511");
-  });
-
-  it("3번째 카드를 보던 중 온 씨앗도 문맥 초점으로 실려 나간다", async () => {
-    useConversation.setState({ turns: [mapTurn], busy: false });
-    const tree = await mount();
-    await swipeTo(tree, 2);
-
-    await seed(SEED);
-    await type(tree, "근처 카페");
-    await press(tree, "travel-send");
-
-    expect(askAgentMock.mock.calls[0][0].context).toEqual({
-      spots: [],
-      focusContentId: "126511",
-    });
-  });
-
-  it("씨앗을 소모한 뒤 시작한 턴은 지워지지 않는다", async () => {
-    useConversation.setState({ turns: [mapTurn], busy: false });
-    useTravelAnchor.setState({ spot: SEED });
-    const tree = await mount();
-    await type(tree, "근처 카페");
-    await press(tree, "travel-send");
-
-    expect(useTravelAnchor.getState().spot).toBeNull();
-    const turns = useConversation.getState().turns;
-    expect(turns).toHaveLength(1);
-    expect(turns[0].question).toBe("근처 카페");
-  });
-
-  it("씨앗으로 시작한 대화를 지도 탭으로 다시 비울 수 있다", async () => {
-    useConversation.setState({ turns: [mapTurn], busy: false });
-    useTravelAnchor.setState({ spot: SEED });
-    const tree = await mount();
-    await type(tree, "근처 카페");
-    await press(tree, "travel-send");
-    await blankTap(tree);
-
-    expect(useTravelAnchor.getState().spot).toBeNull();
-    expect(useConversation.getState().turns).toEqual([]);
-    expect(snapOf(tree)).toBe("collapsed");
-    expect(placeholder(tree)).toBe(ASK_PLACEHOLDER);
-  });
-
-  it("씨앗도 답도 없으면 시트는 접혀 있고 그리팅도 없다", async () => {
-    const tree = await mount();
-
-    expect(snapOf(tree)).toBe("collapsed");
-    expect(rendered(tree)).not.toContain(GREETING_LINE1);
-    expect(placeholder(tree)).toBe(ASK_PLACEHOLDER);
   });
 });
 

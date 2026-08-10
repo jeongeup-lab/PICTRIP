@@ -2,7 +2,8 @@ export type SheetSnap = "collapsed" | "mid" | "full";
 
 export const SHEET_ANIM_MS = 280;
 export const SHEET_MID_RATIO = 0.58;
-export const SHEET_FULL_RATIO = 0.88;
+export const SHEET_GREETING_RATIO = 0.5;
+export const SHEET_FULL_RATIO = 0.76;
 export const SHEET_HEADER_PX = 20;
 export const SHEET_FLING_VY = 0.55;
 
@@ -15,11 +16,23 @@ interface HeightInput {
   insetBottom: number;
   keyboardPx: number;
   dockPx: number;
+  greeting?: boolean;
 }
 
-export function sheetHeightPx({ snap, frameH, insetTop, keyboardPx, dockPx }: HeightInput): number {
+function midRatio(greeting: boolean): number {
+  return greeting ? SHEET_GREETING_RATIO : SHEET_MID_RATIO;
+}
+
+export function sheetHeightPx({
+  snap,
+  frameH,
+  insetTop,
+  keyboardPx,
+  dockPx,
+  greeting = false,
+}: HeightInput): number {
   if (snap === "collapsed") return dockPx + SHEET_HEADER_PX;
-  const ratio = snap === "mid" ? SHEET_MID_RATIO : SHEET_FULL_RATIO;
+  const ratio = snap === "mid" ? midRatio(greeting) : SHEET_FULL_RATIO;
   const wanted = Math.round(frameH * ratio);
   if (keyboardPx === 0) return wanted;
   return Math.min(wanted, frameH - keyboardPx - insetTop);
