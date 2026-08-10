@@ -623,7 +623,8 @@ async def _ask_with_question(
         sentence = NO_AXIS_ANSWER if question.strip() else BLANK_ANSWER
         return _talk_response(steps, intent, sentence, legacy_client=legacy_client)
 
-    pivot = _origin_anchor(intent, context)
+    region_scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
+    pivot = _origin_anchor(intent, context, region_named=bool(region_scope.prefixes))
     if pivot is not None:
         return await _ask_with_anchor(
             session,
@@ -669,7 +670,7 @@ async def _ask_with_question(
             legacy_client=legacy_client,
         )
     mood_ids = await repositories.find_mood_ids(session, list(intent.moodHints))
-    scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
+    scope = region_scope
     prefixes = scope.prefixes or pre_ota_region_prefixes
     if not scope.prefixes and pre_ota_region_prefixes:
         intent = intent.model_copy(update={"regionHints": list(pre_ota_region_prefixes)})
@@ -1561,7 +1562,9 @@ def _prior(context: AskContext | None) -> tuple[QueryIntent | None, list[str]]:
     return context.intent, [spot.title for spot in context.spots]
 
 
-def _origin_anchor(intent: QueryIntent, context: AskContext | None) -> AskAnchor | None:
+def _origin_anchor(
+    intent: QueryIntent, context: AskContext | None, *, region_named: bool = True
+) -> AskAnchor | None:
     if context is None:
         return None
     if intent.originPlace is not None:
@@ -1569,7 +1572,7 @@ def _origin_anchor(intent: QueryIntent, context: AskContext | None) -> AskAnchor
         match = next((spot for spot in context.spots if spot.title.strip() == wanted), None)
         if match is not None:
             return AskAnchor(contentId=match.contentId, action=_origin_action(intent))
-    if _named_a_new_region(intent, context):
+    if region_named and _named_a_new_region(intent, context):
         return None
     if context.focusContentId is not None and (intent.aroundOrigin or intent.nearMe):
         return AskAnchor(contentId=context.focusContentId, action=_origin_action(intent))
