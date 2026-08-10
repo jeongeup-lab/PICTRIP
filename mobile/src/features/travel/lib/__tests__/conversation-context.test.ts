@@ -17,7 +17,6 @@ const answer = (over: Partial<AgentAnswer> = {}): AgentAnswer => ({
   spots: [spot("a"), spot("b")],
   totalCount: 2,
   intent: { categoryKeywords: ["해수욕장"], regionHints: ["제주"] },
-  suggestions: [],
   refinements: [],
   ...over,
 });

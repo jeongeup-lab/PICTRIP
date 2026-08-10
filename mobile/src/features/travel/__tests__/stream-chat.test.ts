@@ -80,8 +80,7 @@ describe("streamChat 이벤트", () => {
         'event: delta\ndata: {"text":"정읍"}\n\n',
         'event: cards\ndata: {"spots":[],"tagBasis":null}\n\n',
         'event: sources\ndata: {"items":[{"kind":"kto","title":"관광정보"}]}\n\n',
-        'event: suggestions\ndata: {"items":["실내만"]}\n\n',
-        'event: done\ndata: {"answerText":"정읍","spots":[],"sources":[],"suggestions":[],"intent":{"categoryKeywords":[],"regionHints":[]},"totalCount":0}\n\n',
+        'event: done\ndata: {"answerText":"정읍","spots":[],"sources":[],"intent":{"categoryKeywords":[],"regionHints":[]},"totalCount":0}\n\n',
       ]),
     );
     const seen: string[] = [];
@@ -90,20 +89,12 @@ describe("streamChat 이벤트", () => {
       onDelta: (text) => seen.push(`delta:${text}`),
       onCards: () => seen.push("cards"),
       onSources: (items) => seen.push(`sources:${items.length}`),
-      onSuggestions: (items) => seen.push(`suggestions:${items[0]}`),
       onDone: (event) => seen.push(`done:${event.answerText}`),
     };
 
     await streamChat({ message: "정읍" }, handlers);
 
-    expect(seen).toEqual([
-      "step",
-      "delta:정읍",
-      "cards",
-      "sources:1",
-      "suggestions:실내만",
-      "done:정읍",
-    ]);
+    expect(seen).toEqual(["step", "delta:정읍", "cards", "sources:1", "done:정읍"]);
   });
 
   it("error 이벤트는 onError로 흐른다", async () => {

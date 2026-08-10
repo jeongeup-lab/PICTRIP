@@ -35,7 +35,6 @@ beforeEach(() => {
           spots: [],
           totalCount: 0,
           intent: { categoryKeywords: [], regionHints: [] },
-          suggestions: [],
         },
         error: null,
         meta: {},

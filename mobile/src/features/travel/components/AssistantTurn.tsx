@@ -24,7 +24,6 @@ interface Props {
   turn: ChatTurn;
   latest: boolean;
   origin: LatLng | null;
-  onSuggestion: (text: string) => void;
   onRetry: () => void;
   onDetail: (spot: TravelSpot) => void;
   onSaveToggle: (saved: boolean) => void;
@@ -52,7 +51,6 @@ export function AssistantTurn({
   turn,
   latest,
   origin,
-  onSuggestion,
   onRetry,
   onDetail,
   onSaveToggle,
@@ -193,22 +191,6 @@ export function AssistantTurn({
         </View>
       ) : null}
 
-      {latest && turn.status === "done" && turn.suggestions.length > 0 ? (
-        <View style={styles.suggestRow}>
-          {turn.suggestions.map((suggestion, index) => (
-            <Pressable
-              key={`${index}-${suggestion}`}
-              testID={`travel-suggest-${index}`}
-              accessibilityRole="button"
-              onPress={() => onSuggestion(suggestion)}
-              style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
-            >
-              <Text style={styles.chipText}>{suggestion}</Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-
       <SourcesSheet
         visible={sourcesOpen}
         items={turn.sources}
@@ -299,26 +281,4 @@ const styles = StyleSheet.create({
   },
   retryText: { fontSize: 13, fontWeight: "700", color: colors.onImage },
   pressed: { opacity: 0.7 },
-  suggestRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    paddingHorizontal: spacing.md,
-  },
-  chip: {
-    height: 31,
-    paddingHorizontal: 13,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: "rgba(255,59,83,0.30)",
-    backgroundColor: colors.fill,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  chipText: {
-    fontSize: 12.5,
-    fontWeight: "700",
-    letterSpacing: -0.2,
-    color: colors.accentText,
-  },
 });

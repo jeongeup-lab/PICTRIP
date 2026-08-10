@@ -70,7 +70,6 @@ const DONE: ChatDoneEvent = {
   answerText: "제주라면 **무릉계곡**이 좋아요.\n- 아침에 한적해요",
   spots: SPOTS,
   sources: [{ kind: "naver_blog", title: "제주 계곡 후기", url: "https://blog", date: "20260801" }],
-  suggestions: ["실내만"],
   intent: { categoryKeywords: ["계곡"], regionHints: ["제주"] },
   totalCount: 4,
 };
@@ -223,14 +222,13 @@ describe("TravelScreen 워드마크와 전송", () => {
 });
 
 describe("TravelScreen 완료 턴", () => {
-  it("done이 내려앉으면 캐러셀과 출처, 팔로업 칩이 선다", async () => {
+  it("done이 내려앉으면 캐러셀과 출처가 선다", async () => {
     const tree = await mount();
     await send(tree, "제주 계곡");
     await finishLast();
 
     expect(tree.root.findAllByType(SpotCarousel)).toHaveLength(1);
     expect(pressable(tree, "travel-sources")).toBeDefined();
-    expect(pressable(tree, "travel-suggest-0")).toBeDefined();
     expect(rendered(tree)).toContain("무릉계곡");
   });
 
@@ -248,27 +246,6 @@ describe("TravelScreen 완료 턴", () => {
     });
 
     expect(tree.root.findAllByProps({ testID: "travel-turn-map" })).toHaveLength(0);
-  });
-
-  it("팔로업 칩을 누르면 그 문자열로 새 턴이 나간다", async () => {
-    const tree = await mount();
-    await send(tree, "제주 계곡");
-    await finishLast();
-
-    await press(tree, "travel-suggest-0");
-
-    expect(streamChatMock).toHaveBeenCalledTimes(2);
-    expect(streams[1].input.message).toBe("실내만");
-    expect(streams[1].input.context?.intent).toEqual(DONE.intent);
-    expect(streams[1].input.history).toEqual([
-      { role: "user", text: "제주 계곡" },
-      {
-        role: "assistant",
-        text: DONE.answerText.slice(0, 300),
-        spotIds: ["126508", "126509"],
-      },
-    ]);
-    expect(useChat.getState().turns).toHaveLength(2);
   });
 
   it("카드 상세 탭은 스팟 상세로 간다", async () => {

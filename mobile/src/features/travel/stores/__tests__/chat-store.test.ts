@@ -25,7 +25,6 @@ const doneEvent = (over: Partial<ChatDoneEvent> = {}): ChatDoneEvent => ({
   answerText: "정읍이라면 **쌍화차 거리**가 유명해요.",
   spots: [spot("1")],
   sources: [{ kind: "naver_blog", title: "정읍 카페 후기", url: "https://blog", date: "20260801" }],
-  suggestions: ["실내만"],
   intent: { categoryKeywords: ["맛집"], regionHints: ["정읍"] },
   totalCount: 4,
   ...over,
@@ -72,17 +71,15 @@ describe("chat-store 스트리밍", () => {
     expect(steps[1].status).toBe("run");
   });
 
-  it("cards와 sources, suggestions가 턴에 붙는다", () => {
+  it("cards와 sources가 턴에 붙는다", () => {
     begin();
     useChat.getState().setCards("turn-1", [spot("1"), spot("2")], "한적함 기준");
     useChat.getState().setSources("turn-1", [{ kind: "kto", title: "관광정보" }]);
-    useChat.getState().setSuggestions("turn-1", ["실내만", "가까운 순"]);
 
     const turn = useChat.getState().turns[0];
     expect(turn.spots.map((s) => s.contentId)).toEqual(["1", "2"]);
     expect(turn.tagBasis).toBe("한적함 기준");
     expect(turn.sources[0].kind).toBe("kto");
-    expect(turn.suggestions).toEqual(["실내만", "가까운 순"]);
   });
 
   it("done은 조립본으로 턴을 확정하고 잠금을 푼다", () => {
@@ -155,7 +152,6 @@ describe("historyOf", () => {
     spots,
     tagBasis: null,
     sources: [],
-    suggestions: [],
     intent: null,
     errorCode: null,
   });
@@ -206,7 +202,6 @@ describe("lastDoneTurn", () => {
       spots: [],
       tagBasis: null,
       sources: [],
-      suggestions: [],
       intent: null,
       errorCode: null,
     };

@@ -37,7 +37,6 @@ export interface ChatTurn {
   spots: TravelSpot[];
   tagBasis: string | null;
   sources: SourceItem[];
-  suggestions: string[];
   intent: QueryIntent | null;
   errorCode: string | null;
 }
@@ -83,7 +82,6 @@ interface ChatState {
   appendDelta: (id: string, text: string) => void;
   setCards: (id: string, spots: TravelSpot[], tagBasis: string | null) => void;
   setSources: (id: string, sources: SourceItem[]) => void;
-  setSuggestions: (id: string, suggestions: string[]) => void;
   finish: (id: string, done: ChatDoneEvent) => void;
   fail: (id: string, errorCode: string) => void;
   retry: (id: string) => void;
@@ -92,15 +90,7 @@ interface ChatState {
 
 function freshBody(): Pick<
   ChatTurn,
-  | "status"
-  | "steps"
-  | "text"
-  | "spots"
-  | "tagBasis"
-  | "sources"
-  | "suggestions"
-  | "intent"
-  | "errorCode"
+  "status" | "steps" | "text" | "spots" | "tagBasis" | "sources" | "intent" | "errorCode"
 > {
   return {
     status: "streaming",
@@ -109,7 +99,6 @@ function freshBody(): Pick<
     spots: [],
     tagBasis: null,
     sources: [],
-    suggestions: [],
     intent: null,
     errorCode: null,
   };
@@ -171,8 +160,6 @@ export const useChat = create<ChatState>((set, get) => ({
     set((s) => (s.activeId === id ? { turns: patchTurn(s.turns, id, { spots, tagBasis }) } : s)),
   setSources: (id, sources) =>
     set((s) => (s.activeId === id ? { turns: patchTurn(s.turns, id, { sources }) } : s)),
-  setSuggestions: (id, suggestions) =>
-    set((s) => (s.activeId === id ? { turns: patchTurn(s.turns, id, { suggestions }) } : s)),
   finish: (id, done) =>
     set((s) =>
       s.activeId === id
@@ -187,7 +174,6 @@ export const useChat = create<ChatState>((set, get) => ({
                     text: done.answerText,
                     spots: done.spots,
                     sources: done.sources,
-                    suggestions: done.suggestions,
                     intent: done.intent,
                     steps: turn.steps.map((step) => ({ ...step, status: "done" })),
                   }

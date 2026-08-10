@@ -65,7 +65,6 @@ export default function TravelScreen() {
         onDelta: (text) => store.appendDelta(id, text),
         onCards: (event) => store.setCards(id, event.spots, event.tagBasis ?? null),
         onSources: (items) => store.setSources(id, items),
-        onSuggestions: (items) => store.setSuggestions(id, items),
         onDone: (event) => store.finish(id, event),
         onError: (event) => store.fail(id, event.code),
       },
@@ -135,7 +134,6 @@ export default function TravelScreen() {
           turn={item}
           latest={index === turns.length - 1}
           origin={coords}
-          onSuggestion={(text) => submit(text, null)}
           onRetry={onRetry}
           onDetail={(spot) => router.push(`/spots/${spot.contentId}`)}
           onSaveToggle={(saved) => setToast(saved ? SAVE_COMPLETE : UNSAVE_COMPLETE)}
@@ -144,7 +142,7 @@ export default function TravelScreen() {
         />
       </View>
     ),
-    [turns.length, coords, submit, onRetry, onFocusSpot],
+    [turns.length, coords, onRetry, onFocusSpot],
   );
 
   const bottomPad = keyboardPx;

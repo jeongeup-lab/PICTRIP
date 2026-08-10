@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime
@@ -10,9 +9,6 @@ from app.modules.agent.naver import NaverBlogPost
 from app.modules.agent.schemas import AgentSpotCard, ChatHistoryItem, QueryIntent
 
 CARDS_MARKER = "[[cards]]"
-MAX_SUGGESTIONS = 3
-MAX_SUGGESTION_CHARS = 20
-_SUGGEST_RE = re.compile(r"^\[\[suggest:\s*(.*?)\s*\]\]$")
 
 SYSTEM_PROMPT = """\
 너는 한국 여행 앱 PICTRIP의 어시스턴트다. 아래에 주어지는 도구 결과 JSON만 근거로 한국어 답변 산문을 쓴다.
@@ -29,10 +25,9 @@ SYSTEM_PROMPT = """\
 - 이어서 "- " 불릿으로 한 줄 팁을 쓴다. 장소 이름은 **굵게** 표기한다.
 - **불릿은 최대 5개다.** spots 가 그보다 많으면 앞에서부터 5곳만 고르고, 나머지는 카드로 볼 수 있다고 한 문장으로 알린다. 목록을 끝까지 나열하지 않는다.
 - 마지막에 한 문장으로 다음 행동을 제안하며 마무리한다.
-- 맨 마지막 줄에 [[suggest: 팔로업1 | 팔로업2 | 팔로업3]] 형식으로 이어서 물을 만한 질문을 최대 3개, 각 20자 이내로 쓴다.
 
 문체 규칙:
-- 한국어 해요체로 쓴다.
+- 한국어 해요체로만 쓴다. "~습니다"·"~입니다" 같은 합쇼체를 섞지 않는다.
 - 서식은 **굵게** 와 "- " 불릿만 쓴다. 제목·표·링크는 쓰지 않는다.
 - clientTime 이 있으면 시간대를 감안한다. 늦은 밤이면 야간에 갈 만한지, 이른 아침이면 아침 동선을 짚는 식이다.
 - spots 가 비어 있으면 결과가 없다는 사실을 짧게 알리고 조건을 바꿔 보라고 제안만 한다. 장소를 지어내지 않는다.
@@ -49,12 +44,7 @@ class WriterCards:
     pass
 
 
-@dataclass(slots=True)
-class WriterSuggestions:
-    items: list[str]
-
-
-WriterEvent = WriterDelta | WriterCards | WriterSuggestions
+WriterEvent = WriterDelta | WriterCards
 
 
 def build_prompt(
@@ -88,36 +78,20 @@ def build_prompt(
     return SYSTEM_PROMPT, json.dumps(payload, ensure_ascii=False)
 
 
-def parse_suggestions(raw: str) -> list[str]:
-    items: list[str] = []
-    for part in raw.split("|"):
-        cleaned = part.strip()[:MAX_SUGGESTION_CHARS].strip()
-        if cleaned and cleaned not in items:
-            items.append(cleaned)
-        if len(items) == MAX_SUGGESTIONS:
-            break
-    return items
-
-
 async def parse_stream(chunks: AsyncIterator[str]) -> AsyncIterator[WriterEvent]:
     line = ""
     sent = 0
     cards_done = False
     body_seen = False
-    suggestions: list[str] | None = None
 
     def end_line() -> list[WriterEvent]:
-        nonlocal line, sent, cards_done, body_seen, suggestions
+        nonlocal line, sent, cards_done, body_seen
         events: list[WriterEvent] = []
         tail = line[sent:]
         if "[[" in tail:
             if sent:
                 events.append(WriterDelta(text="\n"))
-            stripped = tail.strip()
-            matched = _SUGGEST_RE.match(stripped)
-            if matched is not None:
-                suggestions = parse_suggestions(matched.group(1))
-            elif stripped == CARDS_MARKER and not cards_done:
+            if tail.strip() == CARDS_MARKER and not cards_done:
                 cards_done = True
                 events.append(WriterCards())
         else:
@@ -150,11 +124,7 @@ async def parse_stream(chunks: AsyncIterator[str]) -> AsyncIterator[WriterEvent]
 
     tail = line[sent:]
     if "[[" in tail:
-        stripped = tail.strip()
-        matched = _SUGGEST_RE.match(stripped)
-        if matched is not None:
-            suggestions = parse_suggestions(matched.group(1))
-        elif stripped == CARDS_MARKER and not cards_done:
+        if tail.strip() == CARDS_MARKER and not cards_done:
             cards_done = True
             yield WriterCards()
     elif tail:
@@ -163,5 +133,3 @@ async def parse_stream(chunks: AsyncIterator[str]) -> AsyncIterator[WriterEvent]
             body_seen = True
     if body_seen and not cards_done:
         yield WriterCards()
-    if suggestions:
-        yield WriterSuggestions(items=suggestions)

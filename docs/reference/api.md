@@ -64,15 +64,14 @@ AppError/JSend(422 등)로 나간다.
 |---|---|---|
 | `step` | `{index, label, badge?, status}` | 같은 index로 `run`→`done` 갱신 |
 | `delta` | `{text}` | 산문 조각. `**굵게**` · `- ` 불릿만 |
-| `cards` | `{spots, tagBasis?}` | 라이터의 `[[cards]]` 마커 위치에서 1회. spots가 비면 미방출 |
+| `cards` | `{spots, tagBasis?}` | **조회 직후 즉시** 1회 — 라이터를 기다리지 않는다. spots가 비면 미방출 |
 | `sources` | `{items: [{kind, title, url?, date?}]}` | 실제 사용한 블로그 + (spots 있을 때) KTO 고정 행 |
-| `suggestions` | `{items}` | ≤3, 각 ≤20자. 라이터 `[[suggest:…]]` 우선, 없으면 refinements 라벨 |
-| `done` | `{answerText, spots, sources, suggestions, intent, totalCount, traceId?}` | 재시도·저장용 조립본 |
+| `done` | `{answerText, spots, sources, intent, totalCount, traceId?}` | 재시도·저장용 조립본 |
 | `error` | `{code, message}` | 스트림 중 실패 (`AGENT_WRITER_UNAVAILABLE` 등) |
 
-마커(`[[cards]]` · `[[suggest: a | b | c]]`)는 서버가 소비하고 클라이언트에
-노출하지 않는다. 조회가 `AppError`(결과 없음 등)를 내면 그 안내 문구를
-`delta`로 흘리고 빈 `spots`로 정상 `done` 한다. 라이터가 15초 무응답이거나
+라이터가 뱉는 `[[...]]` 줄은 서버가 소비하고 클라이언트에 노출하지 않는다. 조회가 `AppError`(결과 없음 등)를 내면 그 안내 문구를
+`delta`로 흘리고 빈 `spots`로 정상 `done` 한다. 입력이 비어 `VALIDATION_FAILED`가
+나는 경로는 내부 영문 문구 대신 `BLANK_ANSWER` 안내를 보낸다. 라이터가 15초 무응답이거나
 예외를 내면 `error` 이벤트 후 종료하고, 클라이언트는 같은 입력으로 재시도한다.
 
 라이터 규칙: 도구 결과에 있는 사실만 쓴다(스팟 목록 밖 장소명·영업시간·전화·
