@@ -147,22 +147,22 @@ export default function TravelScreen() {
     [turns.length, coords, submit, onRetry, onFocusSpot],
   );
 
-  const bottomPad = keyboardPx > 0 ? keyboardPx + spacing.xs : insets.bottom;
+  const bottomPad = keyboardPx;
 
   return (
     <View style={styles.root}>
-      <View style={[styles.header, { paddingTop: insets.top + spacing.xs }]}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+        <Text style={styles.wordmark}>{WORDMARK}</Text>
         <Pressable
           testID="travel-new-chat"
           accessibilityRole="button"
           accessibilityLabel={NEW_CHAT_LABEL}
           style={({ pressed }) => [styles.newChat, pressed && styles.pressed]}
-          hitSlop={6}
+          hitSlop={8}
           onPress={onNewChat}
         >
           <Icon name="plus" size={19} color={colors.ink} strokeWidth={2} />
         </Pressable>
-        <Text style={styles.wordmark}>{WORDMARK}</Text>
       </View>
 
       <FlatList
@@ -197,21 +197,19 @@ const styles = StyleSheet.create({
   header: {
     alignItems: "center",
     justifyContent: "center",
-    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
   },
-  wordmark: {
-    fontSize: 16,
-    fontWeight: "800",
-    letterSpacing: 2.5,
-    color: colors.onImage,
-  },
+  wordmark: { fontSize: 20, fontWeight: "800", letterSpacing: -0.5, color: colors.ink },
   newChat: {
     position: "absolute",
-    left: spacing.md,
-    bottom: spacing.xs,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    right: spacing.md,
+    bottom: spacing.sm,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
