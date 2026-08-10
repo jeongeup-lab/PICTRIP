@@ -89,10 +89,10 @@ def test_fallback_keeps_place_like_tokens_and_drops_question_words() -> None:
     assert intent_service.fallback_intent("조용한 곳 추천해줘").regionHints == []
 
 
-def test_a_greeting_leaves_every_axis_empty() -> None:
+def test_a_greeting_is_smalltalk_with_every_axis_empty() -> None:
     guessed = intent_service.fallback_intent("고마워")
 
-    assert guessed == QueryIntent()
+    assert guessed == QueryIntent(task="smalltalk")
 
 
 def test_a_blank_question_keeps_the_default_intent() -> None:
@@ -183,3 +183,18 @@ def test_an_unresolvable_region_hint_does_not_veto_the_origin_anchor() -> None:
     assert kept is not None
     assert kept.contentId == "479904"
     assert kept.action == "cafe"
+
+
+def test_out_of_scope_requests_do_not_become_a_nationwide_search() -> None:
+    assert intent_service.fallback_intent("주식 뭐 사면 돼?").task == "unsupported"
+    assert intent_service.fallback_intent("숙소 예약해줄 수 있어?").task == "unsupported"
+    assert intent_service.fallback_intent("부산 지하철 노선도 알려줘").task == "unsupported"
+    assert intent_service.fallback_intent("파리 가볼 만한 곳 알려줘").outOfScope is True
+
+
+def test_a_travel_question_with_a_bored_opener_still_searches() -> None:
+    guessed = intent_service.fallback_intent("심심한데 부산 바다 보고 싶어")
+
+    assert guessed.task == "search"
+    assert guessed.moodHints == ["sea"]
+    assert guessed.regionHints == ["부산"]
