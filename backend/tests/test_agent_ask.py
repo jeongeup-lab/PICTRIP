@@ -142,6 +142,44 @@ def test_a_quiet_answer_leads_with_the_percentile_not_the_count() -> None:
     assert next(s.text for s in segments if s.emphasis).startswith("하위 ")
 
 
+def test_a_plain_answer_says_how_many_of_the_results_are_calm() -> None:
+    rows = [_row("a", rate=10.0), _row("b", rate=90.0), _row("c", rate=50.0)]
+
+    segments = ask_service._answer(rows, intent=QueryIntent(), near=False, lat=None, lng=None)
+
+    text = "".join(s.text for s in segments)
+    assert "이 중 " in text
+    assert "1곳" in text
+    assert "사람이 적은 편이에요." in text
+    assert ask_service.NARROW_HINT not in text
+
+
+def test_a_plain_answer_says_all_when_every_result_is_calm() -> None:
+    rows = [_row("a", rate=10.0), _row("b", rate=12.0)]
+
+    segments = ask_service._answer(rows, intent=QueryIntent(), near=False, lat=None, lng=None)
+
+    assert "".join(s.text for s in segments).endswith(ask_service.CALM_MIX_ALL)
+
+
+def test_a_plain_answer_without_crowd_data_keeps_the_narrowing_hint() -> None:
+    rows = [_row("a", rate=None), _row("b", rate=None)]
+
+    segments = ask_service._answer(rows, intent=QueryIntent(), near=False, lat=None, lng=None)
+
+    assert "".join(s.text for s in segments).endswith(ask_service.NARROW_HINT)
+
+
+def test_a_busy_only_answer_does_not_claim_calm() -> None:
+    rows = [_row("a", rate=90.0), _row("b", rate=95.0)]
+
+    segments = ask_service._answer(rows, intent=QueryIntent(), near=False, lat=None, lng=None)
+
+    text = "".join(s.text for s in segments)
+    assert "사람이 적은" not in text
+    assert text.endswith(ask_service.NARROW_HINT)
+
+
 def test_a_near_answer_leads_with_the_closest_distance() -> None:
     segments = ask_service._answer(
         _pool()[:4],
