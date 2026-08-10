@@ -1,0 +1,43 @@
+name: detail-prewarm
+# spot_details.overview 일일 프리워밍 — KTO detailCommon2 1콜/스팟.
+# 여행 탭 정보 칩과 상세 화면이 읽는 overview 캐시가 9.2% 뿐이라(2026-08-10 실측)
+# 나머지는 질문 시 KTO 3콜을 동기로 기다린다. attraction 11.6k 를 하루 800스팟씩
+# 소진될 때까지 채운다 — 갤러리 백필이 완주해 비운 슬롯을 그대로 쓴다.
+# intro_data 와 spot_images 는 건드리지 않는다(persist_detail_common).
+# 잡은 resumable — overview 가 채워진 스팟은 다음 실행의 대상에서 빠진다.
+# schedule 은 default 브랜치 기준으로 동작하므로 dev 머지 후부터 유효.
+on:
+  schedule:
+    - cron: "0 21 * * *" # 06:00 KST — KTO 쿼터 리셋 후, 캐시 워밍(05:00)과 겹치지 않게
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "이번 실행에서 채울 스팟 수 (쿼터 예산)"
+        type: string
+        default: "800"
+      dry_run:
+        description: "대상 수만 세고 KTO 호출·쓰기 없음"
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: detail-prewarm
+  cancel-in-progress: false
+
+jobs:
+  prewarm:
+    runs-on: [self-hosted, ct112]
+    timeout-minutes: 90
+    steps:
+      # 이미지·/app/.env 마운트·DB 경로를 이미 가진 실행 중인 compose api 컨테이너
+      # (:8000 퍼블리시)에 exec 한다. 새 컨테이너를 띄우지 않는다.
+      - run: |
+          set -euo pipefail
+          cid="$(docker ps -q --filter "publish=8000" | head -n1)"
+          if [ -z "$cid" ]; then echo "api container not found on :8000"; exit 1; fi
+          limit="${{ inputs.limit || '800' }}"
+          extra=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then extra="--dry-run"; fi
+          docker exec "$cid" python -m scripts.prewarm_details --limit "$limit" $extra

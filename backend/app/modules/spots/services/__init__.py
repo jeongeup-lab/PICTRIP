@@ -16,9 +16,11 @@ from app.modules.spots.services.concentration import (
     load_hot_spots,
 )
 from app.modules.spots.services.detail import (
+    fetch_detail_common,
     invalidate_spot_detail_cache,
     load_spot_detail,
     parse_kto_detail_images,
+    persist_detail_common,
     refresh_spot_detail,
     refresh_spot_detail_in_background,
     replace_spot_images,
@@ -70,6 +72,7 @@ __all__ = [
     "category_predicate",
     "category_sql",
     "derive_category",
+    "fetch_detail_common",
     "find_nearby_spots",
     "find_nearby_spots_bbox",
     "image_bearing_spots_stmt",
@@ -87,6 +90,7 @@ __all__ = [
     "map_region_tokens_to_prefixes",
     "map_region_tokens_to_sido",
     "parse_kto_detail_images",
+    "persist_detail_common",
     "refresh_spot_detail",
     "refresh_spot_detail_in_background",
     "replace_spot_images",
