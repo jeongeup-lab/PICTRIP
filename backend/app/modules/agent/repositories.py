@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 
 from sqlalchemy import text
@@ -12,6 +12,7 @@ from app.modules.spots.services import derive_category, travel_category_sql
 
 INDOOR_L2 = ("VE06", "VE07")
 INDOOR_L3 = ("VE020400", "VE120300")
+KST = timezone(timedelta(hours=9))
 
 
 def category_group(l1: str | None, l2: str | None, l3: str | None) -> str | None:
@@ -213,12 +214,18 @@ _DISTANCE_ORDER = (
     "power(lat - CAST(:lat AS numeric), 2) "
     "+ power((lng - CAST(:lng AS numeric)) * CAST(:lng_scale AS numeric), 2)"
 )
+_TRACKED_FIRST = "(concentration_rate IS NOT NULL) DESC"
+_ROTATION = "md5(content_id || :rank_seed)"
 _ORDER_BY: dict[CandidateOrder, str] = {
-    "id": "content_id",
+    "id": f"{_TRACKED_FIRST}, {_ROTATION}, content_id",
     "rate_asc": "concentration_rate ASC, content_id",
     "rate_desc": "concentration_rate DESC, content_id",
     "distance": f"{_DISTANCE_ORDER}, content_id",
 }
+
+
+def rank_seed_for_today() -> str:
+    return datetime.now(KST).date().isoformat()
 
 
 async def find_candidates(
@@ -236,8 +243,9 @@ async def find_candidates(
     indoor_only: bool = False,
     mood_ids: list[int] | None = None,
     pool_sql: str | None = None,
+    rank_seed: str | None = None,
 ) -> list[CandidateRow]:
-    params: dict[str, object] = {"lim": limit}
+    params: dict[str, object] = {"lim": limit, "rank_seed": rank_seed or rank_seed_for_today()}
     percentile_clause = ""
     if rated_only and percentile_ceiling is not None:
         percentile_clause = _CEILING_CLAUSE
