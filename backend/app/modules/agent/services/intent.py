@@ -481,6 +481,12 @@ VERB_TAIL_CHARS = frozenset("요어아까죠지네다게며면고만한할은는
 MIN_REGION_TOKEN_CHARS = 2
 MAX_REGION_TOKEN_CHARS = 6
 MAX_FALLBACK_REGIONS = 3
+LANDMARK_SUFFIXES = ("역", "터미널", "공항")
+NOT_LANDMARK_WORDS = frozenset(
+    {"지역", "구역", "유역", "권역", "해역", "영역", "전역", "광역", "역세권"}
+)
+NOT_LANDMARK_SUFFIXES = ("지역",)
+MIN_LANDMARK_CHARS = 3
 _HANGUL_SPLIT = re.compile(r"[^가-힣]+")
 
 
@@ -587,14 +593,33 @@ def fallback_intent(question: str) -> QueryIntent:
     regions = _region_hints(residual, moods)
     if not categories and not moods and not regions and _mentions(asked, SMALLTALK_WORDS):
         return QueryIntent(task="smalltalk")
+    regions, landmarks = _split_landmarks(regions)
     return QueryIntent(
         categoryKeywords=categories[:MAX_KEYWORDS],
         regionHints=regions,
+        namedPlaces=[ExtractedPlace(name=name) for name in landmarks[:MAX_NAMED_PLACES]],
         moodHints=moods,
         crowdPreference=crowd,
         indoorOnly=indoor,
         nearMe=near,
     )
+
+
+def _split_landmarks(hints: list[str]) -> tuple[list[str], list[str]]:
+    regions: list[str] = []
+    landmarks: list[str] = []
+    for hint in hints:
+        target = landmarks if _is_landmark(hint) else regions
+        target.append(hint)
+    return regions, landmarks
+
+
+def _is_landmark(token: str) -> bool:
+    if len(token) < MIN_LANDMARK_CHARS or token in NOT_LANDMARK_WORDS:
+        return False
+    if token.endswith(NOT_LANDMARK_SUFFIXES):
+        return False
+    return token.endswith(LANDMARK_SUFFIXES)
 
 
 def _by_length(words: dict[str, Any]) -> list[str]:

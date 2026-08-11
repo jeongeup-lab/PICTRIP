@@ -21,11 +21,19 @@ from app.web.errors import RateLimited
 logger = get_logger(__name__)
 
 
+MAX_ERROR_BODY_CHARS = 500
+
+
 def _is_transient(exc: BaseException) -> bool:
     if isinstance(exc, httpx.HTTPStatusError):
-        status = exc.response.status_code
-        return status == 429 or status >= 500
+        return exc.response.status_code >= 500
     return isinstance(exc, (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError))
+
+
+def _failure_detail(exc: BaseException) -> str | None:
+    if not isinstance(exc, httpx.HTTPStatusError):
+        return None
+    return exc.response.text[:MAX_ERROR_BODY_CHARS] or None
 
 
 class GeminiClient:
@@ -91,7 +99,14 @@ class GeminiClient:
             text = payload["candidates"][0]["content"]["parts"][0]["text"]
             return json.loads(text)
         except (httpx.HTTPError, KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
-            logger.warning("agent.llm.failed", error_type=type(exc).__name__)
+            logger.warning(
+                "agent.llm.failed",
+                error_type=type(exc).__name__,
+                status=(
+                    exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+                ),
+                detail=_failure_detail(exc),
+            )
             if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
                 raise RateLimited() from exc
             raise AgentIntentUnavailable() from exc

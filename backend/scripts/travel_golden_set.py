@@ -6,10 +6,17 @@ import json
 import sys
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8099"
+LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+SHARED_KEY_REFUSAL = (
+    "이 하네스는 케이스마다 Gemini 를 호출한다 — 전체 실행이면 1,000콜을 넘는다.\n"
+    "지금 --base-url 이 로컬이 아니라서 운영 키를 태울 수 있어 멈춘다.\n"
+    "로컬 서버로 돌리거나, 전용 키를 쓰는 게 확실하면 --allow-shared-key 를 붙여라."
+)
 PACE_SECONDS = 3.5
 BUSAN = {"lat": 35.1587, "lng": 129.1604}
 SEOUL = {"lat": 37.5665, "lng": 126.9780}
@@ -1134,11 +1141,21 @@ async def run(base_url: str, only: str | None) -> int:
     return 1 if failed else 0
 
 
+def targets_a_shared_key(base_url: str) -> bool:
+    host = urlsplit(base_url).hostname
+    return host not in LOOPBACK_HOSTS
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="여행 탭 대화 골든셋 실행")
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
     parser.add_argument("--only", default=None, help="케이스 ID 접두사 또는 그룹명")
     parser.add_argument("--list", action="store_true")
+    parser.add_argument(
+        "--allow-shared-key",
+        action="store_true",
+        help="로컬이 아닌 서버로 실행 — 운영 Gemini 쿼터를 태울 수 있다",
+    )
     args = parser.parse_args()
     if args.list:
         print(
@@ -1149,6 +1166,9 @@ def main() -> int:
             )
         )
         return 0
+    if targets_a_shared_key(args.base_url) and not args.allow_shared_key:
+        print(SHARED_KEY_REFUSAL, file=sys.stderr)
+        return 2
     return asyncio.run(run(args.base_url, args.only))
 
 
