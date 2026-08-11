@@ -83,6 +83,34 @@ class ChannelsResponse(BaseModel):
     channels: list[ChannelMeta]
 
 
+class HomeSpotCard(BaseModel):
+    contentId: str
+    title: str
+    regionLabel: str
+    imageUrl: str | None
+    rank: int | None = None
+    dist: float | None = None
+    category: str | None = None
+    tag: str | None = None
+    anchorTitle: str | None = None
+
+    @field_validator("imageUrl")
+    @classmethod
+    def _upgrade_image(cls, v: str | None) -> str | None:
+        return hires_kto_image(v) or v
+
+
+class HomeCardsResponse(BaseModel):
+    items: list[HomeSpotCard]
+
+
+class RecommendationsResponse(BaseModel):
+    ready: bool
+    savedCount: int
+    minSaved: int
+    items: list[HomeSpotCard]
+
+
 class ShortsSpotCard(BaseModel):
     contentId: str
     title: str

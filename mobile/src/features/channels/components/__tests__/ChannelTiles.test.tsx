@@ -39,7 +39,7 @@ function tiles(r: renderer.ReactTestRenderer) {
 const meta = (key: ChannelKey, over: Partial<ChannelMeta> = {}): ChannelMeta => ({
   key,
   label: key.charAt(0).toUpperCase() + key.slice(1),
-  thumbnailUrl: key === "around" ? null : `https://tong.visitkorea.or.kr/${key}.jpg`,
+  thumbnailUrl: `https://tong.visitkorea.or.kr/${key}.jpg`,
   available: true,
   ...over,
 });
@@ -48,23 +48,16 @@ afterEach(() => jest.clearAllMocks());
 
 describe("ChannelTiles", () => {
   it("renders a tile per channel with its English label", async () => {
-    setChannels([meta("around"), meta("hot"), meta("hidden"), meta("festa"), meta("pets")]);
+    setChannels([meta("hidden"), meta("festa"), meta("pets"), meta("snap")]);
     setSeen([]);
     const r = await mount(() => {});
-    expect(tiles(r)).toHaveLength(5);
-    expect(JSON.stringify(r.toJSON())).toContain("Hot");
-  });
-
-  it("around tile renders the pin icon instead of a photo", async () => {
-    setChannels([meta("around")]);
-    setSeen([]);
-    const r = await mount(() => {});
-    expect(r.root.findAllByProps({ name: "map-pin" }).length).toBeGreaterThan(0);
+    expect(tiles(r)).toHaveLength(4);
+    expect(JSON.stringify(r.toJSON())).toContain("Hidden");
   });
 
   it("seen tile is dimmed and loses its new badge", async () => {
-    setChannels([meta("hot")]);
-    setSeen(["hot"]);
+    setChannels([meta("hidden")]);
+    setSeen(["hidden"]);
     const r = await mount(() => {});
     const tile = tiles(r)[0];
     expect(StyleSheet.flatten(tile.props.style).opacity).toBe(0.55);
@@ -81,28 +74,28 @@ describe("ChannelTiles", () => {
   });
 
   it("unseen available tile keeps its new badge", async () => {
-    setChannels([meta("hot")]);
+    setChannels([meta("hidden")]);
     setSeen([]);
     const r = await mount(() => {});
     expect(r.root.findAllByProps({ testID: "channel-new-dot" }).length).toBeGreaterThan(0);
   });
 
   it("pressing in a tile prefetches its cards", async () => {
-    setChannels([meta("around"), meta("hot")]);
+    setChannels([meta("snap"), meta("hidden")]);
     setSeen([]);
     const r = await mount(() => {});
     await act(async () => tiles(r)[1].props.onPressIn());
-    expect(mockPrefetch).toHaveBeenCalledWith("hot");
+    expect(mockPrefetch).toHaveBeenCalledWith("hidden");
   });
 
   it("tapping a tile calls onOpen with its key", async () => {
-    setChannels([meta("around"), meta("hot")]);
+    setChannels([meta("snap"), meta("hidden")]);
     setSeen([]);
     const onOpen = jest.fn();
     const r = await mount(onOpen);
-    const hot = tiles(r)[1];
-    await act(async () => hot.props.onPress());
-    expect(onOpen).toHaveBeenCalledWith("hot");
+    const second = tiles(r)[1];
+    await act(async () => second.props.onPress());
+    expect(onOpen).toHaveBeenCalledWith("hidden");
   });
 
   it("tapping an available:false tile does not call onOpen", async () => {
@@ -119,8 +112,8 @@ describe("ChannelTiles", () => {
   });
 
   it("tapping an available seen tile still calls onOpen", async () => {
-    setChannels([meta("hot")]);
-    setSeen(["hot"]);
+    setChannels([meta("hidden")]);
+    setSeen(["hidden"]);
     const onOpen = jest.fn();
     const r = await mount(onOpen);
     const tile = tiles(r)[0];
@@ -128,6 +121,6 @@ describe("ChannelTiles", () => {
     await act(async () => {
       if (!tile.props.disabled) tile.props.onPress();
     });
-    expect(onOpen).toHaveBeenCalledWith("hot");
+    expect(onOpen).toHaveBeenCalledWith("hidden");
   });
 });

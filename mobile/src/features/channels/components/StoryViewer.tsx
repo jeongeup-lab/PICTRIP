@@ -16,13 +16,6 @@ import { Icon } from "@/components/Icon";
 import { RemoteImage, fullSizeSourceUri } from "@/components/RemoteImage";
 import { useChannelCards, useChannels, useSeenChannels } from "@/features/channels/queries";
 import type { ChannelKey } from "@/features/channels/api";
-import {
-  getCurrentCoords,
-  getPermissionStatus,
-  requestPermission,
-  type Coords,
-} from "@/features/map/usecases/request-location";
-import { PermissionPrimer } from "@/features/map/components/PermissionPrimer";
 import { StoryCard } from "@/features/channels/components/StoryCard";
 import { prefetchSpot } from "@/features/spots/queries";
 import { colors } from "@/constants/theme";
@@ -45,8 +38,6 @@ export function StoryViewer({ start }: Props) {
 
   const [manualIdx, setManualIdx] = useState<number | null>(null);
   const [cardIdx, setCardIdx] = useState(0);
-  const [coords, setCoords] = useState<Coords | null>(null);
-  const [primer, setPrimer] = useState(false);
 
   const startIdx = Math.max(
     0,
@@ -55,10 +46,8 @@ export function StoryViewer({ start }: Props) {
   const channelIdx = manualIdx ?? startIdx;
   const channel = channels[channelIdx];
   const channelKey = channel?.key ?? start;
-  const isAround = channelKey === "around";
-  const needCoords = isAround && !coords;
 
-  const { data: cardData, isError } = useChannelCards(channelKey, coords ?? undefined);
+  const { data: cardData, isError } = useChannelCards(channelKey);
   const noData = !cardData;
   const cards = cardData?.cards ?? [];
   const cardCount = cards.length;
@@ -72,26 +61,6 @@ export function StoryViewer({ start }: Props) {
     }
   }, [cardData, shownIdx]);
 
-  useEffect(() => {
-    if (!needCoords) return;
-    let alive = true;
-    void (async () => {
-      const status = await getPermissionStatus();
-      if (!alive) return;
-      if (status === "granted") {
-        const c = await getCurrentCoords();
-        if (!alive) return;
-        if (c) setCoords(c);
-        else setPrimer(true);
-      } else {
-        setPrimer(true);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [needCoords, channelKey]);
-
   const close = () => router.back();
 
   const nextChannel = () => {
@@ -99,7 +68,6 @@ export function StoryViewer({ start }: Props) {
     if (channelIdx < channels.length - 1) {
       setManualIdx(channelIdx + 1);
       setCardIdx(0);
-      setCoords(null);
     } else {
       close();
     }
@@ -109,7 +77,6 @@ export function StoryViewer({ start }: Props) {
     if (channelIdx > 0) {
       setManualIdx(channelIdx - 1);
       setCardIdx(LAST);
-      setCoords(null);
     }
   };
 
@@ -131,19 +98,6 @@ export function StoryViewer({ start }: Props) {
     prefetchSpot({ ...currentCard, contentId });
     close();
     router.push(`/spots/${contentId}`);
-  };
-
-  const onAllow = () => {
-    void (async () => {
-      const status = await requestPermission();
-      if (status === "granted") {
-        const c = await getCurrentCoords();
-        if (c) {
-          setCoords(c);
-          setPrimer(false);
-        }
-      }
-    })();
   };
 
   const pan = PanResponder.create({
@@ -171,21 +125,6 @@ export function StoryViewer({ start }: Props) {
         )}
         <Pressable
           testID="story-empty-close"
-          style={[styles.close, styles.closeFloat, { top: insets.top + 12 }]}
-          onPress={close}
-          hitSlop={8}
-        >
-          <Icon name="close" size={18} color={colors.onImage} />
-        </Pressable>
-      </View>
-    );
-  }
-
-  if (needCoords) {
-    return (
-      <View style={[styles.root, { backgroundColor: BG }]} {...pan.panHandlers}>
-        {primer ? <PermissionPrimer variant="priming" onAllow={onAllow} onSkip={close} /> : null}
-        <Pressable
           style={[styles.close, styles.closeFloat, { top: insets.top + 12 }]}
           onPress={close}
           hitSlop={8}

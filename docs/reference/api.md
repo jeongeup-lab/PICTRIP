@@ -21,8 +21,12 @@
 | GET | `/feed` | 홈 피드 — 해외 게시물 (seed+cursor, 6개) | — |
 | GET | `/explore` | 탐색 그리드 (동일 소스, 30개) | — |
 | GET | `/overseas/{id}/matches` | 해외→국내 매칭 3곳 | — |
+| GET | `/home/nearby` | 지금 주변 인기 장소 — 5km 내 혼잡도 랭킹 10곳 (lat/lng 필수) | — |
+| GET | `/home/trending` | 전국 트렌드 — 혼잡도 상위 10곳 | — |
+| GET | `/home/taste-picks` | 취향 카드 후보 (시군구별 1곳, 임베딩 보유분만) | — |
+| GET | `/home/recommendations` | 저장 장소 임베딩 중심 기반 AI 추천 (3곳 미만이면 `ready=false`) | JWT |
 | GET | `/home/channels` | 채널 메타 (가용성 포함) | — |
-| GET | `/home/channels/{key}` | 채널 카드 (`around`는 lat/lng 필요) | — |
+| GET | `/home/channels/{key}` | 채널 카드 (`hidden`·`festa`·`pets`·`snap`) | — |
 | POST | `/agent/chat` | 여행 탭 대화 — SSE 스트리밍, LLM 산문 + 카드 + 출처 (아래) | — |
 | POST | `/agent/ask` | 구 여행 탭 질의 — 단일 JSON 응답. **구 OTA 클라이언트 전용, OTA 완료 시 폐기** (아래) | — |
 | GET | `/map/nearby` | 내 주변 (bbox+카테고리, ≤30) | — |

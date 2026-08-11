@@ -14,14 +14,18 @@ from app.modules.feed.schemas import (
     ChannelCardsResponse,
     ChannelMeta,
     ChannelsResponse,
+    HomeCardsResponse,
+    HomeSpotCard,
     MatchCard,
     MatchesResponse,
     PostsResponse,
+    RecommendationsResponse,
     ShortsCard,
     ShortsResponse,
     ShortsSpotCard,
 )
-from app.modules.feed.services import channels, matching, posts, shorts
+from app.modules.feed.services import channels, home, matching, posts, shorts
+from app.security.jwt import CurrentUserId
 from app.web.envelope import ok
 
 router = APIRouter(tags=["feed"])
@@ -109,6 +113,73 @@ async def overseas_matches(
                 for r in rows
             ],
         )
+    )
+
+
+@router.get("/home/nearby", summary="지금 주변 인기 장소 (혼잡도 랭킹 + 거리)")
+async def home_nearby(
+    session: DbSession,
+    redis: RedisDep,
+    lat: float = Query(..., ge=-90, le=90),
+    lng: float = Query(..., ge=-180, le=180),
+    limit: int = Query(home.CARD_COUNT, ge=1, le=20),
+) -> dict[str, Any]:
+    rows = await home.load_nearby_ranked(session, redis, lat=lat, lng=lng, limit=limit)
+    return ok(HomeCardsResponse(items=[_home_card(r) for r in rows]))
+
+
+@router.get("/home/trending", summary="전국 트렌드 (혼잡도 상위)")
+async def home_trending(
+    session: DbSession,
+    redis: RedisDep,
+    limit: int = Query(home.CARD_COUNT, ge=1, le=20),
+) -> dict[str, Any]:
+    rows = await home.load_trending(session, redis, limit=limit)
+    return ok(HomeCardsResponse(items=[_home_card(r) for r in rows]))
+
+
+@router.get("/home/taste-picks", summary="취향 카드 후보 (저장하면 AI 추천 시드)")
+async def home_taste_picks(
+    session: DbSession,
+    redis: RedisDep,
+    limit: int = Query(home.TASTE_PICK_COUNT, ge=1, le=30),
+) -> dict[str, Any]:
+    rows = await home.load_taste_picks(session, redis, limit=limit)
+    return ok(HomeCardsResponse(items=[_home_card(r) for r in rows]))
+
+
+@router.get("/home/recommendations", summary="저장한 장소 임베딩 기반 AI 추천")
+async def home_recommendations(
+    session: DbSession,
+    user_id: CurrentUserId,
+    lat: float | None = Query(None, ge=-90, le=90),
+    lng: float | None = Query(None, ge=-180, le=180),
+    limit: int = Query(home.CARD_COUNT, ge=1, le=20),
+) -> dict[str, Any]:
+    result = await home.load_recommendations(
+        session, user_id=user_id, lat=lat, lng=lng, limit=limit
+    )
+    return ok(
+        RecommendationsResponse(
+            ready=result.ready,
+            savedCount=result.saved_count,
+            minSaved=result.min_saved,
+            items=[_home_card(r) for r in result.items],
+        )
+    )
+
+
+def _home_card(row: home.HomeCardRow) -> HomeSpotCard:
+    return HomeSpotCard(
+        contentId=row.content_id,
+        title=row.title,
+        regionLabel=row.region_label,
+        imageUrl=row.image_url,
+        rank=row.rank,
+        dist=row.dist,
+        category=row.category,
+        tag=row.tag,
+        anchorTitle=row.anchor_title,
     )
 
 

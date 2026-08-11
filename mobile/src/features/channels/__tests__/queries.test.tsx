@@ -30,21 +30,9 @@ const mockSaveSeen = saveSeen as jest.Mock;
 const mockLoadSeen = loadSeen as jest.Mock;
 
 describe("channelCardsKey", () => {
-  it("puts different locations in different keys", () => {
-    const a = channelCardsKey("around", { lat: 37.5, lng: 127.0 });
-    const b = channelCardsKey("around", { lat: 35.1, lng: 129.0 });
-    expect(a).not.toEqual(b);
-    expect(a).toEqual(["channel-cards", "around", [37500, 127000]]);
-  });
-
-  it("reuses one key for sub-100m GPS jitter", () => {
-    const a = channelCardsKey("around", { lat: 37.5, lng: 127.0 });
-    const b = channelCardsKey("around", { lat: 37.5001, lng: 127.0001 });
-    expect(a).toEqual(b);
-  });
-
-  it("uses a null location slot when coords are absent", () => {
-    expect(channelCardsKey("hot")).toEqual(["channel-cards", "hot", null]);
+  it("keys by channel alone now that no channel takes coordinates", () => {
+    expect(channelCardsKey("hidden")).toEqual(["channel-cards", "hidden"]);
+    expect(channelCardsKey("festa")).not.toEqual(channelCardsKey("hidden"));
   });
 });
 
@@ -74,11 +62,10 @@ describe("prefetchChannelCards", () => {
     expect(prefetch).toHaveBeenCalledTimes(1);
   });
 
-  it("skips the around channel and cards without an image", async () => {
+  it("skips cards without an image", async () => {
     const prefetch = jest.spyOn(Image, "prefetch").mockResolvedValue(true);
     prefetch.mockClear();
     (getChannelCards as jest.Mock).mockClear();
-    prefetchChannelCards("around");
     (getChannelCards as jest.Mock).mockResolvedValue({
       key: "snap",
       label: "Snap",
@@ -128,17 +115,17 @@ describe("useSeenChannels day reset", () => {
     });
 
     await act(async () => {
-      hook!.markSeen("hot");
+      hook!.markSeen("pets");
     });
-    expect(hook!.seen.has("hot")).toBe(true);
-    expect(mockSaveSeen).toHaveBeenLastCalledWith(["hot"], "2026-07-13");
+    expect(hook!.seen.has("pets")).toBe(true);
+    expect(mockSaveSeen).toHaveBeenLastCalledWith(["pets"], "2026-07-13");
 
     mockKst.day = "2026-07-14";
     await act(async () => {
       hook!.markSeen("festa");
     });
     expect([...hook!.seen]).toEqual(["festa"]);
-    expect(hook!.seen.has("hot")).toBe(false);
+    expect(hook!.seen.has("pets")).toBe(false);
     expect(mockSaveSeen).toHaveBeenLastCalledWith(["festa"], "2026-07-14");
   });
 
@@ -155,9 +142,9 @@ describe("useSeenChannels day reset", () => {
       tree = mountHarness(Harness);
     });
     await act(async () => {
-      hook!.markSeen("hot");
+      hook!.markSeen("pets");
     });
-    expect(hook!.seen.has("hot")).toBe(true);
+    expect(hook!.seen.has("pets")).toBe(true);
 
     mockKst.day = "2026-07-14";
     await act(async () => {
@@ -186,16 +173,16 @@ describe("useSeenChannels day reset", () => {
     });
 
     await act(async () => {
-      hook!.markSeen("hot");
+      hook!.markSeen("pets");
     });
-    expect(hook!.seen.has("hot")).toBe(true);
+    expect(hook!.seen.has("pets")).toBe(true);
 
     await act(async () => {
       resolveLoad!(["hidden"]);
       await Promise.resolve();
     });
 
-    expect(hook!.seen.has("hot")).toBe(true);
+    expect(hook!.seen.has("pets")).toBe(true);
     expect(hook!.seen.has("hidden")).toBe(true);
   });
 
@@ -219,9 +206,9 @@ describe("useSeenChannels day reset", () => {
     });
 
     await act(async () => {
-      hook!.markSeen("hot");
+      hook!.markSeen("pets");
     });
-    expect(hook!.seen.has("hot")).toBe(true);
+    expect(hook!.seen.has("pets")).toBe(true);
     expect(mockSaveSeen).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -229,11 +216,11 @@ describe("useSeenChannels day reset", () => {
       await Promise.resolve();
     });
 
-    expect(hook!.seen.has("hot")).toBe(true);
+    expect(hook!.seen.has("pets")).toBe(true);
     expect(hook!.seen.has("hidden")).toBe(true);
     expect(mockSaveSeen).toHaveBeenCalledTimes(1);
     const persisted = new Set(mockSaveSeen.mock.calls[0][0] as string[]);
-    expect(persisted.has("hot")).toBe(true);
+    expect(persisted.has("pets")).toBe(true);
     expect(persisted.has("hidden")).toBe(true);
   });
 });

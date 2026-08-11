@@ -10,21 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.kto.client import KtoClient
 from app.kto.display import T1_TILE_WIDTH, t1_display_url
-from app.modules.map import services as map_services
-from app.modules.map.schemas import NearbySpotCard
-from app.modules.spots import services as spots_services
-from app.web.errors import ResourceNotFound, ValidationFailed
+from app.web.errors import ResourceNotFound
 
 CHANNEL_LABELS = {
-    "around": "Around",
-    "hot": "Hot",
     "hidden": "Hidden",
     "festa": "Festa",
     "pets": "Pets",
     "snap": "Snap",
 }
-_CARD_COUNT = 10
-_AROUND_RADIUS_M = 5000
 _META_TIMEOUT = 4.0
 _T = TypeVar("_T")
 
@@ -63,38 +56,7 @@ async def load_channel_cards(
 ) -> list[ChannelCardRow]:
     if key not in CHANNEL_LABELS:
         raise ResourceNotFound(f"unknown channel {key}")
-    if key == "around":
-        if lat is None or lng is None:
-            raise ValidationFailed("around channel requires lat/lng")
-        cards = await map_services.nearby_cards(
-            session,
-            lat=lat,
-            lng=lng,
-            radius=_AROUND_RADIUS_M,
-            category=None,
-            sw_lat=None,
-            sw_lng=None,
-            ne_lat=None,
-            ne_lng=None,
-        )
-        top = cards[:_CARD_COUNT]
-        spot_cards = await spots_services.load_active_spot_cards_by_ids(
-            session, [c.contentId for c in top]
-        )
-        return [
-            ChannelCardRow(
-                content_id=c.contentId,
-                title=c.title,
-                region_label=_region(c),
-                image_url=c.firstImageUrl,
-                dist=c.dist,
-                cpyrht_div_cd=(
-                    spot_cards[c.contentId].cpyrht_div_cd if c.contentId in spot_cards else None
-                ),
-            )
-            for c in top
-        ]
-    if key in ("hot", "hidden"):
+    if key == "hidden":
         from app.modules.feed.services.concentration_channels import (
             load_concentration_channel_cached,
         )
@@ -142,20 +104,13 @@ async def load_channel_metas(
     )
     from app.modules.feed.services.kto_channels import load_kto_channel_cached
 
-    async def _concentration_metas() -> tuple[list[ChannelCardRow], list[ChannelCardRow]]:
-        hot = await load_concentration_channel_cached(session, redis, "hot")
-        hidden = await load_concentration_channel_cached(session, redis, "hidden")
-        return hot, hidden
-
-    (hot, hidden), festa, pets, snap = await asyncio.gather(
-        _concentration_metas(),
+    hidden, festa, pets, snap = await asyncio.gather(
+        load_concentration_channel_cached(session, redis, "hidden"),
         _safe(asyncio.wait_for(load_kto_channel_cached(redis, kto, "festa"), _META_TIMEOUT)),
         _safe(asyncio.wait_for(load_kto_channel_cached(redis, kto, "pets"), _META_TIMEOUT)),
         _safe(asyncio.wait_for(load_kto_channel_cached(redis, kto, "snap"), _META_TIMEOUT)),
     )
-    metas = [ChannelMetaRow("around", CHANNEL_LABELS["around"], None, True)]
-    metas.append(_meta_from_rows("hot", hot))
-    metas.append(_meta_from_rows("hidden", hidden))
+    metas = [_meta_from_rows("hidden", hidden)]
     if festa is None:
         metas.append(ChannelMetaRow("festa", CHANNEL_LABELS["festa"], None, False))
     elif festa:
@@ -163,7 +118,3 @@ async def load_channel_metas(
     metas.append(_meta_or_unavailable("pets", pets))
     metas.append(_meta_or_unavailable("snap", snap))
     return metas
-
-
-def _region(card: NearbySpotCard) -> str:
-    return " ".join(part for part in (card.regionName, card.sigunguName) if part)
