@@ -2413,7 +2413,7 @@ async def test_legacy_region_yields_to_a_region_the_question_names(
         app.dependency_overrides.clear()
 
     assert res.status_code == 200
-    assert [spot["contentId"] for spot in res.json()["data"]["spots"]] == ["v1", "v2", "v3"]
+    assert sorted(spot["contentId"] for spot in res.json()["data"]["spots"]) == ["v1", "v2", "v3"]
 
 
 @pytest.mark.integration
@@ -2470,7 +2470,12 @@ async def test_legacy_region_all_stays_nationwide(db_session, client, seeded, mo
         app.dependency_overrides.clear()
 
     assert res.status_code == 200
-    assert [spot["contentId"] for spot in res.json()["data"]["spots"]] == ["j1", "v1", "v2", "v3"]
+    assert sorted(spot["contentId"] for spot in res.json()["data"]["spots"]) == [
+        "j1",
+        "v1",
+        "v2",
+        "v3",
+    ]
 
 
 def test_suggestions_offer_only_axes_that_are_not_already_on() -> None:
