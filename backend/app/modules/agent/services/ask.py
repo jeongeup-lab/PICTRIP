@@ -600,6 +600,8 @@ async def _ask_with_question(
             question, prior=prior, prior_spots=prior_spots
         )
         intent = outcome.intent
+        if outcome.fallback:
+            intent = await retrieve.reclassify_guessed_hints(session, intent)
         steps.append(
             AskStep(
                 tool="intent",

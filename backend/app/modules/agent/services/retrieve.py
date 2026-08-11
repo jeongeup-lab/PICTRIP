@@ -9,10 +9,17 @@ from app.modules.agent import repositories
 from app.modules.agent.repositories import INDOOR_L2 as INDOOR_L2
 from app.modules.agent.repositories import INDOOR_L3 as INDOOR_L3
 from app.modules.agent.repositories import CandidateOrder, CandidateRow
-from app.modules.agent.schemas import MAX_HINT_TOKENS, AgentSpotCard, CrowdPreference
+from app.modules.agent.schemas import (
+    MAX_HINT_TOKENS,
+    MAX_KEYWORDS,
+    AgentSpotCard,
+    CrowdPreference,
+    QueryIntent,
+)
 from app.modules.agent.services.geo import haversine_km
 from app.modules.spots.services import (
     NearbyCategory,
+    RegionPrefix,
     category_sql,
     map_region_tokens_to_prefixes,
     search_spots_by_title,
@@ -38,8 +45,34 @@ CAFE_CODES = ("FD05", "FD030100")
 FOOD_PREFIX = "FD"
 
 
-CAFE_WORDS = ("카페", "커피", "찻집", "디저트")
+CAFE_WORDS = ("카페", "커피", "찻집", "디저트", "베이커리", "빵집", "제과점")
 FOOD_WORDS = ("맛집", "음식", "식당", "먹을", "먹거리", "밥집")
+FOOD_SUFFIXES = ("집", "전문점", "포차", "주점", "술집")
+DISH_WORDS = (
+    "삼겹살",
+    "불고기",
+    "국밥",
+    "냉면",
+    "칼국수",
+    "국수",
+    "파스타",
+    "피자",
+    "치킨",
+    "초밥",
+    "라멘",
+    "짜장면",
+    "짬뽕",
+    "돈까스",
+    "곱창",
+    "막창",
+    "족발",
+    "보쌈",
+    "해물",
+    "한정식",
+    "브런치",
+)
+EXACT_DISH_WORDS = frozenset({"회", "고기", "구이", "찜", "탕"})
+MIN_FOOD_SUFFIX_CHARS = 2
 
 
 def food_word(keywords: list[str]) -> Literal["food", "cafe"] | None:
@@ -53,6 +86,12 @@ def _eating(word: str) -> Literal["food", "cafe"] | None:
     if any(hint in word for hint in CAFE_WORDS):
         return "cafe"
     if any(hint in word for hint in FOOD_WORDS):
+        return "food"
+    if word in EXACT_DISH_WORDS:
+        return "food"
+    if any(hint in word for hint in DISH_WORDS):
+        return "food"
+    if len(word) >= MIN_FOOD_SUFFIX_CHARS and word.endswith(FOOD_SUFFIXES):
         return "food"
     return None
 
@@ -149,6 +188,38 @@ def _drop_covered(prefixes: set[str]) -> list[str]:
 
 async def resolve_region_prefixes(session: AsyncSession, *, hints: list[str]) -> list[str]:
     return (await resolve_region_scope(session, hints=hints)).prefixes
+
+
+def split_unmappable_hints(
+    hints: list[str], mapping: dict[str, RegionPrefix]
+) -> tuple[list[str], list[str]]:
+    kept: list[str] = []
+    dropped: list[str] = []
+    for hint in hints:
+        target = kept if any(token in mapping for token in _hint_tokens(hint)) else dropped
+        target.append(hint)
+    return kept, dropped
+
+
+def reclassified_intent(intent: QueryIntent, *, kept: list[str], dropped: list[str]) -> QueryIntent:
+    keywords = list(intent.categoryKeywords)
+    for word in dropped:
+        if word and word not in keywords:
+            keywords.append(word)
+    return intent.model_copy(
+        update={"regionHints": kept, "categoryKeywords": keywords[:MAX_KEYWORDS]}
+    )
+
+
+async def reclassify_guessed_hints(session: AsyncSession, intent: QueryIntent) -> QueryIntent:
+    if not intent.regionHints:
+        return intent
+    tokens = {token for hint in intent.regionHints for token in _hint_tokens(hint)}
+    mapping = await map_region_tokens_to_prefixes(session, tokens)
+    kept, dropped = split_unmappable_hints(intent.regionHints, mapping)
+    if not dropped:
+        return intent
+    return reclassified_intent(intent, kept=kept, dropped=dropped)
 
 
 def _hint_tokens(hint: str) -> list[str]:
