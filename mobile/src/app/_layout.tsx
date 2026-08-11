@@ -39,6 +39,10 @@ export default function RootLayout() {
             name="channels"
             options={{ presentation: "fullScreenModal", headerShown: false }}
           />
+          <Stack.Screen
+            name="taste"
+            options={{ presentation: "fullScreenModal", headerShown: false }}
+          />
           <Stack.Screen name="auth/login" options={{ presentation: "fullScreenModal" }} />
           <Stack.Screen name="saved" />
           <Stack.Screen name="settings" />

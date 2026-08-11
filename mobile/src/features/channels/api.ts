@@ -1,6 +1,6 @@
 import { api } from "@/lib/api-client";
 
-export type ChannelKey = "around" | "hot" | "hidden" | "festa" | "pets" | "snap";
+export type ChannelKey = "hidden" | "festa" | "pets" | "snap";
 
 export type ChannelMeta = {
   key: ChannelKey;
@@ -28,9 +28,10 @@ export async function getChannels(): Promise<{ channels: ChannelMeta[] }> {
 
 export async function getChannelCards(
   key: ChannelKey,
-  coords?: { lat: number; lng: number },
 ): Promise<{ key: ChannelKey; label: string; cards: ChannelCard[] }> {
-  return (await api.get(`/home/channels/${key}`, {
-    params: coords ? { lat: coords.lat, lng: coords.lng } : undefined,
-  })) as unknown as { key: ChannelKey; label: string; cards: ChannelCard[] };
+  return (await api.get(`/home/channels/${key}`)) as unknown as {
+    key: ChannelKey;
+    label: string;
+    cards: ChannelCard[];
+  };
 }

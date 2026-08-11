@@ -12,17 +12,9 @@ describe("channels api", () => {
     expect(api.get).toHaveBeenCalledWith("/home/channels");
   });
 
-  it("getChannelCards passes coords for around", async () => {
-    (api.get as jest.Mock).mockResolvedValue({ key: "around", label: "Around", cards: [] });
-    await getChannelCards("around", { lat: 35.1, lng: 129 });
-    expect(api.get).toHaveBeenCalledWith("/home/channels/around", {
-      params: { lat: 35.1, lng: 129 },
-    });
-  });
-
-  it("getChannelCards omits coords for keyless channels", async () => {
-    (api.get as jest.Mock).mockResolvedValue({ key: "hot", label: "Hot", cards: [] });
-    await getChannelCards("hot");
-    expect(api.get).toHaveBeenCalledWith("/home/channels/hot", { params: undefined });
+  it("getChannelCards hits the channel path", async () => {
+    (api.get as jest.Mock).mockResolvedValue({ key: "hidden", label: "Hidden", cards: [] });
+    await getChannelCards("hidden");
+    expect(api.get).toHaveBeenCalledWith("/home/channels/hidden");
   });
 });

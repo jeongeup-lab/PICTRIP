@@ -1,20 +1,30 @@
 import renderer, { act } from "react-test-renderer";
-import { FlatList } from "react-native";
+import { ScrollView, Text } from "react-native";
 import HomeScreen from "@/app/(tabs)/index";
-import { useShortsFeed } from "@/features/shorts/queries";
-import type { ShortsCardData } from "@/features/shorts/api";
+import { useHomeLocation } from "@/features/home/hooks/use-home-location";
+import {
+  useNearby,
+  useRecommendations,
+  useRegionLabel,
+  useTrending,
+} from "@/features/home/queries";
 import { queryClient } from "@/lib/query-client";
+import type { HomeSpotCard } from "@/features/home/api";
 
 jest.mock("expo-router", () => ({
-  router: { back: jest.fn(), push: jest.fn() },
+  router: { push: jest.fn() },
   useScrollToTop: jest.fn(),
 }));
 jest.mock("react-native-safe-area-context", () => ({
   SafeAreaView: (props: { children?: unknown }) => props.children,
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
-jest.mock("@/features/shorts/queries", () => ({
-  useShortsFeed: jest.fn(),
+jest.mock("@/features/home/hooks/use-home-location", () => ({ useHomeLocation: jest.fn() }));
+jest.mock("@/features/home/queries", () => ({
+  useNearby: jest.fn(),
+  useTrending: jest.fn(),
+  useRegionLabel: jest.fn(),
+  useRecommendations: jest.fn(),
 }));
 jest.mock("@/features/channels/components/ChannelTiles", () => {
   const React = require("react");
@@ -23,195 +33,183 @@ jest.mock("@/features/channels/components/ChannelTiles", () => {
     ChannelTiles: ({ onOpen }: { onOpen: (k: string) => void }) =>
       React.createElement(Pressable, {
         testID: "channel-tiles",
-        onPress: () => onOpen("hot"),
+        onPress: () => onOpen("hidden"),
       }),
   };
 });
-jest.mock("@/features/shorts/components/ShortsCard", () => {
-  const React = require("react");
-  const { Pressable } = require("react-native");
-  return {
-    ShortsCard: ({ short, onOpen }: { short: { videoId: string }; onOpen: (s: unknown) => void }) =>
-      React.createElement(Pressable, {
-        testID: "shorts-card",
-        onPress: () => onOpen(short),
-      }),
-  };
-});
-jest.mock("@/features/shorts/components/ShortsPlayerSheet", () => {
+jest.mock("@/features/home/components/RankSection", () => {
   const React = require("react");
   const { View } = require("react-native");
   return {
-    ShortsPlayerSheet: ({ short }: { short: { videoId: string } | null }) =>
-      short ? React.createElement(View, { testID: "shorts-player-sheet" }) : null,
+    RankSection: ({ title, cards }: { title: string; cards: HomeSpotCard[] }) =>
+      React.createElement(View, {
+        testID: "rank-section",
+        accessibilityLabel: title,
+        accessibilityHint: cards.map((c) => c.contentId).join(","),
+      }),
+  };
+});
+jest.mock("@/features/home/components/AiSection", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+  return {
+    AiSection: ({ displayName }: { displayName: string | null }) =>
+      React.createElement(View, { testID: "ai-section", accessibilityLabel: displayName ?? "" }),
   };
 });
 
-const useShortsFeedMock = useShortsFeed as jest.Mock;
-const { router, useScrollToTop } = jest.requireMock("expo-router") as {
-  router: { push: jest.Mock };
-  useScrollToTop: jest.Mock;
-};
+const mockLocation = useHomeLocation as jest.Mock;
+const mockNearby = useNearby as jest.Mock;
+const mockTrending = useTrending as jest.Mock;
+const mockRegion = useRegionLabel as jest.Mock;
+const mockRecommendations = useRecommendations as jest.Mock;
+const { router } = jest.requireMock("expo-router") as { router: { push: jest.Mock } };
 
-function shorts(n: number): ShortsCardData[] {
-  return Array.from({ length: n }, (_, i) => ({
-    videoId: `vid-${i + 1}`,
-    title: `쇼츠 ${i + 1}`,
-    channelTitle: `채널 ${i + 1}`,
-    thumbnailUrl: `https://i.ytimg.com/vi/vid-${i + 1}/hqdefault.jpg`,
-    viewCount: (i + 1) * 1000,
-    anchorLabel: "경주",
-    spots: [],
-  }));
+const COORDS = { lat: 37.54, lng: 127.07 };
+
+function card(contentId: string): HomeSpotCard {
+  return {
+    contentId,
+    title: `스팟 ${contentId}`,
+    regionLabel: "서울특별시 광진구",
+    imageUrl: null,
+    rank: 1,
+    dist: 1000,
+    category: null,
+    tag: null,
+    anchorTitle: null,
+  };
 }
 
-let fetchNextPage: jest.Mock;
-let refetch: jest.Mock;
-
-function setFeed(over: Record<string, unknown> = {}) {
-  fetchNextPage = jest.fn();
-  refetch = jest.fn();
-  useShortsFeedMock.mockReturnValue({
-    data: {
-      pages: [
-        { items: shorts(4), nextCursor: "4", hasMore: true },
-        {
-          items: shorts(2).map((s) => ({ ...s, videoId: `${s.videoId}-p2` })),
-          nextCursor: null,
-          hasMore: false,
-        },
-      ],
-    },
-    fetchNextPage,
-    hasNextPage: true,
-    isFetchingNextPage: false,
-    isFetching: false,
+function query(items: HomeSpotCard[], over: Record<string, unknown> = {}) {
+  return {
+    data: { items },
     isLoading: false,
     isError: false,
-    refetch,
+    isFetching: false,
+    dataUpdatedAt: Date.now(),
+    refetch: jest.fn(),
     ...over,
-  });
+  };
 }
 
-function hosts(r: renderer.ReactTestRenderer, testID: string) {
-  return r.root.findAllByProps({ testID }).filter((n) => typeof n.type === "string");
-}
+let request: jest.Mock;
 
-let tree: renderer.ReactTestRenderer | null = null;
+beforeEach(() => {
+  request = jest.fn(async () => {});
+  mockLocation.mockReturnValue({ coords: COORDS, status: "granted", request });
+  mockNearby.mockReturnValue(query([card("near-1")]));
+  mockTrending.mockReturnValue(query([card("trend-1")]));
+  mockRegion.mockReturnValue({ data: { label: "광진구 화양동" } });
+  mockRecommendations.mockReturnValue({ data: undefined, isLoading: false });
+});
+
+let mounted: renderer.ReactTestRenderer | null = null;
 
 afterEach(() => {
-  act(() => tree?.unmount());
-  tree = null;
+  act(() => mounted?.unmount());
+  mounted = null;
   jest.clearAllMocks();
 });
 
 async function mount() {
   await act(async () => {
-    tree = renderer.create(<HomeScreen />);
+    mounted = renderer.create(<HomeScreen />);
   });
-  return tree!;
+  return mounted!;
 }
+
+const rank = (r: renderer.ReactTestRenderer) => r.root.findByProps({ testID: "rank-section" });
+const texts = (r: renderer.ReactTestRenderer) =>
+  r.root
+    .findAllByType(Text)
+    .flatMap((n) => (Array.isArray(n.props.children) ? n.props.children : [n.props.children]))
+    .filter((c): c is string => typeof c === "string");
 
 describe("HomeScreen", () => {
   it("renders the PICTRIP wordmark", async () => {
-    setFeed();
     const r = await mount();
     expect(r.root.findAllByProps({ children: "PICTRIP" }).length).toBeGreaterThan(0);
   });
 
-  it("renders the channel tiles header and routes to the channel viewer on open", async () => {
-    setFeed();
+  it("keeps the channel rail and routes into the channel viewer", async () => {
     const r = await mount();
-    expect(hosts(r, "channel-tiles").length).toBe(1);
     await act(async () => {
       r.root.findByProps({ testID: "channel-tiles" }).props.onPress();
     });
-    expect(router.push).toHaveBeenCalledWith("/channels?start=hot");
+    expect(router.push).toHaveBeenCalledWith("/channels?start=hidden");
   });
 
-  it("renders one shorts card per flattened feed item", async () => {
-    setFeed();
+  it("shows nearby cards under the region-named tab by default", async () => {
     const r = await mount();
-    expect(hosts(r, "shorts-card").length).toBe(6);
+    expect(texts(r)).toContain("광진구 화양동");
+    expect(rank(r).props.accessibilityLabel).toBe("지금 주변 인기 장소");
+    expect(rank(r).props.accessibilityHint).toBe("near-1");
   });
 
-  it("opens the player sheet when a shorts card is tapped", async () => {
-    setFeed();
+  it("swaps to the nationwide ranking when the trend tab is picked", async () => {
     const r = await mount();
-    expect(hosts(r, "shorts-player-sheet").length).toBe(0);
     await act(async () => {
-      r.root.findAllByProps({ testID: "shorts-card" })[0].props.onPress();
+      r.root.findByProps({ testID: "home-scope-trending" }).props.onPress();
     });
-    expect(hosts(r, "shorts-player-sheet").length).toBe(1);
+    expect(rank(r).props.accessibilityLabel).toBe("전국 트렌드 인기 장소");
+    expect(rank(r).props.accessibilityHint).toBe("trend-1");
   });
 
-  it("shows loading skeletons before the first page resolves", async () => {
-    setFeed({ data: undefined, isLoading: true });
+  it("falls back to the trend ranking and prompts for location when permission is missing", async () => {
+    mockLocation.mockReturnValue({ coords: null, status: "denied", request });
     const r = await mount();
-    expect(hosts(r, "shorts-card").length).toBe(0);
-    expect(r.root.findAllByType(FlatList).length).toBe(0);
-  });
-
-  it("shows the error view with a retry that refetches", async () => {
-    setFeed({ data: undefined, isError: true });
-    const r = await mount();
-    expect(hosts(r, "shorts-card").length).toBe(0);
+    expect(rank(r).props.accessibilityHint).toBe("trend-1");
     await act(async () => {
-      r.root.findByProps({ testID: "home-retry" }).props.onPress();
+      r.root.findByProps({ testID: "home-location-cta" }).props.onPress();
     });
-    expect(refetch).toHaveBeenCalled();
+    expect(request).toHaveBeenCalled();
   });
 
-  it("renders no legal footer under the feed", async () => {
-    setFeed();
+  it("labels the tab 내 주변 until the reverse geocode lands", async () => {
+    mockRegion.mockReturnValue({ data: undefined });
     const r = await mount();
-    expect(hosts(r, "footer-terms").length).toBe(0);
-    expect(hosts(r, "footer-privacy").length).toBe(0);
-    expect(hosts(r, "footer-data-source").length).toBe(0);
+    expect(texts(r)).toContain("내 주변");
   });
 
-  it("fetches the next page when the list end is reached", async () => {
-    setFeed();
+  it("asks for location when the user taps back to the nearby tab without coords", async () => {
+    mockLocation.mockReturnValue({ coords: null, status: "denied", request });
     const r = await mount();
-    const list = r.root.findAllByType(FlatList)[0];
     await act(async () => {
-      list.props.onEndReached();
+      r.root.findByProps({ testID: "home-scope-nearby" }).props.onPress();
     });
-    expect(fetchNextPage).toHaveBeenCalled();
+    expect(request).toHaveBeenCalled();
   });
 
-  it("does not fetch the next page while one is already loading", async () => {
-    setFeed({ isFetchingNextPage: true, isFetching: true });
+  it("renders the AI section under the ranking", async () => {
     const r = await mount();
-    const list = r.root.findAllByType(FlatList)[0];
-    await act(async () => {
-      list.props.onEndReached();
-    });
-    expect(fetchNextPage).not.toHaveBeenCalled();
+    expect(r.root.findAllByProps({ testID: "ai-section" }).length).toBeGreaterThan(0);
   });
 
-  it("pull-to-refresh invalidates the shorts query", async () => {
+  it("pull-to-refresh invalidates every home query", async () => {
     const invalidate = jest.spyOn(queryClient, "invalidateQueries");
-    setFeed();
     const r = await mount();
-    const list = r.root.findAllByType(FlatList)[0];
+    const list = r.root.findAllByType(ScrollView)[0];
     await act(async () => {
       list.props.refreshControl.props.onRefresh();
     });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["shorts"] });
+    const predicate = invalidate.mock.calls[0][0]?.predicate as unknown as (q: {
+      queryKey: unknown[];
+    }) => boolean;
+    expect(predicate({ queryKey: ["home-nearby", null] })).toBe(true);
+    expect(predicate({ queryKey: ["channels"] })).toBe(false);
     invalidate.mockRestore();
   });
 
-  it("shows the refresh spinner while a refetch is in flight", async () => {
-    setFeed({ isFetching: true });
-    const r = await mount();
-    const list = r.root.findAllByType(FlatList)[0];
-    expect(list.props.refreshControl.props.refreshing).toBe(true);
-  });
-
-  it("wires the feed list into the tab re-tap scroll-to-top hook", async () => {
-    setFeed();
+  it("wires the scroll view into the tab re-tap scroll-to-top hook", async () => {
+    const { useScrollToTop } = jest.requireMock("expo-router") as { useScrollToTop: jest.Mock };
     await mount();
     expect(useScrollToTop).toHaveBeenCalled();
+  });
+
+  it("does not render a shorts player anywhere on the home screen", async () => {
+    const r = await mount();
+    expect(r.root.findAllByProps({ testID: "shorts-card" })).toHaveLength(0);
+    expect(r.root.findAllByProps({ testID: "shorts-player-sheet" })).toHaveLength(0);
   });
 });

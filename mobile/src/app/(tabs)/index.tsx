@@ -1,51 +1,50 @@
 import { useCallback, useRef, useState } from "react";
-import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useScrollToTop } from "expo-router";
+import { Icon } from "@/components/Icon";
 import { ChannelTiles } from "@/features/channels/components/ChannelTiles";
-import type { ShortsCardData } from "@/features/shorts/api";
-import { ShortsCard } from "@/features/shorts/components/ShortsCard";
-import { ShortsPlayerSheet } from "@/features/shorts/components/ShortsPlayerSheet";
-import { useShortsFeed } from "@/features/shorts/queries";
-import { Skeleton } from "@/components/Skeleton";
-import { PrimaryButton } from "@/components/PrimaryButton";
+import { AiSection } from "@/features/home/components/AiSection";
+import { RankSection } from "@/features/home/components/RankSection";
+import { ScopeTabs, type HomeScope } from "@/features/home/components/ScopeTabs";
+import { useHomeLocation } from "@/features/home/hooks/use-home-location";
+import { useNow } from "@/features/home/hooks/use-now";
+import { formatUpdatedAt } from "@/features/home/lib/updated-at";
+import {
+  useNearby,
+  useRecommendations,
+  useRegionLabel,
+  useTrending,
+} from "@/features/home/queries";
+import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { queryClient } from "@/lib/query-client";
 import { colors, spacing } from "@/constants/theme";
 
-function Header() {
-  return (
-    <View style={styles.headerBlock}>
-      <ChannelTiles onOpen={(key) => router.push(`/channels?start=${key}`)} />
-    </View>
-  );
-}
-
 export default function HomeScreen() {
-  const listRef = useRef<FlatList<ShortsCardData>>(null);
-  const [openShort, setOpenShort] = useState<ShortsCardData | null>(null);
-
+  const listRef = useRef<ScrollView>(null);
   useScrollToTop(listRef);
 
-  const {
-    data,
-    isLoading,
-    isError,
-    isFetching,
-    isFetchingNextPage,
-    hasNextPage,
-    fetchNextPage,
-    refetch,
-  } = useShortsFeed();
+  const [scope, setScope] = useState<HomeScope>("nearby");
+  const { coords, status, request } = useHomeLocation();
+  const displayName = useAuthStore((s) => s.user?.displayName ?? null);
+  const now = useNow();
 
-  const shorts: ShortsCardData[] = data?.pages.flatMap((p) => p.items) ?? [];
+  const region = useRegionLabel(coords);
+  const nearby = useNearby(coords);
+  const trending = useTrending();
+  const recommendations = useRecommendations(coords);
+
+  const locationDenied = status === "denied" || status === "undetermined";
+  const showTrending = scope === "trending" || locationDenied;
+  const active = showTrending ? trending : nearby;
+  const waitingForFix = !showTrending && !coords;
+  const cards = active.data?.items ?? [];
 
   const onRefresh = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: ["shorts"] });
+    void queryClient.invalidateQueries({
+      predicate: (q) => String(q.queryKey[0]).startsWith("home-"),
+    });
   }, []);
-
-  const onEndReached = () => {
-    if (hasNextPage && !isFetching) void fetchNextPage();
-  };
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -53,45 +52,58 @@ export default function HomeScreen() {
         <Text style={styles.wordmark}>PICTRIP</Text>
       </View>
 
-      {isLoading ? (
-        <View style={styles.loading}>
-          <View style={styles.tileRow}>
-            <Skeleton width={86} height={110} radius={14} />
-            <Skeleton width={86} height={110} radius={14} />
-            <Skeleton width={86} height={110} radius={14} />
-          </View>
-          <Skeleton height={520} radius={16} style={{ marginTop: spacing.xxl }} />
+      <ScrollView
+        ref={listRef}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={active.isFetching && !active.isLoading}
+            onRefresh={onRefresh}
+            tintColor={colors.ter}
+          />
+        }
+      >
+        <View style={styles.channels}>
+          <ChannelTiles onOpen={(key) => router.push(`/channels?start=${key}`)} />
         </View>
-      ) : isError || !data ? (
-        <View style={styles.error}>
-          <Text style={styles.errorText}>피드를 불러오지 못했어요.</Text>
-          <PrimaryButton testID="home-retry" label="다시 시도" onPress={() => refetch()} />
-        </View>
-      ) : (
-        <FlatList
-          ref={listRef}
-          data={shorts}
-          keyExtractor={(short) => short.videoId}
-          renderItem={({ item }) => (
-            <View style={styles.cardBlock}>
-              <ShortsCard short={item} onOpen={setOpenShort} />
-            </View>
-          )}
-          ListHeaderComponent={Header}
-          showsVerticalScrollIndicator={false}
-          onEndReached={onEndReached}
-          onEndReachedThreshold={0.8}
-          refreshControl={
-            <RefreshControl
-              refreshing={isFetching && !isLoading && !isFetchingNextPage}
-              onRefresh={onRefresh}
-              tintColor={colors.ter}
-            />
-          }
-        />
-      )}
 
-      <ShortsPlayerSheet short={openShort} onClose={() => setOpenShort(null)} />
+        <ScopeTabs
+          scope={showTrending ? "trending" : "nearby"}
+          nearbyLabel={region.data?.label ?? "내 주변"}
+          onChange={(next) => {
+            setScope(next);
+            if (next === "nearby" && !coords) void request();
+          }}
+        />
+
+        {locationDenied && scope === "nearby" ? (
+          <Pressable
+            testID="home-location-cta"
+            onPress={() => void request()}
+            style={styles.permit}
+          >
+            <Icon name="location" size={18} color={colors.accentText} />
+            <Text style={styles.permitText}>위치를 켜면 지금 주변 인기 장소를 보여드려요</Text>
+            <Icon name="chevron-right" size={16} color={colors.ter} />
+          </Pressable>
+        ) : null}
+
+        <RankSection
+          title={showTrending ? "전국 트렌드 인기 장소" : "지금 주변 인기 장소"}
+          note={cards.length > 0 ? formatUpdatedAt(active.dataUpdatedAt, now) : null}
+          cards={cards}
+          isLoading={active.isLoading || waitingForFix}
+          isError={active.isError}
+          onRetry={() => void active.refetch()}
+        />
+
+        <AiSection
+          displayName={displayName}
+          data={recommendations.data}
+          isLoading={recommendations.isLoading}
+        />
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -106,16 +118,18 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.line,
   },
   wordmark: { fontSize: 20, fontWeight: "800", letterSpacing: -0.5, color: colors.ink },
-  headerBlock: { paddingTop: spacing.md, paddingBottom: spacing.sm },
-  cardBlock: { paddingBottom: spacing.xxl },
-  loading: { padding: spacing.lg },
-  tileRow: { flexDirection: "row", gap: 10 },
-  error: {
-    flex: 1,
+  content: { paddingTop: spacing.md, paddingBottom: spacing.xxl },
+  channels: { paddingBottom: spacing.lg },
+  permit: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.md,
-    padding: spacing.xl,
+    gap: 8,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: colors.accentFill,
   },
-  errorText: { fontSize: 15, color: colors.sec },
+  permitText: { flex: 1, fontSize: 13.5, fontWeight: "700", color: colors.ink },
 });

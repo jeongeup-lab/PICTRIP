@@ -5,11 +5,6 @@ import { Image } from "expo-image";
 import { StoryViewer } from "@/features/channels/components/StoryViewer";
 import { useChannels, useChannelCards, useSeenChannels } from "@/features/channels/queries";
 import { useSaveOptimistic } from "@/features/saved/hooks/use-save-optimistic";
-import {
-  getCurrentCoords,
-  getPermissionStatus,
-  requestPermission,
-} from "@/features/map/usecases/request-location";
 import { prefetchSpot } from "@/features/spots/queries";
 import type { ChannelCard, ChannelKey, ChannelMeta } from "@/features/channels/api";
 
@@ -21,11 +16,6 @@ jest.mock("@/features/channels/queries", () => ({
 }));
 jest.mock("@/features/saved/hooks/use-save-optimistic", () => ({ useSaveOptimistic: jest.fn() }));
 jest.mock("@/features/spots/queries", () => ({ prefetchSpot: jest.fn() }));
-jest.mock("@/features/map/usecases/request-location", () => ({
-  getPermissionStatus: jest.fn(),
-  getCurrentCoords: jest.fn(),
-  requestPermission: jest.fn(),
-}));
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
@@ -66,9 +56,6 @@ beforeEach(() => {
   });
   (useSeenChannels as jest.Mock).mockReturnValue({ seen: new Set(), markSeen: mockMarkSeen });
   (useSaveOptimistic as jest.Mock).mockReturnValue({ saved: false, toggle: jest.fn() });
-  (getPermissionStatus as jest.Mock).mockResolvedValue("granted");
-  (getCurrentCoords as jest.Mock).mockResolvedValue(null);
-  (requestPermission as jest.Mock).mockResolvedValue("granted");
 });
 
 afterEach(() => jest.clearAllMocks());
@@ -95,21 +82,21 @@ const saveIconName = (r: renderer.ReactTestRenderer) =>
 
 describe("StoryViewer", () => {
   it("renders progress segments equal to card count and the English channel title", async () => {
-    setChannels([meta("hot", "Hot"), meta("hidden", "Hidden")]);
-    cardsByKey.hot = [card({ title: "A" }), card({ title: "B" })];
-    const r = await mount("hot");
+    setChannels([meta("festa", "Festa"), meta("hidden", "Hidden")]);
+    cardsByKey.festa = [card({ title: "A" }), card({ title: "B" })];
+    const r = await mount("festa");
     const segs = r.root
       .findAllByProps({ testID: "story-progress-seg" })
       .filter((n) => typeof n.type === "string");
     expect(segs).toHaveLength(2);
-    expect(JSON.stringify(r.toJSON())).toContain("Hot");
+    expect(JSON.stringify(r.toJSON())).toContain("Festa");
     expect(title(r)).toBe("A");
   });
 
   it("right tap advances the card, left tap goes back", async () => {
-    setChannels([meta("hot", "Hot")]);
-    cardsByKey.hot = [card({ title: "A" }), card({ title: "B" })];
-    const r = await mount("hot");
+    setChannels([meta("festa", "Festa")]);
+    cardsByKey.festa = [card({ title: "A" }), card({ title: "B" })];
+    const r = await mount("festa");
     await tap(r, "right");
     expect(title(r)).toBe("B");
     await tap(r, "left");
@@ -117,7 +104,7 @@ describe("StoryViewer", () => {
   });
 
   it("tapping past the last card of the last channel closes the viewer and marks it seen", async () => {
-    setChannels([meta("hot", "Hot"), meta("hidden", "Hidden")]);
+    setChannels([meta("festa", "Festa"), meta("hidden", "Hidden")]);
     cardsByKey.hidden = [card({ title: "H1" }), card({ title: "H2" })];
     const r = await mount("hidden");
     await tap(r, "right");
@@ -127,43 +114,43 @@ describe("StoryViewer", () => {
   });
 
   it("skips unavailable channels: past the last available channel closes without entering a locked one", async () => {
-    setChannels([meta("hot", "Hot"), { ...meta("hidden", "Hidden"), available: false }]);
-    cardsByKey.hot = [card({ title: "A" }), card({ title: "B" })];
+    setChannels([meta("festa", "Festa"), { ...meta("hidden", "Hidden"), available: false }]);
+    cardsByKey.festa = [card({ title: "A" }), card({ title: "B" })];
     cardsByKey.hidden = [card({ title: "H1" })];
-    const r = await mount("hot");
+    const r = await mount("festa");
     await tap(r, "right");
     await tap(r, "right");
-    expect(mockMarkSeen).toHaveBeenCalledWith("hot");
+    expect(mockMarkSeen).toHaveBeenCalledWith("festa");
     expect(mockMarkSeen).not.toHaveBeenCalledWith("hidden");
     expect(router.back).toHaveBeenCalled();
     expect(JSON.stringify(r.toJSON())).not.toContain("Hidden");
   });
 
   it("advancing past the last card moves to the next channel and marks the current seen", async () => {
-    setChannels([meta("hot", "Hot"), meta("hidden", "Hidden")]);
-    cardsByKey.hot = [card({ title: "A" }), card({ title: "B" })];
+    setChannels([meta("festa", "Festa"), meta("hidden", "Hidden")]);
+    cardsByKey.festa = [card({ title: "A" }), card({ title: "B" })];
     cardsByKey.hidden = [card({ title: "H1" }), card({ title: "H2" })];
-    const r = await mount("hot");
+    const r = await mount("festa");
     await tap(r, "right");
     await tap(r, "right");
-    expect(mockMarkSeen).toHaveBeenCalledWith("hot");
+    expect(mockMarkSeen).toHaveBeenCalledWith("festa");
     expect(title(r)).toBe("H1");
   });
 
   it("ignores a channel-advancing tap while the current channel's cards are loading", async () => {
-    setChannels([meta("hot", "Hot"), meta("hidden", "Hidden")]);
+    setChannels([meta("festa", "Festa"), meta("hidden", "Hidden")]);
     (useChannelCards as jest.Mock).mockReturnValue({ data: undefined, isLoading: true });
-    const r = await mount("hot");
+    const r = await mount("festa");
     await tap(r, "right");
     expect(mockMarkSeen).not.toHaveBeenCalled();
-    expect(JSON.stringify(r.toJSON())).toContain("Hot");
+    expect(JSON.stringify(r.toJSON())).toContain("Festa");
     expect(JSON.stringify(r.toJSON())).not.toContain("Hidden");
   });
 
   it("blocks channel navigation and renders an error card when the cards fail to load", async () => {
-    setChannels([meta("hot", "Hot"), meta("hidden", "Hidden")]);
+    setChannels([meta("festa", "Festa"), meta("hidden", "Hidden")]);
     (useChannelCards as jest.Mock).mockReturnValue({ data: undefined, isError: true });
-    const r = await mount("hot");
+    const r = await mount("festa");
     expect(JSON.stringify(r.toJSON())).toContain("채널을 불러오지 못했어요");
     expect(r.root.findAllByProps({ testID: "story-tap-right" })).toHaveLength(0);
     expect(mockMarkSeen).not.toHaveBeenCalled();
@@ -171,21 +158,21 @@ describe("StoryViewer", () => {
   });
 
   it("advances to the next channel and marks it seen once the cards have loaded", async () => {
-    setChannels([meta("hot", "Hot"), meta("hidden", "Hidden")]);
-    cardsByKey.hot = [card({ title: "A" })];
+    setChannels([meta("festa", "Festa"), meta("hidden", "Hidden")]);
+    cardsByKey.festa = [card({ title: "A" })];
     cardsByKey.hidden = [card({ title: "H1" })];
-    const r = await mount("hot");
+    const r = await mount("festa");
     await tap(r, "right");
-    expect(mockMarkSeen).toHaveBeenCalledWith("hot");
+    expect(mockMarkSeen).toHaveBeenCalledWith("festa");
     expect(title(r)).toBe("H1");
   });
 
   it("renders the current card image cover-filled inside the rounded card frame", async () => {
-    setChannels([meta("hot", "Hot")]);
-    cardsByKey.hot = [
+    setChannels([meta("festa", "Festa")]);
+    cardsByKey.festa = [
       card({ title: "A", imageUrl: "https://tong.visitkorea.or.kr/cms/a_image1_1.jpg" }),
     ];
-    const r = await mount("hot");
+    const r = await mount("festa");
     const uris = r.root
       .findAllByType(Image)
       .map((n) => n.props.source?.uri)
@@ -195,14 +182,14 @@ describe("StoryViewer", () => {
 
   it("prefetches the next two card images but not the current one", async () => {
     const prefetch = jest.spyOn(Image, "prefetch").mockResolvedValue(true);
-    setChannels([meta("hot", "Hot")]);
-    cardsByKey.hot = [
+    setChannels([meta("festa", "Festa")]);
+    cardsByKey.festa = [
       card({ title: "A", imageUrl: "https://tong.visitkorea.or.kr/cms/a_image1_1.jpg" }),
       card({ title: "B", imageUrl: "https://tong.visitkorea.or.kr/cms/b_image1_1.jpg" }),
       card({ title: "C", imageUrl: "https://tong.visitkorea.or.kr/cms/c_image1_1.jpg" }),
       card({ title: "D", imageUrl: "https://tong.visitkorea.or.kr/cms/d_image1_1.jpg" }),
     ];
-    await mount("hot");
+    await mount("festa");
     const prefetched = prefetch.mock.calls.map((c) => c[0] as string);
     expect(prefetched).toContain(
       "https://img.pictrip.org/tong.visitkorea.or.kr/cms/b_image1_1.jpg",
@@ -227,18 +214,18 @@ describe("StoryViewer", () => {
   });
 
   it("detail button closes the viewer then pushes the spot detail route", async () => {
-    setChannels([meta("hot", "Hot")]);
+    setChannels([meta("festa", "Festa")]);
     const selected = card({
       title: "A",
       contentId: "777",
       imageUrl: "https://example.com/a.jpg",
       regionLabel: "서울",
     });
-    cardsByKey.hot = [selected];
+    cardsByKey.festa = [selected];
     const order: string[] = [];
     (router.back as jest.Mock).mockImplementation(() => order.push("back"));
     (router.push as jest.Mock).mockImplementation(() => order.push("push"));
-    const r = await mount("hot");
+    const r = await mount("festa");
     await act(async () => {
       r.root.findByProps({ testID: "story-detail" }).props.onPress();
     });
@@ -247,46 +234,17 @@ describe("StoryViewer", () => {
     expect(order).toEqual(["back", "push"]);
   });
 
-  it("shows the permission primer for the around channel when permission is not granted", async () => {
-    setChannels([meta("around", "Around")]);
-    cardsByKey.around = [card({ title: "AR" })];
-    (getPermissionStatus as jest.Mock).mockResolvedValue("denied");
-    const r = await mount("around");
-    await act(async () => {});
-    expect(JSON.stringify(r.toJSON())).toContain("위치 허용하기");
-    expect(getCurrentCoords).not.toHaveBeenCalled();
-  });
-
-  it("falls back to the permission primer when granted coords resolve null", async () => {
-    setChannels([meta("around", "Around")]);
-    cardsByKey.around = [card({ title: "AR" })];
-    (getPermissionStatus as jest.Mock).mockResolvedValue("granted");
-    (getCurrentCoords as jest.Mock).mockResolvedValue(null);
-    const r = await mount("around");
-    await act(async () => {});
-    expect(getCurrentCoords).toHaveBeenCalled();
-    expect(JSON.stringify(r.toJSON())).toContain("위치 허용하기");
-  });
-
-  it("reads current coords for the around channel when permission is already granted", async () => {
-    setChannels([meta("around", "Around")]);
-    cardsByKey.around = [card({ title: "AR" })];
-    (getPermissionStatus as jest.Mock).mockResolvedValue("granted");
-    (getCurrentCoords as jest.Mock).mockResolvedValue({ lat: 37.5, lng: 127 });
-    const r = await mount("around");
-    await act(async () => {});
-    expect(getCurrentCoords).toHaveBeenCalled();
-    expect(title(r)).toBe("AR");
-  });
-
   it("does not leak an optimistic save from one card onto the next", async () => {
-    setChannels([meta("hot", "Hot")]);
-    cardsByKey.hot = [card({ title: "A", contentId: "a1" }), card({ title: "B", contentId: "b1" })];
+    setChannels([meta("festa", "Festa")]);
+    cardsByKey.festa = [
+      card({ title: "A", contentId: "a1" }),
+      card({ title: "B", contentId: "b1" }),
+    ];
     (useSaveOptimistic as jest.Mock).mockImplementation(() => {
       const [saved, setSaved] = React.useState(false);
       return { saved, toggle: async () => setSaved((s) => !s) };
     });
-    const r = await mount("hot");
+    const r = await mount("festa");
     await act(async () => {
       r.root.findByProps({ testID: "story-save" }).props.onPress();
     });
@@ -298,11 +256,11 @@ describe("StoryViewer", () => {
 
   it("reconciles to the start channel once channels load on a cold entry", async () => {
     (useChannels as jest.Mock).mockReturnValue({ data: undefined });
-    cardsByKey.hot = [card({ title: "A" })];
+    cardsByKey.festa = [card({ title: "A" })];
     cardsByKey.hidden = [card({ title: "H1" })];
     const r = await mount("hidden");
     await act(async () => {
-      setChannels([meta("hot", "Hot"), meta("hidden", "Hidden")]);
+      setChannels([meta("festa", "Festa"), meta("hidden", "Hidden")]);
       r.update(<StoryViewer start="hidden" />);
     });
     expect(JSON.stringify(r.toJSON())).toContain("Hidden");
@@ -311,7 +269,7 @@ describe("StoryViewer", () => {
 
   it("renders a closeable fallback instead of null when channels are empty or still loading", async () => {
     (useChannels as jest.Mock).mockReturnValue({ data: undefined });
-    const r = await mount("hot");
+    const r = await mount("festa");
     expect(r.toJSON()).not.toBeNull();
     const closeBtn = r.root.findByProps({ testID: "story-empty-close" });
     await act(async () => {
@@ -322,25 +280,25 @@ describe("StoryViewer", () => {
 
   it("shows an error (not an endless spinner) when the channel list fails", async () => {
     (useChannels as jest.Mock).mockReturnValue({ data: undefined, isError: true });
-    const r = await mount("hot");
+    const r = await mount("festa");
     expect(JSON.stringify(r.toJSON())).toContain("채널을 불러오지 못했어요");
     r.root.findByProps({ testID: "story-empty-close" });
   });
 
   it("shows a no-channels message (not a spinner) when loaded but none are available", async () => {
     (useChannels as jest.Mock).mockReturnValue({ data: { channels: [] } });
-    const r = await mount("hot");
+    const r = await mount("festa");
     expect(JSON.stringify(r.toJSON())).toContain("지금은 열 수 있는 채널이 없어요");
     r.root.findByProps({ testID: "story-empty-close" });
   });
 
   it("does not override manual navigation after the initial start resolves", async () => {
     (useChannels as jest.Mock).mockReturnValue({ data: undefined });
-    cardsByKey.hot = [card({ title: "A" })];
+    cardsByKey.festa = [card({ title: "A" })];
     cardsByKey.hidden = [card({ title: "H1" })];
     const r = await mount("hidden");
     await act(async () => {
-      setChannels([meta("hot", "Hot"), meta("hidden", "Hidden")]);
+      setChannels([meta("festa", "Festa"), meta("hidden", "Hidden")]);
       r.update(<StoryViewer start="hidden" />);
     });
     expect(title(r)).toBe("H1");

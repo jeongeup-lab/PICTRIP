@@ -48,6 +48,9 @@ export type IconName =
   | "settings"
   | "users"
   | "tag"
+  | "flame"
+  | "star"
+  | "star-fill"
   | "play";
 
 interface IconProps {
@@ -120,6 +123,16 @@ const PATHS: Record<IconName, IconSpec> = {
   },
   check: { d: "M4.5 12.5l4.6 4.6L19.5 6.7" },
   play: { d: "M9 6.2v11.6l9.4-5.8z", fill: true },
+  flame: {
+    d:
+      "M12 3c.6 3 2.4 4 3.9 5.7A6.6 6.6 0 0 1 17.6 13a5.6 5.6 0 0 1-11.2 0c0-1.9.9-3.3 1.9-4.4" +
+      "C9 10.5 10.2 11 11 11c0-2.4.3-5.6 1-8z",
+  },
+  star: { d: "M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8L3.6 9.7l5.8-.8z" },
+  "star-fill": {
+    d: "M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8L3.6 9.7l5.8-.8z",
+    fill: true,
+  },
   calendar: {
     d: "M4 10.5h16M8.5 4v4M15.5 4v4",
     rects: [{ x: 4, y: 6, width: 16, height: 14, rx: 2 }],
