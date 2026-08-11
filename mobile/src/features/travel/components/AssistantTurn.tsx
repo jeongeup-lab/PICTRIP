@@ -5,6 +5,7 @@ import { KakaoWebMap } from "@/features/map/components/KakaoWebMap";
 import { RichAnswerText } from "@/features/travel/components/RichAnswerText";
 import { SourcesSheet, KIND_ICONS } from "@/features/travel/components/SourcesSheet";
 import { SpotCarousel } from "@/features/travel/components/SpotCarousel";
+import { StepSpinner } from "@/features/travel/components/StepSpinner";
 import { agentErrorMessageForCode } from "@/features/travel/lib/agent-errors";
 import { coordsOf } from "@/features/travel/lib/distance";
 import { bounds, center, pinsFrom, placed } from "@/features/travel/lib/spot-geo";
@@ -37,7 +38,7 @@ function StepRow({ label, badge, done }: { label: string; badge: string | null; 
       {done ? (
         <Icon name="check" size={13} color={colors.sec} strokeWidth={2.2} />
       ) : (
-        <View style={styles.spinner} />
+        <StepSpinner />
       )}
       <Text style={styles.stepText} numberOfLines={1}>
         {label}
@@ -208,14 +209,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     paddingHorizontal: spacing.md,
-  },
-  spinner: {
-    width: 13,
-    height: 13,
-    borderRadius: 7,
-    borderWidth: 2,
-    borderColor: colors.line,
-    borderTopColor: colors.accent,
   },
   stepText: { flexShrink: 1, fontSize: 12.5, letterSpacing: -0.2, color: colors.sec },
   stepBadge: { fontSize: 11.5, fontWeight: "700", letterSpacing: -0.2, color: colors.ter },
