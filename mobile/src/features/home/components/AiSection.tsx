@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { Icon } from "@/components/Icon";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { GridSkeleton } from "@/features/home/components/RankSection";
 import { SectionHead } from "@/features/home/components/SectionHead";
 import { SpotGrid } from "@/features/home/components/SpotGrid";
@@ -13,9 +14,11 @@ interface Props {
   displayName: string | null;
   data: Recommendations | undefined;
   isLoading: boolean;
+  isError: boolean;
+  onRetry: () => void;
 }
 
-export function AiSection({ displayName, data, isLoading }: Props) {
+export function AiSection({ displayName, data, isLoading, isError, onRetry }: Props) {
   const requireAuth = useAuthGate();
   const ready = data?.ready === true && data.items.length > 0;
 
@@ -30,40 +33,31 @@ export function AiSection({ displayName, data, isLoading }: Props) {
       <SectionHead
         title="님을 위한 AI 추천 장소"
         highlight={displayName ?? "여행자"}
-        caption={
-          ready
-            ? "저장한 장소와 닮은 곳을 골랐어요."
-            : "마음에 드는 장소를 저장하면 취향에 맞춰 추천해 드려요."
-        }
+        caption={ready ? "저장한 장소와 닮은 곳을 골랐어요." : null}
       />
       {isLoading ? (
         <GridSkeleton />
+      ) : isError ? (
+        <View testID="home-ai-error" style={styles.error}>
+          <Text style={styles.errorText}>추천을 불러오지 못했어요.</Text>
+          <PrimaryButton testID="home-ai-retry" label="다시 시도" onPress={onRetry} />
+        </View>
       ) : ready ? (
         <SpotGrid cards={data.items} subtitleOf={categorySubtitle} badgeOf={anchorBadge} />
       ) : (
-        <EmptyState remaining={remainingSaves(data)} onPress={openPicker} />
+        <EmptyState onPress={openPicker} />
       )}
     </View>
   );
 }
 
-function remainingSaves(data: Recommendations | undefined): number | null {
-  if (!data) return null;
-  return Math.max(0, data.minSaved - data.savedCount);
-}
-
-function EmptyState({ remaining, onPress }: { remaining: number | null; onPress: () => void }) {
+function EmptyState({ onPress }: { onPress: () => void }) {
   return (
     <Pressable testID="home-taste-cta" onPress={onPress} style={styles.empty}>
       <View style={styles.emptyIcon}>
         <Icon name="sparkle" size={26} color={colors.accentText} />
       </View>
       <Text style={styles.emptyTitle}>취향 카드로 시작하기</Text>
-      <Text style={styles.emptyBody}>
-        {remaining && remaining > 0
-          ? `${remaining}곳만 더 저장하면 추천이 시작돼요.`
-          : "카드를 넘기며 마음에 드는 곳만 저장해 주세요."}
-      </Text>
       <View style={styles.emptyCta}>
         <Text style={styles.emptyCtaText}>카드 고르러 가기</Text>
         <Icon name="chevron-right" size={16} color={colors.onImage} />
@@ -94,7 +88,6 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   emptyTitle: { fontSize: 16, fontWeight: "800", letterSpacing: -0.3, color: colors.ink },
-  emptyBody: { fontSize: 13.5, lineHeight: 20, color: colors.sec, textAlign: "center" },
   emptyCta: {
     marginTop: 6,
     flexDirection: "row",
@@ -106,4 +99,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
   },
   emptyCtaText: { fontSize: 15, fontWeight: "700", color: colors.onImage },
+  error: { alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg },
+  errorText: { fontSize: 14, color: colors.sec },
 });

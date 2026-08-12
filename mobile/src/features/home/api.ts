@@ -14,6 +14,7 @@ export interface HomeSpotCard {
 
 export interface HomeCards {
   items: HomeSpotCard[];
+  baseDate?: string | null;
 }
 
 export interface Recommendations {

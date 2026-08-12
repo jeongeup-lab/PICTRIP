@@ -21,7 +21,9 @@ export const homeKeys = {
   trending: ["home-trending"] as const,
   region: (coords: Coords | null) => ["home-region", coordKey(coords)] as const,
   tastePicks: ["home-taste-picks"] as const,
-  recommendations: (coords: Coords | null) => ["home-recommendations", coordKey(coords)] as const,
+  recommendationsRoot: ["home-recommendations"] as const,
+  recommendations: (userId: number | null, coords: Coords | null) =>
+    ["home-recommendations", userId, coordKey(coords)] as const,
 };
 
 export function useNearby(coords: Coords | null) {
@@ -59,11 +61,12 @@ export function useTastePicks() {
 }
 
 export function useRecommendations(coords: Coords | null) {
+  const userId = useAuthStore((s) => s.user?.id ?? null);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   return useQuery({
-    queryKey: homeKeys.recommendations(coords),
+    queryKey: homeKeys.recommendations(userId, coords),
     queryFn: () => getRecommendations(coords ?? undefined),
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && userId !== null,
     staleTime: NEARBY_STALE_MS,
   });
 }

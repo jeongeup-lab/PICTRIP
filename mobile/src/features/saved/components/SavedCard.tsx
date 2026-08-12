@@ -28,7 +28,7 @@ export function SavedCard({ spot, onPress, onPressIn, onUnsave, testID }: Props)
           accessibilityLabel="스크랩 해제"
           testID={testID ? `${testID}-unsave` : undefined}
         >
-          <Icon name="heart-fill" size={17} color={colors.onImage} />
+          <Icon name="bookmark-fill" size={17} color={colors.onImage} />
         </Pressable>
       </View>
       <Text numberOfLines={1} style={styles.name}>

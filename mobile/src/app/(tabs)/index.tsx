@@ -8,8 +8,7 @@ import { AiSection } from "@/features/home/components/AiSection";
 import { RankSection } from "@/features/home/components/RankSection";
 import { ScopeTabs, type HomeScope } from "@/features/home/components/ScopeTabs";
 import { useHomeLocation } from "@/features/home/hooks/use-home-location";
-import { useNow } from "@/features/home/hooks/use-now";
-import { formatUpdatedAt } from "@/features/home/lib/updated-at";
+import { formatBaseDate } from "@/features/home/lib/base-date";
 import {
   useNearby,
   useRecommendations,
@@ -27,22 +26,25 @@ export default function HomeScreen() {
   const [scope, setScope] = useState<HomeScope>("nearby");
   const { coords, status, request } = useHomeLocation();
   const displayName = useAuthStore((s) => s.user?.displayName ?? null);
-  const now = useNow();
 
   const region = useRegionLabel(coords);
   const nearby = useNearby(coords);
-  const trending = useTrending();
+  const national = useTrending();
   const recommendations = useRecommendations(coords);
 
   const locationDenied = status === "denied" || status === "undetermined";
-  const showTrending = scope === "trending" || locationDenied;
-  const active = showTrending ? trending : nearby;
-  const waitingForFix = !showTrending && !coords;
+  const showNational = scope === "national" || locationDenied;
+  const active = showNational ? national : nearby;
+  const waitingForFix = !showNational && !coords;
   const cards = active.data?.items ?? [];
+  const regionLabel = region.data?.label ?? null;
 
   const onRefresh = useCallback(() => {
     void queryClient.invalidateQueries({
-      predicate: (q) => String(q.queryKey[0]).startsWith("home-"),
+      predicate: (q) => {
+        const root = String(q.queryKey[0]);
+        return root.startsWith("home-") || root === "channels";
+      },
     });
   }, []);
 
@@ -69,8 +71,8 @@ export default function HomeScreen() {
         </View>
 
         <ScopeTabs
-          scope={showTrending ? "trending" : "nearby"}
-          nearbyLabel={region.data?.label ?? "내 주변"}
+          scope={showNational ? "national" : "nearby"}
+          nearbyLabel={regionLabel ?? "내 주변"}
           onChange={(next) => {
             setScope(next);
             if (next === "nearby" && !coords) void request();
@@ -90,8 +92,14 @@ export default function HomeScreen() {
         ) : null}
 
         <RankSection
-          title={showTrending ? "전국 트렌드 인기 장소" : "지금 주변 인기 장소"}
-          note={cards.length > 0 ? formatUpdatedAt(active.dataUpdatedAt, now) : null}
+          title={
+            showNational
+              ? "전국 인기 장소"
+              : regionLabel
+                ? `${regionLabel} 인기 장소`
+                : "지금 주변 인기 장소"
+          }
+          note={cards.length > 0 ? formatBaseDate(active.data?.baseDate) : null}
           cards={cards}
           isLoading={active.isLoading || waitingForFix}
           isError={active.isError}
@@ -102,6 +110,8 @@ export default function HomeScreen() {
           displayName={displayName}
           data={recommendations.data}
           isLoading={recommendations.isLoading}
+          isError={recommendations.isError}
+          onRetry={() => void recommendations.refetch()}
         />
       </ScrollView>
     </SafeAreaView>

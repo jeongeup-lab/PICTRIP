@@ -4,19 +4,18 @@ from app.modules.feed.schemas import ChannelCard, ChannelMeta, MatchCard, Overse
 
 KTO_HTTP = "http://tong.visitkorea.or.kr/cms/resource/98/3045598_image2_1.jpg"
 KTO_HTTPS = "https://tong.visitkorea.or.kr/cms/resource/98/3045598_image2_1.jpg"
-KTO_HIRES = "https://tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg"
 
 
-def test_match_card_upgrades_kto_to_hires_https() -> None:
+def test_match_card_forces_https_without_rewriting_the_path() -> None:
     card = MatchCard(
         contentId="1", title="t", regionLabel="강원", imageUrl=KTO_HTTP, overviewFirst=None
     )
-    assert card.imageUrl == KTO_HIRES
+    assert card.imageUrl == KTO_HTTPS
 
 
-def test_channel_card_upgrades_kto_to_hires_https() -> None:
+def test_channel_card_forces_https_without_rewriting_the_path() -> None:
     card = ChannelCard(contentId="1", title="t", regionLabel="강원", imageUrl=KTO_HTTP)
-    assert card.imageUrl == KTO_HIRES
+    assert card.imageUrl == KTO_HTTPS
 
 
 def test_channel_meta_thumbnail_stays_mid_https() -> None:

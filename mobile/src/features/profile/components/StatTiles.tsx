@@ -16,7 +16,7 @@ interface Tile {
 }
 
 const TILES: readonly Tile[] = [
-  { key: "saved", label: "스크랩", icon: "heart-fill", accent: true },
+  { key: "saved", label: "스크랩", icon: "bookmark-fill", accent: true },
   { key: "regions", label: "지역", icon: "map-pin" },
   { key: "days", label: "함께한 날", icon: "calendar" },
 ] as const;

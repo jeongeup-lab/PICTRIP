@@ -66,7 +66,14 @@ async function mount(props: Partial<Parameters<typeof AiSection>[0]> = {}) {
   let tree: renderer.ReactTestRenderer;
   await act(async () => {
     tree = renderer.create(
-      <AiSection displayName="Leesinseong" data={recommendations()} isLoading={false} {...props} />,
+      <AiSection
+        displayName="Leesinseong"
+        data={recommendations()}
+        isLoading={false}
+        isError={false}
+        onRetry={jest.fn()}
+        {...props}
+      />,
     );
   });
   return tree!;
@@ -89,13 +96,31 @@ describe("AiSection", () => {
   it("renders the recommendation grid with the anchor badge", async () => {
     const r = await mount();
     const item = r.root.findAllByProps({ testID: "grid-item" })[0];
-    expect(item.props.accessibilityLabel).toBe("저장한 밀크컨셉 건대점과 비슷한");
+    expect(item.props.accessibilityLabel).toBe("저장한 밀크컨셉 건대점과 비슷한 곳");
   });
 
   it("shows the taste CTA instead of a grid before the minimum saves", async () => {
     const r = await mount({ data: recommendations({ ready: false, savedCount: 1, items: [] }) });
     expect(r.root.findAllByProps({ testID: "spot-grid" })).toHaveLength(0);
-    expect(json(r)).toContain("2곳만 더 저장하면");
+    expect(r.root.findAllByProps({ testID: "home-taste-cta" }).length).toBeGreaterThan(0);
+  });
+
+  it("keeps the CTA free of remaining-count and how-it-works copy", async () => {
+    const r = await mount({ data: recommendations({ ready: false, savedCount: 1, items: [] }) });
+    expect(json(r)).not.toContain("추천이 시작돼요");
+    expect(json(r)).not.toContain("추천해 드려요");
+    expect(json(r)).toContain("취향 카드로 시작하기");
+    expect(json(r)).toContain("카드 고르러 가기");
+  });
+
+  it("offers a retry instead of the taste CTA when the request failed", async () => {
+    const onRetry = jest.fn();
+    const r = await mount({ data: undefined, isError: true, onRetry });
+    expect(r.root.findAllByProps({ testID: "home-taste-cta" })).toHaveLength(0);
+    await act(async () => {
+      r.root.findByProps({ testID: "home-ai-retry" }).props.onPress();
+    });
+    expect(onRetry).toHaveBeenCalled();
   });
 
   it("shows the CTA when the backend reports ready but sends nothing", async () => {

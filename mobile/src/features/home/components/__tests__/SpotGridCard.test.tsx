@@ -29,6 +29,11 @@ beforeEach(() => {
 
 afterEach(() => jest.clearAllMocks());
 
+const saveButton = (r: renderer.ReactTestRenderer) =>
+  r.root
+    .findAllByProps({ testID: "home-save-button" })
+    .filter((n) => typeof n.props.onPress === "function")[0];
+
 async function mount(props: Partial<Parameters<typeof SpotGridCard>[0]> = {}) {
   let tree: renderer.ReactTestRenderer;
   await act(async () => {
@@ -73,20 +78,19 @@ describe("SpotGridCard", () => {
     expect(json(r)).toContain("중식당 · 724m");
   });
 
-  it("tapping the star toggles the save without opening the spot", async () => {
+  it("tapping the scrap button toggles the save without opening the spot", async () => {
     const onPress = jest.fn();
     const r = await mount({ onPress });
     await act(async () => {
-      r.root.findByProps({ testID: "home-save-star" }).props.onPress();
+      saveButton(r).props.onPress();
     });
     expect(toggle).toHaveBeenCalled();
     expect(onPress).not.toHaveBeenCalled();
   });
 
-  it("fills the star once the spot is saved", async () => {
+  it("fills the bookmark once the spot is saved", async () => {
     mockSave.mockReturnValue({ saved: true, toggle });
     const r = await mount();
-    const star = r.root.findByProps({ testID: "home-save-star" });
-    expect(star.findAllByProps({ name: "star-fill" }).length).toBeGreaterThan(0);
+    expect(saveButton(r).findAllByProps({ name: "bookmark-fill" }).length).toBeGreaterThan(0);
   });
 });

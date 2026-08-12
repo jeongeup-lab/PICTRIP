@@ -133,15 +133,15 @@ function EmptyState({
     <View>
       <View style={styles.emptyHead}>
         <View style={styles.emptyIcon}>
-          <Icon name="heart" size={28} color={colors.accent} strokeWidth={1.7} />
+          <Icon name="bookmark" size={28} color={colors.accent} strokeWidth={1.7} />
         </View>
         <Text style={styles.emptyTitle}>{EMPTY_HEADLINE}</Text>
-        <Text style={styles.emptySub}>카드의 하트를 누르면 여기 모여요.</Text>
+        <Text style={styles.emptySub}>카드의 스크랩 버튼을 누르면 여기 모여요.</Text>
       </View>
 
       <InfoBox
         title="이렇게 쓰면 편해요"
-        text="여행 탭에서 결과를 받고 마음에 드는 곳만 하트 → 스크랩에 앨범처럼 모아두고 다음 여행을 짜는 흐름이에요."
+        text="여행 탭에서 결과를 받고 마음에 드는 곳만 스크랩 → 스크랩에 앨범처럼 모아두고 다음 여행을 짜는 흐름이에요."
       >
         <View style={styles.emptyAction}>
           <PrimaryButton

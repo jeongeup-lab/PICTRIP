@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.spots.models import Spot, SpotConcentration, SpotDetail
@@ -29,6 +30,12 @@ async def load_hidden_spots(
     session: AsyncSession, *, limit: int = 10
 ) -> list[ConcentrationCardRow]:
     return await _load(session, limit=limit, ascending=True, require_overview=True)
+
+
+async def load_concentration_base_date(session: AsyncSession) -> date | None:
+    return (
+        await session.execute(select(func.max(SpotConcentration.base_ymd)))
+    ).scalar_one_or_none()
 
 
 async def load_concentration_rates(
