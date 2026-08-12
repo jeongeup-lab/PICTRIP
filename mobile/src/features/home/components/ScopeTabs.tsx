@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Icon } from "@/components/Icon";
 import { colors, spacing } from "@/constants/theme";
 
-export type HomeScope = "nearby" | "trending";
+export type HomeScope = "nearby" | "national";
 
 interface Props {
   scope: HomeScope;
@@ -21,11 +21,11 @@ export function ScopeTabs({ scope, nearbyLabel, onChange }: Props) {
         onPress={() => onChange("nearby")}
       />
       <Tab
-        testID="home-scope-trending"
+        testID="home-scope-national"
         icon="flame"
-        label="전국 트렌드"
-        active={scope === "trending"}
-        onPress={() => onChange("trending")}
+        label="전국 인기"
+        active={scope === "national"}
+        onPress={() => onChange("national")}
       />
     </View>
   );

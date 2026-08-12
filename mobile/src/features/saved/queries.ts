@@ -6,6 +6,8 @@ import { containsId, removeById } from "@/features/saved/lib/optimistic";
 
 export const savedKeys = { list: ["saved"] as const };
 
+const RECOMMENDATIONS_ROOT = ["home-recommendations"] as const;
+
 export function useSavedList() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   return useQuery({
@@ -24,7 +26,10 @@ export function useSaveMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (contentId: string) => saveSpot(contentId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: savedKeys.list }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: savedKeys.list });
+      void qc.invalidateQueries({ queryKey: RECOMMENDATIONS_ROOT });
+    },
   });
 }
 
@@ -41,6 +46,9 @@ export function useUnsaveMutation() {
     onError: (_e, _id, ctx) => {
       if (ctx?.prev) qc.setQueryData(savedKeys.list, ctx.prev);
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: savedKeys.list }),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: savedKeys.list });
+      void qc.invalidateQueries({ queryKey: RECOMMENDATIONS_ROOT });
+    },
   });
 }

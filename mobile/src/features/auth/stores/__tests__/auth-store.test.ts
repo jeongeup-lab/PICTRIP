@@ -44,11 +44,18 @@ describe("auth-store", () => {
       jest.requireActual<typeof import("@/lib/query-client")>("@/lib/query-client");
     queryClient.setQueryData(["saved"], [{ contentId: "1" }]);
     queryClient.setQueryData(["consents"], { locationConsent: true, termsVersion: "2026-06-01" });
+    queryClient.setQueryData(["home-recommendations", 7, [37540, 127070]], {
+      ready: true,
+      savedCount: 5,
+      minSaved: 3,
+      items: [{ contentId: "1" }],
+    });
 
     await useAuthStore.getState().clear();
 
     expect(queryClient.getQueryData(["saved"])).toBeUndefined();
     expect(queryClient.getQueryData(["consents"])).toBeUndefined();
+    expect(queryClient.getQueryData(["home-recommendations", 7, [37540, 127070]])).toBeUndefined();
   });
 
   it("forgets recently viewed spots on sign out so the next account cannot see them", async () => {

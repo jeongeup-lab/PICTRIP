@@ -135,7 +135,7 @@ export function SpotCard({
         }}
       >
         <Icon
-          name={saved ? "heart-fill" : "heart"}
+          name={saved ? "bookmark-fill" : "bookmark"}
           size={17}
           color={saved ? colors.accent : colors.ter}
           strokeWidth={1.9}

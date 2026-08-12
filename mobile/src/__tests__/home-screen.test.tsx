@@ -143,20 +143,20 @@ describe("HomeScreen", () => {
   it("shows nearby cards under the region-named tab by default", async () => {
     const r = await mount();
     expect(texts(r)).toContain("광진구 화양동");
-    expect(rank(r).props.accessibilityLabel).toBe("지금 주변 인기 장소");
+    expect(rank(r).props.accessibilityLabel).toBe("광진구 화양동 인기 장소");
     expect(rank(r).props.accessibilityHint).toBe("near-1");
   });
 
-  it("swaps to the nationwide ranking when the trend tab is picked", async () => {
+  it("swaps to the nationwide ranking when the 전국 인기 tab is picked", async () => {
     const r = await mount();
     await act(async () => {
-      r.root.findByProps({ testID: "home-scope-trending" }).props.onPress();
+      r.root.findByProps({ testID: "home-scope-national" }).props.onPress();
     });
-    expect(rank(r).props.accessibilityLabel).toBe("전국 트렌드 인기 장소");
+    expect(rank(r).props.accessibilityLabel).toBe("전국 인기 장소");
     expect(rank(r).props.accessibilityHint).toBe("trend-1");
   });
 
-  it("falls back to the trend ranking and prompts for location when permission is missing", async () => {
+  it("falls back to the national ranking and prompts for location when permission is missing", async () => {
     mockLocation.mockReturnValue({ coords: null, status: "denied", request });
     const r = await mount();
     expect(rank(r).props.accessibilityHint).toBe("trend-1");
@@ -186,7 +186,7 @@ describe("HomeScreen", () => {
     expect(r.root.findAllByProps({ testID: "ai-section" }).length).toBeGreaterThan(0);
   });
 
-  it("pull-to-refresh invalidates every home query", async () => {
+  it("pull-to-refresh invalidates the home queries and the channel rail", async () => {
     const invalidate = jest.spyOn(queryClient, "invalidateQueries");
     const r = await mount();
     const list = r.root.findAllByType(ScrollView)[0];
@@ -197,7 +197,8 @@ describe("HomeScreen", () => {
       queryKey: unknown[];
     }) => boolean;
     expect(predicate({ queryKey: ["home-nearby", null] })).toBe(true);
-    expect(predicate({ queryKey: ["channels"] })).toBe(false);
+    expect(predicate({ queryKey: ["channels"] })).toBe(true);
+    expect(predicate({ queryKey: ["saved"] })).toBe(false);
     invalidate.mockRestore();
   });
 

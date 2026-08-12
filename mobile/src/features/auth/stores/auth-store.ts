@@ -57,6 +57,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ accessToken: null, user: null, isAuthenticated: false });
     queryClient.removeQueries({ queryKey: ["saved"] });
     queryClient.removeQueries({ queryKey: ["consents"] });
+    queryClient.removeQueries({ queryKey: ["home-recommendations"] });
     useRecentSpots.getState().clear();
   },
 

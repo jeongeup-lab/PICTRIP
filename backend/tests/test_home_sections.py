@@ -205,6 +205,20 @@ async def test_trending_returns_ranked_cards(client: AsyncClient, seeded: AsyncS
     assert items[0]["dist"] is None
 
 
+async def test_ranked_sections_expose_the_concentration_base_date(
+    client: AsyncClient, seeded: AsyncSession
+) -> None:
+    await _seed_region(seeded)
+    await _seed_spot(seeded, "base-date")
+    await _seed_rate(seeded, "base-date", "50.00")
+    await seeded.commit()
+
+    trending = await client.get("/v1/home/trending")
+    nearby = await client.get("/v1/home/nearby", params={"lat": LAT, "lng": LNG})
+    assert trending.json()["data"]["baseDate"] == "2026-07-01"
+    assert nearby.json()["data"]["baseDate"] == "2026-07-01"
+
+
 async def test_taste_picks_only_returns_spots_with_embeddings(
     client: AsyncClient, seeded: AsyncSession
 ) -> None:

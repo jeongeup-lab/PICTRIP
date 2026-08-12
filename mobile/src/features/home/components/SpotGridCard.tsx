@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { Icon } from "@/components/Icon";
 import { RemoteImage } from "@/components/RemoteImage";
-import { SaveStar } from "@/features/home/components/SaveStar";
+import { SaveButton } from "@/features/saved/components/SaveButton";
 import type { HomeSpotCard } from "@/features/home/api";
 import { colors } from "@/constants/theme";
 
@@ -50,7 +50,7 @@ export function SpotGridCard({ card, width, subtitle, badge, onPress }: Props) {
         {badge ? (
           <View testID="home-card-badge" style={styles.badge}>
             <Icon name="sparkle" size={13} color={colors.accentText} />
-            <Text style={styles.badgeText} numberOfLines={2}>
+            <Text style={styles.badgeText} numberOfLines={1} ellipsizeMode="tail">
               {badge}
             </Text>
           </View>
@@ -66,7 +66,7 @@ export function SpotGridCard({ card, width, subtitle, badge, onPress }: Props) {
             {subtitle}
           </Text>
         </View>
-        <SaveStar contentId={card.contentId} />
+        <SaveButton testID="home-save-button" contentId={card.contentId} />
       </View>
     </Pressable>
   );

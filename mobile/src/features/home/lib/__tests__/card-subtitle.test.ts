@@ -47,11 +47,25 @@ describe("categorySubtitle", () => {
 describe("anchorBadge", () => {
   it("names the saved spot the recommendation came from", () => {
     expect(anchorBadge(card({ anchorTitle: "광안리해수욕장" }))).toBe(
-      "저장한 광안리해수욕장과 비슷한",
+      "저장한 광안리해수욕장과 비슷한 곳",
     );
+  });
+
+  it("picks 와 when the anchor ends without a coda", () => {
+    expect(anchorBadge(card({ anchorTitle: "해운대" }))).toBe("저장한 해운대와 비슷한 곳");
+  });
+
+  it("clips a long anchor so the trailing phrase survives", () => {
+    const badge = anchorBadge(card({ anchorTitle: "국립중앙박물관 어린이박물관 별관" }));
+    expect(badge).toContain("…");
+    expect(badge?.endsWith("비슷한 곳")).toBe(true);
   });
 
   it("is absent when no anchor came back", () => {
     expect(anchorBadge(card())).toBeNull();
+  });
+
+  it("treats a blank anchor as no anchor", () => {
+    expect(anchorBadge(card({ anchorTitle: "   " }))).toBeNull();
   });
 });

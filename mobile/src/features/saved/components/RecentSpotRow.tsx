@@ -47,7 +47,7 @@ export function RecentSpotRow({ spot, onPress, testID }: Props) {
         testID={testID ? `${testID}-heart` : undefined}
       >
         <Icon
-          name={saved ? "heart-fill" : "heart"}
+          name={saved ? "bookmark-fill" : "bookmark"}
           size={19}
           color={saved ? colors.accent : colors.ter}
         />

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import asdict, dataclass
+from datetime import date
 
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,10 +21,12 @@ MIN_TASTE_SEEDS = 3
 
 _NEARBY_RADIUS_M = 5000
 _NEARBY_TTL = 600
+_EMPTY_TTL = 120
+_BASE_DATE_TTL = 3600
 _TASTE_PICKS_TTL = 21_600
 _SEED_LIMIT = 30
 _NEIGHBOR_OVERFETCH = 3
-_CACHE_VERSION = "v1"
+_CACHE_VERSION = "v2"
 
 
 @dataclass(frozen=True)
@@ -69,7 +72,7 @@ async def load_nearby_ranked(
         limit=limit,
     )
     cards = [_card(row, rank=idx) for idx, row in enumerate(rows, start=1)]
-    await _cache_set(redis, key, cards, _NEARBY_TTL)
+    await _cache_set(redis, key, cards, _NEARBY_TTL if cards else _EMPTY_TTL)
     return cards
 
 
@@ -81,6 +84,7 @@ async def load_trending(
     )
 
     rows = await load_concentration_channel_cached(session, redis, "hot")
+    usable = [row for row in rows if row.content_id][:limit]
     return [
         HomeCardRow(
             content_id=row.content_id or "",
@@ -90,9 +94,31 @@ async def load_trending(
             rank=idx,
             tag=_last_token(row.region_label),
         )
-        for idx, row in enumerate(rows[:limit], start=1)
-        if row.content_id
+        for idx, row in enumerate(usable, start=1)
     ]
+
+
+async def load_base_date(session: AsyncSession, redis: Redis) -> date | None:
+    key = f"home:base-date:{_CACHE_VERSION}"
+    try:
+        raw = await redis.get(key)
+    except Exception as exc:
+        logger.warning("feed.home.base_date_cache_get_failed", error=str(exc))
+        raw = None
+    if raw:
+        try:
+            return date.fromisoformat(raw if isinstance(raw, str) else raw.decode())
+        except ValueError:
+            logger.warning("feed.home.base_date_cache_corrupt")
+
+    base = await spots_services.load_concentration_base_date(session)
+    if base is None:
+        return None
+    try:
+        await redis.set(key, base.isoformat(), ex=_BASE_DATE_TTL)
+    except Exception as exc:
+        logger.warning("feed.home.base_date_cache_set_failed", error=str(exc))
+    return base
 
 
 async def load_taste_picks(
