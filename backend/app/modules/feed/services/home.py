@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from datetime import date
 
@@ -22,7 +23,7 @@ MIN_TASTE_SEEDS = 3
 _NEARBY_RADIUS_M = 5000
 _NEARBY_TTL = 600
 _EMPTY_TTL = 120
-_BASE_DATE_TTL = 3600
+_TRENDING_TTL = 3600
 _TASTE_PICKS_TTL = 21_600
 _SEED_LIMIT = 30
 _NEIGHBOR_OVERFETCH = 3
@@ -43,6 +44,12 @@ class HomeCardRow:
 
 
 @dataclass(frozen=True)
+class HomeRanking:
+    cards: list[HomeCardRow]
+    base_date: str | None
+
+
+@dataclass(frozen=True)
 class RecommendationRow:
     ready: bool
     saved_count: int
@@ -52,7 +59,7 @@ class RecommendationRow:
 
 async def load_nearby_ranked(
     session: AsyncSession, redis: Redis, *, lat: float, lng: float, limit: int = CARD_COUNT
-) -> list[HomeCardRow]:
+) -> HomeRanking:
     key = f"home:nearby:{_CACHE_VERSION}:{lat:.3f}:{lng:.3f}:{limit}"
     cached = await _cache_get(redis, key)
     if cached is not None:
@@ -71,54 +78,40 @@ async def load_nearby_ranked(
         radius=_NEARBY_RADIUS_M,
         limit=limit,
     )
-    cards = [_card(row, rank=idx) for idx, row in enumerate(rows, start=1)]
-    await _cache_set(redis, key, cards, _NEARBY_TTL if cards else _EMPTY_TTL)
-    return cards
+    ranking = HomeRanking(
+        cards=[_card(row, rank=idx) for idx, row in enumerate(rows, start=1)],
+        base_date=_shared_base_date(row.base_ymd for row in rows),
+    )
+    await _cache_set(redis, key, ranking, _NEARBY_TTL if ranking.cards else _EMPTY_TTL)
+    return ranking
 
 
 async def load_trending(
     session: AsyncSession, redis: Redis, *, limit: int = CARD_COUNT
-) -> list[HomeCardRow]:
-    from app.modules.feed.services.concentration_channels import (
-        load_concentration_channel_cached,
+) -> HomeRanking:
+    key = f"home:trending:{_CACHE_VERSION}:{limit}"
+    cached = await _cache_get(redis, key)
+    if cached is not None:
+        return cached
+
+    rows = await spots_services.load_hot_spots(session, limit=limit)
+    usable = [row for row in rows if row.content_id]
+    ranking = HomeRanking(
+        cards=[
+            HomeCardRow(
+                content_id=row.content_id,
+                title=row.title,
+                region_label=row.region_label,
+                image_url=t1_display_url(row.first_image_url, row.cpyrht_div_cd),
+                rank=idx,
+                tag=_last_token(row.region_label),
+            )
+            for idx, row in enumerate(usable, start=1)
+        ],
+        base_date=_shared_base_date(row.base_ymd for row in usable),
     )
-
-    rows = await load_concentration_channel_cached(session, redis, "hot")
-    usable = [row for row in rows if row.content_id][:limit]
-    return [
-        HomeCardRow(
-            content_id=row.content_id or "",
-            title=row.title,
-            region_label=row.region_label,
-            image_url=t1_display_url(row.image_url, row.cpyrht_div_cd),
-            rank=idx,
-            tag=_last_token(row.region_label),
-        )
-        for idx, row in enumerate(usable, start=1)
-    ]
-
-
-async def load_base_date(session: AsyncSession, redis: Redis) -> date | None:
-    key = f"home:base-date:{_CACHE_VERSION}"
-    try:
-        raw = await redis.get(key)
-    except Exception as exc:
-        logger.warning("feed.home.base_date_cache_get_failed", error=str(exc))
-        raw = None
-    if raw:
-        try:
-            return date.fromisoformat(raw if isinstance(raw, str) else raw.decode())
-        except ValueError:
-            logger.warning("feed.home.base_date_cache_corrupt")
-
-    base = await spots_services.load_concentration_base_date(session)
-    if base is None:
-        return None
-    try:
-        await redis.set(key, base.isoformat(), ex=_BASE_DATE_TTL)
-    except Exception as exc:
-        logger.warning("feed.home.base_date_cache_set_failed", error=str(exc))
-    return base
+    await _cache_set(redis, key, ranking, _TRENDING_TTL if ranking.cards else _EMPTY_TTL)
+    return ranking
 
 
 async def load_taste_picks(
@@ -127,12 +120,12 @@ async def load_taste_picks(
     key = f"home:taste-picks:{_CACHE_VERSION}:{limit}"
     cached = await _cache_get(redis, key)
     if cached is not None:
-        return cached
+        return cached.cards
 
     rows = await repo.fetch_taste_picks(session, limit=limit)
-    cards = [_card(row) for row in rows]
-    await _cache_set(redis, key, cards, _TASTE_PICKS_TTL)
-    return cards
+    ranking = HomeRanking(cards=[_card(row) for row in rows], base_date=None)
+    await _cache_set(redis, key, ranking, _TASTE_PICKS_TTL if ranking.cards else _EMPTY_TTL)
+    return ranking.cards
 
 
 async def load_recommendations(
@@ -204,7 +197,12 @@ def _last_token(label: str) -> str | None:
     return parts[-1] if parts else None
 
 
-async def _cache_get(redis: Redis, key: str) -> list[HomeCardRow] | None:
+def _shared_base_date(dates: Iterable[date | None]) -> str | None:
+    seen = {d for d in dates if d is not None}
+    return seen.pop().isoformat() if len(seen) == 1 else None
+
+
+async def _cache_get(redis: Redis, key: str) -> HomeRanking | None:
     try:
         raw = await redis.get(key)
     except Exception as exc:
@@ -213,16 +211,22 @@ async def _cache_get(redis: Redis, key: str) -> list[HomeCardRow] | None:
     if not raw:
         return None
     try:
-        return [HomeCardRow(**item) for item in json.loads(raw)]
-    except (ValueError, TypeError) as exc:
+        payload = json.loads(raw)
+        return HomeRanking(
+            cards=[HomeCardRow(**item) for item in payload["cards"]],
+            base_date=payload["baseDate"],
+        )
+    except (ValueError, TypeError, KeyError) as exc:
         logger.warning("feed.home.cache_corrupt", key=key, error=str(exc))
         return None
 
 
-async def _cache_set(redis: Redis, key: str, cards: list[HomeCardRow], ttl: int) -> None:
-    if not cards:
-        return
+async def _cache_set(redis: Redis, key: str, ranking: HomeRanking, ttl: int) -> None:
+    payload = {
+        "baseDate": ranking.base_date,
+        "cards": [asdict(c) for c in ranking.cards],
+    }
     try:
-        await redis.set(key, json.dumps([asdict(c) for c in cards], ensure_ascii=False), ex=ttl)
+        await redis.set(key, json.dumps(payload, ensure_ascii=False), ex=ttl)
     except Exception as exc:
         logger.warning("feed.home.cache_set_failed", key=key, error=str(exc))

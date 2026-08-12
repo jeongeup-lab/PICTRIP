@@ -11,7 +11,6 @@ from app.modules.spots.services.cards import (
 )
 from app.modules.spots.services.concentration import (
     ConcentrationCardRow,
-    load_concentration_base_date,
     load_concentration_rates,
     load_hidden_spots,
     load_hot_spots,
@@ -80,7 +79,6 @@ __all__ = [
     "invalidate_spot_detail_cache",
     "list_saved_spots",
     "load_active_spot_cards_by_ids",
-    "load_concentration_base_date",
     "load_concentration_rates",
     "load_hidden_spots",
     "load_hot_spots",

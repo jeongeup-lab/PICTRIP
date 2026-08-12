@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.spots.models import Spot, SpotConcentration, SpotDetail
@@ -20,6 +20,7 @@ class ConcentrationCardRow:
     region_label: str
     rank: int
     cpyrht_div_cd: str | None = None
+    base_ymd: date | None = None
 
 
 async def load_hot_spots(session: AsyncSession, *, limit: int = 10) -> list[ConcentrationCardRow]:
@@ -30,12 +31,6 @@ async def load_hidden_spots(
     session: AsyncSession, *, limit: int = 10
 ) -> list[ConcentrationCardRow]:
     return await _load(session, limit=limit, ascending=True, require_overview=True)
-
-
-async def load_concentration_base_date(session: AsyncSession) -> date | None:
-    return (
-        await session.execute(select(func.max(SpotConcentration.base_ymd)))
-    ).scalar_one_or_none()
 
 
 async def load_concentration_rates(
@@ -68,6 +63,7 @@ async def _load(
             Spot.title,
             Spot.first_image_url,
             Spot.cpyrht_div_cd,
+            SpotConcentration.base_ymd,
         )
         .join(SpotConcentration, SpotConcentration.content_id == Spot.content_id)
         .where(
@@ -94,6 +90,7 @@ async def _load(
             region_label=_region_label(meta.get(r.content_id, (None, None))),
             rank=idx,
             cpyrht_div_cd=r.cpyrht_div_cd,
+            base_ymd=r.base_ymd,
         )
         for idx, r in enumerate(rows, start=1)
     ]

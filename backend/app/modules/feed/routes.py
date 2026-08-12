@@ -124,14 +124,8 @@ async def home_nearby(
     lng: float = Query(..., ge=-180, le=180),
     limit: int = Query(home.CARD_COUNT, ge=1, le=20),
 ) -> dict[str, Any]:
-    rows = await home.load_nearby_ranked(session, redis, lat=lat, lng=lng, limit=limit)
-    base = await home.load_base_date(session, redis)
-    return ok(
-        HomeCardsResponse(
-            items=[_home_card(r) for r in rows],
-            baseDate=base.isoformat() if base else None,
-        )
-    )
+    ranking = await home.load_nearby_ranked(session, redis, lat=lat, lng=lng, limit=limit)
+    return ok(_home_cards(ranking))
 
 
 @router.get("/home/trending", summary="전국 인기 (혼잡도 상위)")
@@ -140,14 +134,8 @@ async def home_trending(
     redis: RedisDep,
     limit: int = Query(home.CARD_COUNT, ge=1, le=20),
 ) -> dict[str, Any]:
-    rows = await home.load_trending(session, redis, limit=limit)
-    base = await home.load_base_date(session, redis)
-    return ok(
-        HomeCardsResponse(
-            items=[_home_card(r) for r in rows],
-            baseDate=base.isoformat() if base else None,
-        )
-    )
+    ranking = await home.load_trending(session, redis, limit=limit)
+    return ok(_home_cards(ranking))
 
 
 @router.get("/home/taste-picks", summary="취향 카드 후보 (저장하면 AI 추천 시드)")
@@ -178,6 +166,13 @@ async def home_recommendations(
             minSaved=result.min_saved,
             items=[_home_card(r) for r in result.items],
         )
+    )
+
+
+def _home_cards(ranking: home.HomeRanking) -> HomeCardsResponse:
+    return HomeCardsResponse(
+        items=[_home_card(r) for r in ranking.cards],
+        baseDate=ranking.base_date,
     )
 
 

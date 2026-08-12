@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
+from datetime import date
 
 import pytest_asyncio
 from fakeredis.aioredis import FakeRedis
@@ -97,13 +98,15 @@ async def _seed_spot(
     )
 
 
-async def _seed_rate(session: AsyncSession, cid: str, rate: str) -> None:
+async def _seed_rate(
+    session: AsyncSession, cid: str, rate: str, *, base_ymd: str = "2026-07-01"
+) -> None:
     await session.execute(
         text(
             "INSERT INTO spot_concentration (content_id, concentration_rate, base_ymd, raw_name) "
-            "VALUES (:cid, :rate, DATE '2026-07-01', :rn) ON CONFLICT (content_id) DO NOTHING"
+            "VALUES (:cid, :rate, :ymd, :rn) ON CONFLICT (content_id) DO NOTHING"
         ),
-        {"cid": cid, "rate": rate, "rn": f"n-{cid}"},
+        {"cid": cid, "rate": rate, "rn": f"n-{cid}", "ymd": date.fromisoformat(base_ymd)},
     )
 
 
@@ -205,7 +208,7 @@ async def test_trending_returns_ranked_cards(client: AsyncClient, seeded: AsyncS
     assert items[0]["dist"] is None
 
 
-async def test_ranked_sections_expose_the_concentration_base_date(
+async def test_ranked_sections_expose_the_snapshot_the_cards_came_from(
     client: AsyncClient, seeded: AsyncSession
 ) -> None:
     await _seed_region(seeded)
@@ -217,6 +220,38 @@ async def test_ranked_sections_expose_the_concentration_base_date(
     nearby = await client.get("/v1/home/nearby", params={"lat": LAT, "lng": LNG})
     assert trending.json()["data"]["baseDate"] == "2026-07-01"
     assert nearby.json()["data"]["baseDate"] == "2026-07-01"
+
+
+async def test_a_mixed_snapshot_reports_no_base_date(
+    client: AsyncClient, seeded: AsyncSession
+) -> None:
+    await _seed_region(seeded)
+    await _seed_spot(seeded, "mixed-old")
+    await _seed_spot(seeded, "mixed-new")
+    await _seed_rate(seeded, "mixed-old", "90.00", base_ymd="2026-07-01")
+    await _seed_rate(seeded, "mixed-new", "80.00", base_ymd="2026-07-02")
+    await seeded.commit()
+
+    trending = await client.get("/v1/home/trending")
+    nearby = await client.get("/v1/home/nearby", params={"lat": LAT, "lng": LNG})
+    assert len(trending.json()["data"]["items"]) >= 2
+    assert trending.json()["data"]["baseDate"] is None
+    assert nearby.json()["data"]["baseDate"] is None
+
+
+async def test_spots_without_concentration_do_not_erase_the_base_date(
+    client: AsyncClient, seeded: AsyncSession
+) -> None:
+    await _seed_region(seeded)
+    await _seed_spot(seeded, "rated")
+    await _seed_spot(seeded, "unrated")
+    await _seed_rate(seeded, "rated", "70.00")
+    await seeded.commit()
+
+    nearby = await client.get("/v1/home/nearby", params={"lat": LAT, "lng": LNG})
+    body = nearby.json()["data"]
+    assert {i["contentId"] for i in body["items"]} >= {"rated", "unrated"}
+    assert body["baseDate"] == "2026-07-01"
 
 
 async def test_taste_picks_only_returns_spots_with_embeddings(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
 from sqlalchemy import text
@@ -226,6 +227,7 @@ class HomeSpotRow:
     sigungu_name: str | None
     dist: float | None = None
     anchor_content_id: str | None = None
+    base_ymd: date | None = None
 
 
 _SPOT_COLUMNS_SQL = """
@@ -258,6 +260,7 @@ _NEARBY_RANKED_SQL = f"""
 SELECT * FROM (
     SELECT {_SPOT_COLUMNS_SQL},
            sc.concentration_rate AS rate,
+           sc.base_ymd AS base_ymd,
            {_HAVERSINE_SQL} AS dist
     FROM spots
     LEFT JOIN spot_concentration sc ON sc.content_id = spots.content_id
@@ -411,4 +414,5 @@ def _home_spot_row(row: Any) -> HomeSpotRow:
         sigungu_name=mapping["sigungu_name"],
         dist=float(dist) if dist is not None else None,
         anchor_content_id=mapping.get("anchor_content_id"),
+        base_ymd=mapping.get("base_ymd"),
     )
