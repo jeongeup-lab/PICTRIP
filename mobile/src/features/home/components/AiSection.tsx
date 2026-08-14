@@ -5,7 +5,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { GridSkeleton } from "@/features/home/components/RankSection";
 import { SectionHead } from "@/features/home/components/SectionHead";
 import { SpotGrid } from "@/features/home/components/SpotGrid";
-import { anchorBadge, categorySubtitle } from "@/features/home/lib/card-subtitle";
+import { categorySubtitle } from "@/features/home/lib/card-subtitle";
 import type { Recommendations } from "@/features/home/api";
 import { useAuthGate } from "@/features/auth/hooks/use-auth-gate";
 import { colors, spacing } from "@/constants/theme";
@@ -30,11 +30,7 @@ export function AiSection({ displayName, data, isLoading, isError, onRetry }: Pr
 
   return (
     <View style={styles.section}>
-      <SectionHead
-        title="님을 위한 AI 추천 장소"
-        highlight={displayName ?? "여행자"}
-        caption={ready ? "저장한 장소와 닮은 곳을 골랐어요." : null}
-      />
+      <SectionHead title="님을 위한 AI 추천 장소" highlight={displayName ?? "여행자"} />
       {isLoading ? (
         <GridSkeleton />
       ) : isError ? (
@@ -43,7 +39,7 @@ export function AiSection({ displayName, data, isLoading, isError, onRetry }: Pr
           <PrimaryButton testID="home-ai-retry" label="다시 시도" onPress={onRetry} />
         </View>
       ) : ready ? (
-        <SpotGrid cards={data.items} subtitleOf={categorySubtitle} badgeOf={anchorBadge} />
+        <SpotGrid cards={data.items} subtitleOf={categorySubtitle} />
       ) : (
         <EmptyState onPress={openPicker} />
       )}

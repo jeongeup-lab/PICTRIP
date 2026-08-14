@@ -65,13 +65,6 @@ describe("SpotGridCard", () => {
     expect(json(r)).not.toContain("#카페");
   });
 
-  it("renders the anchor badge only when one is given", async () => {
-    const without = await mount();
-    expect(without.root.findAllByProps({ testID: "home-card-badge" })).toHaveLength(0);
-    const withBadge = await mount({ badge: "저장한 광안리해수욕장과 비슷한" });
-    expect(json(withBadge)).toContain("저장한 광안리해수욕장과 비슷한");
-  });
-
   it("shows the title and subtitle in the footer", async () => {
     const r = await mount({ subtitle: "중식당 · 724m" });
     expect(json(r)).toContain("롯데시네마 월드타워");

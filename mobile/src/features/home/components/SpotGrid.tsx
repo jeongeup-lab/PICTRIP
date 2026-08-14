@@ -8,13 +8,12 @@ import { spacing } from "@/constants/theme";
 interface Props {
   cards: HomeSpotCard[];
   subtitleOf: (card: HomeSpotCard) => string;
-  badgeOf?: (card: HomeSpotCard) => string | null;
 }
 
 const GUTTER = 10;
 export const GRID_PADDING = spacing.lg;
 
-export function SpotGrid({ cards, subtitleOf, badgeOf }: Props) {
+export function SpotGrid({ cards, subtitleOf }: Props) {
   const { width } = useWindowDimensions();
   const cardWidth = Math.floor((width - GRID_PADDING * 2 - GUTTER) / 2);
 
@@ -37,7 +36,6 @@ export function SpotGrid({ cards, subtitleOf, badgeOf }: Props) {
           card={card}
           width={cardWidth}
           subtitle={subtitleOf(card)}
-          badge={badgeOf?.(card)}
           onPress={() => open(card)}
         />
       ))}

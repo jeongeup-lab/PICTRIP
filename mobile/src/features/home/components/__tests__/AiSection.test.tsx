@@ -10,13 +10,7 @@ jest.mock("@/features/home/components/SpotGrid", () => {
   const React = require("react");
   const { View } = require("react-native");
   return {
-    SpotGrid: ({
-      cards,
-      badgeOf,
-    }: {
-      cards: HomeSpotCard[];
-      badgeOf?: (c: HomeSpotCard) => string | null;
-    }) =>
+    SpotGrid: ({ cards }: { cards: HomeSpotCard[] }) =>
       React.createElement(
         View,
         { testID: "spot-grid" },
@@ -24,7 +18,6 @@ jest.mock("@/features/home/components/SpotGrid", () => {
           React.createElement(View, {
             key: c.contentId,
             testID: "grid-item",
-            accessibilityLabel: badgeOf?.(c) ?? undefined,
           }),
         ),
       ),
@@ -93,10 +86,11 @@ describe("AiSection", () => {
     expect(json(r)).toContain("여행자");
   });
 
-  it("renders the recommendation grid with the anchor badge", async () => {
+  it("renders the recommendation grid without saved-similarity copy", async () => {
     const r = await mount();
-    const item = r.root.findAllByProps({ testID: "grid-item" })[0];
-    expect(item.props.accessibilityLabel).toBe("저장한 밀크컨셉 건대점과 비슷한 곳");
+    expect(r.root.findAllByProps({ testID: "grid-item" }).length).toBeGreaterThan(0);
+    expect(json(r)).not.toContain("저장한 장소와 닮은 곳을 골랐어요.");
+    expect(json(r)).not.toContain("비슷한 곳");
   });
 
   it("shows the taste CTA instead of a grid before the minimum saves", async () => {
