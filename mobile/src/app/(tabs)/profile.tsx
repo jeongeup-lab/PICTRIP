@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { View, Pressable, ScrollView, Linking, StyleSheet } from "react-native";
+import { View, Pressable, ScrollView, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as WebBrowser from "expo-web-browser";
 import { router, useFocusEffect } from "expo-router";
@@ -16,7 +16,6 @@ import { ProfileHero } from "@/features/profile/components/ProfileHero";
 import { GuestHero } from "@/features/profile/components/GuestHero";
 import { StatTiles } from "@/features/profile/components/StatTiles";
 import { profileStats } from "@/features/profile/lib/stats";
-import { PERM_LABEL, useAppPermissions } from "@/features/profile/hooks/use-app-permissions";
 import { APP_BUILD_LABEL } from "@/lib/app-meta";
 import { colors, spacing } from "@/constants/theme";
 
@@ -27,7 +26,6 @@ export default function ProfileTab() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const user = useAuthStore((s) => s.user);
   const { data: saved } = useSavedList();
-  const { location } = useAppPermissions();
   const [today, setToday] = useState(() => Date.now());
   useFocusEffect(
     useCallback(() => {
@@ -95,33 +93,25 @@ export default function ProfileTab() {
             <ListRow icon="person" title="계정" chevron onPress={() => router.push("/account")} />
           ) : null}
           <ListRow
-            icon="map-pin"
-            title="위치 권한"
-            value={location ? PERM_LABEL[location] : null}
-            tone={location === "granted" ? "on" : "off"}
-            chevron
-            onPress={() => void Linking.openSettings()}
-          />
-          <ListRow
             icon="settings"
-            title="권한 설정"
+            title="기기 권한"
             chevron
             onPress={() => router.push("/settings")}
           />
+          {isAuthenticated ? (
+            <ListRow
+              icon="check"
+              title="동의 내역"
+              chevron
+              onPress={() => router.push("/consent")}
+            />
+          ) : null}
           <ListRow
             icon="shield-check"
             title="약관·정책"
             chevron
             onPress={() => router.push("/legal")}
           />
-          {isAuthenticated ? (
-            <ListRow
-              icon="check"
-              title="동의 관리"
-              chevron
-              onPress={() => router.push("/consent")}
-            />
-          ) : null}
           <ListRow
             icon="chat"
             title="문의"
@@ -144,6 +134,6 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     paddingHorizontal: spacing.lg,
   },
-  navBtn: { width: 34, height: 34, alignItems: "flex-end", justifyContent: "center" },
+  navBtn: { width: 48, height: 48, alignItems: "center", justifyContent: "center" },
   scroll: { paddingBottom: spacing.xxl },
 });
