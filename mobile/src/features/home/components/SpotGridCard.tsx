@@ -1,6 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
-import { Icon } from "@/components/Icon";
 import { RemoteImage } from "@/components/RemoteImage";
 import { SaveButton } from "@/features/saved/components/SaveButton";
 import type { HomeSpotCard } from "@/features/home/api";
@@ -10,14 +9,13 @@ interface Props {
   card: HomeSpotCard;
   width: number;
   subtitle: string;
-  badge?: string | null;
   onPress: () => void;
 }
 
 const IMAGE_RATIO = 1.08;
 const FOOTER_HEIGHT = 62;
 
-export function SpotGridCard({ card, width, subtitle, badge, onPress }: Props) {
+export function SpotGridCard({ card, width, subtitle, onPress }: Props) {
   const imageHeight = Math.round(width * IMAGE_RATIO);
   return (
     <Pressable testID="home-grid-card" onPress={onPress} style={[styles.card, { width }]}>
@@ -28,7 +26,7 @@ export function SpotGridCard({ card, width, subtitle, badge, onPress }: Props) {
             <LinearGradient id="homeCardScrim" x1="0" y1="0" x2="0" y2="1">
               <Stop offset="0" stopColor="#0B0D11" stopOpacity={0.72} />
               <Stop offset="0.5" stopColor="#0B0D11" stopOpacity={0.06} />
-              <Stop offset="1" stopColor="#0B0D11" stopOpacity={badge ? 0.78 : 0.18} />
+              <Stop offset="1" stopColor="#0B0D11" stopOpacity={0.18} />
             </LinearGradient>
           </Defs>
           <Rect x="0" y="0" width="100%" height="100%" fill="url(#homeCardScrim)" />
@@ -46,15 +44,6 @@ export function SpotGridCard({ card, width, subtitle, badge, onPress }: Props) {
             ) : null}
           </>
         )}
-
-        {badge ? (
-          <View testID="home-card-badge" style={styles.badge}>
-            <Icon name="sparkle" size={13} color={colors.accentText} />
-            <Text style={styles.badgeText} numberOfLines={1} ellipsizeMode="tail">
-              {badge}
-            </Text>
-          </View>
-        ) : null}
       </View>
 
       <View style={styles.footer}>
@@ -92,23 +81,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
     letterSpacing: -0.3,
-    color: colors.onImage,
-  },
-  badge: {
-    position: "absolute",
-    left: 10,
-    right: 10,
-    bottom: 10,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 4,
-  },
-  badgeText: {
-    flex: 1,
-    fontSize: 12.5,
-    lineHeight: 17,
-    fontWeight: "800",
-    letterSpacing: -0.2,
     color: colors.onImage,
   },
   footer: {
