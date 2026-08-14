@@ -1,7 +1,6 @@
 import { StyleSheet } from "react-native";
 import renderer, { act } from "react-test-renderer";
 import { router } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
 import ProfileTab from "@/app/(tabs)/profile";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { useSavedList } from "@/features/saved/queries";
@@ -19,15 +18,7 @@ jest.mock("react-native-safe-area-context", () => ({
 }));
 jest.mock("@/features/saved/queries", () => ({ useSavedList: jest.fn() }));
 jest.mock("@/features/spots/queries", () => ({ prefetchSpot: jest.fn() }));
-jest.mock("@/features/profile/hooks/use-app-permissions", () => ({
-  PERM_LABEL: { granted: "허용됨", denied: "꺼짐", undetermined: "미설정" },
-  useAppPermissions: () => ({ location: "granted", photos: null, camera: null }),
-}));
 jest.mock("@/features/profile/components/StatTiles", () => ({ StatTiles: jest.fn(() => null) }));
-jest.mock("expo-web-browser", () => ({
-  openBrowserAsync: jest.fn(),
-  maybeCompleteAuthSession: jest.fn(),
-}));
 
 const useSavedListMock = useSavedList as jest.Mock;
 const StatTilesMock = StatTiles as unknown as jest.Mock;
@@ -122,11 +113,11 @@ describe("ProfileTab", () => {
     expect(router.push).toHaveBeenCalledWith("/settings");
   });
 
-  it("keeps a way into the consent screen when logged in", async () => {
+  it("keeps a way into the consent history when logged in", async () => {
     useAuthStore.setState({ user: USER, isAuthenticated: true, accessToken: "token" });
     const tree = await mount();
 
-    const consent = row(tree, "동의 관리");
+    const consent = row(tree, "동의 내역");
     expect(consent).toBeDefined();
 
     await act(async () => {
@@ -137,15 +128,27 @@ describe("ProfileTab", () => {
 
   it("hides the consent row for guests", async () => {
     const tree = await mount();
-    expect(tree.root.findAllByProps({ title: "동의 관리" })).toHaveLength(0);
+    expect(tree.root.findAllByProps({ title: "동의 내역" })).toHaveLength(0);
   });
 
-  it("opens the support page from the inquiry row", async () => {
+  it("keeps one device permission entry that opens the settings screen", async () => {
     const tree = await mount();
 
     await act(async () => {
-      row(tree, "문의").props.onPress();
+      row(tree, "기기 권한").props.onPress();
     });
-    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://pictrip.org/support");
+    expect(router.push).toHaveBeenCalledWith("/settings");
+    expect(tree.root.findAllByProps({ title: "위치 권한" })).toHaveLength(0);
+  });
+
+  it("orders device permissions, consent history, then legal policies", async () => {
+    useAuthStore.setState({ user: USER, isAuthenticated: true, accessToken: "token" });
+    const tree = await mount();
+    const titles = tree.root
+      .findAll((node) => typeof node.props.title === "string")
+      .map((node) => node.props.title);
+
+    expect(titles.indexOf("기기 권한")).toBeLessThan(titles.indexOf("동의 내역"));
+    expect(titles.indexOf("동의 내역")).toBeLessThan(titles.indexOf("약관·정책"));
   });
 });
