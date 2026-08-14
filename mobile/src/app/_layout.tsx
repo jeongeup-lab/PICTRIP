@@ -47,6 +47,10 @@ export default function RootLayout() {
           <Stack.Screen name="saved" />
           <Stack.Screen name="settings" />
           <Stack.Screen name="account" />
+          <Stack.Screen
+            name="account/delete"
+            options={{ presentation: "fullScreenModal", headerShown: false }}
+          />
           <Stack.Screen name="consent" />
           <Stack.Screen name="legal/index" />
           <Stack.Screen name="legal/[slug]" />
