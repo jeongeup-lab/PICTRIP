@@ -1,14 +1,25 @@
 import renderer, { act } from "react-test-renderer";
 import { Text } from "react-native";
-import SettingsScreen, { PHOTO_NOTICE } from "@/app/settings";
+import SettingsScreen from "@/app/settings";
 
-jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
+jest.mock("expo-router", () => ({
+  router: { push: jest.fn(), back: jest.fn() },
+  useFocusEffect: (effect: () => void | (() => void)) =>
+    jest.requireActual<typeof import("react")>("react").useEffect(effect, [effect]),
+}));
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 jest.mock("@/features/profile/hooks/use-app-permissions", () => ({
   PERM_LABEL: { granted: "허용됨", denied: "꺼짐", undetermined: "미설정" },
   useAppPermissions: () => ({ location: "granted", photos: "denied", camera: "undetermined" }),
+}));
+jest.mock("@/features/consent/queries", () => ({
+  useConsents: jest.fn(() => ({ data: undefined })),
+  useUpdateConsent: jest.fn(() => ({ mutate: jest.fn() })),
+}));
+jest.mock("expo-location", () => ({
+  getForegroundPermissionsAsync: jest.fn(async () => ({ granted: true })),
 }));
 
 let mounted: renderer.ReactTestRenderer | null = null;
@@ -43,11 +54,13 @@ describe("SettingsScreen", () => {
     expect(shown).toContain("미설정");
   });
 
-  it("keeps the photo-discard notice and drops the sourcing footer", async () => {
+  it("contains only system permission rows", async () => {
     const tree = await mount();
     const shown = texts(tree);
-    expect(shown).toContain(PHOTO_NOTICE);
-    expect(shown).not.toContain("관광 정보 출처");
+    expect(shown).toContain("기기 권한");
+    expect(shown).not.toContain("사진으로 찾기에 올린 이미지");
+    expect(shown).not.toContain("약관·정책");
+    expect(shown).not.toContain("앱 버전");
   });
 
   it("offers no notification or export rows", async () => {
