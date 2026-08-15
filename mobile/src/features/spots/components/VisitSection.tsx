@@ -4,22 +4,42 @@ import { colors } from "@/constants/theme";
 
 interface VisitSectionProps {
   title: string;
+  saved: boolean;
   onShare: () => void;
   onScrap: () => void;
 }
 
-export function VisitSection({ title, onShare, onScrap }: VisitSectionProps) {
+export function VisitSection({ title, saved, onShare, onScrap }: VisitSectionProps) {
   return (
     <View style={styles.visit}>
       <Text style={styles.h3}>{title}에 방문 예정이신가요?</Text>
       <View style={styles.cards}>
-        <Pressable style={styles.card} onPress={onShare}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="공유"
+          style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+          onPress={onShare}
+          testID="visit-share"
+        >
           <Text style={styles.cardText}>공유</Text>
           <Icon name="share" size={19} color={colors.sec} />
         </Pressable>
-        <Pressable style={styles.card} onPress={onScrap}>
-          <Text style={styles.cardText}>스크랩</Text>
-          <Icon name="bookmark" size={19} color={colors.accentText} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={saved ? "스크랩 해제" : "스크랩"}
+          accessibilityState={{ selected: saved }}
+          style={({ pressed }) => [styles.card, saved && styles.cardOn, pressed && styles.pressed]}
+          onPress={onScrap}
+          testID="visit-scrap"
+        >
+          <Text style={[styles.cardText, saved && styles.cardTextOn]}>
+            {saved ? "스크랩됨" : "스크랩"}
+          </Text>
+          <Icon
+            name={saved ? "bookmark-fill" : "bookmark"}
+            size={19}
+            color={saved ? colors.accent : colors.sec}
+          />
         </Pressable>
       </View>
     </View>
@@ -49,5 +69,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
   },
+  cardOn: { borderColor: colors.accent, backgroundColor: colors.accentFill },
   cardText: { fontSize: 14, fontWeight: "700", color: colors.ink },
+  cardTextOn: { color: colors.accentText },
+  pressed: { opacity: 0.72 },
 });
