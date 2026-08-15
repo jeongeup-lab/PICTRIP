@@ -144,6 +144,176 @@ async def test_anchor_food_returns_nearby_restaurants_sorted_by_distance(
 
 
 @pytest.mark.integration
+async def test_a_specific_dish_question_with_coords_keeps_only_title_evidence(
+    db_session, client, anchor_seeded, monkeypatch
+) -> None:
+    from app.modules.agent.services import intent as intent_service
+
+    await _spot(
+        db_session,
+        "f3",
+        title="구좌삼겹살집",
+        l1="FD",
+        l2="FD01",
+        l3=None,
+        content_type=39,
+        lat_offset=0.002,
+    )
+
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["맛집"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={"question": "삼겹살집", "lat": ANCHOR_LAT, "lng": ANCHOR_LNG},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert [spot["contentId"] for spot in data["spots"]] == ["f3"]
+    assert data["intent"]["categoryKeywords"] == ["맛집", "삼겹살"]
+
+
+@pytest.mark.integration
+async def test_a_specific_dish_question_keeps_its_title_constraint_after_focus_pivot(
+    db_session, client, anchor_seeded, monkeypatch
+) -> None:
+    from app.modules.agent.services import intent as intent_service
+
+    await _spot(
+        db_session,
+        "f3",
+        title="구좌삼겹살집",
+        l1="FD",
+        l2="FD01",
+        l3=None,
+        content_type=39,
+        lat_offset=0.002,
+    )
+
+    async def fake_intent(
+        question: str, *, prior: QueryIntent | None = None, prior_spots: list[str] | None = None
+    ) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["맛집"], originPlace="앵커스팟")
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={
+                "question": "거기 근처 삼겹살집은?",
+                "context": {"spots": [{"contentId": "a1", "title": "앵커스팟"}]},
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    assert [spot["contentId"] for spot in res.json()["data"]["spots"]] == ["f3"]
+
+
+@pytest.mark.integration
+async def test_a_specific_dish_zero_after_focus_pivot_names_the_title_condition(
+    db_session, client, anchor_seeded, monkeypatch
+) -> None:
+    from app.modules.agent.services import intent as intent_service
+
+    async def fake_intent(
+        question: str, *, prior: QueryIntent | None = None, prior_spots: list[str] | None = None
+    ) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["맛집"], originPlace="앵커스팟")
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={
+                "question": "거기 근처 보쌈집은?",
+                "context": {"spots": [{"contentId": "a1", "title": "앵커스팟"}]},
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    answer = "".join(part["text"] for part in res.json()["data"]["answer"])
+    assert "상호에 요청한 음식명(보쌈)이 모두 들어간 곳을 찾지 못했어요" in answer
+    assert "맛집이 없어요" not in answer
+
+
+@pytest.mark.integration
+async def test_a_specific_dish_zero_at_my_coords_names_the_title_condition(
+    db_session, client, anchor_seeded, monkeypatch
+) -> None:
+    from app.modules.agent.services import intent as intent_service
+
+    async def fake_intent(question: str) -> QueryIntent:
+        return QueryIntent(categoryKeywords=["맛집"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={"question": "보쌈집", "lat": ANCHOR_LAT, "lng": ANCHOR_LNG},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    answer = "".join(part["text"] for part in res.json()["data"]["answer"])
+    assert "상호에 요청한 음식명(보쌈)이 모두 들어간 곳을 찾지 못했어요" in answer
+    assert "맛집이 없어요" not in answer
+
+
+@pytest.mark.integration
+async def test_a_specific_dish_zero_around_a_named_origin_names_the_title_condition(
+    db_session, anchor_seeded
+) -> None:
+    response = await ask_service._ask_around(
+        db_session,
+        "김녕미로공원",
+        "food",
+        lat=ANCHOR_LAT,
+        lng=ANCHOR_LNG,
+        steps=[],
+        intent=QueryIntent(categoryKeywords=["맛집", "보쌈"]),
+        title_terms=["보쌈"],
+    )
+
+    answer = "".join(part.text for part in response.answer)
+    assert "상호에 요청한 음식명(보쌈)이 모두 들어간 곳을 찾지 못했어요" in answer
+    assert "맛집이 없어요" not in answer
+
+
+@pytest.mark.integration
+async def test_a_specific_dish_zero_across_a_region_names_the_title_condition(
+    db_session, anchor_seeded
+) -> None:
+    response = await ask_service._food_across_region(
+        db_session,
+        "food",
+        ["제주특별자치도"],
+        steps=[],
+        intent=QueryIntent(categoryKeywords=["맛집", "보쌈"]),
+        lat=None,
+        lng=None,
+        title_terms=["보쌈"],
+    )
+
+    answer = "".join(part.text for part in response.answer)
+    assert "상호에 요청한 음식명(보쌈)이 모두 들어간 곳을 찾지 못했어요" in answer
+    assert "등록된 맛집이 없어요" not in answer
+
+
+@pytest.mark.integration
 async def test_a_photoless_anchor_card_borrows_a_random_attraction_image(
     db_session, client, anchor_seeded
 ) -> None:

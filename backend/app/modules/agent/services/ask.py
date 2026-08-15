@@ -18,6 +18,7 @@ from app.modules.agent.errors import (
 from app.modules.agent.repositories import CandidateRow, VectorMatchRow
 from app.modules.agent.schemas import (
     MAX_HINT_TOKENS,
+    MAX_KEYWORDS,
     AgentSpotCard,
     AnchorAction,
     AnswerSegment,
@@ -327,6 +328,7 @@ async def _ask_with_anchor(
     lng: float | None,
     prior_steps: list[AskStep] | None = None,
     carried_intent: QueryIntent | None = None,
+    title_terms: list[str] | None = None,
 ) -> AskResponse:
     row: CandidateRow | None = None
     if anchor.contentId is not None:
@@ -359,6 +361,7 @@ async def _ask_with_anchor(
         radius=ANCHOR_RADIUS_M,
         category=ANCHOR_CATEGORIES[anchor.action],
         travel_only=anchor.action == "nearby",
+        title_terms=title_terms,
     )
     kept = [near for near in found if row is None or near.content_id != row.content_id]
     kept = kept[: retrieve.RESULT_LIMIT]
@@ -368,6 +371,7 @@ async def _ask_with_anchor(
             anchor.action,
             prior_steps=prior_steps or [],
             intent=carried_intent,
+            title_terms=title_terms,
         )
     rated = await repositories.load_candidates_by_ids(session, [n.content_id for n in kept])
     spots = [_anchor_card(near, has_crowd=_has_crowd(rated.get(near.content_id))) for near in kept]
@@ -399,6 +403,7 @@ def empty_anchor_response(
     *,
     prior_steps: list[AskStep],
     intent: QueryIntent | None = None,
+    title_terms: list[str] | None = None,
 ) -> AskResponse:
     noun = ANCHOR_NOUNS[action]
     steps = [
@@ -406,15 +411,28 @@ def empty_anchor_response(
         AskStep(tool="nearby", label=f"{origin} 주변 {noun} 조회", badge="0곳"),
     ]
     logger.info("agent.anchor.empty", action=action)
-    return AskResponse(
-        steps=steps,
-        answer=[
+    answer = (
+        [
+            AnswerSegment(
+                text=(
+                    f"{origin} 주변 {ANCHOR_RADIUS_M // 1000}km 안에서 "
+                    f"{_dish_title_condition(title_terms)}을 찾지 못했어요. "
+                    "다른 곳을 골라 보세요."
+                )
+            )
+        ]
+        if title_terms
+        else [
             AnswerSegment(text=f"{origin} 주변 "),
             AnswerSegment(text=f"{ANCHOR_RADIUS_M // 1000}km", emphasis=True),
             AnswerSegment(
                 text=f" 안에는 {noun}{_subject_particle(noun)} 없어요. 다른 곳을 골라 보세요."
             ),
-        ],
+        ]
+    )
+    return AskResponse(
+        steps=steps,
+        answer=answer,
         spots=[],
         totalCount=0,
         intent=_without_unapplied_axes(intent or QueryIntent()),
@@ -621,6 +639,17 @@ async def _ask_with_question(
             )
     if intent.task == "smalltalk":
         return _talk_response(steps, intent, BLANK_ANSWER, legacy_client=legacy_client)
+    raw_dish_terms = retrieve.dish_search_terms(question)
+    if raw_dish_terms:
+        carried_keywords = (
+            set(context.intent.categoryKeywords) if context and context.intent else set()
+        )
+        merged_keywords = [
+            keyword for keyword in intent.categoryKeywords if keyword not in carried_keywords
+        ]
+        merged_keywords.extend(term for term in raw_dish_terms if term not in merged_keywords)
+        intent = intent.model_copy(update={"categoryKeywords": merged_keywords[:MAX_KEYWORDS]})
+    title_terms = retrieve.dish_search_terms(" ".join(intent.categoryKeywords))
     if _asks_for_nothing(intent, prefixes=pre_ota_region_prefixes):
         sentence = NO_AXIS_ANSWER if question.strip() else BLANK_ANSWER
         return _talk_response(steps, intent, sentence, legacy_client=legacy_client)
@@ -635,6 +664,7 @@ async def _ask_with_question(
             lng=lng,
             prior_steps=steps,
             carried_intent=intent,
+            title_terms=title_terms,
         )
 
     if intent.festivalOnly:
@@ -670,6 +700,7 @@ async def _ask_with_question(
             context=context,
             resolved=resolved,
             legacy_client=legacy_client,
+            title_terms=title_terms,
         )
     mood_ids = await repositories.find_mood_ids(session, list(intent.moodHints))
     scope = region_scope
@@ -926,6 +957,7 @@ async def _ask_for_food(
     context: AskContext | None,
     resolved: list[ResolvedPlace],
     legacy_client: bool,
+    title_terms: list[str],
 ) -> AskResponse:
     scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
     stale = context is not None and _named_a_new_region(intent, context)
@@ -938,6 +970,7 @@ async def _ask_for_food(
             lng=lng,
             prior_steps=steps,
             carried_intent=intent,
+            title_terms=title_terms,
         )
     origin = await _named_origin(session, intent, resolved)
     if origin is not None:
@@ -954,10 +987,18 @@ async def _ask_for_food(
             steps=located,
             intent=intent,
             exclude=origin.content_id,
+            title_terms=title_terms,
         )
     if scope.prefixes:
         return await _food_across_region(
-            session, action, scope.prefixes, steps=steps, intent=intent, lat=lat, lng=lng
+            session,
+            action,
+            scope.prefixes,
+            steps=steps,
+            intent=intent,
+            lat=lat,
+            lng=lng,
+            title_terms=title_terms,
         )
     if lat is not None and lng is not None:
         return await _ask_with_anchor(
@@ -967,6 +1008,7 @@ async def _ask_for_food(
             lng=lng,
             prior_steps=steps,
             carried_intent=intent,
+            title_terms=title_terms,
         )
     return _talk_response(steps, intent, FOOD_NEEDS_ORIGIN_ANSWER, legacy_client=legacy_client)
 
@@ -980,6 +1022,7 @@ async def _food_across_region(
     intent: QueryIntent,
     lat: float | None,
     lng: float | None,
+    title_terms: list[str] | None = None,
 ) -> AskResponse:
     near = intent.nearMe and lat is not None and lng is not None
     spoken = intent if near or not intent.nearMe else intent.model_copy(update={"nearMe": False})
@@ -995,13 +1038,28 @@ async def _food_across_region(
         lat=lat,
         lng=lng,
         near=near,
+        title_terms=title_terms,
     )
     if rows or not narrowed:
         return food_in_region(
-            rows, prefixes, action, steps=steps, intent=spoken, lat=lat, lng=lng, near=near
+            rows,
+            prefixes,
+            action,
+            steps=steps,
+            intent=spoken,
+            lat=lat,
+            lng=lng,
+            near=near,
+            title_terms=title_terms,
         )
     unfiltered = await retrieve.search_food(
-        session, action=action, region_prefixes=prefixes, lat=lat, lng=lng, near=near
+        session,
+        action=action,
+        region_prefixes=prefixes,
+        lat=lat,
+        lng=lng,
+        near=near,
+        title_terms=title_terms,
     )
     return food_in_region(
         unfiltered,
@@ -1012,6 +1070,7 @@ async def _food_across_region(
         lat=lat,
         lng=lng,
         near=near,
+        title_terms=title_terms,
     )
 
 
@@ -1031,6 +1090,7 @@ async def _ask_around(
     steps: list[AskStep],
     intent: QueryIntent,
     exclude: str | None = None,
+    title_terms: list[str] | None = None,
 ) -> AskResponse:
     noun = ANCHOR_NOUNS[action]
     found = await find_nearby_spots(
@@ -1039,10 +1099,17 @@ async def _ask_around(
         lng=lng,
         radius=ANCHOR_RADIUS_M,
         category=ANCHOR_CATEGORIES[action],
+        title_terms=title_terms,
     )
     kept = [near for near in found if near.content_id != exclude][: retrieve.RESULT_LIMIT]
     if not kept:
-        return empty_anchor_response(origin, action, prior_steps=steps, intent=intent)
+        return empty_anchor_response(
+            origin,
+            action,
+            prior_steps=steps,
+            intent=intent,
+            title_terms=title_terms,
+        )
     rated = await repositories.load_candidates_by_ids(session, [n.content_id for n in kept])
     spots = [_anchor_card(near, has_crowd=_has_crowd(rated.get(near.content_id))) for near in kept]
     await _fill_missing_card_images(session, spots)
@@ -1077,6 +1144,7 @@ def food_in_region(
     lat: float | None = None,
     lng: float | None = None,
     near: bool = False,
+    title_terms: list[str] | None = None,
 ) -> AskResponse:
     noun = ANCHOR_NOUNS[action]
     where = " · ".join(regions)
@@ -1086,11 +1154,18 @@ def food_in_region(
         AskStep(tool="category_search", label=f"{where} {noun} 조회", badge=_count(rows)),
     ]
     if not top:
+        answer = (
+            [
+                AnswerSegment(
+                    text=f"{where}에서 {_dish_title_condition(title_terms)}을 찾지 못했어요."
+                )
+            ]
+            if title_terms
+            else [AnswerSegment(text=f"{where}에는 등록된 {noun}{_subject_particle(noun)} 없어요.")]
+        )
         return AskResponse(
             steps=scanned,
-            answer=[
-                AnswerSegment(text=f"{where}에는 등록된 {noun}{_subject_particle(noun)} 없어요.")
-            ],
+            answer=answer,
             spots=[],
             totalCount=0,
             intent=intent,
@@ -1111,6 +1186,10 @@ def food_in_region(
         tagBasis="직선거리 기준" if near else None,
         refinements=[],
     )
+
+
+def _dish_title_condition(title_terms: list[str]) -> str:
+    return f"상호에 요청한 음식명({' · '.join(title_terms)})이 모두 들어간 곳"
 
 
 def _region_food_card(
@@ -1588,7 +1667,5 @@ def _named_a_new_region(intent: QueryIntent, context: AskContext) -> bool:
 
 def _origin_action(intent: QueryIntent) -> AnchorAction:
     haystack = " ".join(intent.categoryKeywords)
-    return next(
-        (action for word, action in ORIGIN_ACTION_WORDS if word in haystack),
-        "nearby",
-    )
+    matched = next((action for word, action in ORIGIN_ACTION_WORDS if word in haystack), None)
+    return matched or retrieve.food_word(list(intent.categoryKeywords)) or "nearby"
