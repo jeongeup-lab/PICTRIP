@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class UserPublic(BaseModel):
@@ -26,6 +26,11 @@ class RefreshBody(BaseModel):
 
 class LogoutBody(BaseModel):
     refreshToken: str | None = None
+
+
+class DeleteAccountBody(BaseModel):
+    refreshToken: str | None = None
+    reason: str | None = Field(default=None, max_length=64)
 
 
 class TokenPair(BaseModel):

@@ -2,21 +2,33 @@ import { AppError } from "@/lib/app-error";
 import { accountDeletion } from "@/features/auth/account-deletion";
 
 describe("accountDeletion", () => {
-  it("names the losses in the user's words, not ours", () => {
-    expect(accountDeletion.losses(3)).toEqual([
-      "저장한 장소 3곳",
-      "취향에 맞춘 추천",
-      "계정 정보와 로그인 연결",
+  it("offers four reasons and lets the user decline one", () => {
+    expect(accountDeletion.reasons.map((reason) => reason.label)).toEqual([
+      "가고 싶던 곳을 다 찾았어요",
+      "여행 앱을 잠시 쉬려고요",
+      "추천이 취향과 맞지 않아요",
+      "말하고 싶지 않아요",
     ]);
   });
 
-  it("drops the count when nothing is saved", () => {
-    expect(accountDeletion.losses(0)[0]).toBe("저장한 장소");
+  it("keeps reason codes stable and unique for the server", () => {
+    const codes = accountDeletion.reasons.map((reason) => reason.code);
+
+    expect(codes).toEqual([
+      "found_everything",
+      "taking_a_break",
+      "poor_recommendations",
+      "declined",
+    ]);
+    expect(new Set(codes).size).toBe(codes.length);
   });
 
-  it("keeps the screen copy to a single sentence and a short consent", () => {
-    expect(accountDeletion.lead).toBe("탈퇴하면 되돌릴 수 없어요.");
-    expect(accountDeletion.acknowledgement).toBe("확인했어요");
+  it("states the loss only where the decision is made", () => {
+    expect(accountDeletion.reasonPrompt).toBe("떠나시는 이유 (선택)");
+    expect(accountDeletion.confirmTitle).toBe("정말 탈퇴할까요?");
+    expect(accountDeletion.confirmBody).toBe(
+      "계정과 저장한 장소가 모두 삭제돼요. 되돌릴 수 없어요.",
+    );
   });
 
   it("maps known application error codes without exposing server messages", () => {

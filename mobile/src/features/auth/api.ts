@@ -19,6 +19,9 @@ export async function logoutRequest(refreshToken: string | null): Promise<void> 
   await bareClient.post("/auth/logout", { refreshToken });
 }
 
-export async function deleteAccountRequest(refreshToken: string | null): Promise<void> {
-  await api.delete("/users/me", { data: { refreshToken } });
+export async function deleteAccountRequest(
+  refreshToken: string | null,
+  reason?: string,
+): Promise<void> {
+  await api.delete("/users/me", { data: { refreshToken, reason: reason ?? null } });
 }

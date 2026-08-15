@@ -286,3 +286,44 @@ async def test_delete_without_auth_returns_401(client: AsyncClient) -> None:
     resp = await client.delete("/v1/users/me")
     assert resp.status_code == 401
     assert resp.json()["error"]["code"] == "AUTH_TOKEN_INVALID"
+
+
+@pytest.mark.asyncio
+async def test_delete_accepts_an_optional_reason(
+    client: AsyncClient, override_db_and_seed: AsyncSession
+) -> None:
+    uid = await _seed_user_with_provider(override_db_and_seed)
+
+    resp = await client.request(
+        "DELETE",
+        "/v1/users/me",
+        headers=_auth(uid),
+        json={"refreshToken": None, "reason": "taking_a_break"},
+    )
+    assert resp.status_code == 204
+
+    row = (
+        await override_db_and_seed.execute(
+            text("SELECT deleted_at FROM users WHERE id = :u"), {"u": uid}
+        )
+    ).first()
+    assert row is not None and row.deleted_at is not None
+
+
+@pytest.mark.asyncio
+async def test_delete_rejects_an_overlong_reason(
+    client: AsyncClient, override_db_and_seed: AsyncSession
+) -> None:
+    uid = await _seed_user_with_provider(override_db_and_seed)
+
+    resp = await client.request(
+        "DELETE", "/v1/users/me", headers=_auth(uid), json={"reason": "x" * 65}
+    )
+    assert resp.status_code == 422
+
+    row = (
+        await override_db_and_seed.execute(
+            text("SELECT deleted_at FROM users WHERE id = :u"), {"u": uid}
+        )
+    ).first()
+    assert row is not None and row.deleted_at is None

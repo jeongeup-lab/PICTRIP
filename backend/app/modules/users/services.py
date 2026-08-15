@@ -84,9 +84,11 @@ async def delete_user_account(
     redis: Redis,
     user_id: int,
     refresh_token: str | None = None,
+    reason: str | None = None,
 ) -> None:
     user = await repo.get_user(session, user_id)
     if user is not None and user.deleted_at is None:
+        log.info("users: account deleted", extra={"reason": reason or "unspecified"})
         apple_tokens_to_revoke = await repo.list_provider_refresh_tokens(
             session, user_id, provider="apple"
         )
