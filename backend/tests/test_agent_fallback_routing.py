@@ -195,6 +195,20 @@ async def test_focused_dish_followup_replaces_carried_category_when_gemini_is_do
     assert seen_title_terms == ["삼겹살"]
 
 
+@pytest.mark.parametrize(
+    ("action", "expected"),
+    [
+        ("food", ["삼겹살"]),
+        ("cafe", []),
+        ("nearby", []),
+        ("related", []),
+        ("crowd", []),
+    ],
+)
+def test_only_food_action_keeps_dish_title_terms(action: AnchorAction, expected: list[str]) -> None:
+    assert ask_service._title_terms_for_action(action, ["삼겹살"]) == expected
+
+
 async def test_a_station_anchors_the_food_search_instead_of_the_users_own_location(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
