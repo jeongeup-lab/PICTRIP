@@ -14,7 +14,7 @@ jest.mock("expo-router", () => {
     useNavigation: () => nav,
   };
 });
-jest.mock("expo-router/build/react-navigation/core", () => ({ usePreventRemove: jest.fn() }));
+jest.mock("expo-router/react-navigation", () => ({ usePreventRemove: jest.fn() }));
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
@@ -26,7 +26,7 @@ const expoRouterMock = jest.requireMock<{
   router: { back: jest.Mock; canGoBack: jest.Mock; replace: jest.Mock; dismissAll: jest.Mock };
 }>("expo-router");
 const usePreventRemove = jest.requireMock<{ usePreventRemove: jest.Mock }>(
-  "expo-router/build/react-navigation/core",
+  "expo-router/react-navigation",
 ).usePreventRemove;
 
 const deleteAccount = jest.fn(async () => {});

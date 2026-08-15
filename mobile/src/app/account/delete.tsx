@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useNavigation } from "expo-router";
-import { usePreventRemove } from "expo-router/build/react-navigation/core";
+import { usePreventRemove } from "expo-router/react-navigation";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { InfoBox } from "@/components/InfoBox";
 import { Icon } from "@/components/Icon";
