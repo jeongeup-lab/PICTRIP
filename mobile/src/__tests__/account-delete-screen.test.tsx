@@ -1,24 +1,20 @@
 import renderer, { act } from "react-test-renderer";
 import { Text } from "react-native";
-import { router } from "expo-router";
 import AccountDeleteScreen from "@/app/account/delete";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import type { User } from "@/lib/api-types";
 
 jest.mock("expo-router", () => {
-  const listener: { current?: (event: { preventDefault: () => void }) => void } = {};
   const nav = {
-    addListener: jest.fn((_type: string, cb: (event: { preventDefault: () => void }) => void) => {
-      listener.current = cb;
-      return jest.fn();
-    }),
+    addListener: jest.fn(() => jest.fn()),
+    dispatch: jest.fn(),
   };
   return {
     router: { back: jest.fn(), canGoBack: jest.fn(), replace: jest.fn(), dismissAll: jest.fn() },
     useNavigation: () => nav,
-    __listener: listener,
   };
 });
+jest.mock("expo-router/build/react-navigation/core", () => ({ usePreventRemove: jest.fn() }));
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
@@ -28,8 +24,10 @@ jest.mock("@/features/saved/queries", () => ({
 
 const expoRouterMock = jest.requireMock<{
   router: { back: jest.Mock; canGoBack: jest.Mock; replace: jest.Mock; dismissAll: jest.Mock };
-  __listener: { current?: (event: { preventDefault: () => void }) => void };
 }>("expo-router");
+const usePreventRemove = jest.requireMock<{ usePreventRemove: jest.Mock }>(
+  "expo-router/build/react-navigation/core",
+).usePreventRemove;
 
 const deleteAccount = jest.fn(async () => {});
 const user: User = {
@@ -77,7 +75,22 @@ describe("AccountDeleteScreen", () => {
     expect(expoRouterMock.router.replace).toHaveBeenCalledWith("/(tabs)");
   });
 
-  it("blocks route removal while deletion is pending", async () => {
+  it("presents irreversible PicTrip data in a dedicated consequences section", async () => {
+    await act(async () => {
+      mounted = renderer.create(<AccountDeleteScreen />);
+    });
+    if (mounted === null) throw new Error("screen did not mount");
+
+    expect(mounted.root.findByProps({ testID: "delete-consequences" })).toBeDefined();
+    const shown = mounted.root
+      .findAllByType(Text)
+      .map((node) => JSON.stringify(node.props.children))
+      .join("|");
+    expect(shown).toContain("삭제되는 PicTrip 데이터");
+    expect(shown).toContain("PicTrip에 저장된 소셜 로그인 연결 정보가 삭제돼요");
+  });
+
+  it("prevents removal only while account deletion is in flight", async () => {
     let resolveDelete: (() => void) | undefined;
     deleteAccount.mockImplementationOnce(
       () =>
@@ -89,6 +102,7 @@ describe("AccountDeleteScreen", () => {
       mounted = renderer.create(<AccountDeleteScreen />);
     });
     if (mounted === null) throw new Error("screen did not mount");
+    expect(usePreventRemove).toHaveBeenLastCalledWith(false, expect.any(Function));
     await act(async () => {
       mounted?.root.findByProps({ testID: "delete-acknowledgement" }).props.onPress();
     });
@@ -96,21 +110,15 @@ describe("AccountDeleteScreen", () => {
       mounted?.root.findByProps({ testID: "delete-account" }).props.onPress();
     });
 
-    const preventDefault = jest.fn();
-    await act(async () => {
-      expoRouterMock.__listener.current?.({ preventDefault });
-    });
-    expect(preventDefault).toHaveBeenCalled();
+    expect(usePreventRemove).toHaveBeenLastCalledWith(true, expect.any(Function));
     expect(expoRouterMock.router.dismissAll).not.toHaveBeenCalled();
 
     await act(async () => {
       resolveDelete?.();
     });
-    await act(async () => {
-      const preventDefaultAfter = jest.fn();
-      expoRouterMock.__listener.current?.({ preventDefault: preventDefaultAfter });
-      expect(preventDefaultAfter).not.toHaveBeenCalled();
-    });
+    expect(usePreventRemove).toHaveBeenLastCalledWith(false, expect.any(Function));
+    expect(expoRouterMock.router.dismissAll).toHaveBeenCalledTimes(1);
+    expect(expoRouterMock.router.replace).toHaveBeenCalledWith("/(tabs)");
   });
 
   it("sends guests back to account without exposing deletion", async () => {
