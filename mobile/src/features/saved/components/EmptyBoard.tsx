@@ -34,7 +34,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     backgroundColor: colors.bg,
   },
-  text: { color: colors.ter, fontSize: 14 },
+  text: { color: colors.sec, fontSize: 14 },
   btn: {
     flexDirection: "row",
     alignItems: "center",
