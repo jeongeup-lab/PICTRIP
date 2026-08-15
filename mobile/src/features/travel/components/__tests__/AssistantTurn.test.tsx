@@ -21,6 +21,12 @@ const BLOG_SOURCE: SourceItem = {
   date: "20260801",
 };
 
+const KAKAO_SOURCE: SourceItem = {
+  kind: "kakao",
+  title: "카카오 장소 검색",
+  url: "https://place.map.kakao.com/42",
+};
+
 function turnWith(sources: SourceItem[]): ChatTurn {
   return {
     id: "assistant-1",
@@ -75,8 +81,8 @@ describe("AssistantTurn sources", () => {
     expect(tree.root.findByType(SourcesSheet).props.items).toEqual([]);
   });
 
-  it("a mixed response exposes only the visible source in the trigger and sheet", () => {
-    const tree = mount([KTO_SOURCE, BLOG_SOURCE]);
+  it("a mixed response exposes only Naver blog sources in the trigger and sheet", () => {
+    const tree = mount([KTO_SOURCE, KAKAO_SOURCE, BLOG_SOURCE]);
     mounted.push(tree);
     const trigger = tree.root.findByProps({ testID: "travel-sources" });
 

@@ -61,7 +61,7 @@ function SourceRow({ item }: { item: SourceItem }) {
 
 export function SourcesSheet({ visible, items, onClose }: Props) {
   const insets = useSafeAreaInsets();
-  const listed = items.filter((item) => item.kind !== "kto");
+  const listed = items.filter((item) => item.kind === "naver_blog");
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>

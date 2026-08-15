@@ -64,7 +64,7 @@ export function AssistantTurn({
 
   const mapSpots = useMemo(() => placed(turn.spots), [turn.spots]);
   const pins = useMemo(() => pinsFrom(mapSpots), [mapSpots]);
-  const visibleSources = turn.sources.filter((source) => source.kind !== "kto");
+  const visibleSources = turn.sources.filter((source) => source.kind === "naver_blog");
   const fit = useMemo(() => {
     const box = bounds(mapSpots);
     if (!box) return null;
