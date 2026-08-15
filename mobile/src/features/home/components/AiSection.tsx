@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -8,7 +8,7 @@ import { SpotGrid } from "@/features/home/components/SpotGrid";
 import { categorySubtitle } from "@/features/home/lib/card-subtitle";
 import type { Recommendations } from "@/features/home/api";
 import { useAuthGate } from "@/features/auth/hooks/use-auth-gate";
-import { colors, spacing } from "@/constants/theme";
+import { colors, radii, spacing } from "@/constants/theme";
 
 interface Props {
   displayName: string | null;
@@ -49,16 +49,16 @@ export function AiSection({ displayName, data, isLoading, isError, onRetry }: Pr
 
 function EmptyState({ onPress }: { onPress: () => void }) {
   return (
-    <Pressable testID="home-taste-cta" onPress={onPress} style={styles.empty}>
+    <View style={styles.empty}>
       <View style={styles.emptyIcon}>
         <Icon name="sparkle" size={26} color={colors.accentText} />
       </View>
       <Text style={styles.emptyTitle}>취향 카드로 시작하기</Text>
-      <View style={styles.emptyCta}>
-        <Text style={styles.emptyCtaText}>카드 고르러 가기</Text>
-        <Icon name="chevron-right" size={16} color={colors.onImage} />
+      <Text style={styles.emptyDescription}>마음에 드는 곳을 고르면 맞춤 추천을 준비해요.</Text>
+      <View style={styles.emptyAction}>
+        <PrimaryButton testID="home-taste-cta" label="카드 고르러 가기" onPress={onPress} />
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -67,34 +67,25 @@ const styles = StyleSheet.create({
   empty: {
     marginHorizontal: spacing.lg,
     padding: spacing.lg,
-    borderRadius: 18,
+    borderRadius: radii.lg,
     alignItems: "center",
-    gap: 8,
+    gap: spacing.sm,
     backgroundColor: colors.inset,
     borderWidth: 1,
     borderColor: colors.line,
   },
   emptyIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: spacing.xxl + spacing.xl,
+    height: spacing.xxl + spacing.xl,
+    borderRadius: radii.pill,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: colors.accentFill,
-    marginBottom: 2,
+    marginBottom: spacing.xs,
   },
   emptyTitle: { fontSize: 16, fontWeight: "800", letterSpacing: -0.3, color: colors.ink },
-  emptyCta: {
-    marginTop: 6,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-    paddingHorizontal: 18,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: colors.accent,
-  },
-  emptyCtaText: { fontSize: 15, fontWeight: "700", color: colors.onImage },
+  emptyDescription: { fontSize: 14, fontWeight: "500", color: colors.sec, textAlign: "center" },
+  emptyAction: { alignSelf: "stretch", marginTop: spacing.xs },
   error: { alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg },
   errorText: { fontSize: 14, color: colors.sec },
 });

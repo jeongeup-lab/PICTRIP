@@ -1,5 +1,6 @@
 import renderer, { act } from "react-test-renderer";
 import { router } from "expo-router";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { AiSection } from "@/features/home/components/AiSection";
 import { useAuthGate } from "@/features/auth/hooks/use-auth-gate";
 import type { HomeSpotCard, Recommendations } from "@/features/home/api";
@@ -97,6 +98,15 @@ describe("AiSection", () => {
     const r = await mount({ data: recommendations({ ready: false, savedCount: 1, items: [] }) });
     expect(r.root.findAllByProps({ testID: "spot-grid" })).toHaveLength(0);
     expect(r.root.findAllByProps({ testID: "home-taste-cta" }).length).toBeGreaterThan(0);
+  });
+
+  it("provides the taste CTA as its only shared primary action", async () => {
+    const r = await mount({ data: recommendations({ ready: false, savedCount: 1, items: [] }) });
+    const buttons = r.root.findAllByType(PrimaryButton);
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].findByProps({ testID: "home-taste-cta" }).props.onPress).toEqual(
+      expect.any(Function),
+    );
   });
 
   it("keeps the CTA free of remaining-count and how-it-works copy", async () => {
