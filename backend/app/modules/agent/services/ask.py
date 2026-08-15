@@ -664,7 +664,7 @@ async def _ask_with_question(
             lng=lng,
             prior_steps=steps,
             carried_intent=intent,
-            title_terms=title_terms,
+            title_terms=_title_terms_for_action(pivot.action, title_terms),
         )
 
     if intent.festivalOnly:
@@ -700,7 +700,7 @@ async def _ask_with_question(
             context=context,
             resolved=resolved,
             legacy_client=legacy_client,
-            title_terms=title_terms,
+            title_terms=_title_terms_for_action(eating, title_terms),
         )
     mood_ids = await repositories.find_mood_ids(session, list(intent.moodHints))
     scope = region_scope
@@ -1669,3 +1669,7 @@ def _origin_action(intent: QueryIntent) -> AnchorAction:
     haystack = " ".join(intent.categoryKeywords)
     matched = next((action for word, action in ORIGIN_ACTION_WORDS if word in haystack), None)
     return matched or retrieve.food_word(list(intent.categoryKeywords)) or "nearby"
+
+
+def _title_terms_for_action(action: AnchorAction, title_terms: list[str]) -> list[str]:
+    return title_terms if action == "food" else []
