@@ -5,6 +5,7 @@ describe("accountDeletion", () => {
   it("describes empty and populated saved lists", () => {
     expect(accountDeletion.losses(0)[0]).toBe("스크랩이 모두 삭제돼요");
     expect(accountDeletion.losses(3)[0]).toBe("스크랩 3개가 삭제돼요");
+    expect(accountDeletion.losses(3)[1]).toBe("PicTrip에 저장된 소셜 로그인 연결 정보가 삭제돼요");
   });
 
   it("maps known application error codes without exposing server messages", () => {
