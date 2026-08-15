@@ -1,9 +1,15 @@
 import { AppError } from "@/lib/app-error";
 
-const losses = (savedCount: number): readonly string[] => [
-  savedCount > 0 ? `저장한 장소 ${savedCount}곳` : "저장한 장소",
-  "취향에 맞춘 추천",
-  "계정 정보와 로그인 연결",
+export interface DeletionReason {
+  readonly code: string;
+  readonly label: string;
+}
+
+const reasons: readonly DeletionReason[] = [
+  { code: "found_everything", label: "가고 싶던 곳을 다 찾았어요" },
+  { code: "taking_a_break", label: "여행 앱을 잠시 쉬려고요" },
+  { code: "poor_recommendations", label: "추천이 취향과 맞지 않아요" },
+  { code: "declined", label: "말하고 싶지 않아요" },
 ];
 
 const errorMessage = (error: unknown): string => {
@@ -22,8 +28,12 @@ const errorMessage = (error: unknown): string => {
 
 export const accountDeletion = {
   title: "회원 탈퇴",
-  lead: "탈퇴하면 되돌릴 수 없어요.",
-  acknowledgement: "확인했어요",
-  losses,
+  reasonPrompt: "떠나시는 이유 (선택)",
+  submitLabel: "탈퇴하기",
+  pendingLabel: "탈퇴 처리 중…",
+  confirmTitle: "정말 탈퇴할까요?",
+  confirmBody: "계정과 저장한 장소가 모두 삭제돼요. 되돌릴 수 없어요.",
+  cancelLabel: "취소",
+  reasons,
   errorMessage,
 } as const;

@@ -39,6 +39,16 @@ describe("auth api", () => {
   it("deleteAccountRequest sends the refresh token so the server can revoke it", async () => {
     (api.delete as jest.Mock).mockResolvedValue(undefined);
     await deleteAccountRequest("r1");
-    expect(api.delete).toHaveBeenCalledWith("/users/me", { data: { refreshToken: "r1" } });
+    expect(api.delete).toHaveBeenCalledWith("/users/me", {
+      data: { refreshToken: "r1", reason: null },
+    });
+  });
+
+  it("deleteAccountRequest carries the chosen reason when there is one", async () => {
+    (api.delete as jest.Mock).mockResolvedValue(undefined);
+    await deleteAccountRequest("r1", "taking_a_break");
+    expect(api.delete).toHaveBeenCalledWith("/users/me", {
+      data: { refreshToken: "r1", reason: "taking_a_break" },
+    });
   });
 });

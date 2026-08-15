@@ -20,7 +20,7 @@ interface AuthState {
   hydrate: () => Promise<void>;
   loginWithOAuth: (provider: Provider) => Promise<"success" | "canceled">;
   logout: () => Promise<void>;
-  deleteAccount: () => Promise<void>;
+  deleteAccount: (reason?: string) => Promise<void>;
   devLogin: () => void;
 }
 
@@ -91,8 +91,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await get().clear();
   },
 
-  deleteAccount: async () => {
-    await deleteAccountRequest(await getRefreshToken());
+  deleteAccount: async (reason) => {
+    await deleteAccountRequest(await getRefreshToken(), reason);
     await get().clear();
   },
 

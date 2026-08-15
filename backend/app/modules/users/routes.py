@@ -12,6 +12,7 @@ from app.modules.spots.schemas import SpotCard
 from app.modules.users import services
 from app.modules.users.schemas import (
     ConsentIn,
+    DeleteAccountBody,
     LogoutBody,
     OAuthLoginIn,
     RefreshBody,
@@ -76,9 +77,15 @@ async def delete_me(
     user_id: CurrentUserId,
     session: DbSession,
     redis: RedisDep,
-    body: LogoutBody | None = None,
+    body: DeleteAccountBody | None = None,
 ) -> Response:
-    await services.delete_user_account(session, redis, user_id, body.refreshToken if body else None)
+    await services.delete_user_account(
+        session,
+        redis,
+        user_id,
+        body.refreshToken if body else None,
+        reason=body.reason if body else None,
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
