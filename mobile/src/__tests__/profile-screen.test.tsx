@@ -4,12 +4,13 @@ import { router } from "expo-router";
 import ProfileTab from "@/app/(tabs)/profile";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { useSavedList } from "@/features/saved/queries";
+import { EmptyBoard } from "@/features/saved/components/EmptyBoard";
 import { StatTiles } from "@/features/profile/components/StatTiles";
 import { daysSince } from "@/features/profile/lib/stats";
 import type { SpotCard, User } from "@/lib/api-types";
 
 jest.mock("expo-router", () => ({
-  router: { push: jest.fn(), back: jest.fn() },
+  router: { push: jest.fn(), navigate: jest.fn(), back: jest.fn() },
   useFocusEffect: (effect: () => void | (() => void)) =>
     jest.requireActual<typeof import("react")>("react").useEffect(effect, [effect]),
 }));
@@ -150,5 +151,16 @@ describe("ProfileTab", () => {
 
     expect(titles.indexOf("기기 권한")).toBeLessThan(titles.indexOf("동의 내역"));
     expect(titles.indexOf("동의 내역")).toBeLessThan(titles.indexOf("약관·정책"));
+  });
+
+  it("opens Explore from the empty scrap CTA", async () => {
+    useAuthStore.setState({ user: USER, isAuthenticated: true, accessToken: "token" });
+    const tree = await mount();
+    const emptyBoard = tree.root.findByType(EmptyBoard);
+
+    await act(async () => {
+      emptyBoard.props.onAction();
+    });
+    expect(router.navigate).toHaveBeenCalledWith("/(tabs)/explore");
   });
 });

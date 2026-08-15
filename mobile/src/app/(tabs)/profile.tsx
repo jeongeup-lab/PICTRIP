@@ -79,9 +79,9 @@ export default function ProfileTab() {
             ) : (
               <EmptyBoard
                 text="아직 스크랩한 곳이 없어요"
-                actionLabel="둘러보러 가기"
-                actionIcon="home"
-                onAction={() => router.push("/(tabs)")}
+                actionLabel="탐색 탭 열기"
+                actionIcon="search"
+                onAction={() => router.navigate("/(tabs)/explore")}
               />
             )}
           </>
