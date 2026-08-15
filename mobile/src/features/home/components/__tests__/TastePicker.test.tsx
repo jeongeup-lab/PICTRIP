@@ -2,7 +2,7 @@ import renderer, { act } from "react-test-renderer";
 import { router } from "expo-router";
 import { TastePicker } from "@/features/home/components/TastePicker";
 import { useTastePicks } from "@/features/home/queries";
-import { useSavedList, useSaveMutation, useUnsaveMutation } from "@/features/saved/queries";
+import { useSavedList, useSaveMutation } from "@/features/saved/queries";
 import { queryClient } from "@/lib/query-client";
 import type { HomeSpotCard } from "@/features/home/api";
 
@@ -11,7 +11,6 @@ jest.mock("@/features/home/queries", () => ({ useTastePicks: jest.fn() }));
 jest.mock("@/features/saved/queries", () => ({
   useSaveMutation: jest.fn(),
   useSavedList: jest.fn(),
-  useUnsaveMutation: jest.fn(),
 }));
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
@@ -19,10 +18,8 @@ jest.mock("react-native-safe-area-context", () => ({
 
 const mockPicks = useTastePicks as jest.Mock;
 const mockSaveMutation = useSaveMutation as jest.Mock;
-const mockUnsaveMutation = useUnsaveMutation as jest.Mock;
 const mockSavedList = useSavedList as jest.Mock;
 let mutateAsync: jest.Mock;
-let unsaveAsync: jest.Mock;
 
 function picks(n: number): HomeSpotCard[] {
   return Array.from({ length: n }, (_, i) => ({
@@ -39,18 +36,14 @@ function picks(n: number): HomeSpotCard[] {
 }
 
 beforeEach(() => {
-  jest.useFakeTimers();
   mutateAsync = jest.fn().mockResolvedValue(undefined);
-  unsaveAsync = jest.fn().mockResolvedValue(undefined);
   mockSaveMutation.mockReturnValue({ mutateAsync });
-  mockUnsaveMutation.mockReturnValue({ mutateAsync: unsaveAsync });
   mockSavedList.mockReturnValue({ data: [] });
-  mockPicks.mockReturnValue({ data: { items: picks(3) }, isLoading: false, isError: false });
+  mockPicks.mockReturnValue({ data: { items: picks(24) }, isLoading: false, isError: false });
 });
 
 afterEach(() => {
   jest.clearAllMocks();
-  jest.useRealTimers();
 });
 
 async function mount() {
@@ -62,191 +55,125 @@ async function mount() {
 }
 
 const json = (r: renderer.ReactTestRenderer) => JSON.stringify(r.toJSON());
-const progress = (r: renderer.ReactTestRenderer) =>
-  r.root.findByProps({ testID: "taste-progress" }).props.children as string;
 
-const press = async (r: renderer.ReactTestRenderer, testID: string) => {
+const cards = (r: renderer.ReactTestRenderer) =>
+  r.root
+    .findAll((n) => typeof n.props.testID === "string" && /^taste-card-/.test(n.props.testID))
+    .filter((n) => !!n.props.onPress);
+
+const meter = (r: renderer.ReactTestRenderer) =>
+  r.root.findByProps({ testID: "taste-meter" }).props.children as unknown;
+
+const tap = async (r: renderer.ReactTestRenderer, testID: string) => {
+  const target = r.root.findAll((n) => n.props.testID === testID && !!n.props.onPress)[0];
   await act(async () => {
-    r.root.findByProps({ testID }).props.onPress();
+    target.props.onPress();
   });
-  await act(async () => {
-    jest.runAllTimers();
-  });
-  await act(async () => {});
 };
 
+const picked = (r: renderer.ReactTestRenderer) =>
+  cards(r)
+    .filter((n) => n.props.accessibilityState?.selected === true)
+    .map((n) => String(n.props.testID).replace("taste-card-", ""));
+
 describe("TastePicker", () => {
-  it("starts on the first card with an empty progress counter", async () => {
+  it("shows a page of candidates drawn from a larger pool", async () => {
     const r = await mount();
+    expect(cards(r)).toHaveLength(12);
     expect(json(r)).toContain("취향 1");
-    expect(progress(r)).toBe("0/3 검토");
-    expect(json(r)).toContain("오른쪽으로 밀면 저장, 왼쪽으로 밀면 넘겨요");
+    expect(json(r)).not.toContain("취향 13");
   });
 
-  it("saving a card persists it and advances to the next", async () => {
+  it("selects a card on tap and counts it toward the minimum", async () => {
     const r = await mount();
-    await press(r, "taste-keep");
-    expect(mutateAsync).toHaveBeenCalledWith("p1");
-    expect(json(r)).toContain("취향 2");
-    expect(progress(r)).toBe("1/3 검토");
+    await tap(r, "taste-card-p1");
+    expect(picked(r)).toEqual(["p1"]);
+    expect(JSON.stringify(meter(r))).toContain("2곳");
   });
 
-  it("holds the card and the counter when the save fails", async () => {
-    mutateAsync.mockRejectedValueOnce(new Error("offline"));
+  it("takes the selection back on a second tap", async () => {
     const r = await mount();
-    await press(r, "taste-keep");
-    expect(json(r)).toContain("취향 1");
-    expect(progress(r)).toBe("0/3 검토");
-    expect(json(r)).toContain("저장하지 못했어요");
+    await tap(r, "taste-card-p1");
+    await tap(r, "taste-card-p1");
+    expect(picked(r)).toEqual([]);
   });
 
-  it("skipping advances the reviewed progress without saving", async () => {
+  it("saves nothing until the minimum is reached", async () => {
     const r = await mount();
-    await press(r, "taste-skip");
+    await tap(r, "taste-card-p1");
+    await tap(r, "taste-card-p2");
+    await tap(r, "taste-done");
     expect(mutateAsync).not.toHaveBeenCalled();
-    expect(json(r)).toContain("취향 2");
-    expect(progress(r)).toBe("1/3 검토");
   });
 
-  it("undoes a skip locally and restores the prior card", async () => {
-    const r = await mount();
-    await press(r, "taste-skip");
-    expect(r.root.findByProps({ testID: "taste-undo" }).props.disabled).toBe(false);
-    await press(r, "taste-undo");
-    expect(json(r)).toContain("취향 1");
-    expect(progress(r)).toBe("0/3 검토");
-    expect(unsaveAsync).not.toHaveBeenCalled();
-  });
-
-  it("unsaves a newly saved card before restoring it", async () => {
-    const r = await mount();
-    await press(r, "taste-keep");
-    await press(r, "taste-undo");
-    expect(unsaveAsync).toHaveBeenCalledWith("p1");
-    expect(json(r)).toContain("취향 1");
-    expect(progress(r)).toBe("0/3 검토");
-  });
-
-  it("does not resave or unsave a card that was already saved before the session", async () => {
-    mockSavedList.mockReturnValue({
-      data: [{ contentId: "p1" }, { contentId: "p2" }, { contentId: "p3" }],
-    });
-    const r = await mount();
-    await press(r, "taste-keep");
-    expect(mutateAsync).not.toHaveBeenCalled();
-    await press(r, "taste-undo");
-    expect(unsaveAsync).not.toHaveBeenCalled();
-  });
-
-  it("keeps the current card in place and offers a retry when undoing a save fails", async () => {
-    unsaveAsync.mockRejectedValueOnce(new Error("offline"));
-    const r = await mount();
-    await press(r, "taste-keep");
-    await press(r, "taste-undo");
-    expect(json(r)).toContain("취향 2");
-    expect(json(r)).toContain("되돌리지 못했어요");
-    expect(r.root.findByProps({ testID: "taste-undo" }).props.disabled).toBe(false);
-  });
-
-  it("keeps undo available from completion", async () => {
-    const r = await mount();
-    await press(r, "taste-skip");
-    await press(r, "taste-skip");
-    await press(r, "taste-skip");
-    expect(r.root.findByProps({ testID: "taste-undo" }).props.disabled).toBe(false);
-    await press(r, "taste-undo");
-    expect(json(r)).toContain("취향 3");
-    expect(progress(r)).toBe("2/3 검토");
-  });
-
-  it("suppresses duplicate saves while a decision is pending", async () => {
-    let resolveSave: (() => void) | undefined;
-    mutateAsync.mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveSave = resolve;
-        }),
-    );
-    const r = await mount();
-    await act(async () => {
-      r.root.findByProps({ testID: "taste-keep" }).props.onPress();
-      r.root.findByProps({ testID: "taste-keep" }).props.onPress();
-    });
-    expect(mutateAsync).toHaveBeenCalledTimes(1);
-    await act(async () => {
-      resolveSave?.();
-      jest.runAllTimers();
-    });
-  });
-
-  it("drops cards the user already saved from the deck", async () => {
-    mockSavedList.mockReturnValue({ data: [{ contentId: "p1" }] });
-    const r = await mount();
-    expect(json(r)).toContain("취향 2");
-    expect(json(r)).not.toContain("취향 1");
-  });
-
-  it("keeps the full deck when every pick is already saved", async () => {
-    mockSavedList.mockReturnValue({
-      data: [{ contentId: "p1" }, { contentId: "p2" }, { contentId: "p3" }],
-    });
-    const r = await mount();
-    expect(json(r)).toContain("취향 1");
-  });
-
-  it("nudges the user when the deck runs out under the minimum", async () => {
-    const r = await mount();
-    await press(r, "taste-skip");
-    await press(r, "taste-skip");
-    await press(r, "taste-skip");
-    expect(json(r)).toContain("3곳 이상 저장하면 추천이 시작돼요");
-  });
-
-  it("confirms the taste is read once enough cards are saved", async () => {
-    const r = await mount();
-    await press(r, "taste-keep");
-    await press(r, "taste-keep");
-    await press(r, "taste-keep");
-    expect(json(r)).toContain("취향을 다 읽었어요");
-  });
-
-  it("counts pre-existing saves toward the completion threshold", async () => {
-    mockSavedList.mockReturnValue({
-      data: [{ contentId: "x1" }, { contentId: "x2" }],
-    });
-    const r = await mount();
-    await press(r, "taste-keep");
-    await press(r, "taste-skip");
-    await press(r, "taste-skip");
-    expect(json(r)).toContain("취향을 다 읽었어요");
-  });
-
-  it("treats a fully pre-saved deck as complete without new saves", async () => {
-    mockSavedList.mockReturnValue({
-      data: [{ contentId: "p1" }, { contentId: "p2" }, { contentId: "p3" }],
-    });
-    const r = await mount();
-    await press(r, "taste-skip");
-    await press(r, "taste-skip");
-    await press(r, "taste-skip");
-    expect(json(r)).toContain("취향을 다 읽었어요");
-  });
-
-  it("refreshes the recommendations on the way out", async () => {
+  it("saves every picked card at once, then refreshes home and leaves", async () => {
     const invalidate = jest.spyOn(queryClient, "invalidateQueries");
     const r = await mount();
-    await act(async () => {
-      r.root.findByProps({ testID: "taste-close" }).props.onPress();
-    });
+    await tap(r, "taste-card-p1");
+    await tap(r, "taste-card-p3");
+    await tap(r, "taste-card-p5");
+    await tap(r, "taste-done");
+
+    expect(mutateAsync.mock.calls.map((c) => c[0])).toEqual(["p1", "p3", "p5"]);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["home-recommendations"] });
     expect(router.back).toHaveBeenCalled();
     invalidate.mockRestore();
   });
 
+  it("refreshes only the cards the user has not picked", async () => {
+    const r = await mount();
+    await tap(r, "taste-card-p2");
+    await tap(r, "taste-refresh");
+
+    const shown = cards(r).map((n) => String(n.props.testID).replace("taste-card-", ""));
+    expect(shown).toContain("p2");
+    expect(shown).toHaveLength(12);
+    expect(shown.filter((id) => id !== "p2")).toEqual(
+      expect.arrayContaining(["p13", "p14", "p15"]),
+    );
+    expect(picked(r)).toEqual(["p2"]);
+  });
+
+  it("drops spots the user already saved from the pool", async () => {
+    mockSavedList.mockReturnValue({ data: [{ contentId: "p1" }] });
+    const r = await mount();
+    const shown = cards(r).map((n) => String(n.props.testID).replace("taste-card-", ""));
+    expect(shown).not.toContain("p1");
+    expect(shown).toHaveLength(12);
+  });
+
+  it("keeps the user on the screen when a save fails", async () => {
+    mutateAsync.mockRejectedValueOnce(new Error("offline"));
+    const r = await mount();
+    await tap(r, "taste-card-p1");
+    await tap(r, "taste-card-p2");
+    await tap(r, "taste-card-p3");
+    await tap(r, "taste-done");
+
+    expect(json(r)).toContain("저장하지 못했어요");
+    expect(router.back).not.toHaveBeenCalled();
+    expect(picked(r)).toEqual(["p1", "p2", "p3"]);
+  });
+
   it("offers a way back when there are no cards to show", async () => {
     mockPicks.mockReturnValue({ data: { items: [] }, isLoading: false, isError: false });
     const r = await mount();
-    expect(json(r)).toContain("지금은 보여줄 카드가 없어요");
-    expect(r.root.findAllByProps({ testID: "taste-keep" })).toHaveLength(0);
+    expect(json(r)).toContain("지금은 보여줄 장소가 없어요");
+    expect(r.root.findAllByProps({ testID: "taste-done" })).toHaveLength(0);
+  });
+
+  it("hides the refresh control when the pool has nothing left to rotate in", async () => {
+    mockPicks.mockReturnValue({ data: { items: picks(12) }, isLoading: false, isError: false });
+    const r = await mount();
+    expect(r.root.findAllByProps({ testID: "taste-refresh" })).toHaveLength(0);
+  });
+
+  it("refreshes the recommendations on the way out", async () => {
+    const invalidate = jest.spyOn(queryClient, "invalidateQueries");
+    const r = await mount();
+    await tap(r, "taste-close");
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["home-recommendations"] });
+    expect(router.back).toHaveBeenCalled();
+    invalidate.mockRestore();
   });
 });

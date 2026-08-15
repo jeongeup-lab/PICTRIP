@@ -52,10 +52,10 @@ export function useRegionLabel(coords: Coords | null) {
   });
 }
 
-export function useTastePicks() {
+export function useTastePicks(limit: number) {
   return useQuery({
-    queryKey: homeKeys.tastePicks,
-    queryFn: getTastePicks,
+    queryKey: [...homeKeys.tastePicks, limit],
+    queryFn: () => getTastePicks(limit),
     staleTime: TRENDING_STALE_MS,
   });
 }

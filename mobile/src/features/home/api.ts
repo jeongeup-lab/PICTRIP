@@ -39,8 +39,8 @@ export async function getTrending(): Promise<HomeCards> {
   return (await api.get("/home/trending")) as unknown as HomeCards;
 }
 
-export async function getTastePicks(): Promise<HomeCards> {
-  return (await api.get("/home/taste-picks")) as unknown as HomeCards;
+export async function getTastePicks(limit: number): Promise<HomeCards> {
+  return (await api.get("/home/taste-picks", { params: { limit } })) as unknown as HomeCards;
 }
 
 export async function getRecommendations(coords?: {
