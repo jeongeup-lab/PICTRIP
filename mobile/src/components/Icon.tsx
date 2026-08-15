@@ -51,7 +51,8 @@ export type IconName =
   | "flame"
   | "star"
   | "star-fill"
-  | "play";
+  | "play"
+  | "refresh";
 
 interface IconProps {
   name: IconName;
@@ -165,6 +166,7 @@ const PATHS: Record<IconName, IconSpec> = {
     d: "M4 4h7l9 9-7 7-9-9z",
     circles: [{ cx: 8, cy: 8, r: 1.4 }],
   },
+  refresh: { d: "M20 12a8 8 0 1 1-2.6-5.9M20 4v4h-4" },
 };
 
 export function Icon({ name, size = 22, color = colors.ink, strokeWidth = 1.9 }: IconProps) {
