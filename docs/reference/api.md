@@ -69,7 +69,7 @@ AppError/JSend(422 등)로 나간다.
 | `step` | `{index, label, badge?, status}` | 같은 index로 `run`→`done` 갱신 |
 | `delta` | `{text}` | 산문 조각. `**굵게**` · `- ` 불릿만 |
 | `cards` | `{spots, tagBasis?}` | **조회 직후 즉시** 1회 — 라이터를 기다리지 않는다. spots가 비면 미방출 |
-| `sources` | `{items: [{kind, title, url?, date?}]}` | 실제 사용한 블로그 + (spots 있을 때) KTO 고정 행 |
+| `sources` | `{items: [{kind, title, url?, date?}]}` | 실제 사용한 블로그 근거. KTO 고정 행은 포함하지 않음 |
 | `done` | `{answerText, spots, sources, intent, totalCount, traceId?}` | 재시도·저장용 조립본 |
 | `error` | `{code, message}` | 스트림 중 실패 (`AGENT_WRITER_UNAVAILABLE` 등) |
 

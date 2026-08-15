@@ -41,8 +41,8 @@
 | 출처 행 | 파비콘 겹침(20px, -7 겹침, ≤3) + `소스 N` 필. 탭 = `SourcesSheet` | `sources` 있을 때 |
 | 실패 블록 | 좌측 3px `accent` 띠 + `답변을 못 받았어요` + `err.code` 사유 + `다시 시도`(h34, `accent`) | `status = error` |
 
-`SourcesSheet` 는 Modal 바텀시트 — kind별 아이콘(naver_blog·kto·kakao), 제목·
-날짜, url 탭 = `Linking`. KTO 행은 spots 가 있던 턴에 항상 포함된다.
+`SourcesSheet` 는 Modal 바텀시트 — 블로그 근거의 제목·날짜, url 탭 = `Linking`.
+KTO 고정 행은 화면에 표시하지 않는다. 블로그 링크는 실제 사용된 근거로 남는다.
 
 ## 컴포저
 
