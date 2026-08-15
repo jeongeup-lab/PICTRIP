@@ -4,9 +4,17 @@ from dataclasses import dataclass
 
 import pytest
 from fakeredis.aioredis import FakeRedis
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.agent.errors import AgentNoResults
-from app.modules.agent.schemas import AskContext, AskContextSpot, AskResponse, QueryIntent
+from app.modules.agent.repositories import CandidateRow
+from app.modules.agent.schemas import (
+    AskContext,
+    AskContextSpot,
+    AskResponse,
+    CrowdPreference,
+    QueryIntent,
+)
 from app.modules.agent.services import ask as ask_service
 from app.modules.agent.services import detail as detail_service
 from app.modules.agent.services import intent as intent_service
@@ -846,6 +854,51 @@ async def test_a_region_food_answer_drops_conditions_it_could_not_apply(monkeypa
     assert answer.intent.regionHints == ["부산"]
 
 
+async def test_a_region_dish_constraint_survives_condition_relaxation(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.modules.agent import repositories
+    from app.modules.agent.services import retrieve
+
+    seen: list[list[str] | None] = []
+
+    async def fake_food(
+        session: AsyncSession,
+        *,
+        action: str,
+        region_prefixes: list[str],
+        preference: CrowdPreference = "any",
+        indoor_only: bool = False,
+        mood_ids: list[int] | None = None,
+        lat: float | None = None,
+        lng: float | None = None,
+        near: bool = False,
+        title_terms: list[str] | None = None,
+    ) -> list[CandidateRow]:
+        seen.append(title_terms)
+        return []
+
+    async def fake_moods(session: AsyncSession, codes: list[str]) -> list[int]:
+        return [7]
+
+    monkeypatch.setattr(retrieve, "search_food", fake_food)
+    monkeypatch.setattr(repositories, "find_mood_ids", fake_moods)
+
+    answer = await ask_service._food_across_region(
+        db_session,
+        "food",
+        ["부산광역시"],
+        steps=[],
+        lat=None,
+        lng=None,
+        intent=QueryIntent(categoryKeywords=["맛집", "삼겹살"], indoorOnly=True),
+        title_terms=["삼겹살"],
+    )
+
+    assert answer.totalCount == 0
+    assert seen == [["삼겹살"], ["삼겹살"]]
+
+
 def test_an_empty_surrounding_drops_the_axes_it_never_applied() -> None:
     intent = QueryIntent(
         categoryKeywords=["맛집"],
@@ -865,9 +918,18 @@ def test_an_empty_surrounding_drops_the_axes_it_never_applied() -> None:
 
 async def test_an_origin_search_does_not_claim_conditions_it_never_applied(monkeypatch) -> None:
     from app.modules.agent import repositories
-    from app.modules.spots.services import NearbySpotRow
+    from app.modules.spots.services import NearbyCategory, NearbySpotRow
 
-    async def fake_nearby(session, *, lat, lng, radius, category, travel_only=False):  # type: ignore[no-untyped-def]
+    async def fake_nearby(
+        session: AsyncSession,
+        *,
+        lat: float,
+        lng: float,
+        radius: int,
+        category: NearbyCategory | None,
+        travel_only: bool = False,
+        title_terms: list[str] | None = None,
+    ) -> list[NearbySpotRow]:
         return [
             NearbySpotRow(
                 content_id="f1",
@@ -1119,7 +1181,7 @@ async def test_a_carried_region_still_drops_the_card_left_over_from_before(monke
 
 async def test_the_origin_itself_is_not_offered_as_its_own_neighbour(monkeypatch) -> None:
     from app.modules.agent import repositories
-    from app.modules.spots.services import NearbySpotRow
+    from app.modules.spots.services import NearbyCategory, NearbySpotRow
 
     def _near(cid: str, title: str, dist: float) -> NearbySpotRow:
         return NearbySpotRow(
@@ -1132,7 +1194,16 @@ async def test_the_origin_itself_is_not_offered_as_its_own_neighbour(monkeypatch
             dist=dist,
         )
 
-    async def fake_nearby(session, *, lat, lng, radius, category, travel_only=False):  # type: ignore[no-untyped-def]
+    async def fake_nearby(
+        session: AsyncSession,
+        *,
+        lat: float,
+        lng: float,
+        radius: int,
+        category: NearbyCategory | None,
+        travel_only: bool = False,
+        title_terms: list[str] | None = None,
+    ) -> list[NearbySpotRow]:
         return [_near("c1", "스타벅스 강남점", 0.0), _near("c2", "옆집 커피", 180.0)]
 
     async def fake_briefs(session, content_ids):  # type: ignore[no-untyped-def]
