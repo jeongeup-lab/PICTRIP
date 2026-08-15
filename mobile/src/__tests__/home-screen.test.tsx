@@ -143,7 +143,7 @@ describe("HomeScreen", () => {
   it("shows nearby cards under the region-named tab by default", async () => {
     const r = await mount();
     expect(texts(r)).toContain("광진구 화양동");
-    expect(rank(r).props.accessibilityLabel).toBe("광진구 화양동 인기 장소");
+    expect(rank(r).props.accessibilityLabel).toBe("광진구 화양동 근처 인기 장소");
     expect(rank(r).props.accessibilityHint).toBe("near-1");
   });
 
