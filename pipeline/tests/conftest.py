@@ -8,17 +8,10 @@ TEST_DSN = os.environ.get(
     "postgresql://pictrip:pictrip_dev_only@localhost:5432/pictrip_test",
 )
 
-# Every test content_id starts with this prefix so cleanup is targeted.
 TEST_PREFIX = "T"
-# Real fixture ids used by sync_daily test (not prefixed) — clean these too.
 FIXTURE_IDS = ("2865520", "3509884")
 
 
-# Minimal schema the DB-integration tests need. CREATE ... IF NOT EXISTS makes
-# this a no-op against the locally-migrated pictrip_test (backend Alembic head),
-# and self-bootstraps a fresh empty Postgres in CI (no backend dependency).
-# Column types/FKs mirror the live spots schema; sync_runs is created separately
-# by the pipeline's own ensure_table().
 _SCHEMA = """
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE TABLE IF NOT EXISTS regions (
@@ -81,6 +74,20 @@ CREATE TABLE IF NOT EXISTS overseas_spots (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE OR REPLACE FUNCTION invalidate_overseas_spot_embedding()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    NEW.embedding = NULL;
+    RETURN NEW;
+END;
+$$;
+CREATE OR REPLACE TRIGGER trg_overseas_spots_invalidate_embedding
+BEFORE UPDATE OF image_url ON overseas_spots
+FOR EACH ROW
+WHEN (OLD.image_url IS DISTINCT FROM NEW.image_url)
+EXECUTE FUNCTION invalidate_overseas_spot_embedding();
 """
 
 
@@ -91,7 +98,6 @@ def _ensure_test_schema(conn: psycopg.Connection) -> None:
 
 def _cleanup(conn: psycopg.Connection) -> None:
     cur = conn.cursor()
-    # sync_runs may not exist yet on a fresh DB; ignore if missing.
     cur.execute(
         "DELETE FROM spots WHERE content_id LIKE %s OR content_id = ANY(%s)",
         (TEST_PREFIX + "%", list(FIXTURE_IDS)),
@@ -103,12 +109,8 @@ def _cleanup(conn: psycopg.Connection) -> None:
 
 @pytest.fixture
 def db_conn():
-    """Connect to pictrip_test (schema = backend Alembic head). Explicit cleanup
-    before and after, because record_run/sync_daily commit mid-test."""
     conn = psycopg.connect(TEST_DSN, autocommit=False)
-    # Self-bootstrap the schema (no-op on the locally-migrated DB; creates it in CI).
     _ensure_test_schema(conn)
-    # Ensure sync_runs exists so TRUNCATE/DELETE never error.
     from pictrip_data.sync.audit import ensure_table
 
     ensure_table(conn)
@@ -123,8 +125,6 @@ def db_conn():
 
 @pytest.fixture
 def seed_refs(db_conn):
-    """Insert one region/sigungu/lcls code so FK targets exist, then COMMIT
-    (so commits inside record_run/upsert can see them)."""
     cur = db_conn.cursor()
     cur.execute(
         "INSERT INTO regions (ldong_regn_cd, ldong_regn_nm) VALUES ('11','서울특별시') ON CONFLICT DO NOTHING"

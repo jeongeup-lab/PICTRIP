@@ -29,6 +29,7 @@ dependencies = [
     "transformers>=4.45.0",
     "torch>=2.4.0",
     "pillow>=10.4.0",
+    "pillow-heif>=0.18.0",
     # Crypto
     "cryptography>=48.0.1",
     # Observability
@@ -36,6 +37,7 @@ dependencies = [
     "sentry-sdk[fastapi]>=2.16.0",
     "pyjwt[crypto]>=2.13.0",
     "itsdangerous>=2.2.0",
+    "youtube-transcript-api>=1.2.4",
 ]
 
 [dependency-groups]
@@ -112,7 +114,7 @@ plugins = ["pydantic.mypy"]
 exclude = ["alembic/versions"]
 
 [[tool.mypy.overrides]]
-module = ["transformers.*", "torch.*", "pgvector.*"]
+module = ["transformers.*", "torch.*", "pgvector.*", "pillow_heif.*"]
 ignore_missing_imports = true
 
 # ---------- import-linter ----------
@@ -128,13 +130,13 @@ name = "Routes do not import SQLAlchemy"
 type = "forbidden"
 source_modules = [
     "app.modules.users.routes",
-    "app.modules.taste.routes",
     "app.modules.spots.routes",
     "app.modules.images.routes",
     "app.modules.map.routes",
     "app.modules.system.routes",
     "app.modules.admin.routes",
     "app.modules.feed.routes",
+    "app.modules.agent.routes",
 ]
 forbidden_modules = [
     "sqlalchemy",
@@ -152,17 +154,16 @@ name = "Routes do not import any module's models"
 type = "forbidden"
 source_modules = [
     "app.modules.users.routes",
-    "app.modules.taste.routes",
     "app.modules.spots.routes",
     "app.modules.images.routes",
     "app.modules.map.routes",
     "app.modules.system.routes",
     "app.modules.admin.routes",
     "app.modules.feed.routes",
+    "app.modules.agent.routes",
 ]
 forbidden_modules = [
     "app.modules.users.models",
-    "app.modules.taste.models",
     "app.modules.spots.models",
     "app.modules.images.models",
     "app.modules.map.models",
@@ -179,13 +180,13 @@ name = "Schemas do not import SQLAlchemy"
 type = "forbidden"
 source_modules = [
     "app.modules.users.schemas",
-    "app.modules.taste.schemas",
     "app.modules.spots.schemas",
     "app.modules.images.schemas",
     "app.modules.map.schemas",
     # system has no schemas.py (removed as dead code) — re-add if it returns.
     "app.modules.admin.schemas",
     "app.modules.feed.schemas",
+    "app.modules.agent.schemas",
 ]
 forbidden_modules = [
     "sqlalchemy",
@@ -201,17 +202,16 @@ name = "Modules don't cross-import each other's models"
 type = "forbidden"
 source_modules = [
     "app.modules.users.services",
-    "app.modules.taste.services",
     "app.modules.spots.services",
     "app.modules.images.services",
     "app.modules.map.services",
     "app.modules.system.services",
     "app.modules.admin.services",
     "app.modules.feed.services",
+    "app.modules.agent.services",
 ]
 forbidden_modules = [
     "app.modules.users.models",
-    "app.modules.taste.models",
     "app.modules.spots.models",
     "app.modules.images.models",
     "app.modules.map.models",
@@ -224,7 +224,6 @@ ignore_imports = [
     # USR seam: services calls the repository, which holds own-module ORM.
     "app.modules.users.services -> app.modules.users.repositories",
     "app.modules.users.repositories -> app.modules.users.models",
-    "app.modules.taste.services -> app.modules.taste.models",
     "app.modules.spots.services -> app.modules.spots.models",
     "app.modules.images.services -> app.modules.images.models",
     "app.modules.map.services -> app.modules.map.models",
@@ -242,12 +241,13 @@ ignore_imports = [
     # 잡히지 않게 한다. spots 내부의 직접 spots.models import는 의도된 것(#22).
     "app.modules.spots.services -> app.modules.spots.services.*",
     "app.modules.spots.services.* -> app.modules.spots.models",
-    # ADM seam: own-module ORM via its repository, plus the documented
-    # exception — admin writes curations/curation_spots (spots.models) only.
+    # ADM seam: own-module ORM via its repository.
     "app.modules.admin.services -> app.modules.admin.models",
     "app.modules.admin.services -> app.modules.admin.repositories",
     "app.modules.admin.repositories -> app.modules.admin.models",
-    "app.modules.admin.repositories -> app.modules.spots.models",
+    # AGT seam: services submodules reach own-module SQL via the repository.
+    "app.modules.agent.services -> app.modules.agent.services.*",
+    "app.modules.agent.services.* -> app.modules.agent.repositories",
 ]
 # Most services are still placeholders that don't import their own models yet.
 # Allow these ignores to be inactive until the services get implemented.
@@ -256,25 +256,21 @@ unmatched_ignore_imports_alerting = "none"
 # The contract above ignores spots.services.* -> *.models broadly (for the seam
 # chains), which blinded it to a submodule directly importing ANOTHER module's
 # models. This DIRECT-only contract (allow_indirect_imports = true) closes that:
-# a spots service submodule must not import users/taste/images/map/system models
+# a spots service submodule must not import users/images/map/system models
 # directly. spots.models is excluded — own-module model imports are intended (#22).
-# The legitimate seam chain curations -> images.services -> images.models is
-# indirect, so it is not flagged.
 [[tool.importlinter.contracts]]
 name = "Spots service submodules don't directly import other modules' models"
 type = "forbidden"
 source_modules = [
     "app.modules.spots.services.cards",
-    "app.modules.spots.services.curations",
+    "app.modules.spots.services.concentration",
     "app.modules.spots.services.detail",
-    "app.modules.spots.services.feed",
     "app.modules.spots.services.nearby",
     "app.modules.spots.services.rows",
     "app.modules.spots.services.saved",
 ]
 forbidden_modules = [
     "app.modules.users.models",
-    "app.modules.taste.models",
     "app.modules.images.models",
     "app.modules.map.models",
     "app.modules.system.models",
@@ -298,6 +294,23 @@ forbidden_modules = [
     "pgvector",
 ]
 allow_indirect_imports = true
+
+# Shared-package layering: modules on top, then the shared utility packages
+# (mutually independent), then web (HTTP contract), then core (infra plumbing).
+# security.jwt -> users.schemas is the one sanctioned upward edge (lazy import
+# for TokenPair/UserPublic — breaking it needs a token-DTO move, not worth it).
+[[tool.importlinter.contracts]]
+name = "Shared packages are layered (modules > security|kto|ml > web > core)"
+type = "layers"
+layers = [
+    "app.modules",
+    "app.security | app.kto | app.ml",
+    "app.web",
+    "app.core",
+]
+ignore_imports = [
+    "app.security.jwt -> app.modules.users.schemas",
+]
 
 # ---------- pytest ----------
 [tool.pytest.ini_options]

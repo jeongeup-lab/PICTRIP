@@ -23,12 +23,14 @@ export default function TabsLayout() {
         tabBarActiveTintColor: colors.accentText,
         tabBarInactiveTintColor: colors.ter,
         tabBarLabelStyle: { fontSize: 10, fontWeight: "700" },
-        tabBarStyle: { borderTopColor: colors.line },
+        sceneStyle: { backgroundColor: colors.bg },
+        tabBarHideOnKeyboard: true,
+        tabBarStyle: { backgroundColor: colors.bg, borderTopColor: colors.line },
       }}
     >
       <Tabs.Screen name="index" options={{ title: "홈", tabBarIcon: tabIcon("home") }} />
       <Tabs.Screen name="explore" options={{ title: "탐색", tabBarIcon: tabIcon("search") }} />
-      <Tabs.Screen name="map" options={{ title: "지도", tabBarIcon: tabIcon("map-pin") }} />
+      <Tabs.Screen name="travel" options={{ title: "여행", tabBarIcon: tabIcon("chat") }} />
       <Tabs.Screen name="profile" options={{ title: "마이", tabBarIcon: tabIcon("person") }} />
     </Tabs>
   );

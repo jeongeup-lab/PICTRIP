@@ -13,24 +13,18 @@ function toStatus(s: Location.PermissionStatus | string): PermStatus {
   return "denied";
 }
 
-/** Read current permission without prompting (S05 entry branch). */
 export async function getPermissionStatus(): Promise<PermStatus> {
   const { status } = await Location.getForegroundPermissionsAsync();
   return toStatus(status);
 }
 
-/** Prompt for permission (priming "위치 허용하기"). */
 export async function requestPermission(): Promise<PermStatus> {
   const { status } = await Location.requestForegroundPermissionsAsync();
   return toStatus(status);
 }
 
-// getCurrentPositionAsync has no timeout of its own — a slow first fix (iOS
-// cold start indoors) can hang tens of seconds, keeping the primer/"위치 확인 중"
-// on screen. Cap the wait and fall back to the OS's last known position.
 const GPS_TIMEOUT_MS = 8000;
 
-/** Best-effort current GPS fix; last-known position on timeout, null on failure. */
 export async function getCurrentCoords(): Promise<Coords | null> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {

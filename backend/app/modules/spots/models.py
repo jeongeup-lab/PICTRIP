@@ -1,5 +1,3 @@
-"""SPT ORM models. spot_embeddings lives in img/models.py; moods is shared with TST."""
-
 from __future__ import annotations
 
 from datetime import date, datetime
@@ -8,21 +6,17 @@ from typing import Any
 
 from sqlalchemy import (
     BigInteger,
-    Boolean,
     CheckConstraint,
     Date,
     DateTime,
     Float,
     ForeignKey,
-    Identity,
     Index,
-    Integer,
     Numeric,
     SmallInteger,
     String,
     Text,
     UniqueConstraint,
-    false,
     func,
     text,
 )
@@ -33,8 +27,6 @@ from app.core.db import Base
 
 
 class Mood(Base):
-    """8 base moods exposed in the UI."""
-
     __tablename__ = "moods"
 
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
@@ -45,8 +37,6 @@ class Mood(Base):
 
 
 class Region(Base):
-    """17 sido (provinces)."""
-
     __tablename__ = "regions"
 
     ldong_regn_cd: Mapped[str] = mapped_column(String(8), primary_key=True)
@@ -54,8 +44,6 @@ class Region(Base):
 
 
 class Sigungu(Base):
-    """~250 sigungu (districts)."""
-
     __tablename__ = "sigungus"
 
     ldong_signgu_cd: Mapped[str] = mapped_column(String(8), primary_key=True)
@@ -66,8 +54,6 @@ class Sigungu(Base):
 
 
 class LclsSystmCode(Base):
-    """KTO classification system (lclsSystmCode2)."""
-
     __tablename__ = "lcls_systm_codes"
 
     lcls_systm3_cd: Mapped[str] = mapped_column(String(16), primary_key=True)
@@ -79,8 +65,6 @@ class LclsSystmCode(Base):
 
 
 class Spot(Base):
-    """KTO spot master. Synced by the pipeline repo; this repo owns the schema."""
-
     __tablename__ = "spots"
     __table_args__ = (
         CheckConstraint(
@@ -88,7 +72,6 @@ class Spot(Base):
             name="ck_spot_cpyrht_div_cd",
         ),
         CheckConstraint("show_flag IN (0, 1)", name="ck_spot_show_flag"),
-        # User reads always filter show_flag=1 (ADR-0007), so browsing indexes are partial.
         Index(
             "idx_spots_active_location",
             "mapx",
@@ -117,7 +100,6 @@ class Spot(Base):
             "show_flag",
             postgresql_where=text("show_flag = 1"),
         ),
-        # Partial index backs the home-feed quality-gate random pool.
         Index(
             "idx_spots_image_pool",
             "ldong_regn_cd",
@@ -155,9 +137,6 @@ class Spot(Base):
 
 
 class SpotDetail(Base):
-    """Lazy 7-day cache of detail* responses. overview lives here (not spots)
-    per ADR-0007 and is stored verbatim — never derive or summarize."""
-
     __tablename__ = "spot_details"
     __table_args__ = (Index("idx_spot_details_cached", "cached_at"),)
 
@@ -178,8 +157,6 @@ class SpotDetail(Base):
 
 
 class SpotImage(Base):
-    """Additional images from detailImage2. KTO URLs only — never store bytes."""
-
     __tablename__ = "spot_images"
     __table_args__ = (
         UniqueConstraint("content_id", "sort_order", name="uq_spot_images_content_sort"),
@@ -200,8 +177,6 @@ class SpotImage(Base):
 
 
 class SpotMood(Base):
-    """M:N spots <-> moods. confidence: 1.0 = code match, 0.0-1.0 = image match."""
-
     __tablename__ = "spot_moods"
     __table_args__ = (
         CheckConstraint(
@@ -226,10 +201,6 @@ class SpotMood(Base):
 
 
 class SpotConcentration(Base):
-    """KTO 관광지 집중률 (ADR-0016). concentration_rate is a relative 0-100 figure
-    (100 = that spot's own peak), not an absolute count. Source is name-keyed
-    (tAtsNm + 시군구), so rows are name-matched to active spots; no row = excluded."""
-
     __tablename__ = "spot_concentration"
     __table_args__ = (
         CheckConstraint(
@@ -254,8 +225,6 @@ class SpotConcentration(Base):
 
 
 class UserSavedSpot(Base):
-    """User saves a spot. CASCADE both sides."""
-
     __tablename__ = "user_saved_spots"
     __table_args__ = (Index("idx_user_saved_spots_user", "user_id", text("saved_at DESC")),)
 
@@ -272,58 +241,3 @@ class UserSavedSpot(Base):
     saved_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-
-
-# TarRlteTar lives in Redis (rlte:{contentId}, 1h TTL, ADR-0005) — no ORM model.
-
-
-# Curation (S07 §3.1/§3.2) — first-class entity backing the home feed + detail pages.
-class Curation(Base):
-    __tablename__ = "curations"
-
-    id: Mapped[int] = mapped_column(BigInteger, Identity(always=False), primary_key=True)
-    type: Mapped[str] = mapped_column(String(16), nullable=False)
-    slug: Mapped[str] = mapped_column(String(80), nullable=False, unique=True)
-    title: Mapped[str] = mapped_column(Text, nullable=False)
-    subtitle: Mapped[str | None] = mapped_column(Text)
-    lead: Mapped[str | None] = mapped_column(Text)
-    intro: Mapped[str | None] = mapped_column(Text)
-    cover_spot_id: Mapped[str | None] = mapped_column(
-        String(32), ForeignKey("spots.content_id", ondelete="SET NULL")
-    )
-    region_cd: Mapped[str | None] = mapped_column(String(8), ForeignKey("regions.ldong_regn_cd"))
-    mood_id: Mapped[int | None] = mapped_column(SmallInteger, ForeignKey("moods.id"))
-    is_published: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=false())
-    position: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-
-    __table_args__ = (
-        CheckConstraint("type IN ('region','mood','editorial')", name="ck_curation_type"),
-        CheckConstraint(
-            "(type='region' AND region_cd IS NOT NULL) "
-            "OR (type='mood' AND mood_id IS NOT NULL) "
-            "OR type='editorial'",
-            name="ck_curation_scope",
-        ),
-        UniqueConstraint("slug", name="uq_curations_slug"),
-        Index("idx_curations_feed", "type", "is_published", "position"),
-    )
-
-
-class CurationSpot(Base):
-    __tablename__ = "curation_spots"
-
-    curation_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("curations.id", ondelete="CASCADE"), primary_key=True
-    )
-    content_id: Mapped[str] = mapped_column(
-        String(32), ForeignKey("spots.content_id", ondelete="CASCADE"), primary_key=True
-    )
-    position: Mapped[int] = mapped_column(Integer, nullable=False)
-
-    __table_args__ = (Index("idx_curation_spots_order", "curation_id", "position"),)

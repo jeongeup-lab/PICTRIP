@@ -1,23 +1,3 @@
-"""Backfill CLIP embeddings for spots that have an image but no embedding row.
-
-    uv run python -m scripts.backfill_embeddings [--limit N] [--concurrency N]
-                                                 [--batch-size N] [--dry-run]
-                                                 [--only-failed]
-
-Photo-search quality is gated on embedding coverage (S04): spots without a
-`spot_embeddings` row never surface as image-search matches. This walks every
-spot that has `first_image_url` but no embedding, downloads the KTO image,
-runs CLIP in-process, and upserts the 512-dim halfvec.
-
-The actual work lives in ``app.modules.images.embedding_job`` (shared with the
-admin console's re-embed button). Failures are recorded in ``embedding_failures``
-so a missing embedding is distinguishable as pending vs. broken.
-
-Idempotent and resumable: it only targets missing rows, so a re-run picks up
-where it left off (and retries transient download/decode failures). Image bytes
-are processed in memory and never persisted (only the vector is stored).
-"""
-
 from __future__ import annotations
 
 import argparse

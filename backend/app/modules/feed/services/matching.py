@@ -7,11 +7,12 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core.exceptions import ResourceNotFound
 from app.core.logging import get_logger
+from app.kto.display import t1_display_url
 from app.modules.feed import repositories
 from app.modules.feed.text import first_sentence
 from app.modules.spots import services as spots_services
+from app.web.errors import ResourceNotFound
 
 logger = get_logger(__name__)
 
@@ -28,6 +29,11 @@ class MatchRow:
     region_label: str
     image_url: str
     overview_first: str | None
+    cpyrht_div_cd: str | None = None
+
+
+def display_image_url(row: MatchRow) -> str:
+    return t1_display_url(row.image_url, row.cpyrht_div_cd) or row.image_url
 
 
 async def find_matches(session: AsyncSession, redis: Redis, overseas_id: int) -> list[MatchRow]:
@@ -111,6 +117,7 @@ async def _hydrate(
                 region_label=_region_label(region_name, sigungu_name),
                 image_url=card.first_image_url,
                 overview_first=first_sentence(overview_map.get(cid)),
+                cpyrht_div_cd=card.cpyrht_div_cd,
             )
         )
     return rows, changed

@@ -1,5 +1,3 @@
-"""Generic Kakao Local REST helper (server-side key; modules own parsing/caching/fallback)."""
-
 from __future__ import annotations
 
 import json
@@ -18,7 +16,6 @@ _TIMEOUT = httpx.Timeout(5.0, connect=3.0)
 
 
 async def kakao_local_get(path: str, *, params: Mapping[str, Any]) -> dict[str, Any] | None:
-    """GET a Kakao Local endpoint and return decoded JSON, or None on failure."""
     if not settings.KAKAO_REST_API_KEY:
         logger.warning("kakao.local.no_key", path=path)
         return None

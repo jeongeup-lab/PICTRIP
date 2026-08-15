@@ -1,16 +1,3 @@
-"""ADM-009/010 — collection trigger (POST /admin/api/collection/trigger).
-
-Exercises the trigger endpoint behind the Basic-auth gate (A01 §3): the
-``ADMIN_TRIGGER_FAILED(502)`` envelope for the not-configured and concurrency
-cases, the happy path (token set, GitHub returns 204), and the structured audit
-line (ADM-010).
-
-The actual GitHub ``workflow_dispatch`` HTTP call is mocked at the
-``WorkflowDispatchTrigger._dispatch`` boundary so the suite never hits the
-network. ``sync_runs`` (pipeline-owned, A05) is created in-transaction with the
-measured schema, mirroring ``test_admin_api.py``.
-"""
-
 from __future__ import annotations
 
 import pytest
@@ -24,13 +11,9 @@ from app.main import app
 from app.modules.admin import triggers
 from app.modules.admin.security import require_admin
 
-# DB-backed admin auth: migration 0016 seeds admin/admin into the test DB, so
-# requests authenticate with this fixed credential (no settings monkeypatch).
-# settings is still used by the trigger-config fixture below.
 _PASSWORD = "admin"
 _AUTH = ("admin", _PASSWORD)
 
-# Measured sync_runs schema (A01 §0); same as test_admin_api.py.
 _CREATE_SYNC_RUNS = """
 CREATE TABLE IF NOT EXISTS sync_runs (
     id            bigserial PRIMARY KEY,
@@ -54,13 +37,11 @@ CREATE TABLE IF NOT EXISTS sync_runs (
 
 @pytest.fixture
 def admin_password() -> str:
-    """The DB-seeded default admin credential (migration 0016)."""
     return _PASSWORD
 
 
 @pytest.fixture
 def token_set(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Configure the trigger: a non-empty dispatch token = "configured"."""
     monkeypatch.setattr(settings, "GITHUB_DISPATCH_TOKEN", "ghp_test_token")
     monkeypatch.setattr(settings, "GITHUB_REPO", "jeongeup-lab/PICTRIP")
     monkeypatch.setattr(settings, "COLLECTION_WORKFLOW", "pipeline-sync.yml")
@@ -94,15 +75,13 @@ def _override(db_session: AsyncSession) -> None:
     app.dependency_overrides[require_admin] = lambda: "admin"
 
 
-# --- auth gate ----------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_trigger_requires_auth(client: AsyncClient, admin_password: str) -> None:
-    resp = await client.post("/admin/api/collection/trigger")  # no credentials
+    resp = await client.post("/admin/api/collection/trigger")
     assert resp.status_code == 401
     assert resp.json()["error"]["code"] == "ADMIN_UNAUTHORIZED"
 
 
-# --- not configured -----------------------------------------------------------
 @pytest.mark.asyncio
 async def test_trigger_not_configured_502(
     db_session: AsyncSession,
@@ -122,14 +101,12 @@ async def test_trigger_not_configured_502(
     body = resp.json()
     assert body["error"]["code"] == "ADMIN_TRIGGER_FAILED"
     assert "구성되지 않았습니다" in body["error"]["message"]
-    # ADM-010 audit: not-configured path emits a structured line to stdout.
     out = capsys.readouterr().out
     assert "collection.trigger" in out
     assert "result=failed" in out
     assert "reason=not-configured" in out
 
 
-# --- happy path ---------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_trigger_happy_path(
     db_session: AsyncSession,
@@ -140,7 +117,6 @@ async def test_trigger_happy_path(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    # GitHub workflow_dispatch returns 204 No Content (no run id) → ref is None.
     dispatched: dict[str, str] = {}
 
     async def fake_dispatch(self: triggers.WorkflowDispatchTrigger, job: str) -> None:
@@ -159,16 +135,12 @@ async def test_trigger_happy_path(
     assert data["accepted"] is True
     assert data["job"] == "sync-daily"
     assert data["runId"] is None
-    # the adapter was actually invoked with the sync-daily job
     assert dispatched["job"] == "sync-daily"
-    # ADM-010 audit: a structured "collection.trigger" line is emitted to stdout
-    # (structlog PrintLoggerFactory → stdout, not stdlib logging) with result=accepted.
     out = capsys.readouterr().out
     assert "collection.trigger" in out
     assert "result=accepted" in out
 
 
-# --- concurrency: already running --------------------------------------------
 @pytest.mark.asyncio
 async def test_trigger_rejects_when_running(
     db_session: AsyncSession,
@@ -198,16 +170,13 @@ async def test_trigger_rejects_when_running(
     body = resp.json()
     assert body["error"]["code"] == "ADMIN_TRIGGER_FAILED"
     assert "진행 중" in body["error"]["message"]
-    # GitHub must NOT be called when a run is already in flight.
     assert called["hit"] is False
-    # ADM-010 audit: already-running path emits a structured line to stdout.
     out = capsys.readouterr().out
     assert "collection.trigger" in out
     assert "result=failed" in out
     assert "reason=already-running" in out
 
 
-# --- GitHub returns non-2xx ---------------------------------------------------
 @pytest.mark.asyncio
 async def test_trigger_github_error_502(
     db_session: AsyncSession,
@@ -217,10 +186,9 @@ async def test_trigger_github_error_502(
     sync_runs_table: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.core.exceptions import AdminTriggerFailed
+    from app.web.errors import AdminTriggerFailed
 
     async def fake_dispatch(self: triggers.WorkflowDispatchTrigger, job: str) -> None:
-        # Simulate the adapter mapping a non-2xx GitHub response to the domain error.
         raise AdminTriggerFailed("GitHub workflow_dispatch 실패 (HTTP 404).")
 
     monkeypatch.setattr(triggers.WorkflowDispatchTrigger, "_dispatch", fake_dispatch)

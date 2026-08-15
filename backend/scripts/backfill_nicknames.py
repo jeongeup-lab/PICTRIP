@@ -1,23 +1,3 @@
-"""Backfill random nicknames for accounts created before the generator shipped.
-
-Accounts created before 2026-07-01 stored the provider name claim, which is
-often absent — those rows kept ``users.name = NULL`` and the app falls back to
-the generic '여행자' label. New signups already get a random nickname at
-creation (``app.modules.users.nickname``); this fills the remaining NULLs the
-same way. Soft-deleted accounts are skipped: deletion scrubs ``name`` on
-purpose. Connects with the same ``DATABASE_URL`` / ``POSTGRES_*`` settings as
-the app (``app.config``).
-
-Usage (from ``backend/``):
-
-    uv run python -m scripts.backfill_nicknames             # write
-    uv run python -m scripts.backfill_nicknames --dry-run   # count only
-
-Idempotent: only touches ``name IS NULL`` rows, and each UPDATE re-checks both
-``name IS NULL`` and ``deleted_at IS NULL`` so neither a signup nor an account
-deletion racing the script is ever overwritten.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -34,7 +14,6 @@ _SELECT_NAMELESS = "SELECT id FROM users WHERE name IS NULL AND deleted_at IS NU
 
 
 async def backfill(session: AsyncSession, rng: random.Random | None = None) -> int:
-    """Assign a random nickname to every active user without one; return the count."""
     ids = (await session.execute(text(_SELECT_NAMELESS))).scalars().all()
     for user_id in ids:
         await session.execute(

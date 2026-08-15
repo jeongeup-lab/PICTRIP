@@ -1,0 +1,1410 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import pytest
+from fakeredis.aioredis import FakeRedis
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.modules.agent.errors import AgentNoResults
+from app.modules.agent.repositories import CandidateRow
+from app.modules.agent.schemas import (
+    AskContext,
+    AskContextSpot,
+    AskResponse,
+    CrowdPreference,
+    QueryIntent,
+)
+from app.modules.agent.services import ask as ask_service
+from app.modules.agent.services import detail as detail_service
+from app.modules.agent.services import intent as intent_service
+from app.modules.spots.services.rows import SpotDetailRow, SpotIntroRow
+
+SEBYEONGGWAN = AskContextSpot(contentId="126198", title="통영 세병관")
+
+
+@dataclass
+class SimpleTitleRow:
+    title: str
+    lat: float | None
+    lng: float | None
+    content_id: str = "t1"
+    addr1: str | None = None
+
+
+def _coordless_row():  # type: ignore[no-untyped-def]
+    from app.modules.agent.repositories import CandidateRow
+
+    return CandidateRow(
+        content_id="126198",
+        title="통영 세병관",
+        addr1="경상남도 통영시 세병로 27",
+        region_name="경상남도",
+        sigungu_name="통영시",
+        lat=None,
+        lng=None,
+        image_url=None,
+        cpyrht_div_cd="Type1",
+        concentration_rate=None,
+    )
+
+
+class _ExplodingSession:
+    async def execute(self, *args: object, **kwargs: object) -> object:
+        raise AssertionError("a detail turn must not run a search")
+
+
+def _detail(**intro: str | None) -> SpotDetailRow:
+    return SpotDetailRow(
+        content_id="126198",
+        title="통영 세병관",
+        first_image_url=None,
+        addr1="경상남도 통영시 세병로 27",
+        addr2=None,
+        mapx=128.4,
+        mapy=34.8,
+        overview="세병관은 삼도수군통제영의 客舍이다.",
+        homepage=None,
+        tel=intro.pop("tel", None),
+        region_name="경상남도",
+        sigungu_name="통영시",
+        detail_status="fresh",
+        images=[],
+        intro=SpotIntroRow(**intro),  # type: ignore[arg-type]
+    )
+
+
+async def _ask(question: str, *, intent: QueryIntent, row: SpotDetailRow | None, monkeypatch):
+    async def fake_extract(q, *, prior=None, prior_spots=None):  # type: ignore[no-untyped-def]
+        return intent
+
+    async def fake_detail(
+        session, kto, redis, content_id, *, defer_refresh=False, require_intro=False
+    ):  # type: ignore[no-untyped-def]
+        if row is None:
+            raise AgentNoResults()
+        return row
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_extract)
+    monkeypatch.setattr(detail_service, "load_spot_detail", fake_detail)
+    return await ask_service.ask(
+        _ExplodingSession(),  # type: ignore[arg-type]
+        FakeRedis(),
+        None,
+        question=question,
+        lat=None,
+        lng=None,
+        image_bytes=None,
+        image_mime=None,
+        context=AskContext(spots=[SEBYEONGGWAN]),
+    )
+
+
+def _text(answer: AskResponse) -> str:
+    return "".join(segment.text for segment in answer.answer)
+
+
+async def test_an_opening_hours_question_answers_instead_of_searching(monkeypatch) -> None:
+    intent = QueryIntent(task="detail", targetPlace="통영 세병관", detailFields=["hours"])
+
+    answer = await _ask(
+        "세병관 영업시간 몇시야?",
+        intent=intent,
+        row=_detail(usetime="09:00~18:00"),
+        monkeypatch=monkeypatch,
+    )
+
+    assert "09:00~18:00" in _text(answer)
+
+
+async def test_a_detail_turn_names_the_spot_it_answered_about(monkeypatch) -> None:
+    intent = QueryIntent(task="detail", targetPlace="통영 세병관", detailFields=["hours"])
+
+    answer = await _ask(
+        "세병관 영업시간 몇시야?",
+        intent=intent,
+        row=_detail(usetime="09:00~18:00"),
+        monkeypatch=monkeypatch,
+    )
+
+    assert "통영 세병관" in _text(answer)
+    assert [spot.contentId for spot in answer.spots] == ["126198"]
+
+
+async def test_a_missing_field_is_admitted_not_invented(monkeypatch) -> None:
+    intent = QueryIntent(task="detail", targetPlace="통영 세병관", detailFields=["parking"])
+
+    answer = await _ask(
+        "주차 되나?", intent=intent, row=_detail(usetime="09:00~18:00"), monkeypatch=monkeypatch
+    )
+
+    text = _text(answer)
+    assert detail_service.UNKNOWN_HINT in text
+    assert "09:00~18:00" not in text
+
+
+async def test_a_detail_turn_records_the_lookup_step(monkeypatch) -> None:
+    intent = QueryIntent(task="detail", targetPlace="통영 세병관", detailFields=["hours"])
+
+    answer = await _ask(
+        "몇시까지 해?", intent=intent, row=_detail(usetime="09:00~18:00"), monkeypatch=monkeypatch
+    )
+
+    assert [step.tool for step in answer.steps] == ["intent", "spot_detail"]
+
+
+async def test_a_detail_question_about_nothing_we_can_pin_falls_back_to_search() -> None:
+    intent = QueryIntent(task="detail", targetPlace="없는곳", regionHints=["통영"])
+
+    assert ask_service.detail_target(intent, context=AskContext(spots=[SEBYEONGGWAN])) is None
+
+
+async def test_a_detail_question_pins_the_focused_card_over_the_named_one() -> None:
+    intent = QueryIntent(task="detail", targetPlace="통영 세병관")
+    context = AskContext(spots=[SEBYEONGGWAN], focusContentId="999")
+
+    assert ask_service.detail_target(intent, context=context) == "999"
+
+
+async def test_an_unsupported_task_says_so_without_searching(monkeypatch) -> None:
+    intent = QueryIntent(task="unsupported", regionHints=["통영"])
+
+    answer = await _ask("통영 1박2일 일정 짜줘", intent=intent, row=None, monkeypatch=monkeypatch)
+
+    assert answer.spots == []
+    assert _text(answer) == ask_service.UNSUPPORTED_ANSWER
+
+
+async def test_smalltalk_never_searches_even_with_a_region_in_it(monkeypatch) -> None:
+    intent = QueryIntent(task="smalltalk", regionHints=["통영"])
+
+    answer = await _ask("통영 좋지 그치?", intent=intent, row=None, monkeypatch=monkeypatch)
+
+    assert answer.spots == []
+    assert _text(answer) == ask_service.BLANK_ANSWER
+
+
+@pytest.mark.parametrize(
+    "field,intro,expected",
+    [
+        ("hours", {"usetime": "09:00~18:00"}, "09:00~18:00"),
+        ("closed", {"restdate": "월요일"}, "월요일"),
+        ("parking", {"parking": "가능(30대)"}, "가능(30대)"),
+        ("contact", {"infocenter": "055-650-0000"}, "055-650-0000"),
+        ("fee", {"usefee": "어른 3,000원"}, "어른 3,000원"),
+    ],
+)
+def test_each_field_reads_its_own_kto_column(field, intro, expected) -> None:
+    row = SpotIntroRow(**intro)
+
+    assert detail_service.field_value(row, None, field) == expected
+
+
+@pytest.mark.parametrize(
+    "noun,value,expected",
+    [
+        ("이용시간", "09:00~18:00", "이용시간은 09:00~18:00이에요."),
+        ("문의", "055-645-3805", "문의는 055-645-3805예요."),
+        ("주차", "가능", "주차는 가능이에요."),
+        ("이용요금", "어른 2000원", "이용요금은 어른 2000원이에요."),
+        ("쉬는 날", "월요일", "쉬는 날은 월요일이에요."),
+    ],
+)
+def test_a_fact_sentence_picks_the_right_particles(noun, value, expected) -> None:
+    assert detail_service.fact_sentence(noun, value) == expected
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("가능", detail_service.PARKING_AVAILABLE),
+        ("있음", detail_service.PARKING_AVAILABLE),
+        ("불가능", detail_service.PARKING_UNAVAILABLE),
+        ("없음", detail_service.PARKING_UNAVAILABLE),
+        ("가능 요금 (무료)", None),
+        ("가능 (소형 80대 / 대형 10대)", None),
+    ],
+)
+def test_a_yes_no_parking_value_becomes_a_verb_not_a_noun(value, expected) -> None:
+    assert detail_service.parking_sentence(value) == expected
+
+
+@pytest.mark.parametrize(
+    "fields,expected",
+    [(["overview"], False), (["hours"], True), (["overview", "parking"], True), ([], True)],
+)
+async def test_intro_is_only_demanded_when_the_question_needs_it(
+    fields, expected, monkeypatch
+) -> None:
+    seen: list[bool] = []
+
+    async def fake_load(
+        session, kto, redis, content_id, *, defer_refresh=False, require_intro=False
+    ):  # type: ignore[no-untyped-def]
+        seen.append(require_intro)
+        return _detail(usetime="09:00~18:00")
+
+    monkeypatch.setattr(detail_service, "load_spot_detail", fake_load)
+    await detail_service.answer_about_spot(
+        _ExplodingSession(),  # type: ignore[arg-type]
+        FakeRedis(),
+        None,
+        content_id="126198",
+        intent=QueryIntent(task="detail", detailFields=fields),
+        steps=[],
+    )
+
+    assert seen == [expected]
+
+
+async def test_a_bare_parking_value_reads_as_a_sentence(monkeypatch) -> None:
+    intent = QueryIntent(task="detail", targetPlace="통영 세병관", detailFields=["parking"])
+
+    answer = await _ask(
+        "주차 되나?", intent=intent, row=_detail(parking="가능"), monkeypatch=monkeypatch
+    )
+
+    text = _text(answer)
+    assert detail_service.PARKING_AVAILABLE in text
+    assert "주차는 가능이에요" not in text
+
+
+def test_a_target_matches_a_title_that_carries_a_region_prefix() -> None:
+    intent = QueryIntent(task="detail", targetPlace="세병관")
+
+    assert ask_service.detail_target(intent, context=AskContext(spots=[SEBYEONGGWAN])) == "126198"
+
+
+def test_a_target_that_matches_nothing_does_not_pin_the_wrong_card() -> None:
+    other = AskContextSpot(contentId="1", title="해운대해수욕장")
+    intent = QueryIntent(task="detail", targetPlace="세병관")
+
+    assert ask_service.detail_target(intent, context=AskContext(spots=[SEBYEONGGWAN, other]))
+    assert ask_service.detail_target(intent, context=AskContext(spots=[other])) is None
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("가능<br>요금(무료)", "가능 요금(무료)"),
+        ("09:00~18:00<br/>동절기 17:00", "09:00~18:00 동절기 17:00"),
+        ("주차 <b>가능</b>", "주차 가능"),
+        ("&lt;주의&gt; 유료", "<주의> 유료"),
+        ("평상시", "평상시"),
+    ],
+)
+def test_a_fact_value_never_shows_markup(raw, expected) -> None:
+    assert detail_service.plain(raw) == expected
+
+
+async def test_a_marked_up_value_reaches_the_sentence_clean(monkeypatch) -> None:
+    intent = QueryIntent(task="detail", targetPlace="통영 세병관", detailFields=["parking"])
+
+    answer = await _ask(
+        "주차 되나?",
+        intent=intent,
+        row=_detail(parking="가능<br>요금(무료)"),
+        monkeypatch=monkeypatch,
+    )
+
+    text = _text(answer)
+    assert "<br>" not in text
+    assert "가능 요금(무료)" in text
+
+
+def test_food_codes_are_recognised_as_a_food_scope() -> None:
+    from app.modules.agent.services import retrieve
+
+    assert retrieve.food_action(["FD010100", "FD020100"]) == "food"
+    assert retrieve.food_action(["FD050100"]) == "cafe"
+    assert retrieve.food_action(["FD030100"]) == "cafe"
+    assert retrieve.food_action(["VE060100"]) is None
+    assert retrieve.food_action(["FD010100", "VE060100"]) is None
+    assert retrieve.food_action([]) is None
+
+
+async def test_a_food_search_with_no_origin_at_all_says_how_to_get_one(monkeypatch) -> None:
+    from app.modules.agent.services import retrieve
+
+    async def fake_scope(session, keywords):  # type: ignore[no-untyped-def]
+        return retrieve.CategoryScope(codes=["FD010100"], matched=list(keywords))
+
+    async def fake_region(session, *, hints):  # type: ignore[no-untyped-def]
+        return retrieve.EMPTY_REGION_SCOPE
+
+    monkeypatch.setattr(retrieve, "resolve_category_scope", fake_scope)
+    monkeypatch.setattr(retrieve, "resolve_region_scope", fake_region)
+
+    answer = await _ask(
+        "맛집 아무데나",
+        intent=QueryIntent(categoryKeywords=["맛집"]),
+        row=None,
+        monkeypatch=monkeypatch,
+    )
+
+    assert answer.spots == []
+    assert _text(answer) == ask_service.FOOD_NEEDS_ORIGIN_ANSWER
+
+
+async def test_a_question_that_wants_a_search_but_named_no_axis_asks_for_one(monkeypatch) -> None:
+    answer = await _ask(
+        "아이랑 갈 만한 곳", intent=QueryIntent(), row=None, monkeypatch=monkeypatch
+    )
+
+    assert _text(answer) == ask_service.NO_AXIS_ANSWER
+    assert _text(answer) != ask_service.BLANK_ANSWER
+
+
+async def test_pure_smalltalk_keeps_the_plain_greeting(monkeypatch) -> None:
+    answer = await _ask(
+        "안녕", intent=QueryIntent(task="smalltalk"), row=None, monkeypatch=monkeypatch
+    )
+
+    assert _text(answer) == ask_service.BLANK_ANSWER
+
+
+def test_everyday_food_words_route_even_when_the_taxonomy_has_no_such_name() -> None:
+    from app.modules.agent.services import retrieve
+
+    assert retrieve.food_word(["맛집"]) == "food"
+    assert retrieve.food_word(["먹을 곳"]) == "food"
+    assert retrieve.food_word(["카페"]) == "cafe"
+    assert retrieve.food_word(["커피숍"]) == "cafe"
+    assert retrieve.food_word(["박물관"]) is None
+    assert retrieve.food_word(["맛집", "박물관"]) is None
+    assert retrieve.food_word([]) is None
+
+
+def test_everyday_nouns_map_onto_the_taxonomy_words() -> None:
+    from app.modules.agent.services import retrieve
+
+    assert retrieve.taxonomy_word("사찰") == "불교"
+    assert retrieve.taxonomy_word("절") == "불교"
+    assert retrieve.taxonomy_word("성당") == "기독교"
+    assert retrieve.taxonomy_word("놀이공원") == "테마파크"
+    assert retrieve.taxonomy_word("식물원") == "수목원"
+    assert retrieve.taxonomy_word("박물관") == "박물관"
+
+
+def test_a_shopping_word_stays_a_title_keyword_instead_of_a_dead_category() -> None:
+    from app.modules.agent.services import retrieve
+
+    assert retrieve.taxonomy_word("야시장") == "야시장"
+
+
+async def test_a_synonym_search_keeps_the_user_word_in_the_answer() -> None:
+    from app.modules.agent import repositories
+    from app.modules.agent.services import retrieve
+
+    asked: list[str] = []
+
+    class _Session:
+        async def execute(self, *args: object, **kwargs: object) -> object:
+            raise AssertionError("unused")
+
+    async def fake_codes(session, keyword, *, limit=40):  # type: ignore[no-untyped-def]
+        asked.append(keyword)
+        return ["HS030100"] if keyword == "불교" else []
+
+    original = repositories.find_category_codes
+    repositories.find_category_codes = fake_codes  # type: ignore[assignment]
+    try:
+        scope = await retrieve.resolve_category_scope(_Session(), ["사찰"])  # type: ignore[arg-type]
+    finally:
+        repositories.find_category_codes = original  # type: ignore[assignment]
+
+    assert asked == ["불교"]
+    assert scope.codes == ["HS030100"]
+    assert scope.matched == ["사찰"]
+
+
+def test_a_food_pool_sql_is_available_per_category() -> None:
+    from app.modules.spots.services import NearbyCategory, category_sql
+
+    food = category_sql(NearbyCategory.food)
+    cafe = category_sql(NearbyCategory.cafe)
+
+    assert "FD01" in food and "FD05" not in food
+    assert "FD05" in cafe
+
+
+async def test_a_region_is_a_good_enough_origin_for_food(monkeypatch) -> None:
+    from app.modules.agent.services import retrieve
+
+    async def fake_scope(session, keywords):  # type: ignore[no-untyped-def]
+        return retrieve.CategoryScope(codes=[], matched=[])
+
+    async def fake_region(session, *, hints):  # type: ignore[no-untyped-def]
+        return retrieve.RegionScope(
+            prefixes=["전북특별자치도 정읍시"], sido_prefixes=["전북특별자치도"]
+        )
+
+    seen: dict[str, object] = {}
+
+    async def fake_food(session, *, action, region_prefixes, **axes):  # type: ignore[no-untyped-def]
+        seen["action"] = action
+        seen["prefixes"] = region_prefixes
+        return []
+
+    monkeypatch.setattr(retrieve, "resolve_category_scope", fake_scope)
+    monkeypatch.setattr(retrieve, "resolve_region_scope", fake_region)
+    monkeypatch.setattr(retrieve, "search_food", fake_food)
+
+    await _ask(
+        "정읍 맛집",
+        intent=QueryIntent(categoryKeywords=["맛집"], regionHints=["정읍"]),
+        row=None,
+        monkeypatch=monkeypatch,
+    )
+
+    assert seen["action"] == "food"
+    assert seen["prefixes"] == ["전북특별자치도 정읍시"]
+
+
+def test_a_geocode_hit_must_actually_carry_the_asked_name() -> None:
+    from app.modules.agent.services import geocode
+
+    assert geocode.names_match("대천역", "대천역 장항선") is True
+    assert geocode.names_match("대천역", "대천천") is False
+    assert geocode.names_match("한옥마을", "북촌도담") is False
+    assert geocode.names_match("전주 한옥마을", "전북 전주 한옥마을 [슬로시티]") is True
+    assert geocode.names_match("정읍역", "정읍역 (고속철도)") is True
+    assert geocode.names_match("", "아무거나") is False
+
+
+async def test_geocoding_prefers_a_kto_spot_that_carries_the_name(monkeypatch) -> None:
+    from app.modules.agent.services import geocode
+
+    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
+        return [
+            SimpleTitleRow("전북 전주 한옥마을 [슬로시티]", 35.818, 127.153),
+        ]
+
+    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
+    found = await geocode.locate(None, "전주 한옥마을")  # type: ignore[arg-type]
+
+    assert found is not None
+    assert found.title == "전북 전주 한옥마을 [슬로시티]"
+    assert round(found.lat, 2) == 35.82
+
+
+async def test_geocoding_falls_through_to_naver_when_no_spot_carries_the_name(
+    monkeypatch,
+) -> None:
+    from app.modules.agent import naver
+    from app.modules.agent.services import geocode
+
+    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
+        return [SimpleTitleRow("대천천", 35.242, 129.019)]
+
+    async def fake_local(client, query, *, display=3):  # type: ignore[no-untyped-def]
+        return [naver.NaverPlace("대천역 장항선", None, "충청남도 보령시", 36.3416, 126.5867)]
+
+    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
+    monkeypatch.setattr(geocode, "naver_search", fake_local)
+    monkeypatch.setattr(naver, "is_configured", lambda: True)
+
+    found = await geocode.locate(None, "대천역")  # type: ignore[arg-type]
+
+    assert found is not None
+    assert round(found.lat, 2) == 36.34
+
+
+async def test_geocoding_gives_up_rather_than_guessing(monkeypatch) -> None:
+    from app.modules.agent import naver
+    from app.modules.agent.services import geocode
+
+    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
+        return []
+
+    async def fake_local(client, query, *, display=3):  # type: ignore[no-untyped-def]
+        return [naver.NaverPlace("북촌도담", None, "서울특별시 종로구", 37.577, 126.985)]
+
+    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
+    monkeypatch.setattr(geocode, "naver_search", fake_local)
+    monkeypatch.setattr(naver, "is_configured", lambda: True)
+
+    assert await geocode.locate(None, "한옥마을") is None  # type: ignore[arg-type]
+
+
+async def test_the_origin_is_named_the_way_the_user_said_it(monkeypatch) -> None:
+    from app.modules.agent import naver
+    from app.modules.agent.services import geocode
+
+    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
+        return []
+
+    async def fake_local(client, query, *, display=3):  # type: ignore[no-untyped-def]
+        return [naver.NaverPlace("타이어뱅크 대천역점", None, "충청남도 보령시", 36.34, 126.58)]
+
+    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
+    monkeypatch.setattr(geocode, "naver_search", fake_local)
+    monkeypatch.setattr(naver, "is_configured", lambda: True)
+
+    found = await geocode.locate(None, "대천역")  # type: ignore[arg-type]
+
+    assert found is not None
+    assert found.title == "대천역"
+
+
+def test_a_two_region_food_answer_names_both() -> None:
+    answer = ask_service.food_in_region(
+        [], ["부산광역시", "제주특별자치도"], "food", steps=[], intent=QueryIntent()
+    )
+
+    assert "부산광역시 · 제주특별자치도" in "".join(part.text for part in answer.answer)
+
+
+def test_a_two_region_food_step_names_both() -> None:
+    answer = ask_service.food_in_region(
+        [], ["부산광역시", "제주특별자치도"], "food", steps=[], intent=QueryIntent()
+    )
+
+    assert answer.steps[-1].label == "부산광역시 · 제주특별자치도 맛집 조회"
+
+
+async def test_geocoding_narrows_the_spot_search_with_the_region_hint(monkeypatch) -> None:
+    from app.modules.agent.services import geocode
+
+    seen: dict[str, object] = {}
+
+    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
+        seen["hint"] = region_hint
+        return [
+            SimpleTitleRow(
+                "전북 전주 한옥마을 [슬로시티]",
+                35.818,
+                127.153,
+                addr1="전북특별자치도 전주시 완산구 1",
+            )
+        ]
+
+    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
+    found = await geocode.locate(None, "한옥마을", region_hint="전주")  # type: ignore[arg-type]
+
+    assert seen["hint"] == "전주"
+    assert found is not None and round(found.lat, 2) == 35.82
+
+
+async def test_geocoding_asks_naver_within_the_region(monkeypatch) -> None:
+    from app.modules.agent import naver
+    from app.modules.agent.services import geocode
+
+    asked: dict[str, object] = {}
+
+    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
+        return []
+
+    async def fake_local(client, query, *, display=3):  # type: ignore[no-untyped-def]
+        asked["query"] = query
+        return [naver.NaverPlace("전주 한옥마을", None, "전북특별자치도 전주시", 35.818, 127.153)]
+
+    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
+    monkeypatch.setattr(geocode, "naver_search", fake_local)
+    monkeypatch.setattr(naver, "is_configured", lambda: True)
+
+    found = await geocode.locate(None, "한옥마을", region_hint="전주")  # type: ignore[arg-type]
+
+    assert asked["query"] == "전주 한옥마을"
+    assert found is not None
+
+
+async def test_a_hit_outside_the_named_region_is_rejected(monkeypatch) -> None:
+    from app.modules.agent import naver
+    from app.modules.agent.services import geocode
+
+    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
+        return []
+
+    async def fake_local(client, query, *, display=3):  # type: ignore[no-untyped-def]
+        return [naver.NaverPlace("송도 한옥마을", None, "인천광역시 연수구", 37.38, 126.65)]
+
+    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
+    monkeypatch.setattr(geocode, "naver_search", fake_local)
+    monkeypatch.setattr(naver, "is_configured", lambda: True)
+
+    assert await geocode.locate(None, "한옥마을", region_hint="전주") is None  # type: ignore[arg-type]
+
+
+async def test_a_new_region_beats_a_card_left_over_from_earlier(monkeypatch) -> None:
+    from app.modules.agent.services import retrieve
+
+    seen: dict[str, object] = {}
+
+    async def fake_scope(session, keywords):  # type: ignore[no-untyped-def]
+        return retrieve.CategoryScope(codes=[], matched=[])
+
+    async def fake_region(session, *, hints):  # type: ignore[no-untyped-def]
+        return retrieve.RegionScope(prefixes=["부산광역시"], sido_prefixes=["부산광역시"])
+
+    async def fake_food(session, *, action, region_prefixes, **axes):  # type: ignore[no-untyped-def]
+        seen["prefixes"] = region_prefixes
+        return []
+
+    monkeypatch.setattr(retrieve, "resolve_category_scope", fake_scope)
+    monkeypatch.setattr(retrieve, "resolve_region_scope", fake_region)
+    monkeypatch.setattr(retrieve, "search_food", fake_food)
+
+    async def fake_extract(q, *, prior=None, prior_spots=None):  # type: ignore[no-untyped-def]
+        return QueryIntent(categoryKeywords=["맛집"], regionHints=["부산"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_extract)
+    await ask_service.ask(
+        _ExplodingSession(),  # type: ignore[arg-type]
+        FakeRedis(),
+        None,
+        question="부산 맛집",
+        lat=None,
+        lng=None,
+        image_bytes=None,
+        image_mime=None,
+        context=AskContext(
+            intent=QueryIntent(regionHints=["서울"]),
+            spots=[SEBYEONGGWAN],
+            focusContentId="126198",
+        ),
+    )
+
+    assert seen["prefixes"] == ["부산광역시"]
+
+
+def test_an_empty_surrounding_keeps_the_asked_conditions() -> None:
+    intent = QueryIntent(categoryKeywords=["맛집"], regionHints=["보령"])
+
+    answer = ask_service.empty_anchor_response("대천역", "food", prior_steps=[], intent=intent)
+
+    assert answer.intent.categoryKeywords == ["맛집"]
+    assert answer.intent.regionHints == ["보령"]
+
+
+async def test_an_old_province_name_still_reaches_the_landmark(monkeypatch) -> None:
+    from app.modules.agent import naver
+    from app.modules.agent.services import geocode
+
+    seen: dict[str, object] = {}
+
+    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
+        seen["hint"] = region_hint
+        return []
+
+    async def fake_local(client, query, *, display=3):  # type: ignore[no-untyped-def]
+        seen["query"] = query
+        return [
+            naver.NaverPlace("속초해수욕장", None, "강원특별자치도 속초시", 38.19, 128.60),
+        ]
+
+    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
+    monkeypatch.setattr(geocode, "naver_search", fake_local)
+    monkeypatch.setattr(naver, "is_configured", lambda: True)
+
+    found = await geocode.locate(  # type: ignore[arg-type]
+        None, "속초해수욕장", region_hint="강원도"
+    )
+
+    assert seen["hint"] == "강원"
+    assert seen["query"] == "강원 속초해수욕장"
+    assert found is not None and round(found.lat, 2) == 38.19
+
+
+async def test_a_multi_word_region_hint_narrows_by_its_finest_token(monkeypatch) -> None:
+    from app.modules.agent.services import geocode
+
+    seen: dict[str, object] = {}
+
+    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
+        seen["hint"] = region_hint
+        return [
+            SimpleTitleRow("속초해수욕장", 38.19, 128.60, addr1="강원특별자치도 속초시 조양동 1")
+        ]
+
+    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
+    found = await geocode.locate(  # type: ignore[arg-type]
+        None, "속초해수욕장", region_hint="강원도 속초"
+    )
+
+    assert seen["hint"] == "속초"
+    assert found is not None
+
+
+async def test_a_focus_card_without_coordinates_yields_to_the_named_region(monkeypatch) -> None:
+    from app.modules.agent import repositories
+    from app.modules.agent.services import retrieve
+
+    seen: dict[str, object] = {}
+
+    async def fake_scope(session, keywords):  # type: ignore[no-untyped-def]
+        return retrieve.CategoryScope(codes=[], matched=[])
+
+    async def fake_region(session, *, hints):  # type: ignore[no-untyped-def]
+        return retrieve.RegionScope(prefixes=["경상남도 통영시"], sido_prefixes=["경상남도"])
+
+    async def fake_food(session, *, action, region_prefixes, **axes):  # type: ignore[no-untyped-def]
+        seen["prefixes"] = region_prefixes
+        return []
+
+    async def fake_briefs(session, content_ids):  # type: ignore[no-untyped-def]
+        return {"126198": _coordless_row()}
+
+    monkeypatch.setattr(retrieve, "resolve_category_scope", fake_scope)
+    monkeypatch.setattr(retrieve, "resolve_region_scope", fake_region)
+    monkeypatch.setattr(retrieve, "search_food", fake_food)
+    monkeypatch.setattr(repositories, "load_candidates_by_ids", fake_briefs)
+
+    async def fake_extract(q, *, prior=None, prior_spots=None):  # type: ignore[no-untyped-def]
+        return QueryIntent(categoryKeywords=["맛집"], regionHints=["통영"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_extract)
+    answer = await ask_service.ask(
+        _ExplodingSession(),  # type: ignore[arg-type]
+        FakeRedis(),
+        None,
+        question="통영 맛집",
+        lat=None,
+        lng=None,
+        image_bytes=None,
+        image_mime=None,
+        context=AskContext(
+            intent=QueryIntent(regionHints=["통영"]),
+            spots=[SEBYEONGGWAN],
+            focusContentId="126198",
+        ),
+    )
+
+    assert seen["prefixes"] == ["경상남도 통영시"]
+    assert answer.totalCount == 0
+
+
+async def test_a_region_food_query_carries_the_other_conditions(monkeypatch) -> None:
+    from app.modules.agent import repositories
+    from app.modules.agent.services import retrieve
+
+    seen: dict[str, object] = {}
+
+    async def fake_food(session, *, action, region_prefixes, **axes):  # type: ignore[no-untyped-def]
+        seen.update(axes)
+        return [_coordless_row()]
+
+    async def fake_moods(session, codes):  # type: ignore[no-untyped-def]
+        return [7]
+
+    monkeypatch.setattr(retrieve, "search_food", fake_food)
+    monkeypatch.setattr(repositories, "find_mood_ids", fake_moods)
+
+    answer = await ask_service._food_across_region(
+        None,  # type: ignore[arg-type]
+        "food",
+        ["부산광역시"],
+        steps=[],
+        lat=None,
+        lng=None,
+        intent=QueryIntent(
+            categoryKeywords=["맛집"],
+            regionHints=["부산"],
+            crowdPreference="quiet",
+            indoorOnly=True,
+            moodHints=["sea"],
+        ),
+    )
+
+    assert seen["preference"] == "quiet"
+    assert seen["indoor_only"] is True
+    assert seen["mood_ids"] == [7]
+    assert answer.intent.crowdPreference == "quiet"
+
+
+async def test_a_region_food_answer_drops_conditions_it_could_not_apply(monkeypatch) -> None:
+    from app.modules.agent import repositories
+    from app.modules.agent.services import retrieve
+
+    async def fake_food(session, *, action, region_prefixes, **axes):  # type: ignore[no-untyped-def]
+        if (
+            axes.get("mood_ids")
+            or axes.get("indoor_only")
+            or axes.get("preference", "any") != "any"
+        ):
+            return []
+        return [_coordless_row()]
+
+    async def fake_moods(session, codes):  # type: ignore[no-untyped-def]
+        return [7]
+
+    monkeypatch.setattr(retrieve, "search_food", fake_food)
+    monkeypatch.setattr(repositories, "find_mood_ids", fake_moods)
+
+    answer = await ask_service._food_across_region(
+        None,  # type: ignore[arg-type]
+        "food",
+        ["부산광역시"],
+        steps=[],
+        lat=None,
+        lng=None,
+        intent=QueryIntent(
+            categoryKeywords=["맛집"],
+            regionHints=["부산"],
+            crowdPreference="quiet",
+            indoorOnly=True,
+            moodHints=["sea"],
+        ),
+    )
+
+    assert answer.totalCount == 1
+    assert answer.intent.crowdPreference == "any"
+    assert answer.intent.indoorOnly is False
+    assert answer.intent.moodHints == []
+    assert answer.intent.regionHints == ["부산"]
+
+
+async def test_a_region_dish_constraint_survives_condition_relaxation(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.modules.agent import repositories
+    from app.modules.agent.services import retrieve
+
+    seen: list[list[str] | None] = []
+
+    async def fake_food(
+        session: AsyncSession,
+        *,
+        action: str,
+        region_prefixes: list[str],
+        preference: CrowdPreference = "any",
+        indoor_only: bool = False,
+        mood_ids: list[int] | None = None,
+        lat: float | None = None,
+        lng: float | None = None,
+        near: bool = False,
+        title_terms: list[str] | None = None,
+    ) -> list[CandidateRow]:
+        seen.append(title_terms)
+        return []
+
+    async def fake_moods(session: AsyncSession, codes: list[str]) -> list[int]:
+        return [7]
+
+    monkeypatch.setattr(retrieve, "search_food", fake_food)
+    monkeypatch.setattr(repositories, "find_mood_ids", fake_moods)
+
+    answer = await ask_service._food_across_region(
+        db_session,
+        "food",
+        ["부산광역시"],
+        steps=[],
+        lat=None,
+        lng=None,
+        intent=QueryIntent(categoryKeywords=["맛집", "삼겹살"], indoorOnly=True),
+        title_terms=["삼겹살"],
+    )
+
+    assert answer.totalCount == 0
+    assert seen == [["삼겹살"], ["삼겹살"]]
+
+
+def test_an_empty_surrounding_drops_the_axes_it_never_applied() -> None:
+    intent = QueryIntent(
+        categoryKeywords=["맛집"],
+        regionHints=["보령"],
+        crowdPreference="quiet",
+        indoorOnly=True,
+        moodHints=["sea"],
+    )
+
+    answer = ask_service.empty_anchor_response("대천역", "food", prior_steps=[], intent=intent)
+
+    assert answer.intent.crowdPreference == "any"
+    assert answer.intent.indoorOnly is False
+    assert answer.intent.moodHints == []
+    assert answer.intent.categoryKeywords == ["맛집"]
+
+
+async def test_an_origin_search_does_not_claim_conditions_it_never_applied(monkeypatch) -> None:
+    from app.modules.agent import repositories
+    from app.modules.spots.services import NearbyCategory, NearbySpotRow
+
+    async def fake_nearby(
+        session: AsyncSession,
+        *,
+        lat: float,
+        lng: float,
+        radius: int,
+        category: NearbyCategory | None,
+        travel_only: bool = False,
+        title_terms: list[str] | None = None,
+    ) -> list[NearbySpotRow]:
+        return [
+            NearbySpotRow(
+                content_id="f1",
+                title="대천횟집",
+                first_image_url=None,
+                addr1="충청남도 보령시 1",
+                mapx=126.58,
+                mapy=36.34,
+                dist=220.0,
+            )
+        ]
+
+    async def fake_briefs(session, content_ids):  # type: ignore[no-untyped-def]
+        return {}
+
+    async def fake_images(session, limit):  # type: ignore[no-untyped-def]
+        return []
+
+    monkeypatch.setattr(ask_service, "find_nearby_spots", fake_nearby)
+    monkeypatch.setattr(repositories, "load_candidates_by_ids", fake_briefs)
+    monkeypatch.setattr(repositories, "load_random_attraction_images", fake_images)
+
+    answer = await ask_service._ask_around(
+        None,  # type: ignore[arg-type]
+        "대천역",
+        "food",
+        lat=36.34,
+        lng=126.58,
+        steps=[],
+        intent=QueryIntent(
+            categoryKeywords=["맛집"],
+            crowdPreference="quiet",
+            indoorOnly=True,
+            moodHints=["sea"],
+        ),
+    )
+
+    assert answer.totalCount == 1
+    assert answer.intent.crowdPreference == "any"
+    assert answer.intent.indoorOnly is False
+    assert answer.intent.moodHints == []
+
+
+async def test_a_named_food_origin_reuses_the_coords_already_resolved(monkeypatch) -> None:
+    from app.modules.agent.schemas import ExtractedPlace, ResolvedPlace, ResolvedSpot
+    from app.modules.agent.services import geocode
+
+    async def exploding_locate(session, name, *, region_hint=None):  # type: ignore[no-untyped-def]
+        raise AssertionError("an already resolved place must not be geocoded again")
+
+    monkeypatch.setattr(geocode, "locate", exploding_locate)
+
+    intent = QueryIntent(namedPlaces=[ExtractedPlace(name="한옥마을", regionHint="전주")])
+    resolved = [
+        ResolvedPlace(
+            extracted=intent.namedPlaces[0],
+            spot=ResolvedSpot(
+                title="전주 한옥마을",
+                address="전북특별자치도 전주시 완산구 1",
+                lat=35.818,
+                lng=127.153,
+            ),
+            status="matched",
+        )
+    ]
+
+    origin = await ask_service._named_origin(None, intent, resolved)  # type: ignore[arg-type]
+
+    assert origin is not None
+    assert origin.title == "전주 한옥마을"
+    assert round(origin.lat, 2) == 35.82
+
+
+async def test_a_place_the_resolver_missed_still_falls_back_to_geocoding(monkeypatch) -> None:
+    from app.modules.agent.schemas import ExtractedPlace, ResolvedPlace
+    from app.modules.agent.services import geocode
+
+    asked: dict[str, object] = {}
+
+    async def fake_locate(session, name, *, region_hint=None):  # type: ignore[no-untyped-def]
+        asked["name"] = name
+        asked["hint"] = region_hint
+        return geocode.Located(title="대천역", lat=36.34, lng=126.58, source="naver")
+
+    monkeypatch.setattr(geocode, "locate", fake_locate)
+
+    intent = QueryIntent(namedPlaces=[ExtractedPlace(name="대천역", regionHint="보령")])
+    resolved = [ResolvedPlace(extracted=intent.namedPlaces[0])]
+
+    origin = await ask_service._named_origin(None, intent, resolved)  # type: ignore[arg-type]
+
+    assert asked == {"name": "대천역", "hint": "보령"}
+    assert origin is not None and origin.title == "대천역"
+
+
+async def test_an_ambiguous_resolution_is_not_taken_as_an_origin(monkeypatch) -> None:
+    from app.modules.agent.schemas import ExtractedPlace, ResolvedPlace, ResolvedSpot
+    from app.modules.agent.services import geocode
+
+    async def fake_locate(session, name, *, region_hint=None):  # type: ignore[no-untyped-def]
+        return geocode.Located(title="대천역", lat=36.34, lng=126.58, source="naver")
+
+    monkeypatch.setattr(geocode, "locate", fake_locate)
+
+    intent = QueryIntent(namedPlaces=[ExtractedPlace(name="대천역")])
+    resolved = [
+        ResolvedPlace(
+            extracted=intent.namedPlaces[0],
+            spot=ResolvedSpot(title="대천천", lat=35.242, lng=129.019),
+            confidence=0.5,
+            status="ambiguous",
+        )
+    ]
+
+    origin = await ask_service._named_origin(None, intent, resolved)  # type: ignore[arg-type]
+
+    assert origin is not None
+    assert origin.title == "대천역"
+    assert round(origin.lat, 2) == 36.34
+
+
+async def test_a_naver_hit_whose_name_does_not_hold_is_not_an_origin(monkeypatch) -> None:
+    from app.modules.agent.schemas import ExtractedPlace, ResolvedPlace, ResolvedSpot
+    from app.modules.agent.services import geocode
+
+    async def fake_locate(session, name, *, region_hint=None):  # type: ignore[no-untyped-def]
+        return None
+
+    monkeypatch.setattr(geocode, "locate", fake_locate)
+
+    intent = QueryIntent(namedPlaces=[ExtractedPlace(name="한옥마을", regionHint="전주")])
+    resolved = [
+        ResolvedPlace(
+            extracted=intent.namedPlaces[0],
+            spot=ResolvedSpot(source="naver", title="북촌도담", lat=37.577, lng=126.985),
+            confidence=0.7,
+            status="naver_only",
+        )
+    ]
+
+    assert await ask_service._named_origin(None, intent, resolved) is None  # type: ignore[arg-type]
+
+
+async def test_a_verified_naver_hit_is_still_reused_as_an_origin() -> None:
+    from app.modules.agent.schemas import ExtractedPlace, ResolvedPlace, ResolvedSpot
+
+    intent = QueryIntent(namedPlaces=[ExtractedPlace(name="한옥마을", regionHint="전주")])
+    resolved = [
+        ResolvedPlace(
+            extracted=intent.namedPlaces[0],
+            spot=ResolvedSpot(
+                source="naver",
+                title="전주 한옥마을",
+                address="전북특별자치도 전주시 완산구 1",
+                lat=35.818,
+                lng=127.153,
+            ),
+            confidence=0.7,
+            status="naver_only",
+        )
+    ]
+
+    origin = await ask_service._named_origin(None, intent, resolved)  # type: ignore[arg-type]
+
+    assert origin is not None and origin.title == "전주 한옥마을"
+
+
+def test_a_card_from_another_region_is_no_longer_an_origin() -> None:
+    from app.modules.agent.repositories import CandidateRow
+
+    seoul = CandidateRow(
+        content_id="s1",
+        title="경복궁",
+        addr1="서울특별시 종로구 1",
+        region_name="서울특별시",
+        sigungu_name="종로구",
+        lat=37.57,
+        lng=126.97,
+        image_url=None,
+        cpyrht_div_cd="Type1",
+        concentration_rate=None,
+    )
+
+    assert ask_service._stands_in_region(seoul, ["부산광역시"]) is False
+    assert ask_service._stands_in_region(seoul, ["서울특별시"]) is True
+    assert ask_service._stands_in_region(seoul, []) is True
+
+
+async def test_a_carried_region_still_drops_the_card_left_over_from_before(monkeypatch) -> None:
+    from app.modules.agent import repositories
+    from app.modules.agent.repositories import CandidateRow
+    from app.modules.agent.services import retrieve
+
+    seen: dict[str, object] = {}
+
+    async def fake_scope(session, keywords):  # type: ignore[no-untyped-def]
+        return retrieve.CategoryScope(codes=[], matched=[])
+
+    async def fake_region(session, *, hints):  # type: ignore[no-untyped-def]
+        return retrieve.RegionScope(prefixes=["부산광역시"], sido_prefixes=["부산광역시"])
+
+    async def fake_food(session, *, action, region_prefixes, **axes):  # type: ignore[no-untyped-def]
+        seen["prefixes"] = region_prefixes
+        return []
+
+    async def fake_briefs(session, content_ids):  # type: ignore[no-untyped-def]
+        return {
+            "s1": CandidateRow(
+                content_id="s1",
+                title="경복궁",
+                addr1="서울특별시 종로구 1",
+                region_name="서울특별시",
+                sigungu_name="종로구",
+                lat=37.57,
+                lng=126.97,
+                image_url=None,
+                cpyrht_div_cd="Type1",
+                concentration_rate=None,
+            )
+        }
+
+    monkeypatch.setattr(retrieve, "resolve_category_scope", fake_scope)
+    monkeypatch.setattr(retrieve, "resolve_region_scope", fake_region)
+    monkeypatch.setattr(retrieve, "search_food", fake_food)
+    monkeypatch.setattr(repositories, "load_candidates_by_ids", fake_briefs)
+
+    async def fake_extract(q, *, prior=None, prior_spots=None):  # type: ignore[no-untyped-def]
+        return QueryIntent(categoryKeywords=["맛집"], regionHints=["부산"])
+
+    monkeypatch.setattr(intent_service, "extract_intent", fake_extract)
+    await ask_service.ask(
+        _ExplodingSession(),  # type: ignore[arg-type]
+        FakeRedis(),
+        None,
+        question="맛집",
+        lat=None,
+        lng=None,
+        image_bytes=None,
+        image_mime=None,
+        context=AskContext(
+            intent=QueryIntent(regionHints=["부산"]),
+            spots=[AskContextSpot(contentId="s1", title="경복궁")],
+            focusContentId="s1",
+        ),
+    )
+
+    assert seen["prefixes"] == ["부산광역시"]
+
+
+async def test_the_origin_itself_is_not_offered_as_its_own_neighbour(monkeypatch) -> None:
+    from app.modules.agent import repositories
+    from app.modules.spots.services import NearbyCategory, NearbySpotRow
+
+    def _near(cid: str, title: str, dist: float) -> NearbySpotRow:
+        return NearbySpotRow(
+            content_id=cid,
+            title=title,
+            first_image_url=None,
+            addr1="서울특별시 강남구 1",
+            mapx=127.02,
+            mapy=37.50,
+            dist=dist,
+        )
+
+    async def fake_nearby(
+        session: AsyncSession,
+        *,
+        lat: float,
+        lng: float,
+        radius: int,
+        category: NearbyCategory | None,
+        travel_only: bool = False,
+        title_terms: list[str] | None = None,
+    ) -> list[NearbySpotRow]:
+        return [_near("c1", "스타벅스 강남점", 0.0), _near("c2", "옆집 커피", 180.0)]
+
+    async def fake_briefs(session, content_ids):  # type: ignore[no-untyped-def]
+        return {}
+
+    async def fake_images(session, limit):  # type: ignore[no-untyped-def]
+        return []
+
+    monkeypatch.setattr(ask_service, "find_nearby_spots", fake_nearby)
+    monkeypatch.setattr(repositories, "load_candidates_by_ids", fake_briefs)
+    monkeypatch.setattr(repositories, "load_random_attraction_images", fake_images)
+
+    answer = await ask_service._ask_around(
+        None,  # type: ignore[arg-type]
+        "스타벅스 강남점",
+        "cafe",
+        lat=37.50,
+        lng=127.02,
+        steps=[],
+        intent=QueryIntent(categoryKeywords=["카페"]),
+        exclude="c1",
+    )
+
+    assert [spot.contentId for spot in answer.spots] == ["c2"]
+    assert answer.totalCount == 1
+
+
+async def test_a_geocoded_origin_carries_the_id_that_excludes_it(monkeypatch) -> None:
+    from app.modules.agent.services import geocode
+
+    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
+        return [SimpleTitleRow("스타벅스 강남점", 37.50, 127.02, content_id="c1")]
+
+    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
+    found = await geocode.locate(None, "스타벅스 강남점")  # type: ignore[arg-type]
+
+    assert found is not None and found.content_id == "c1"
+
+
+async def test_a_region_food_query_measures_from_me_when_i_said_nearby(monkeypatch) -> None:
+    from app.modules.agent import repositories
+    from app.modules.agent.repositories import CandidateRow
+    from app.modules.agent.services import retrieve
+
+    seen: dict[str, object] = {}
+
+    async def fake_food(session, *, action, region_prefixes, **axes):  # type: ignore[no-untyped-def]
+        seen.update(axes)
+        return [
+            CandidateRow(
+                content_id="f1",
+                title="해운대횟집",
+                addr1="부산광역시 해운대구 1",
+                region_name="부산광역시",
+                sigungu_name="해운대구",
+                lat=35.16,
+                lng=129.16,
+                image_url=None,
+                cpyrht_div_cd="Type1",
+                concentration_rate=None,
+            )
+        ]
+
+    async def fake_moods(session, codes):  # type: ignore[no-untyped-def]
+        return []
+
+    monkeypatch.setattr(retrieve, "search_food", fake_food)
+    monkeypatch.setattr(repositories, "find_mood_ids", fake_moods)
+
+    answer = await ask_service._food_across_region(
+        None,  # type: ignore[arg-type]
+        "food",
+        ["부산광역시"],
+        steps=[],
+        lat=35.15,
+        lng=129.15,
+        intent=QueryIntent(categoryKeywords=["맛집"], regionHints=["부산"], nearMe=True),
+    )
+
+    assert seen["near"] is True
+    assert seen["lat"] == 35.15
+    assert answer.intent.nearMe is True
+    assert answer.tagBasis == "직선거리 기준"
+    assert ask_service._is_distance_tag(answer.spots[0].tag)
+
+
+async def test_a_region_food_query_without_coords_stays_a_plain_listing(monkeypatch) -> None:
+    from app.modules.agent import repositories
+    from app.modules.agent.repositories import CandidateRow
+    from app.modules.agent.services import retrieve
+
+    seen: dict[str, object] = {}
+
+    async def fake_food(session, *, action, region_prefixes, **axes):  # type: ignore[no-untyped-def]
+        seen.update(axes)
+        return [
+            CandidateRow(
+                content_id="f1",
+                title="해운대횟집",
+                addr1="부산광역시 해운대구 1",
+                region_name="부산광역시",
+                sigungu_name="해운대구",
+                lat=35.16,
+                lng=129.16,
+                image_url=None,
+                cpyrht_div_cd="Type1",
+                concentration_rate=None,
+            )
+        ]
+
+    async def fake_moods(session, codes):  # type: ignore[no-untyped-def]
+        return []
+
+    monkeypatch.setattr(retrieve, "search_food", fake_food)
+    monkeypatch.setattr(repositories, "find_mood_ids", fake_moods)
+
+    answer = await ask_service._food_across_region(
+        None,  # type: ignore[arg-type]
+        "food",
+        ["부산광역시"],
+        steps=[],
+        lat=None,
+        lng=None,
+        intent=QueryIntent(categoryKeywords=["맛집"], regionHints=["부산"], nearMe=True),
+    )
+
+    assert seen["near"] is False
+    assert answer.intent.nearMe is False
+    assert answer.tagBasis is None
+    assert answer.spots[0].tag is None
+
+
+async def test_a_same_name_place_in_another_province_is_rejected(monkeypatch) -> None:
+    from app.modules.agent import naver
+    from app.modules.agent.services import geocode
+
+    seen: dict[str, object] = {}
+
+    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
+        seen["hint"] = region_hint
+        return [
+            SimpleTitleRow(
+                "고성탈박물관", 38.38, 128.46, addr1="강원특별자치도 고성군 1", content_id="w1"
+            )
+        ]
+
+    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
+    monkeypatch.setattr(naver, "is_configured", lambda: False)
+
+    found = await geocode.locate(  # type: ignore[arg-type]
+        None, "고성탈박물관", region_hint="경상남도 고성"
+    )
+
+    assert seen["hint"] == "고성"
+    assert found is None
+
+
+async def test_the_place_inside_the_named_province_is_still_taken(monkeypatch) -> None:
+    from app.modules.agent.services import geocode
+
+    async def fake_titles(session, query, *, region_hint=None, limit=3):  # type: ignore[no-untyped-def]
+        return [
+            SimpleTitleRow(
+                "고성탈박물관", 35.02, 128.32, addr1="경상남도 고성군 1", content_id="s1"
+            )
+        ]
+
+    monkeypatch.setattr(geocode, "search_spots_by_title", fake_titles)
+    found = await geocode.locate(  # type: ignore[arg-type]
+        None, "고성탈박물관", region_hint="경상남도 고성"
+    )
+
+    assert found is not None and found.content_id == "s1"
+
+
+async def test_a_resolved_place_in_the_wrong_county_is_not_reused(monkeypatch) -> None:
+    from app.modules.agent.schemas import ExtractedPlace, ResolvedPlace, ResolvedSpot
+    from app.modules.agent.services import geocode
+
+    asked: dict[str, object] = {}
+
+    async def fake_locate(session, name, *, region_hint=None):  # type: ignore[no-untyped-def]
+        asked["hint"] = region_hint
+        return None
+
+    monkeypatch.setattr(geocode, "locate", fake_locate)
+
+    intent = QueryIntent(namedPlaces=[ExtractedPlace(name="중앙시장", regionHint="경상남도 통영")])
+    resolved = [
+        ResolvedPlace(
+            extracted=intent.namedPlaces[0],
+            spot=ResolvedSpot(
+                title="중앙시장",
+                address="경상남도 김해시 1",
+                lat=35.23,
+                lng=128.88,
+            ),
+            confidence=0.8,
+            status="matched",
+        )
+    ]
+
+    assert await ask_service._named_origin(None, intent, resolved) is None  # type: ignore[arg-type]
+    assert asked["hint"] == "경상남도 통영"

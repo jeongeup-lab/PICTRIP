@@ -7,13 +7,13 @@ describe("legal constants", () => {
       "이용약관",
       "개인정보처리방침",
       "위치기반서비스 이용약관",
-      "데이터 출처",
+      "데이터 출처와 이용 조건",
     ]);
   });
 
   it("legalUrl builds the hosted page URL", () => {
     expect(legalUrl("terms")).toBe("https://pictrip.org/legal/terms");
-    expect(legalUrl("data-sources")).toBe("https://pictrip.org/legal/data-sources");
+    expect(legalUrl("location")).toBe("https://pictrip.org/legal/location");
   });
 
   it("findLegalDoc resolves a known slug and returns undefined for unknown", () => {

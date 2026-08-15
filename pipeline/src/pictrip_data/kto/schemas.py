@@ -1,5 +1,3 @@
-"""KTO response parsing DTOs."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -36,10 +34,6 @@ def parse_modifiedtime(v: Any) -> datetime | None:
 
 
 def normalize_regn_cd(c: str | None) -> str | None:
-    """KTO returns Sejong's province code as the 5-char '36110'; every other
-    province is 2-char. Normalize to the 2-char province code so it fits
-    regions.ldong_regn_cd (varchar 8) and the composite signgu matches the
-    existing convention (Sejong sigungu = '36' + '36110' = '3636110')."""
     return c[:2] if c else c
 
 

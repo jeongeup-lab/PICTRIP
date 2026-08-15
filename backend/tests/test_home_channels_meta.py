@@ -1,5 +1,3 @@
-"""GET /v1/home/channels — 채널 메타 목록 조립 (fail-soft)."""
-
 from __future__ import annotations
 
 import asyncio
@@ -13,8 +11,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
-from app.core.kto_client import get_kto
 from app.core.redis import get_redis
+from app.kto.client import get_kto
 from app.main import app
 
 _FESTA_ITEM = {
@@ -148,10 +146,9 @@ async def test_channels_meta_order_and_shape(client, seeded_concentration, kto_a
     res = await client.get("/v1/home/channels")
     assert res.status_code == 200
     chans = res.json()["data"]["channels"]
-    assert [c["key"] for c in chans] == ["around", "hot", "hidden", "festa", "pets", "snap"]
-    assert chans[0]["thumbnailUrl"] is None
+    assert [c["key"] for c in chans] == ["hidden", "festa", "pets", "snap"]
     assert chans[0]["available"] is True
-    assert chans[1]["thumbnailUrl"] == "http://kto/i.jpg"
+    assert chans[0]["thumbnailUrl"] == "http://kto/i.jpg"
     by_key = {c["key"]: c for c in chans}
     assert by_key["festa"]["available"] is True
     assert by_key["festa"]["thumbnailUrl"] == "https://tong.visitkorea.or.kr/f1.jpg"
@@ -182,7 +179,7 @@ async def test_channels_meta_hides_festa_when_empty(
     chans = (await client.get("/v1/home/channels")).json()["data"]["channels"]
     keys = [c["key"] for c in chans]
     assert "festa" not in keys
-    assert keys == ["around", "hot", "hidden", "pets", "snap"]
+    assert keys == ["hidden", "pets", "snap"]
 
 
 @pytest_asyncio.fixture
@@ -225,7 +222,5 @@ async def test_channels_meta_degrades_on_kto_error(
     assert by_key["pets"]["thumbnailUrl"] is None
     assert by_key["snap"]["available"] is False
     assert by_key["festa"]["available"] is False
-    assert by_key["hot"]["available"] is True
-    assert by_key["hot"]["thumbnailUrl"] == "http://kto/i.jpg"
     assert by_key["hidden"]["available"] is True
     assert by_key["hidden"]["thumbnailUrl"] == "http://kto/i.jpg"

@@ -1,5 +1,3 @@
-"""GET /v1/map/region — Kakao coord2regioncode reverse-geocode + Redis cache."""
-
 from __future__ import annotations
 
 import re
@@ -11,13 +9,11 @@ from app.config import settings
 from app.core.redis import get_redis
 from app.main import app
 
-# pytest-httpx has no startswith match, so use a regex that ignores the query string.
 _KAKAO_URL = re.compile(r"https://dapi\.kakao\.com/v2/local/geo/coord2regioncode\.json.*")
 
 
 @pytest.fixture(autouse=True)
 def _kakao_key(monkeypatch):
-    # CI has no .env (empty key → reverse_geocode returns None early); pin a key so behavior is fixed.
     monkeypatch.setattr(settings, "KAKAO_REST_API_KEY", "test-kakao-key")
 
 
@@ -66,7 +62,6 @@ async def test_region_caches_second_call(client, httpx_mock):
         await client.get("/v1/map/region", params={"lat": 37.546, "lng": 127.071})
     finally:
         app.dependency_overrides.clear()
-    # same grid cell → Kakao called only once
     assert len(httpx_mock.get_requests()) == 1
 
 
@@ -84,8 +79,6 @@ async def test_region_returns_null_on_empty(client, httpx_mock):
 
 
 class _BrokenRedis:
-    """get/set both raise — a dead cache must behave like a miss (#13)."""
-
     async def get(self, key):
         raise ConnectionError("redis down")
 
@@ -117,7 +110,6 @@ async def test_region_treats_corrupt_cache_as_miss(client, httpx_mock):
         app.dependency_overrides.clear()
     assert resp.status_code == 200
     assert resp.json()["data"]["label"] == "광진구 화양동"
-    # corrupt cache → miss → Kakao refetch + self-heal (overwrites with a valid value)
     assert len(httpx_mock.get_requests()) == 1
     healed = await redis.get("region:37.546:127.071")
     assert healed is not None and healed != b"{not-json"

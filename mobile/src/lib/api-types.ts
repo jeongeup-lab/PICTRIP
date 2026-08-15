@@ -1,8 +1,3 @@
-/**
- * Mirrors backend JSend envelope + module schemas. Keep field names in sync
- * (camelCase). Source: backend/app/modules/<code>/schemas.py
- */
-
 export interface ResponseMeta {
   traceId: string;
   requestedAt?: string;
@@ -26,7 +21,6 @@ export interface Envelope<T> {
   meta: ResponseMeta;
 }
 
-// Canonical card — extended across endpoints.
 export interface SpotCard {
   contentId: string;
   title: string;
@@ -65,14 +59,14 @@ export interface SpotDetail {
   category: string | null;
   regionName: string | null;
   sigunguName: string | null;
-  detailStatus: string;
+  detailStatus: "fresh" | "stale" | "unavailable" | "pending" | "placeholder";
   images: SpotImage[];
   intro: SpotIntro | null;
 }
 
 export interface NearbySpot extends SpotCard {
   dist: number | null;
-  categoryGroup: string | null; // attraction/food/cafe/leisure/shopping — drives marker glyph
+  categoryGroup: string | null;
   regionName: string | null;
   sigunguName: string | null;
   overview: string | null;

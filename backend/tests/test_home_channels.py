@@ -1,5 +1,3 @@
-"""GET /v1/home/channels/{key} — around·hot·hidden 채널 카드."""
-
 from __future__ import annotations
 
 import pytest_asyncio
@@ -8,11 +6,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
-from app.core.kto_client import get_kto
 from app.core.redis import get_redis
+from app.kto.client import get_kto
 from app.main import app
 
-# reference point near Haeundae, Busan
 LAT, LNG = 35.15, 129.05
 
 
@@ -36,24 +33,6 @@ async def _seed_region(session: AsyncSession) -> None:
             "VALUES (:c, :r, :n) ON CONFLICT DO NOTHING"
         ),
         {"c": "26380", "r": "26", "n": "사하구"},
-    )
-
-
-async def _seed_nearby(
-    session: AsyncSession,
-    cid: str,
-    *,
-    lat: float,
-    lng: float,
-    img: str | None = "http://kto/i.jpg",
-) -> None:
-    await session.execute(
-        text(
-            "INSERT INTO spots (content_id, content_type_id, title, first_image_url, "
-            "show_flag, mapx, mapy, lcls_systm1, ldong_regn_cd, ldong_signgu_cd) "
-            "VALUES (:cid, 12, :t, :img, 1, :lng, :lat, 'NA', '26', '26380')"
-        ),
-        {"cid": cid, "t": f"t-{cid}", "img": img, "lng": lng, "lat": lat},
     )
 
 
@@ -91,14 +70,6 @@ async def _seed_concentration(
 
 
 @pytest_asyncio.fixture
-async def seeded_nearby(db_session: AsyncSession) -> None:
-    await _seed_region(db_session)
-    await _seed_nearby(db_session, "n1", lat=LAT + 0.001, lng=LNG)
-    await _seed_nearby(db_session, "n2", lat=LAT + 0.003, lng=LNG)
-    await db_session.flush()
-
-
-@pytest_asyncio.fixture
 async def seeded_concentration(db_session: AsyncSession) -> None:
     await _seed_region(db_session)
     await _seed_concentration(db_session, "c90", rate="90.00", overview="설명 90")
@@ -107,47 +78,18 @@ async def seeded_concentration(db_session: AsyncSession) -> None:
     await db_session.flush()
 
 
-async def test_around_requires_coords(db_session, client) -> None:
+async def test_around_and_hot_moved_out_of_the_channel_rail(db_session, client) -> None:
     _override(db_session)
     try:
-        res = await client.get("/v1/home/channels/around")
+        around = await client.get("/v1/home/channels/around", params={"lat": LAT, "lng": LNG})
+        hot = await client.get("/v1/home/channels/hot")
     finally:
         app.dependency_overrides.clear()
-    assert res.status_code == 422
-    assert res.json()["error"]["code"] == "VALIDATION_FAILED"
+    assert around.status_code == 404
+    assert hot.status_code == 404
 
 
-async def test_around_returns_nearby_cards_with_dist(db_session, client, seeded_nearby) -> None:
-    _override(db_session)
-    try:
-        res = await client.get("/v1/home/channels/around", params={"lat": LAT, "lng": LNG})
-    finally:
-        app.dependency_overrides.clear()
-    assert res.status_code == 200
-    body = res.json()["data"]
-    cards = body["cards"]
-    assert 1 <= len(cards) <= 10
-    assert cards[0]["dist"] is not None
-    assert cards[0]["saveable"] is True
-    assert cards[0]["regionLabel"] == "부산광역시 사하구"
-    assert body["label"] == "Around"
-    assert body["key"] == "around"
-
-
-async def test_hot_returns_ranked_cards(db_session, client, seeded_concentration) -> None:
-    _override(db_session)
-    try:
-        res = await client.get("/v1/home/channels/hot")
-    finally:
-        app.dependency_overrides.clear()
-    assert res.status_code == 200
-    cards = res.json()["data"]["cards"]
-    assert cards[0]["rank"] == 1
-    assert cards[0]["dday"] is None
-    assert cards[0]["regionLabel"] == "부산광역시 사하구"
-
-
-async def test_hidden_returns_cards_without_rank_exposure(
+async def test_hidden_returns_cards_ranked_from_the_quietest(
     db_session, client, seeded_concentration
 ) -> None:
     _override(db_session)
@@ -158,7 +100,8 @@ async def test_hidden_returns_cards_without_rank_exposure(
     assert res.status_code == 200
     cards = res.json()["data"]["cards"]
     assert len(cards) >= 1
-    assert all(c["rank"] is None for c in cards)
+    assert [c["rank"] for c in cards] == list(range(1, len(cards) + 1))
+    assert all(c["tag"] is None for c in cards)
 
 
 async def test_kto_channel_returns_kto_cards(db_session, client) -> None:

@@ -1,62 +1,36 @@
-"""USR service layer."""
-
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
 from redis.asyncio import Redis
 
-from app.core.auth import (
-    deny_refresh,
-    mint_token_pair,
-    refresh_tokens,
-)
-from app.core.db import AsyncSession, IntegrityError
-from app.core.exceptions import (
-    AuthTokenInvalid,
-    EmailAlreadyRegistered,
-    InvalidCredentials,
-)
-from app.core.passwords import hash_password, verify_password
+from app.core.db import AsyncSession
+from app.modules.spots.services.saved import delete_all_saved_for_user
+from app.modules.users import apple_tokens
 from app.modules.users import repositories as repo
-from app.modules.users.models import User
 from app.modules.users.oidc import verify_oauth_id_token
 from app.modules.users.schemas import (
     ConsentIn,
     ConsentOut,
     ConsentState,
-    EmailLoginIn,
-    EmailSignupIn,
     OAuthLoginIn,
     TokenPair,
     UserPublic,
 )
+from app.security.jwt import (
+    deny_refresh,
+    mint_token_pair,
+    refresh_tokens,
+)
+from app.web.errors import AuthTokenInvalid
 
-# A precomputed bcrypt hash of a random value. ``login_with_email`` runs a verify
-# against this when the email is unknown so the missing-user and wrong-password
-# paths take ~the same time (reduces a timing oracle for email enumeration).
-_DUMMY_PASSWORD_HASH = hash_password("pictrip-dummy-not-a-real-password")
-
-
-def _user_public(user: User) -> UserPublic:
-    return UserPublic(
-        id=user.id,
-        displayName=user.name,
-        email=user.email,
-        avatarUrl=user.profile_image_url,
-        isOnboarded=False,
-        createdAt=user.created_at,
-    )
-
-
-def _normalize_email(email: str) -> str:
-    return email.strip().lower()
+log = logging.getLogger("app.users.services")
 
 
 async def authenticate_with_oauth(
     session: AsyncSession, provider: str, body: OAuthLoginIn
 ) -> TokenPair:
-    # Identity key = provider + sub (S09 §3.1). Zero Redis writes.
     claims = await verify_oauth_id_token(provider, body.idToken, expected_nonce=body.nonce)
 
     user = await repo.get_or_create_user_via_provider(
@@ -66,6 +40,18 @@ async def authenticate_with_oauth(
         email=claims.email,
         picture=claims.picture,
     )
+
+    if provider == "apple" and body.authorizationCode:
+        refresh_token = await apple_tokens.exchange_authorization_code(body.authorizationCode)
+        if refresh_token:
+            await repo.set_provider_refresh_token(
+                session,
+                user_id=user.id,
+                provider=provider,
+                provider_user_id=claims.sub,
+                token=refresh_token,
+            )
+
     await session.commit()
 
     user_public = UserPublic(
@@ -77,47 +63,6 @@ async def authenticate_with_oauth(
         createdAt=user.created_at,
     )
     return mint_token_pair(user_id=user.id, user=user_public)
-
-
-async def signup_with_email(session: AsyncSession, body: EmailSignupIn) -> TokenPair:
-    """Create a new email/password account and mint a token pair.
-
-    Identity key is provider='email' + the normalized email. A pre-check rejects
-    a duplicate active email with 409; a concurrent race is caught via the
-    partial-unique index / provider UNIQUE constraint (IntegrityError → 409)."""
-    email = _normalize_email(body.email)
-
-    if await repo.get_active_user_by_email(session, email) is not None:
-        raise EmailAlreadyRegistered()
-
-    try:
-        user = await repo.create_email_user(
-            session, email=email, password_hash=hash_password(body.password)
-        )
-    except IntegrityError as e:
-        raise EmailAlreadyRegistered() from e
-
-    await session.commit()
-    return mint_token_pair(user_id=user.id, user=_user_public(user))
-
-
-async def login_with_email(session: AsyncSession, body: EmailLoginIn) -> TokenPair:
-    """Verify an email/password credential and mint a token pair.
-
-    Unknown email, an account with no password set, or a bad password all raise
-    the same ``InvalidCredentials`` (401) so the response can't distinguish
-    them. A dummy verify on the missing-user path keeps timing roughly uniform."""
-    email = _normalize_email(body.email)
-    user = await repo.get_active_user_by_email(session, email)
-
-    if user is None or user.password_hash is None:
-        verify_password(body.password, _DUMMY_PASSWORD_HASH)  # equalize timing
-        raise InvalidCredentials()
-
-    if not verify_password(body.password, user.password_hash):
-        raise InvalidCredentials()
-
-    return mint_token_pair(user_id=user.id, user=_user_public(user))
 
 
 async def get_user_public(session: AsyncSession, user_id: int) -> UserPublic:
@@ -134,21 +79,19 @@ async def get_user_public(session: AsyncSession, user_id: int) -> UserPublic:
     )
 
 
-async def delete_user_account(session: AsyncSession, redis: Redis, user_id: int) -> None:
-    """회원 탈퇴 — App Store/Play 심사 가이드(5.1.1(v))를 만족하는 실제 계정 삭제.
-
-    Soft-delete (``deleted_at``) keeps the row for referential integrity, but PII
-    is scrubbed, the password credential is cleared, and OAuth links are removed
-    so the account is genuinely gone, not merely deactivated: re-logging-in with
-    the same Kakao/Google/Apple identity creates a *new* account (the provider
-    link no longer maps to this user) and the email login no longer has a
-    credential to verify against.
-    Idempotent — a second call (or a deleted user) is a no-op. Personal child rows
-    fall away on the eventual hard delete via ``ondelete=CASCADE``; the
-    soft-deleted row carries no personal data in the meantime.
-    """
+async def delete_user_account(
+    session: AsyncSession,
+    redis: Redis,
+    user_id: int,
+    refresh_token: str | None = None,
+    reason: str | None = None,
+) -> None:
     user = await repo.get_user(session, user_id)
     if user is not None and user.deleted_at is None:
+        log.info("users: account deleted", extra={"reason": reason or "unspecified"})
+        apple_tokens_to_revoke = await repo.list_provider_refresh_tokens(
+            session, user_id, provider="apple"
+        )
         user.email = None
         user.name = None
         user.bio = None
@@ -158,7 +101,14 @@ async def delete_user_account(session: AsyncSession, redis: Redis, user_id: int)
         user.password_hash = None
         user.deleted_at = datetime.now(tz=UTC)
         await repo.delete_auth_providers(session, user_id)
+        await delete_all_saved_for_user(session, user_id=user_id)
         await session.commit()
+        for token in apple_tokens_to_revoke:
+            try:
+                await apple_tokens.revoke_refresh_token(token)
+            except Exception:
+                log.warning("apple: revoke raised during account deletion", exc_info=True)
+    await deny_refresh(redis, refresh_token)
 
 
 async def put_consents(session: AsyncSession, user_id: int, body: ConsentIn) -> ConsentOut:
@@ -166,13 +116,11 @@ async def put_consents(session: AsyncSession, user_id: int, body: ConsentIn) -> 
         session,
         user_id=user_id,
         location_consent=body.locationConsent,
-        photo_consent=body.photoConsent,
         terms_version=body.termsVersion,
     )
     await session.commit()
     return ConsentOut(
         locationConsent=row.location_consent,
-        photoConsent=row.photo_consent,
         termsVersion=row.terms_version,
         consentedAt=row.consented_at,
     )
@@ -184,7 +132,6 @@ async def get_consents(session: AsyncSession, user_id: int) -> ConsentState:
         return ConsentState()
     return ConsentState(
         locationConsent=row.location_consent,
-        photoConsent=row.photo_consent,
         termsVersion=row.terms_version,
         consentedAt=row.consented_at,
     )
@@ -192,12 +139,9 @@ async def get_consents(session: AsyncSession, user_id: int) -> ConsentState:
 
 async def refresh_session(session: AsyncSession, redis: Redis, refresh_token: str) -> TokenPair:
     pair = await refresh_tokens(redis, refresh_token)
-    # Re-hydrate the full profile so a refresh returns the same shape as login
-    # (the token primitive only knows the user id).
     pair.user = await get_user_public(session, pair.user.id)
     return pair
 
 
 async def logout_session(redis: Redis, refresh_token: str | None) -> None:
-    # Idempotent: missing/malformed/expired tokens are silently no-ops.
     await deny_refresh(redis, refresh_token)

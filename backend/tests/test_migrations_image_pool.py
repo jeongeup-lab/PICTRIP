@@ -1,9 +1,3 @@
-"""M2 (0012_spots_image_pool_idx) regression test.
-
-Pins the partial index predicate — autogenerate cannot reproduce it, so a future
-migration must not silently drop or widen it.
-"""
-
 from __future__ import annotations
 
 import pytest

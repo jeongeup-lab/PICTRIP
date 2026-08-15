@@ -1,8 +1,8 @@
 import renderer, { act } from "react-test-renderer";
-import { StyleSheet } from "react-native";
+import { StyleSheet, Text } from "react-native";
+import { router } from "expo-router";
 import Onboarding from "@/app/onboarding";
 
-// iPhone Dynamic Island top inset — the regression device class.
 const INSET_TOP = 59;
 
 jest.mock("react-native-safe-area-context", () => {
@@ -28,7 +28,6 @@ describe("Onboarding skip button", () => {
       tree = renderer.create(<Onboarding />);
     });
 
-    // Walk up from the label to the absolutely-positioned Pressable wrapper.
     const label = tree!.root.find(
       (n) =>
         typeof n.type === "string" &&
@@ -48,5 +47,45 @@ describe("Onboarding skip button", () => {
 
     expect(style).toBeDefined();
     expect(style!.top as number).toBeGreaterThanOrEqual(INSET_TOP);
+  });
+});
+
+describe("Onboarding access notice", () => {
+  let tree: renderer.ReactTestRenderer | null = null;
+
+  afterEach(() => {
+    act(() => tree?.unmount());
+    tree = null;
+  });
+
+  const flatten = (node: unknown): string =>
+    Array.isArray(node)
+      ? node.map(flatten).join("")
+      : typeof node === "string" || typeof node === "number"
+        ? String(node)
+        : "";
+
+  const texts = (t: renderer.ReactTestRenderer) =>
+    t.root.findAllByType(Text).map((n) => flatten(n.props.children));
+
+  const pressLabel = (t: renderer.ReactTestRenderer, label: string) => {
+    const labelNode = t.root.findAllByType(Text).find((n) => flatten(n.props.children) === label);
+    let node = labelNode?.parent ?? null;
+    while (node && typeof node.props.onPress !== "function") node = node.parent;
+    if (!node) throw new Error(`no pressable ancestor for "${label}"`);
+    act(() => node.props.onPress());
+  };
+
+  it("routes every tour exit into the access notice instead of finishing", async () => {
+    await act(async () => {
+      tree = renderer.create(<Onboarding />);
+    });
+
+    expect(texts(tree!)).not.toContain("필수 접근권한");
+
+    pressLabel(tree!, "건너뛰기");
+
+    expect(texts(tree!).join("\n")).toContain("필수 접근권한");
+    expect(router.replace).not.toHaveBeenCalled();
   });
 });

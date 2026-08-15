@@ -7,15 +7,8 @@ import type { Bounds, LatLng } from "@/features/map/lib/geo";
 import type { NearbySpot } from "@/lib/api-types";
 import { colors, spacing } from "@/constants/theme";
 
-/**
- * WebView document origin used to pass the Kakao JS SDK domain check. The SDK
- * silently refuses to init unless the WebView page reports a registered origin,
- * so the WebView `source` pins `baseUrl` to this value. Must be registered in
- * the Kakao console under [App] > [Platform/Web] (JavaScript SDK domain).
- */
 export const KAKAO_WEB_ORIGIN = "https://localhost";
 
-/** Maps WebView error codes to human-readable copy shown over the blank map. */
 const ERROR_MESSAGES: Record<string, string> = {
   "missing-js-key": "지도 키가 설정되지 않았어요",
   "sdk-load-failed": "지도를 불러오지 못했어요. 네트워크를 확인해 주세요",
@@ -23,45 +16,46 @@ const ERROR_MESSAGES: Record<string, string> = {
   "init-failed": "지도를 표시할 수 없어요",
 };
 
+export interface FitBounds {
+  sw: LatLng;
+  ne: LatLng;
+  pad?: { top?: number; right?: number; bottom?: number; left?: number };
+}
+
 interface Props {
   center: LatLng | null;
+  fit?: FitBounds | null;
   pins: NearbySpot[];
   selectedId?: string | null;
+  anchorId?: string | null;
   userLocation: LatLng | null;
   onReady?: () => void;
   onPinTap: (contentId: string) => void;
-  /** Fired on every viewport settle (drag/zoom/recenter) with the new center
-   * and the visible bbox. Omitted for non-interactive maps. */
+  onBlankTap?: () => void;
   onViewportChange?: (center: LatLng, bounds: Bounds) => void;
-  /** When false, drag/zoom are locked so the map can sit inside a scrolling
-   * page (spot detail). Defaults true — the map tab is unaffected. */
   interactive?: boolean;
-  /** Tint the generic (category-less) pin dot with the accent green. Used by the
-   * spot-detail self-pin; defaults false so the map tab is unaffected. */
   accentDot?: boolean;
 }
 
 export function KakaoWebMap({
   center,
+  fit = null,
   pins,
   selectedId = null,
+  anchorId = null,
   userLocation,
   onReady,
   onPinTap,
+  onBlankTap,
   onViewportChange,
   interactive = true,
   accentDot = false,
 }: Props) {
-  // react-native-webview 14's `WebView<P = undefined>` collapses its props to
-  // `never` under React 19's JSX typing; instantiating the generic as `<object>`
-  // resolves `WebViewProps & object` back to `WebViewProps`. Runtime unchanged.
   const ref = useRef<WebView<object>>(null);
   const ready = useRef(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const send = (cmd: object) => {
-    // Escape backslash first, then single quote: JSON.stringify leaves `'`
-    // unescaped, which would break out of the single-quoted JS string literal.
     const json = JSON.stringify(cmd).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
     ref.current?.injectJavaScript(`window.handle({data:'${json}'});true;`);
   };
@@ -69,6 +63,9 @@ export function KakaoWebMap({
   useEffect(() => {
     if (ready.current && center) send({ cmd: "setCenter", lat: center.lat, lng: center.lng });
   }, [center]);
+  useEffect(() => {
+    if (ready.current && fit) send({ cmd: "fitBounds", ...fit });
+  }, [fit]);
   useEffect(() => {
     if (ready.current)
       send({
@@ -85,6 +82,9 @@ export function KakaoWebMap({
   useEffect(() => {
     if (ready.current) send({ cmd: "setSelected", contentId: selectedId });
   }, [selectedId]);
+  useEffect(() => {
+    if (ready.current) send({ cmd: "setAnchor", contentId: anchorId });
+  }, [anchorId]);
   useEffect(() => {
     if (ready.current)
       send({
@@ -104,6 +104,7 @@ export function KakaoWebMap({
         ready.current = true;
         setLoadError(null);
         if (center) send({ cmd: "setCenter", lat: center.lat, lng: center.lng });
+        if (fit) send({ cmd: "fitBounds", ...fit });
         send({
           cmd: "setPins",
           spots: pins.map((p) => ({
@@ -115,6 +116,7 @@ export function KakaoWebMap({
           })),
         });
         send({ cmd: "setSelected", contentId: selectedId });
+        send({ cmd: "setAnchor", contentId: anchorId });
         send({
           cmd: "setUserMarker",
           lat: userLocation?.lat ?? null,
@@ -128,6 +130,8 @@ export function KakaoWebMap({
         setLoadError(human + detail);
       } else if (m.type === "pin_tap" && m.payload) {
         onPinTap(String(m.payload.contentId));
+      } else if (m.type === "blank_tap") {
+        onBlankTap?.();
       } else if (m.type === "center_changed" && m.payload) {
         const p = m.payload;
         onViewportChange?.(
@@ -138,12 +142,9 @@ export function KakaoWebMap({
           },
         );
       }
-    } catch {
-      // ignore malformed bridge messages
-    }
+    } catch {}
   };
 
-  // Graceful degrade: no JS key → blank placeholder (list/permission/picker still work).
   if (!KAKAO_JS_KEY) {
     return (
       <View style={styles.placeholder}>
@@ -157,11 +158,9 @@ export function KakaoWebMap({
       <WebView<object>
         ref={ref}
         style={styles.web}
-        // The Kakao JS SDK enforces a domain check — pinning the source baseUrl
-        // to the registered origin (and matching the whitelist) lets it init.
         originWhitelist={["https://*", "http://*"]}
         source={{
-          html: buildKakaoMapHtml(KAKAO_JS_KEY, interactive, accentDot),
+          html: buildKakaoMapHtml(KAKAO_JS_KEY, { interactive, accentDot }),
           baseUrl: KAKAO_WEB_ORIGIN,
         }}
         onMessage={onMessage}

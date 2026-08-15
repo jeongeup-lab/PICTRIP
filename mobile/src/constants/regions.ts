@@ -1,17 +1,3 @@
-/**
- * Complete static 시·도 / 시·군·구 tree for South Korea (17 provinces).
- *
- * Bundled in-app so the region picker can list every district nationwide
- * without depending on the sparsely-seeded backend `GET /map/regions-tree`.
- *
- * `centroid` is an approximate government-office / city-hall coordinate used
- * only to recenter the map, so ~0.01° accuracy is acceptable. The NAMES and
- * COMPLETENESS are the contract, not the exact coordinates.
- *
- * `regionName` holds the SHORT display label (서울, 부산, …) shown in the left
- * column; `fullName` keeps the formal name for reference.
- */
-
 export interface RegionCentroid {
   lat: number;
   lng: number;
@@ -24,9 +10,7 @@ export interface SigunguNode {
 }
 
 export interface RegionNode {
-  /** Short display label, e.g. "서울". */
   regionName: string;
-  /** Formal name, e.g. "서울특별시". */
   fullName: string;
   centroid: RegionCentroid;
   sigungus: SigunguNode[];

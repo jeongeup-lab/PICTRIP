@@ -1,5 +1,3 @@
-"""Structured logging via structlog (JSON off-local); each line carries the request traceId."""
-
 from __future__ import annotations
 
 import logging
@@ -29,7 +27,6 @@ def _inject_trace_id(_logger, _name, event_dict):  # type: ignore[no-untyped-def
 
 
 def configure_logging() -> None:
-    """Configure structlog + stdlib logging. Called once at app startup."""
     timestamper = structlog.processors.TimeStamper(fmt="iso", utc=True)
 
     shared_processors: list[structlog.types.Processor] = [

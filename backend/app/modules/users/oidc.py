@@ -1,9 +1,3 @@
-"""Provider-agnostic OIDC id_token verification (kakao/google/apple).
-
-Generic verifier checks sig + iss + aud + exp (rejects alg:none); Apple adds hashed-nonce.
-Identity key is provider+sub (S09 §3.1). Failure paths log the exception class only, never token PII.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -17,18 +11,17 @@ import httpx
 import jwt
 
 from app.config import settings
-from app.core.exceptions import (
+from app.modules.users.kakao_oidc import verify_id_token as _verify_kakao
+from app.web.errors import (
     OAuthIdTokenInvalid,
     OAuthProviderUnavailable,
     ValidationFailed,
 )
-from app.modules.users.kakao_oidc import verify_id_token as _verify_kakao
 
 log = logging.getLogger("app.auth.oidc")
 
 _JWKS_TIMEOUT = httpx.Timeout(connect=2.0, read=3.0, write=2.0, pool=2.0)
 
-# Per-provider JWKS cache: provider -> {"value", "fresh_until", "stale_until"}.
 _jwks_caches: dict[str, dict[str, Any]] = {}
 
 
@@ -41,7 +34,6 @@ class OidcClaims:
 
 
 async def _fetch_jwks(url: str) -> dict[str, Any]:
-    """One-shot fetch with a single retry."""
     last_exc: Exception | None = None
     async with httpx.AsyncClient(timeout=_JWKS_TIMEOUT) as client:
         for _ in range(2):
@@ -50,14 +42,13 @@ async def _fetch_jwks(url: str) -> dict[str, Any]:
                 resp.raise_for_status()
                 data: dict[str, Any] = resp.json()
                 return data
-            except Exception as exc:  # surface any transport/HTTP error uniformly
+            except Exception as exc:
                 last_exc = exc
                 continue
     raise OAuthProviderUnavailable() from last_exc
 
 
 async def _get_jwks(provider: str, url: str) -> dict[str, Any]:
-    """Cached JWKS per provider, refreshing or serving stale-on-error per policy."""
     now = int(time.time())
     cache = _jwks_caches.setdefault(provider, {})
     if cache and now < cache.get("fresh_until", 0):
@@ -75,7 +66,6 @@ async def _get_jwks(provider: str, url: str) -> dict[str, Any]:
 
 
 def _hashed_nonce(raw: str) -> str:
-    """Apple stores nonce as base64url(sha256(raw)), no padding."""
     return urlsafe_b64encode(hashlib.sha256(raw.encode()).digest()).rstrip(b"=").decode()
 
 
@@ -90,7 +80,6 @@ async def _verify_generic(
     expected_nonce: str | None,
     hash_nonce: bool,
 ) -> OidcClaims:
-    # SECURITY: empty audiences would make PyJWT skip `aud` checks (token-substitution hole) — fail loudly.
     if not audiences:
         log.error("oidc[%s]: no configured audience — provider misconfigured", provider)
         raise OAuthProviderUnavailable()
@@ -117,14 +106,13 @@ async def _verify_generic(
             id_token,
             key,
             algorithms=algorithms,
-            audience=audiences,  # never None — empty audiences rejected above
-            leeway=300,  # ±5 min skew
+            audience=audiences,
+            leeway=300,
         )
     except jwt.InvalidTokenError as exc:
         log.info("oidc[%s]: decode rejected (%s)", provider, type(exc).__name__)
         raise OAuthIdTokenInvalid() from exc
 
-    # Issuer checked manually to allow multiple valid issuers (Google with/without https) across PyJWT versions.
     if payload.get("iss") not in issuers:
         log.info("oidc[%s]: issuer mismatch", provider)
         raise OAuthIdTokenInvalid()
@@ -146,32 +134,16 @@ async def _verify_generic(
 async def verify_oauth_id_token(
     provider: str, id_token: str, *, expected_nonce: str | None = None
 ) -> OidcClaims:
-    """Verify a provider OIDC id_token → OidcClaims. provider ∈ {kakao, google, apple}.
-
-    Raises OAuthIdTokenInvalid (bad token), OAuthProviderUnavailable (JWKS down),
-    or ValidationFailed (unknown provider).
-    """
     if provider == "kakao":
         c = await _verify_kakao(id_token, expected_nonce=expected_nonce)
         return OidcClaims(sub=c.sub, email=c.email, name=c.nickname, picture=c.picture)
-    if provider == "google":
-        return await _verify_generic(
-            provider="google",
-            url=settings.GOOGLE_JWKS_URL,
-            issuers=settings.GOOGLE_OIDC_ISSUERS,
-            audiences=settings.GOOGLE_CLIENT_IDS,
-            algorithms=["RS256"],
-            id_token=id_token,
-            expected_nonce=expected_nonce,
-            hash_nonce=False,
-        )
     if provider == "apple":
         return await _verify_generic(
             provider="apple",
             url=settings.APPLE_JWKS_URL,
             issuers=[settings.APPLE_OIDC_ISSUER],
             audiences=[settings.APPLE_BUNDLE_ID] if settings.APPLE_BUNDLE_ID else [],
-            algorithms=["RS256"],  # Apple id_tokens are RS256-signed
+            algorithms=["RS256"],
             id_token=id_token,
             expected_nonce=expected_nonce,
             hash_nonce=True,

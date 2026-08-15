@@ -2,7 +2,9 @@ import { api } from "@/lib/api-client";
 import type { SpotDetail, NearbySpot } from "@/lib/api-types";
 
 export async function getSpot(contentId: string): Promise<SpotDetail> {
-  return (await api.get(`/spots/${contentId}`)) as unknown as SpotDetail;
+  return (await api.get(`/spots/${contentId}`, {
+    headers: { "X-PicTrip-Detail-Mode": "deferred-v1" },
+  })) as unknown as SpotDetail;
 }
 
 export async function getNearby(lat: number, lng: number): Promise<NearbySpot[]> {

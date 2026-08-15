@@ -1,19 +1,3 @@
-"""Backfill CLIP embeddings for overseas spots that have no embedding yet.
-
-    uv run python -m scripts.embed_overseas [--limit N] [--concurrency N]
-                                            [--batch-size N]
-
-Runs on CT112 after the pipeline loads the Wikidata/Commons overseas rows: it
-walks every ``overseas_spots`` row whose ``embedding`` is NULL, downloads the
-Commons image (Wikimedia 403s odd user-agents, so a real UA is sent), runs CLIP
-in-process, and writes the 512-dim halfvec.
-
-Idempotent and resumable: only NULL rows are targeted, so a re-run picks up where
-it left off and retries transient download/decode failures. There is no failure
-table for overseas rows — failures are counted + logged, and re-running covers
-them. Image bytes are processed in memory and never persisted (only the vector).
-"""
-
 from __future__ import annotations
 
 import argparse

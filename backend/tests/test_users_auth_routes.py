@@ -1,5 +1,3 @@
-"""Integration tests for the auth/user routes (oauth/refresh/logout, GET /users/me)."""
-
 from __future__ import annotations
 
 import uuid
@@ -17,7 +15,6 @@ from app.modules.users.oidc import OidcClaims
 
 @pytest.fixture
 def patched_verify():
-    # Unique sub per invocation so tests never collide on the provider UNIQUE constraint.
     claims = OidcClaims(
         sub=f"kakao-rt-{uuid.uuid4().hex}",
         email=f"t-{uuid.uuid4().hex[:8]}@e.st",
@@ -42,7 +39,6 @@ def override_redis(redis_client_fake):
 
 @pytest_asyncio.fixture(autouse=True)
 async def override_db():
-    # Savepoint-isolated session: service commits demote to savepoints, the outer rollback erases all writes.
     from app.core.db import get_db
 
     eng = create_async_engine(str(settings.sqlalchemy_database_url), poolclass=NullPool)
@@ -79,7 +75,7 @@ async def test_oauth_kakao_returns_token_pair(client, patched_verify):
 
 
 async def test_oauth_kakao_bad_token_returns_401(client):
-    from app.core.exceptions import OAuthIdTokenInvalid
+    from app.web.errors import OAuthIdTokenInvalid
 
     with patch(
         "app.modules.users.services.verify_oauth_id_token",
@@ -90,13 +86,18 @@ async def test_oauth_kakao_bad_token_returns_401(client):
     assert resp.json()["error"]["code"] == "OAUTH_ID_TOKEN_INVALID"
 
 
+async def test_oauth_google_is_rejected_at_the_public_route(client):
+    resp = await client.post("/v1/auth/oauth/google", json={"idToken": "x"})
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "VALIDATION_FAILED"
+
+
 async def test_refresh_returns_valid_pair_without_rotation(client, patched_verify):
     login = (await client.post("/v1/auth/oauth/kakao", json={"idToken": "x"})).json()
     refresh = login["data"]["refreshToken"]
     resp = await client.post("/v1/auth/refresh", json={"refreshToken": refresh})
     assert resp.status_code == 200
     assert resp.json()["data"]["refreshToken"]
-    # Denylist model: refresh does NOT rotate, so the original token still works.
     again = await client.post("/v1/auth/refresh", json={"refreshToken": refresh})
     assert again.status_code == 200
 
@@ -112,7 +113,6 @@ async def test_logout_with_valid_refresh_revokes(client, patched_verify):
     refresh = login["data"]["refreshToken"]
     out = await client.post("/v1/auth/logout", json={"refreshToken": refresh})
     assert out.status_code == 200
-    # Follow-up refresh on the same token now fails
     after = await client.post("/v1/auth/refresh", json={"refreshToken": refresh})
     assert after.status_code == 401
 
@@ -133,7 +133,6 @@ async def test_users_me_returns_profile(client, patched_verify):
     resp = await client.get("/v1/users/me", headers={"Authorization": f"Bearer {access}"})
     assert resp.status_code == 200
     body = resp.json()["data"]
-    # OAuth signup assigns a generated random nickname, not the provider name claim.
     assert body["displayName"]
     assert body["displayName"] != "T"
     assert "avatarUrl" in body

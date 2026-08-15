@@ -1,9 +1,9 @@
-"""hires_kto_image: KTO 대표이미지 URL을 `_image2_1`(940px)에서 `_image1_1`(≈1620px)
-원본으로 승격한다. https_kto_image와 동일한 transport-only 규약 — 다운로드·저장 없음."""
-
 from __future__ import annotations
 
-from app.core.kto_images import hires_kto_image, https_kto_image
+import hashlib
+import hmac
+
+from app.kto.client import hires_kto_image, https_kto_image, t1_transform_url
 
 MID_HTTPS = "https://tong.visitkorea.or.kr/cms/resource/98/3045598_image2_1.jpg"
 BIG_HTTPS = "https://tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg"
@@ -34,14 +34,11 @@ def test_non_kto_untouched() -> None:
 
 
 def test_kto_host_only_as_substring_untouched() -> None:
-    # Real host is example.com; the KTO host merely appears in a query param.
     tricky = "https://example.com/img?u=https://tong.visitkorea.or.kr/x_image2_1.jpg"
     assert hires_kto_image(tricky) == tricky
 
 
 def test_foreign_http_url_with_kto_substring_not_https_promoted() -> None:
-    # Regression: hires must not inherit https_kto_image's old substring match and flip the
-    # outer scheme of a foreign http URL that only mentions the KTO host in a query param.
     tricky = "http://example.com/img?u=http://tong.visitkorea.or.kr/x_image2_1.jpg"
     assert hires_kto_image(tricky) == tricky
     assert https_kto_image(tricky) == tricky
@@ -56,3 +53,30 @@ def test_https_promotion_only_for_real_kto_host() -> None:
 
 def test_none_untouched() -> None:
     assert hires_kto_image(None) is None
+
+
+def test_t1_transform_url_signs_kto_url() -> None:
+    url = t1_transform_url(BIG_HTTPS, width=1080, secret="s3cret", origin="https://img.pictrip.org")
+    assert url is not None
+    prefix = "https://img.pictrip.org/t1/1080/"
+    assert url.startswith(prefix)
+    sig, _, target = url[len(prefix) :].partition("/")
+    assert target == "tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg"
+    assert sig == hmac.new(b"s3cret", f"1080/{target}".encode(), hashlib.sha256).hexdigest()
+
+
+def test_t1_transform_url_upgrades_http_before_signing() -> None:
+    http_url = "http://tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg"
+    assert t1_transform_url(http_url, width=1080, secret="s", origin="https://o") == (
+        t1_transform_url(BIG_HTTPS, width=1080, secret="s", origin="https://o")
+    )
+
+
+def test_t1_transform_url_disabled_without_secret() -> None:
+    assert t1_transform_url(BIG_HTTPS, width=1080, secret="", origin="https://o") is None
+
+
+def test_t1_transform_url_non_kto_and_none_untouched() -> None:
+    commons = "https://upload.wikimedia.org/wikipedia/commons/a/ab/x.jpg"
+    assert t1_transform_url(commons, width=1080, secret="s", origin="https://o") is None
+    assert t1_transform_url(None, width=1080, secret="s", origin="https://o") is None

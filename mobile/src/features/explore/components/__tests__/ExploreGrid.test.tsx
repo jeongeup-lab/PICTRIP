@@ -5,6 +5,7 @@ import { useExploreFeed } from "@/features/explore/queries";
 import type { OverseasPost } from "@/features/feed/posts-api";
 
 jest.mock("@/features/explore/queries", () => ({ useExploreFeed: jest.fn() }));
+jest.mock("expo-router", () => ({ useScrollToTop: jest.fn() }));
 jest.mock("@/features/feed/components/PostCarousel", () => {
   const React = require("react");
   const { Text } = require("react-native");
@@ -28,6 +29,8 @@ function posts(n: number): OverseasPost[] {
     imageSourceUrl: `https://commons.wikimedia.org/${i + 1}`,
   }));
 }
+
+const { useScrollToTop } = jest.requireMock("expo-router") as { useScrollToTop: jest.Mock };
 
 let fetchNextPage: jest.Mock;
 let refetch: jest.Mock;
@@ -97,6 +100,40 @@ describe("ExploreGrid", () => {
       r.root.findByProps({ testID: "post-modal-close" }).props.onPress();
     });
     expect(hosts(r, "carousel").length).toBe(0);
+  });
+
+  it("closes the modal when the empty space around the post is tapped", async () => {
+    setFeed();
+    const r = await mount();
+    await act(async () => {
+      r.root.findAllByProps({ testID: "explore-tile" })[0].props.onPress();
+    });
+    await act(async () => {
+      r.root.findByProps({ testID: "post-modal-backdrop" }).props.onPress();
+    });
+    expect(hosts(r, "carousel").length).toBe(0);
+  });
+
+  it("keeps the post outside the backdrop so tapping it cannot close the modal", async () => {
+    setFeed();
+    const r = await mount();
+    await act(async () => {
+      r.root.findAllByProps({ testID: "explore-tile" })[0].props.onPress();
+    });
+    const backdrop = r.root.findAllByProps({ testID: "post-modal-backdrop" })[0];
+    expect(backdrop.findAllByProps({ testID: "carousel" })).toHaveLength(0);
+    expect(hosts(r, "carousel").length).toBe(1);
+  });
+
+  it("wires the grid list into the tab re-tap scroll-to-top hook", async () => {
+    setFeed();
+    const r = await mount();
+    expect(useScrollToTop).toHaveBeenCalled();
+    const ref = useScrollToTop.mock.calls.at(-1)?.[0] as {
+      current: { scrollToOffset?: unknown } | null;
+    };
+    expect(ref.current).toBe(r.root.findAllByType(FlatList)[0].instance);
+    expect(typeof ref.current?.scrollToOffset).toBe("function");
   });
 
   it("pull-to-refresh hands useExploreFeed a fresh seed to reshuffle", async () => {

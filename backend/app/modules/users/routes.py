@@ -1,28 +1,25 @@
-"""USR routes (API spec §5)."""
-
 from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Query, Response, status
 
-from app.core.auth import CurrentUserId
 from app.core.db import DbSession
-from app.core.ratelimit import rate_limit
 from app.core.redis import RedisDep
-from app.core.schemas import PaginationMeta, ok
+from app.kto.display import T1_TILE_WIDTH, t1_display_url
 from app.modules.spots import services as spots_services
 from app.modules.spots.schemas import SpotCard
 from app.modules.users import services
 from app.modules.users.schemas import (
     ConsentIn,
-    EmailLoginIn,
-    EmailSignupIn,
+    DeleteAccountBody,
     LogoutBody,
     OAuthLoginIn,
     RefreshBody,
     SavedSpotToggle,
 )
+from app.security.jwt import CurrentUserId
+from app.web.envelope import PaginationMeta, ok
 
 router = APIRouter(tags=["USR · user/auth"])
 
@@ -30,7 +27,7 @@ router = APIRouter(tags=["USR · user/auth"])
 @router.post(
     "/auth/oauth/{provider}",
     status_code=status.HTTP_200_OK,
-    summary="OIDC id_token → internal token pair (provider ∈ kakao/google/apple)",
+    summary="OIDC id_token → internal token pair (provider ∈ kakao/apple)",
 )
 async def oauth_login(
     provider: str,
@@ -38,28 +35,6 @@ async def oauth_login(
     session: DbSession,
 ) -> dict[str, Any]:
     pair = await services.authenticate_with_oauth(session, provider, body)
-    return ok(pair.model_dump())
-
-
-@router.post(
-    "/auth/email/signup",
-    status_code=status.HTTP_201_CREATED,
-    summary="Email/password signup → internal token pair",
-    dependencies=[Depends(rate_limit(bucket="email_signup", limit=5, window_seconds=60))],
-)
-async def email_signup(body: EmailSignupIn, session: DbSession) -> dict[str, Any]:
-    pair = await services.signup_with_email(session, body)
-    return ok(pair.model_dump())
-
-
-@router.post(
-    "/auth/email/login",
-    status_code=status.HTTP_200_OK,
-    summary="Email/password login → internal token pair",
-    dependencies=[Depends(rate_limit(bucket="email_login", limit=10, window_seconds=60))],
-)
-async def email_login(body: EmailLoginIn, session: DbSession) -> dict[str, Any]:
-    pair = await services.login_with_email(session, body)
     return ok(pair.model_dump())
 
 
@@ -102,15 +77,22 @@ async def delete_me(
     user_id: CurrentUserId,
     session: DbSession,
     redis: RedisDep,
+    body: DeleteAccountBody | None = None,
 ) -> Response:
-    await services.delete_user_account(session, redis, user_id)
+    await services.delete_user_account(
+        session,
+        redis,
+        user_id,
+        body.refreshToken if body else None,
+        reason=body.reason if body else None,
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get(
     "/users/me/consents",
     status_code=status.HTTP_200_OK,
-    summary="My current consent state (location/photo/terms)",
+    summary="My current consent state (location/terms)",
 )
 async def get_consents(
     user_id: CurrentUserId,
@@ -123,7 +105,7 @@ async def get_consents(
 @router.put(
     "/users/me/consents",
     status_code=status.HTTP_200_OK,
-    summary="Upsert my consents (location/photo/terms)",
+    summary="Upsert my consents (location/terms)",
 )
 async def put_consents(
     body: ConsentIn,
@@ -152,7 +134,7 @@ async def list_saved(
         SpotCard(
             contentId=r.content_id,
             title=r.title,
-            firstImageUrl=r.first_image_url,
+            firstImageUrl=t1_display_url(r.first_image_url, r.cpyrht_div_cd, width=T1_TILE_WIDTH),
             addr1=r.addr1,
             mapx=r.mapx,
             mapy=r.mapy,

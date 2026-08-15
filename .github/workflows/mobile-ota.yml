@@ -3,9 +3,9 @@ name: mobile-ota
 # to dev that touches mobile/ — installed TestFlight apps pick it up within
 # minutes, no store build or review. Native changes (new module, permission,
 # SDK bump) still need mobile-deploy.yml (v* tag, cut from main): the
-# fingerprint runtimeVersion guards delivery — an OTA only lands on builds
-# whose native fingerprint matches, so an accidental native change can't ship
-# here (it is silently skipped; cut a tag build to deliver it).
+# runtimeVersion is appVersion-based, so an update lands on every build sharing
+# app.json `version`. That means a native change MUST come with a `version` bump
+# — otherwise older builds pick up JS that expects native code they don't have.
 on:
   push:
     branches: [dev]

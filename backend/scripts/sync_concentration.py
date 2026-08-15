@@ -1,23 +1,3 @@
-"""Collect KTO 관광지 집중률 (TatsCnctrRateService) into ``spot_concentration``.
-
-Manual, idempotent loader for the #2 전국 "집중률 TOP" tab (ADR-0016). For every
-sigungu it calls ``tatsCnctrRatedList`` once (the API returns a forward-30-day
-series per spot, so ``numOfRows`` is large enough to pull a whole sigungu in one
-page), keeps the **collection-day** value (earliest ``baseYmd``) per spot,
-name-matches ``tAtsNm`` → our active spots *within the same sigungu*, and upserts.
-
-    uv run python -m scripts.sync_concentration              # all sigungu
-    uv run python -m scripts.sync_concentration --limit 5    # smoke test
-    uv run python -m scripts.sync_concentration --dry-run    # no writes
-    KTO_SSL_VERIFY=false uv run python -m scripts.sync_concentration   # behind a TLS proxy
-
-This is intentionally NOT a Celery worker: the 30-day prediction is stable, so a
-periodic manual refresh (e.g. before 심사) is enough. The source is keyed by
-관광지명, not contentId, so spots with no KTO 집중률 simply get no row and are
-excluded from the 전국 tab — that is the documented partial-coverage constraint,
-not a bug.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -37,12 +17,10 @@ from app.modules.spots.models import Sigungu, Spot, SpotConcentration
 logger = get_logger(__name__)
 
 _OPERATION = "tatsCnctrRatedList"
-# One sigungu = up to ~100+ spots x 30 days; 20k rows clears the largest in 1 page.
 _NUM_OF_ROWS = 20000
 
 
 def _normalize(name: str) -> str:
-    """Collapse whitespace and lowercase so "경복궁 " and "경복궁" match."""
     return "".join(name.split()).lower()
 
 
@@ -53,7 +31,6 @@ def _ssl_verify() -> bool:
 async def _fetch_sigungu(
     client: httpx.AsyncClient, area_cd: str, signgu_cd: str
 ) -> list[dict[str, str]]:
-    """Return the raw concentration rows for one sigungu (may be empty)."""
     params = {
         "serviceKey": settings.KTO_SERVICE_KEY,
         "MobileOS": "ETC",
@@ -86,10 +63,6 @@ async def _fetch_sigungu(
 
 
 def _collection_day_rate(rows: list[dict[str, str]]) -> dict[str, tuple[float, str]]:
-    """Per spot name, the rate on the earliest baseYmd (= collection day).
-
-    Returns ``{tAtsNm: (rate, base_ymd)}``.
-    """
     best: dict[str, tuple[str, float]] = {}
     for r in rows:
         name = (r.get("tAtsNm") or "").strip()
@@ -145,7 +118,6 @@ async def main() -> None:
             day_rates = _collection_day_rate(rows)
             totals["fetched"] += len(day_rates)
 
-            # active, image-bearing spots in THIS sigungu, keyed by normalized title
             async with async_session_factory() as session:
                 spot_rows = (
                     await session.execute(
@@ -175,8 +147,6 @@ async def main() -> None:
                     }
                 )
 
-    # dedupe by content_id (a spot can be matched once per its own sigungu only,
-    # but guard anyway) keeping the highest rate
     deduped: dict[str, dict[str, object]] = {}
     for row in upsert_rows:
         cid = row["content_id"]

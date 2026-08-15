@@ -1,16 +1,3 @@
-"""Admin 게시물(해외 스팟) 숨김 관리 — GET list + PUT visibility (A7).
-
-The admin module's second scoped-write surface (``overseas_spots.is_hidden``
-only). Two endpoints under ``/admin/api/*`` behind the session gate:
-
-- ``GET /admin/api/overseas?q=&cursor=&limit=`` — id-cursor list (search on name)
-- ``PUT /admin/api/overseas/{id}/visibility``   — toggle is_hidden
-
-Hiding a spot here is exactly the filter ``/v1/feed`` already applies
-(``is_hidden = false``), so the last test asserts the toggle reaches the feed.
-Auth/session fixture style is copied from ``test_admin_curations.py``.
-"""
-
 from __future__ import annotations
 
 from base64 import b64encode
@@ -85,8 +72,6 @@ def _override(db_session: AsyncSession) -> None:
 
 
 async def test_list_overseas_requires_auth(db_session, client, seeded_overseas) -> None:
-    # Exercise the real session gate: override get_db (so no real DB session
-    # opens) but leave require_admin unmocked.
     app.dependency_overrides[get_db] = lambda: db_session
     try:
         res = await client.get("/admin/api/overseas")
@@ -130,7 +115,7 @@ async def test_list_overseas_orders_by_id_and_cursor(db_session, client, seeded_
 
     d2 = page2.json()["data"]
     assert [i["id"] for i in d2["items"]] == seeded_overseas.ids[2:]
-    assert d2["nextCursor"] is None  # last page
+    assert d2["nextCursor"] is None
 
 
 async def test_toggle_visibility(db_session, client, seeded_overseas) -> None:
@@ -147,7 +132,6 @@ async def test_toggle_visibility(db_session, client, seeded_overseas) -> None:
         target = next(i for i in listed.json()["data"]["items"] if i["id"] == oid)
         assert target["isHidden"] is True
 
-        # toggle back off
         back = await client.put(
             f"/admin/api/overseas/{oid}/visibility", json={"isHidden": False}, headers=_AUTH
         )

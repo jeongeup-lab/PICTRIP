@@ -1,11 +1,3 @@
-"""Owns the `sync_runs` audit table.
-
-The backend admin console reads this table READ-ONLY. The pipeline is the sole
-owner: it creates the table (CREATE TABLE IF NOT EXISTS) and is the only writer.
-Do NOT add this table to backend Alembic. Column names are a shared contract with
-the backend admin module — renaming breaks both sides.
-"""
-
 from __future__ import annotations
 
 import time
@@ -45,14 +37,6 @@ def ensure_table(conn: psycopg.Connection) -> None:
 
 @contextmanager
 def record_run(conn: psycopg.Connection, mode: str) -> Iterator[dict]:
-    """Open a sync_runs row, yield a mutable counter dict, finalize on exit.
-
-    INSERTs a 'running' row and commits it immediately so the audit row exists
-    independently of the run's data work. On clean exit UPDATEs the same row to
-    status='success' with finished_at/duration/watermark/counters; on exception
-    rolls back the data work, UPDATEs to status='error' with the message, and
-    re-raises.
-    """
     ensure_table(conn)
     counters: dict = {
         "api_calls": 0,
@@ -102,9 +86,6 @@ def record_run(conn: psycopg.Connection, mode: str) -> Iterator[dict]:
 
 
 def last_success_watermark(conn: psycopg.Connection) -> str | None:
-    """Return the newest watermark_to (raw KTO text 'YYYYMMDDHHMMSS') among
-    status='success' runs, else None. Lexical DESC == chronological for this
-    fixed-width format."""
     cur = conn.cursor()
     cur.execute(
         "SELECT watermark_to FROM sync_runs WHERE status='success' AND watermark_to IS NOT NULL "

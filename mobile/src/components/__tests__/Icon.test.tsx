@@ -4,8 +4,6 @@ import { Icon } from "@/components/Icon";
 describe("Icon", () => {
   it("renders a known icon without crashing", async () => {
     let r: renderer.ReactTestRenderer;
-    // react-test-renderer 19.2 flushes renders on a macrotask; an async act()
-    // is required to drain the scheduler before reading toJSON().
     await act(async () => {
       r = renderer.create(<Icon name="chevron-left" />);
     });
@@ -30,6 +28,17 @@ describe("Icon", () => {
   });
 
   it.each(["bookmark", "bookmark-fill", "clock", "phone", "globe", "share"] as const)(
+    "renders %s",
+    async (name) => {
+      let r: renderer.ReactTestRenderer;
+      await act(async () => {
+        r = renderer.create(<Icon name={name} />);
+      });
+      expect(r!.toJSON()).toBeTruthy();
+    },
+  );
+
+  it.each(["grid", "bell", "download", "user-x", "heart-off", "settings"] as const)(
     "renders %s",
     async (name) => {
       let r: renderer.ReactTestRenderer;

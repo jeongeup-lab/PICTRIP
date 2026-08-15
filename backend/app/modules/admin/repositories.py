@@ -1,39 +1,16 @@
-"""admin repositories — read-only cross-module aggregates (A01 §1.1).
-
-The *only* admin file that imports SQLAlchemy. All access is read-only:
-
-- ``sync_runs`` is owned by pipeline/ (A05) → accessed via raw ``text()`` only,
-  no ORM model, never in ``Base``/Alembic. Column names are the measured schema
-  (A01 §0) and shared with pipeline/ (rename breaks both — see PR notes).
-- ``spots`` / ``users`` / ``user_auth_providers`` aggregates use raw SQL too,
-  keeping this layer uniform and free of cross-module model imports.
-
-Functions return plain Python (``Row`` / ``dict`` / scalars), never Pydantic —
-shaping into DTOs is the service layer's job.
-"""
-
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import date
 from typing import Any
 
-from sqlalchemy import Row, delete, select, text, update
+from sqlalchemy import Row, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# The admin module's own ORM-mapped surfaces: admin_users (console credentials,
-# DB-backed auth A01 §1.3) and curations/curation_spots (the curation editor's
-# scoped write surface, A01 §7). CLAUDE.md grants admin scoped ownership of these,
-# so importing the models here is sanctioned (ORM over raw SQL for writes: clearer
-# column binding, CHECK/FK violations surface as SQLAlchemy errors). No OTHER
-# cross-module models are imported — reads of spots/users tables stay raw SQL, and
-# the picker's Spot/Region/category query lives in spots.services.nearby.
 from app.modules.admin.models import AdminUser
-from app.modules.spots.models import Curation, CurationSpot
 
 
 async def get_admin_user(session: AsyncSession, username: str) -> AdminUser | None:
-    """The admin-console login for ``username`` (None if absent). Read-only."""
     return (
         await session.execute(select(AdminUser).where(AdminUser.username == username))
     ).scalar_one_or_none()
@@ -45,7 +22,6 @@ async def count_spots(session: AsyncSession) -> int:
 
 
 async def count_embeddings(session: AsyncSession) -> int:
-    """Spots with a CLIP embedding (spot_embeddings is the vector store)."""
     result = await session.execute(
         text(
             "SELECT count(*) FROM spot_embeddings e JOIN spots s "
@@ -56,7 +32,6 @@ async def count_embeddings(session: AsyncSession) -> int:
 
 
 async def latest_sync_run(session: AsyncSession) -> Row[Any] | None:
-    """Newest run (idx_sync_runs_recent, id DESC). ``None`` if never synced."""
     result = await session.execute(
         text(
             "SELECT id, started_at, finished_at, status, mode, api_calls, "
@@ -68,7 +43,6 @@ async def latest_sync_run(session: AsyncSession) -> Row[Any] | None:
 
 
 async def sync_run_daily_counts(session: AsyncSession, days: int) -> list[Row[Any]]:
-    """Per-day rollup over the last ``days`` calendar days (most recent first)."""
     result = await session.execute(
         text(
             "SELECT started_at::date AS day, "
@@ -87,7 +61,6 @@ async def sync_run_daily_counts(session: AsyncSession, days: int) -> list[Row[An
 
 
 async def sync_runs_on_date(session: AsyncSession, day: date) -> list[Row[Any]]:
-    """All runs whose ``started_at`` date equals ``day`` (chronological)."""
     result = await session.execute(
         text(
             "SELECT id, status, mode, started_at, finished_at, api_calls, "
@@ -99,19 +72,7 @@ async def sync_runs_on_date(session: AsyncSession, day: date) -> list[Row[Any]]:
     return list(result.all())
 
 
-# --- embedding status (A01-extension; read-only) ------------------------------
-# Embedding is a separate step from collection: pipeline writes ``spots``, then
-# CLIP writes ``spot_embeddings``. These read-only aggregates let the console show
-# how far embedding has progressed and how many spots failed (embedding_failures).
-
-
 async def embedding_totals(session: AsyncSession) -> Row[Any]:
-    """Coverage + backlog in one round-trip.
-
-    ``missing`` is computed directly (image-bearing spots with no embedding row),
-    matching the embed job's target query; ``embedded`` is derived as
-    ``with_image - missing`` so embedded + missing == with_image exactly.
-    """
     result = await session.execute(
         text(
             "SELECT "
@@ -137,7 +98,6 @@ async def embedding_totals(session: AsyncSession) -> Row[Any]:
 
 
 async def embedding_failures_by_reason(session: AsyncSession) -> list[Row[Any]]:
-    """(reason, count) rollup of the live failure backlog."""
     result = await session.execute(
         text(
             "SELECT f.reason, count(*) AS n FROM embedding_failures f JOIN spots s "
@@ -152,10 +112,6 @@ async def embedding_failures_by_reason(session: AsyncSession) -> list[Row[Any]]:
 
 
 async def embedding_recent_window(session: AsyncSession, since: Any) -> Row[Any]:
-    """Image-bearing spots synced at/after ``since`` and how many are embedded.
-
-    Scopes the "this collection" view to the latest sync run's start.
-    """
     result = await session.execute(
         text(
             "SELECT "
@@ -173,18 +129,14 @@ async def embedding_recent_window(session: AsyncSession, since: Any) -> Row[Any]
 
 
 async def db_ping(session: AsyncSession) -> bool:
-    """``SELECT 1`` liveness probe; False on any failure."""
     try:
         result = await session.execute(text("SELECT 1"))
         return bool(result.scalar_one() == 1)
     except (SQLAlchemyError, OSError):
-        # DB/connection errors → degrade to "not ok". Unexpected exceptions
-        # (programming errors etc.) propagate.
         return False
 
 
 async def user_aggregates(session: AsyncSession) -> Row[Any]:
-    """Total / active / new-7d / deleted-30d / kakao counts in one round-trip."""
     result = await session.execute(
         text(
             "SELECT "
@@ -199,152 +151,9 @@ async def user_aggregates(session: AsyncSession) -> Row[Any]:
     return result.one()
 
 
-# --- curation editor (A01 §7 / ADM-012~015) -----------------------------------
-# Reads return raw Rows; writes operate on the passed session (services own the
-# commit/transaction boundary, A01 §1.1). Curation/CurationSpot are admin-owned.
-
-
-async def list_curations(session: AsyncSession) -> list[Row[Any]]:
-    """Board curations (region + mood only) + resolved cover image.
-
-    Ordered (type, position, id) so the service can split into heroes/rails
-    while preserving per-group position order in a single query. Legacy
-    ``editorial`` rows are excluded — the board is the fixed hero 6 + rails 3.
-    """
-    result = await session.execute(
-        text(
-            "SELECT c.id, c.type, c.slug, c.title, c.subtitle, c.position, "
-            "s.first_image_url AS cover_url "
-            "FROM curations c "
-            "LEFT JOIN spots s ON s.content_id = c.cover_spot_id "
-            "WHERE c.type IN ('region', 'mood') "
-            "ORDER BY c.type, c.position, c.id"
-        )
-    )
-    return list(result.all())
-
-
-async def get_curation(session: AsyncSession, curation_id: int) -> Curation | None:
-    return (
-        await session.execute(select(Curation).where(Curation.id == curation_id))
-    ).scalar_one_or_none()
-
-
-async def get_cover_spot(session: AsyncSession, content_id: str) -> Row[Any] | None:
-    """Cover spot projection (name/image) for the detail payload."""
-    result = await session.execute(
-        text("SELECT content_id, title, first_image_url FROM spots WHERE content_id = :cid"),
-        {"cid": content_id},
-    )
-    return result.first()
-
-
-async def curation_handpicks(session: AsyncSession, curation_id: int) -> list[Row[Any]]:
-    """Handpicked spots (curation_spots) joined to spots, ordered by position.
-
-    ``category`` mirrors the canonical card category (lcls_systm_codes.lcls_systm3_nm).
-    """
-    result = await session.execute(
-        text(
-            "SELECT cs.content_id, cs.position, s.title, s.first_image_url, "
-            "lc.lcls_systm3_nm AS category "
-            "FROM curation_spots cs "
-            "JOIN spots s ON s.content_id = cs.content_id "
-            "LEFT JOIN lcls_systm_codes lc ON lc.lcls_systm3_cd = s.lcls_systm3 "
-            "WHERE cs.curation_id = :cid ORDER BY cs.position"
-        ),
-        {"cid": curation_id},
-    )
-    return list(result.all())
-
-
-async def spot_exposable_with_image(session: AsyncSession, content_id: str) -> bool:
-    """True iff the spot exists, is exposable (show_flag=1) AND has an image.
-
-    Cover validation per A01 §7 ("표지 없으면 거부").
-    """
-    result = await session.execute(
-        text(
-            "SELECT 1 FROM spots "
-            "WHERE content_id = :cid AND show_flag = 1 "
-            "AND first_image_url IS NOT NULL AND first_image_url != ''"
-        ),
-        {"cid": content_id},
-    )
-    return result.first() is not None
-
-
-async def exposable_spot_ids(session: AsyncSession, content_ids: list[str]) -> set[str]:
-    """Subset of ``content_ids`` that are exposable — same gate as the cover check
-    (``spot_exposable_with_image``): exists, show_flag=1 AND non-empty image."""
-    if not content_ids:
-        return set()
-    result = await session.execute(
-        text(
-            "SELECT content_id FROM spots "
-            "WHERE content_id = ANY(:ids) AND show_flag = 1 "
-            "AND first_image_url IS NOT NULL AND first_image_url != ''"
-        ),
-        {"ids": content_ids},
-    )
-    return {r.content_id for r in result.all()}
-
-
-async def update_curation_fields(
-    session: AsyncSession,
-    curation: Curation,
-    *,
-    title: str,
-    subtitle: str | None,
-    lead: str | None,
-    intro: str | None,
-    cover_spot_id: str | None,
-) -> None:
-    """Mutate the editable copy/cover columns + bump updated_at (no auto-onupdate,
-    A01 §7). Ordering is NOT written here — that's the atomic positions endpoint.
-
-    Operates on the passed (managed) ORM instance; the service commits.
-    """
-    curation.title = title
-    curation.subtitle = subtitle
-    curation.lead = lead
-    curation.intro = intro
-    curation.cover_spot_id = cover_spot_id
-    curation.updated_at = datetime.now(tz=UTC)
-
-
-async def curation_ids_by_type(session: AsyncSession, type_: str) -> list[int]:
-    """All curation ids of one type — the permutation universe for a reorder."""
-    rows = (await session.execute(select(Curation.id).where(Curation.type == type_))).scalars()
-    return list(rows)
-
-
-async def set_curation_positions(session: AsyncSession, positions: dict[int, int]) -> None:
-    """Bulk position write ({id: position}) + updated_at bump, single transaction.
-
-    Mutates the passed session only; the service commits (one COMMIT = atomic).
-    """
-    now = datetime.now(tz=UTC)
-    for curation_id, position in positions.items():
-        await session.execute(
-            update(Curation)
-            .where(Curation.id == curation_id)
-            .values(position=position, updated_at=now)
-        )
-    await session.flush()
-
-
-# --- 게시물(해외 스팟) 숨김 관리 (A7) — read list + scoped is_hidden write ------
-# overseas_spots is owned by the feed module; admin's sanctioned write here is the
-# single ``is_hidden`` column (CLAUDE.md grants overseas_spots.is_hidden). Reads
-# stay raw SQL like the other cross-module aggregates above.
-
-
 async def list_overseas(
     session: AsyncSession, *, q: str | None, cursor_id: int | None, limit: int
 ) -> list[Row[Any]]:
-    """One id-ordered page (id > cursor). ``q`` is a case-insensitive name_ko
-    substring with LIKE wildcards escaped (% and _ are literals)."""
     pattern = None
     if q:
         esc = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -363,10 +172,6 @@ async def list_overseas(
 
 
 async def set_overseas_hidden(session: AsyncSession, overseas_id: int, hidden: bool) -> bool:
-    """Set is_hidden (+ updated_at) for one overseas spot. False iff no such row.
-
-    Mutates the passed session; the service commits.
-    """
     result = await session.execute(
         text(
             "UPDATE overseas_spots SET is_hidden = :h, updated_at = now() "
@@ -375,21 +180,3 @@ async def set_overseas_hidden(session: AsyncSession, overseas_id: int, hidden: b
         {"h": hidden, "oid": overseas_id},
     )
     return result.first() is not None
-
-
-async def replace_curation_spots(
-    session: AsyncSession, curation_id: int, spot_ids: list[str]
-) -> None:
-    """Delete-all-then-insert handpicks for one curation (position = index).
-
-    Empty ``spot_ids`` just clears (curation reverts to the quality-pool auto-fill).
-    """
-    await session.execute(delete(CurationSpot).where(CurationSpot.curation_id == curation_id))
-    if spot_ids:
-        session.add_all(
-            [
-                CurationSpot(curation_id=curation_id, content_id=cid, position=i)
-                for i, cid in enumerate(spot_ids)
-            ]
-        )
-    await session.flush()

@@ -1,5 +1,3 @@
-"""FastAPI application entrypoint."""
-
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
@@ -16,25 +14,25 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.config import settings
-from app.core.error_handlers import register_error_handlers
-from app.core.kto_client import KtoClient
 from app.core.logging import configure_logging, get_logger
-from app.core.middleware import (
-    ApiV1CompatMiddleware,
-    CacheControlMiddleware,
-    TraceIdMiddleware,
-)
 from app.core.redis import redis_lifespan
-from app.core.schemas import ok
 from app.core.version import API_VERSION
+from app.kto.client import KtoClient
 from app.modules.admin import router as admin_router
+from app.modules.agent import router as agent_router
+from app.modules.agent.llm import close_client as close_llm_client
 from app.modules.feed import router as feed_router
 from app.modules.images import router as images_router
 from app.modules.map import router as map_router
 from app.modules.spots import router as spots_router
 from app.modules.system import router as system_router
-from app.modules.taste import router as taste_router
 from app.modules.users import router as users_router
+from app.web.envelope import ok
+from app.web.errors import register_error_handlers
+from app.web.middleware import (
+    CacheControlMiddleware,
+    TraceIdMiddleware,
+)
 
 
 @asynccontextmanager
@@ -48,6 +46,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             environment=settings.ENVIRONMENT,
             traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
             profiles_sample_rate=settings.SENTRY_PROFILES_SAMPLE_RATE,
+            max_request_body_size="never",
+            include_local_variables=False,
             integrations=[FastApiIntegration()],
         )
 
@@ -59,6 +59,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             yield
         finally:
             await app.state.kto.aclose()
+            await close_llm_client()
             logger.info("app.shutdown")
 
 
@@ -73,7 +74,6 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Middleware order matters: outermost added first.
     if settings.TRUSTED_HOSTS and settings.TRUSTED_HOSTS != ["*"]:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.TRUSTED_HOSTS)
 
@@ -82,16 +82,18 @@ def create_app() -> FastAPI:
         allow_origins=settings.CORS_ORIGINS or ["*"],
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Trace-Id"],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            "Idempotency-Key",
+            "X-Trace-Id",
+            "X-PicTrip-Detail-Mode",
+        ],
         expose_headers=["X-Trace-Id"],
         max_age=86400,
     )
     app.add_middleware(TraceIdMiddleware)
     app.add_middleware(CacheControlMiddleware, prefix=settings.API_V1_PREFIX)
-    # Outermost (added last) — rewrites bare API paths to /v1 before routing so a
-    # mis-built mobile release (v0.4.1, missing /v1 base) keeps working. TEMPORARY.
-    app.add_middleware(ApiV1CompatMiddleware, prefix=settings.API_V1_PREFIX)
-    # Signed-cookie session for the /admin console login (replaces HTTP Basic).
     app.add_middleware(
         SessionMiddleware,
         secret_key=settings.ADMIN_SESSION_SECRET,
@@ -103,30 +105,25 @@ def create_app() -> FastAPI:
 
     register_error_handlers(app)
 
-    # Liveness probe lives outside /v1.
     @app.get("/health", include_in_schema=False)
     async def health() -> dict[str, Any]:
         return ok({"status": "ok"})
 
-    # --- Admin console (outside /v1 — internal ops surface; A01 §1.2) ---
     app.include_router(admin_router, prefix="/admin")
     admin_assets = Path(__file__).parent / "modules" / "admin" / "static" / "assets"
-    # PUBLIC/unauthenticated mount: must contain ONLY non-sensitive CSS/JS
-    # (no data, no secrets, no source maps) — it is served without the AdminAuth gate.
     app.mount(
         "/admin/assets",
         StaticFiles(directory=admin_assets),
         name="admin-assets",
     )
 
-    # --- Routers under /v1 ---
     prefix = settings.API_V1_PREFIX
     app.include_router(users_router, prefix=prefix)
-    app.include_router(taste_router, prefix=prefix)
     app.include_router(spots_router, prefix=prefix)
     app.include_router(feed_router, prefix=prefix)
     app.include_router(images_router, prefix=prefix)
     app.include_router(map_router, prefix=prefix)
+    app.include_router(agent_router, prefix=prefix)
     app.include_router(system_router, prefix=prefix)
 
     return app

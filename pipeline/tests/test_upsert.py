@@ -55,7 +55,7 @@ def test_insert_then_idempotent_update(seed_refs):
     newer = _spot(show_flag=0, modified_time=datetime(2026, 6, 28, 1, 0, tzinfo=KST))
     upsert_spots(conn, [newer], refs, c2)
     assert c2["soft_deleted"] == 1
-    assert _read(conn, "T1")[0] == 0  # hidden
+    assert _read(conn, "T1")[0] == 0
 
 
 def test_newer_wins_guard_blocks_stale(seed_refs):
@@ -67,7 +67,6 @@ def test_newer_wins_guard_blocks_stale(seed_refs):
         refs,
         {"inserted": 0, "updated": 0, "soft_deleted": 0, "skipped": 0},
     )
-    # older modified_time must NOT overwrite
     stale_counters = {"inserted": 0, "updated": 0, "soft_deleted": 0, "skipped": 0}
     upsert_spots(
         conn,
@@ -78,7 +77,6 @@ def test_newer_wins_guard_blocks_stale(seed_refs):
     cur = conn.cursor()
     cur.execute("SELECT title FROM spots WHERE content_id='T1'")
     assert cur.fetchone()[0] == "new"
-    # guard-blocked stale row is counted as skipped, not updated
     assert stale_counters["skipped"] == 1
 
 

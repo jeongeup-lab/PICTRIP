@@ -1,5 +1,3 @@
-"""Canonical SpotCard serialization: subtype-category join."""
-
 from __future__ import annotations
 
 from sqlalchemy import text
@@ -47,7 +45,7 @@ async def _seed_spot(
 
 async def test_load_spot_cards_carry_subtype_category(db_session: AsyncSession) -> None:
     await _seed_spot(db_session, "s1", l3="A01010100", l3_nm="사적지")
-    await _seed_spot(db_session, "s2")  # no lcls_systm3 → LEFT JOIN yields None
+    await _seed_spot(db_session, "s2")
 
     rows = await load_spot_cards_by_ids(db_session, ["s1", "s2"])
     assert rows["s1"].lcls_systm3_nm == "사적지"
@@ -60,4 +58,4 @@ async def test_load_active_spot_cards_carry_subtype_category(db_session: AsyncSe
 
     rows = await load_active_spot_cards_by_ids(db_session, ["a1", "hidden"])
     assert rows["a1"].lcls_systm3_nm == "찻집"
-    assert "hidden" not in rows  # show_flag=0 excluded
+    assert "hidden" not in rows

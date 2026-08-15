@@ -1,23 +1,3 @@
-"""CLIP embedding job — the single code path for turning image-bearing spots into
-``spot_embeddings`` rows, shared by the CLI backfill (``scripts.backfill_embeddings``)
-and the admin console's "재임베딩" button.
-
-Collection and embedding are separate steps (a spot can exist for hours before its
-image is embedded). This module:
-
-- ``collect_targets`` — finds (content_id, image_url) pairs that still need an
-  embedding (optionally only previously-failed ones, optionally scoped to a sync
-  window).
-- ``embed_spots`` — downloads + embeds a batch against a *passed* session,
-  recording successes in ``spot_embeddings`` and failures in ``embedding_failures``
-  (so a missing embedding is distinguishable as pending vs. broken).
-- ``run_embedding_job`` — the orchestrator that owns its own sessions + HTTP
-  client, used by the background trigger and the CLI.
-
-Image bytes are processed in memory and never persisted (only the vector is
-stored) — per the KTO image prohibition.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -30,16 +10,14 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.db import async_session_factory
-from app.core.embedding import embedder
 from app.core.logging import get_logger
+from app.ml.embedding import embedder
 from app.modules.images.models import EmbeddingFailure, SpotEmbedding
 
 logger = get_logger(__name__)
 
-# CLIP is a single CPU model instance — serialise inference; parallelise only downloads.
 _embed_lock = asyncio.Lock()
 
-# Status codes returned by _embed_one / used as embedding_failures.reason.
 OK = "ok"
 DOWNLOAD_FAILED = "download_failed"
 CLIP_ERROR = "clip_error"
@@ -48,8 +26,6 @@ SOURCE_CHANGED = "source_changed"
 
 @dataclass
 class EmbedResult:
-    """Aggregate counts for one embed run."""
-
     written: int = 0
     failed: int = 0
     skipped: int = 0
@@ -73,15 +49,6 @@ async def collect_targets(
     since: datetime | None = None,
     limit: int | None = None,
 ) -> list[tuple[str, str]]:
-    """(content_id, image_url) for image-bearing spots that have no embedding row.
-
-    ``only_failed`` restricts to spots already recorded in ``embedding_failures``
-    (the admin "retry failures" scope). ``since`` restricts to spots synced at or
-    after that time (the "this collection" scope). ``limit`` caps the batch so the
-    serving process is never pinned by a huge backlog.
-    """
-    # Imported lazily: spots.services (via curations) imports images.services,
-    # which re-exports this module → a module-level import would be circular.
     from app.modules.spots.services import image_bearing_spots_stmt
 
     spots = image_bearing_spots_stmt(since=since).subquery()
@@ -113,12 +80,6 @@ async def _embed_one(
     client: httpx.AsyncClient,
     dl_sem: asyncio.Semaphore,
 ) -> tuple[str, str, list[float] | None, str, str | None]:
-    """Download + embed one spot image.
-
-    Returns (content_id, url, vector|None, status, error_detail). ``status`` is one
-    of OK / DOWNLOAD_FAILED / CLIP_ERROR; ``error_detail`` is a short message for
-    the failure record (None on success).
-    """
     try:
         async with dl_sem:
             resp = await client.get(image_url, timeout=20.0, follow_redirects=True)
@@ -127,7 +88,7 @@ async def _embed_one(
         async with _embed_lock:
             vector = await asyncio.to_thread(embedder.embed_image, resp.content)
         return (content_id, image_url, vector, OK, None)
-    except Exception as exc:  # one bad image must not abort the run
+    except Exception as exc:
         logger.warning("embed.failed", content_id=content_id, error=str(exc))
         return (content_id, image_url, None, CLIP_ERROR, str(exc)[:500])
 
@@ -148,7 +109,6 @@ async def _record_success(
         )
     )
     await session.execute(stmt)
-    # Clear any prior failure record — this spot is now embedded.
     await session.execute(delete(EmbeddingFailure).where(EmbeddingFailure.content_id == content_id))
     return True
 
@@ -189,12 +149,6 @@ async def embed_spots(
     dl_sem: asyncio.Semaphore,
     result: EmbedResult | None = None,
 ) -> EmbedResult:
-    """Embed one batch of (content_id, image_url) targets using ``session``.
-
-    Writes ``spot_embeddings`` for successes and ``embedding_failures`` for
-    failures (clearing the failure row when a previously-failed spot now succeeds).
-    Flushes but does NOT commit — the caller owns the transaction boundary.
-    """
     result = result or EmbedResult()
     if not targets:
         return result
@@ -221,10 +175,6 @@ async def run_embedding_job(
     concurrency: int = 8,
     session_factory: async_sessionmaker[AsyncSession] = async_session_factory,
 ) -> EmbedResult:
-    """Orchestrate a full embed run: collect targets, then embed batch-by-batch
-    with its own sessions + HTTP client (so it is safe to fire from a FastAPI
-    BackgroundTask after the request session has closed). Commits per batch.
-    """
     async with session_factory() as session:
         targets = await collect_targets(
             session,
@@ -261,7 +211,6 @@ async def run_embedding_job(
 
 
 async def count_missing(session: AsyncSession) -> int:
-    """Image-bearing spots with no embedding (the all-time backlog)."""
     return int(
         (
             await session.execute(

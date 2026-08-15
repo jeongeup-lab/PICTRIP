@@ -1,14 +1,3 @@
-"""ADM embedding status + re-embed trigger (collection/embedding are separate).
-
-GET /admin/api/embedding surfaces coverage, the failure backlog, and the
-"this collection" progress (spots synced since the latest sync run). POST
-/admin/api/embedding/trigger kicks an in-process job guarded by a Redis lock.
-
-``sync_runs`` (pipeline-owned, A05) is created in-transaction with the measured
-schema, mirroring test_admin_api.py. The embed job itself is monkeypatched in the
-trigger tests so no CLIP/model/network is touched.
-"""
-
 from __future__ import annotations
 
 import pytest
@@ -64,7 +53,6 @@ async def _seed_spot(
 @pytest.fixture
 async def seed(db_session: AsyncSession) -> None:
     await db_session.execute(text(_CREATE_SYNC_RUNS))
-    # latest sync run started 1 day ago → "this collection" window = synced_at >= then.
     await db_session.execute(
         text(
             "INSERT INTO sync_runs (started_at, finished_at, status, mode) VALUES "
@@ -72,14 +60,12 @@ async def seed(db_session: AsyncSession) -> None:
         )
     )
 
-    # 4 image-bearing spots + 1 with no image.
-    await _seed_spot(db_session, "emb-old", "https://img/1.jpg", days_ago=10)  # embedded, old
-    await _seed_spot(db_session, "emb-new", "https://img/2.jpg", days_ago=0)  # embedded, recent
-    await _seed_spot(db_session, "fail-1", "https://img/3.jpg", days_ago=0)  # failed, recent
-    await _seed_spot(db_session, "pend-1", "https://img/4.jpg", days_ago=0)  # pending, recent
-    await _seed_spot(db_session, "noimg", None, days_ago=0)  # no image → excluded
+    await _seed_spot(db_session, "emb-old", "https://img/1.jpg", days_ago=10)
+    await _seed_spot(db_session, "emb-new", "https://img/2.jpg", days_ago=0)
+    await _seed_spot(db_session, "fail-1", "https://img/3.jpg", days_ago=0)
+    await _seed_spot(db_session, "pend-1", "https://img/4.jpg", days_ago=0)
+    await _seed_spot(db_session, "noimg", None, days_ago=0)
 
-    # 2 embeddings.
     for cid, image_url in (
         ("emb-old", "https://img/1.jpg"),
         ("emb-new", "https://img/2.jpg"),
@@ -118,7 +104,6 @@ def _override(db_session: AsyncSession, redis) -> None:
     app.dependency_overrides[get_redis] = lambda: redis
 
 
-# --- auth gate ----------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_embedding_requires_auth(client: AsyncClient, admin_password: str) -> None:
     resp = await client.get("/admin/api/embedding")
@@ -126,7 +111,6 @@ async def test_embedding_requires_auth(client: AsyncClient, admin_password: str)
     assert resp.json()["error"]["code"] == "ADMIN_UNAUTHORIZED"
 
 
-# --- GET /admin/api/embedding -------------------------------------------------
 @pytest.mark.asyncio
 async def test_embedding_status(
     db_session: AsyncSession,
@@ -146,15 +130,13 @@ async def test_embedding_status(
     assert data["totalSpots"] == 5
     assert data["withImage"] == 4
     assert data["embedded"] == 2
-    assert data["missing"] == 2  # fail-1 + pend-1
+    assert data["missing"] == 2
     assert data["failed"] == 1
     assert data["pending"] == 1
     assert data["failuresByReason"] == {"download_failed": 1}
     assert data["running"] is False
     assert data["lastComputedAt"] is not None
 
-    # "this collection" = spots synced in the last day: emb-new, fail-1, pend-1
-    # → target 3, embedded 1 (emb-new), outstanding 2.
     rec = data["recent"]
     assert rec["since"] is not None
     assert rec["target"] == 3
@@ -192,7 +174,6 @@ async def test_embedding_status_running_reflects_lock(
     assert resp.json()["data"]["running"] is True
 
 
-# --- POST /admin/api/embedding/trigger ----------------------------------------
 @pytest.mark.asyncio
 async def test_trigger_happy_path_schedules_job(
     db_session: AsyncSession,
@@ -210,7 +191,6 @@ async def test_trigger_happy_path_schedules_job(
         await redis_client_fake.set("match:1:during", "cached")
         return None
 
-    # patch where run_embedding_job is looked up (images.services re-export).
     monkeypatch.setattr(services.image_services, "run_embedding_job", fake_job)
     await redis_client_fake.set("match:0:before", "cached")
 
@@ -223,11 +203,9 @@ async def test_trigger_happy_path_schedules_job(
     assert resp.status_code == 200
     data = resp.json()["data"]
     assert data == {"job": "embed-failed", "scope": "failed", "accepted": True}
-    # background task ran (TestClient/ASGI executes background tasks after response)
     assert calls.get("only_failed") is True
     assert await redis_client_fake.get("matching:revision") == "2"
     assert await redis_client_fake.get("match:1:during") == "cached"
-    # lock released by the job's finally
     assert await redis_client_fake.exists("admin:embed:running") == 0
     out = capsys.readouterr().out
     assert "embedding.trigger" in out

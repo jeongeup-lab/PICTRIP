@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ScrollView, View, Text, Pressable, Share, StyleSheet } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSpot } from "@/features/spots/queries";
+import { useRecentSpots } from "@/features/spots/stores/recent-store";
 import { useSaveOptimistic } from "@/features/saved/hooks/use-save-optimistic";
 import { Icon } from "@/components/Icon";
 import { Skeleton } from "@/components/Skeleton";
@@ -11,6 +12,7 @@ import { PhotoViewer } from "@/features/spots/components/PhotoViewer";
 import { LocationSection } from "@/features/spots/components/LocationSection";
 import { VisitSection } from "@/features/spots/components/VisitSection";
 import { NearbyRail } from "@/features/spots/components/NearbyRail";
+import { SourceCredit } from "@/features/legal/components/SourceCredit";
 import { colors, spacing } from "@/constants/theme";
 
 export default function SpotScreen() {
@@ -18,6 +20,20 @@ export default function SpotScreen() {
   const { data, isLoading, isError, refetch, isPlaceholderData } = useSpot(contentId);
   const { saved, toggle: onToggleSave } = useSaveOptimistic(contentId);
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const recordRecent = useRecentSpots((s) => s.record);
+
+  useEffect(() => {
+    if (!data || isPlaceholderData) return;
+    recordRecent({
+      contentId: data.contentId,
+      title: data.title,
+      firstImageUrl: data.firstImageUrl,
+      addr1: data.addr1,
+      mapx: data.mapx,
+      mapy: data.mapy,
+      category: data.category,
+    });
+  }, [data, isPlaceholderData, recordRecent]);
 
   const galleryImages =
     data && data.images.length > 0
@@ -25,10 +41,12 @@ export default function SpotScreen() {
       : data?.firstImageUrl
         ? [data.firstImageUrl]
         : [];
+  const detailPending = data?.detailStatus === "pending";
+  const detailUnavailable = data?.detailStatus === "unavailable";
 
   const onShare = () => {
     if (!data) return;
-    void Share.share({ message: `${data.title} · PicTrip` });
+    void Share.share({ message: `${data.title} · PICTRIP` });
   };
 
   const onViewAll = () => {
@@ -76,9 +94,17 @@ export default function SpotScreen() {
           }
         />
 
-        {isLoading || !data || isPlaceholderData ? (
-          // Seeded hero renders above; body waits for the authoritative KTO row
-          // so the snippet overview never flashes in place of the full text.
+        {detailUnavailable ? (
+          <View style={styles.detailState}>
+            <Text style={styles.errTitle}>상세 정보를 준비하지 못했어요</Text>
+            <Text style={styles.errSub}>
+              기본 관광지 정보는 볼 수 있고, 잠시 후 자동으로 다시 시도해요
+            </Text>
+            <Pressable style={styles.retryBtn} onPress={() => refetch()}>
+              <Text style={styles.retryText}>지금 다시 시도</Text>
+            </Pressable>
+          </View>
+        ) : isLoading || !data || isPlaceholderData || detailPending ? (
           <View style={{ padding: spacing.lg, gap: spacing.md }}>
             <Skeleton height={18} />
             <Skeleton height={18} width="80%" />
@@ -88,18 +114,22 @@ export default function SpotScreen() {
             <IntroSection overview={data.overview} />
             <View style={styles.band} />
             <LocationSection spot={data} />
-            <VisitSection title={data.title} onShare={onShare} onScrap={onToggleSave} />
+            <VisitSection
+              title={data.title}
+              saved={saved}
+              onShare={onShare}
+              onScrap={onToggleSave}
+            />
           </>
         )}
 
-        {/* Kept outside the body gate so the nearby fetch starts from the seed's
-            coords in parallel with the detail fetch, not in a waterfall behind
-            it. Self-hides until coords + results exist. */}
         <NearbyRail
           lat={data?.mapy ?? null}
           lng={data?.mapx ?? null}
           excludeId={data?.contentId ?? ""}
         />
+
+        <SourceCredit />
       </ScrollView>
       <PhotoViewer
         visible={galleryOpen}
@@ -130,6 +160,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.inset,
   },
   errWrap: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 44 },
+  detailState: {
+    alignItems: "center",
+    paddingHorizontal: 36,
+    paddingVertical: spacing.xxl,
+  },
   errTitle: {
     fontSize: 20,
     fontWeight: "700",
@@ -144,7 +179,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.ink,
+    backgroundColor: colors.accent,
   },
   retryText: { fontSize: 15, fontWeight: "700", color: colors.onImage },
 });

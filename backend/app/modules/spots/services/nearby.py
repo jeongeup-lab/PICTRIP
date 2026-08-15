@@ -1,6 +1,3 @@
-"""Nearby SPT service — bbox+haversine distance query + category taxonomy.
-SPT owns Spot queries; MAP only merges crowd (Redis) onto the returned rows."""
-
 from __future__ import annotations
 
 import math
@@ -12,11 +9,13 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
-from app.modules.spots.models import LclsSystmCode, Region, Spot, SpotDetail
+from app.modules.spots.models import LclsSystmCode, Spot, SpotDetail
 
 _MAX_NUM_OF_ROWS = 50
 _EARTH_RADIUS_M = 6_371_000.0
 _VE_EXCLUDE = ("VE06", "VE07", "VE08", "VE09", "VE10", "VE11")
+_TRAVEL_VE_EXCLUDE = ("VE08", "VE09", "VE10", "VE11")
+_LODGING_CONTENT_TYPE = 32
 
 
 class NearbyCategory(StrEnum):
@@ -36,26 +35,24 @@ class NearbySpotRow:
     mapx: float | None
     mapy: float | None
     dist: float | None
-    # KTO subtype label (lcls_systm3_nm); None if unmatched.
+    cpyrht_div_cd: str | None = None
     category: str | None = None
-    # 5-bucket code via derive_category (attraction/food/cafe/leisure/shopping); drives
-    # the map marker glyph. Always one of the 5 since the base WHERE excludes uncategorized.
     category_group: str | None = None
-    # KTO overview, verbatim (no summarize); usually None (lazy-cached on detail only).
     overview: str | None = None
-    # Below filled by the consuming module (MAP) via load_region_meta, not SPT.
     region_name: str | None = None
     sigungu_name: str | None = None
 
 
 def category_predicate(cat: NearbyCategory) -> ColumnElement[bool]:
-    """Category SSOT rule -> SQLAlchemy boolean for the nearby WHERE."""
     if cat is NearbyCategory.attraction:
-        return or_(
-            Spot.lcls_systm1.in_(("HS", "NA", "EX")),
-            and_(
-                Spot.lcls_systm1 == "VE",
-                or_(Spot.lcls_systm2.is_(None), Spot.lcls_systm2.notin_(_VE_EXCLUDE)),
+        return and_(
+            Spot.content_type_id != _LODGING_CONTENT_TYPE,
+            or_(
+                Spot.lcls_systm1.in_(("HS", "NA", "EX")),
+                and_(
+                    Spot.lcls_systm1 == "VE",
+                    or_(Spot.lcls_systm2.is_(None), Spot.lcls_systm2.notin_(_VE_EXCLUDE)),
+                ),
             ),
         )
     if cat is NearbyCategory.food:
@@ -67,7 +64,6 @@ def category_predicate(cat: NearbyCategory) -> ColumnElement[bool]:
         return or_(Spot.lcls_systm2 == "FD05", Spot.lcls_systm3 == "FD030100")
     if cat is NearbyCategory.leisure:
         return Spot.lcls_systm1 == "LS"
-    # shopping
     return and_(
         Spot.lcls_systm1 == "SH",
         or_(Spot.lcls_systm2.is_(None), Spot.lcls_systm2 != "SH04"),
@@ -75,26 +71,51 @@ def category_predicate(cat: NearbyCategory) -> ColumnElement[bool]:
 
 
 def all_categories_predicate() -> ColumnElement[bool]:
-    """Union of the 5 defined categories — uncategorized spots (숙박/축제/공연 등)
-    excluded. The taxonomy SSOT for every "tourist-worthy spots only" gate."""
     return or_(*(category_predicate(c) for c in NearbyCategory))
 
 
-def all_categories_sql() -> str:
-    """all_categories_predicate rendered as raw SQL for text() queries that join
-    the ``spots`` table by its real name (no alias). Generated from the ORM
-    predicate so the category taxonomy stays single-source."""
+def _predicate_sql(predicate: ColumnElement[bool]) -> str:
     return str(
-        all_categories_predicate().compile(
+        predicate.compile(
             dialect=postgresql.dialect(),  # type: ignore[no-untyped-call]
             compile_kwargs={"literal_binds": True},
         )
     )
 
 
+def category_sql(cat: NearbyCategory) -> str:
+    return _predicate_sql(category_predicate(cat))
+
+
+def all_categories_sql() -> str:
+    return _predicate_sql(all_categories_predicate())
+
+
+def attraction_category_sql() -> str:
+    return _predicate_sql(category_predicate(NearbyCategory.attraction))
+
+
+def travel_category_predicate() -> ColumnElement[bool]:
+    return and_(
+        Spot.content_type_id != _LODGING_CONTENT_TYPE,
+        or_(
+            Spot.lcls_systm1.in_(("HS", "NA", "EX")),
+            and_(
+                Spot.lcls_systm1 == "VE",
+                or_(
+                    Spot.lcls_systm2.is_(None),
+                    Spot.lcls_systm2.notin_(_TRAVEL_VE_EXCLUDE),
+                ),
+            ),
+        ),
+    )
+
+
+def travel_category_sql() -> str:
+    return _predicate_sql(travel_category_predicate())
+
+
 def derive_category(l1: str | None, l2: str | None, l3: str | None) -> str | None:
-    """lcls values -> chip code. Order cafe before food: FD030100 is excluded from
-    food but included in cafe."""
     if l2 == "FD05" or l3 == "FD030100":
         return "cafe"
     if l2 in ("FD01", "FD02", "FD03") and l3 != "FD030100":
@@ -109,8 +130,6 @@ def derive_category(l1: str | None, l2: str | None, l3: str | None) -> str | Non
 
 
 def _dist_expr(lat: float, lng: float) -> ColumnElement[float]:
-    """Haversine distance (m) from (lat,lng) to each spot; mapy=lat, mapx=lng.
-    acos domain clamped to avoid NaN at the poles."""
     cos_term = func.cos(func.radians(lat)) * func.cos(func.radians(Spot.mapy)) * func.cos(
         func.radians(Spot.mapx) - func.radians(lng)
     ) + func.sin(func.radians(lat)) * func.sin(func.radians(Spot.mapy))
@@ -119,15 +138,13 @@ def _dist_expr(lat: float, lng: float) -> ColumnElement[float]:
     )
 
 
-def _base_select(dist: ColumnElement[float], category: NearbyCategory | None):  # type: ignore[no-untyped-def]
-    """Shared SELECT + base/category filters for the nearby queries (sans bbox).
-    Base: show_flag=1 AND first_image_url IS NOT NULL. category=None means the
-    union of the 5 defined categories, NOT no filter — uncategorized spots are excluded."""
+def _base_select(dist: ColumnElement[float], predicate: ColumnElement[bool]):  # type: ignore[no-untyped-def]
     inner = (
         select(
             Spot.content_id.label("content_id"),
             Spot.title.label("title"),
             Spot.first_image_url.label("first_image_url"),
+            Spot.cpyrht_div_cd.label("cpyrht_div_cd"),
             Spot.addr1.label("addr1"),
             Spot.mapx.label("mapx"),
             Spot.mapy.label("mapy"),
@@ -147,10 +164,7 @@ def _base_select(dist: ColumnElement[float], category: NearbyCategory | None):  
             Spot.mapy.isnot(None),
         )
     )
-    if category is not None:
-        return inner.where(category_predicate(category))
-    # "All" = union of the 5 categories; uncategorized spots excluded.
-    return inner.where(all_categories_predicate())
+    return inner.where(predicate)
 
 
 def _materialize(result: object) -> list[NearbySpotRow]:
@@ -165,12 +179,21 @@ def _materialize(result: object) -> list[NearbySpotRow]:
                 mapx=float(r.mapx) if r.mapx is not None else None,
                 mapy=float(r.mapy) if r.mapy is not None else None,
                 dist=float(r.dist) if r.dist is not None else None,
+                cpyrht_div_cd=r.cpyrht_div_cd,
                 category=r.category,
                 category_group=derive_category(r.lcls_systm1, r.lcls_systm2, r.lcls_systm3),
                 overview=r.overview,
             )
         )
     return rows
+
+
+def _predicate_for(category: NearbyCategory | None, travel_only: bool) -> ColumnElement[bool]:
+    if travel_only:
+        return travel_category_predicate()
+    if category is not None:
+        return category_predicate(category)
+    return all_categories_predicate()
 
 
 async def find_nearby_spots(
@@ -180,13 +203,19 @@ async def find_nearby_spots(
     lng: float,
     radius: int,
     category: NearbyCategory | None,
+    travel_only: bool = False,
+    title_terms: list[str] | None = None,
 ) -> list[NearbySpotRow]:
-    """Active+image spots within radius m, distance-ordered (crowd merged by MAP)."""
-    # Bounding box (degrees); clamp cos to avoid div-by-0 at high latitudes.
     dlat = radius / 111_320.0
     dlng = radius / (111_320.0 * max(math.cos(math.radians(lat)), 0.01))
 
-    inner = _base_select(_dist_expr(lat, lng), category).where(
+    predicate = _predicate_for(category, travel_only)
+    if title_terms:
+        predicate = and_(
+            predicate,
+            *(Spot.title.ilike(f"%{term}%") for term in title_terms),
+        )
+    inner = _base_select(_dist_expr(lat, lng), predicate).where(
         Spot.mapy.between(lat - dlat, lat + dlat),
         Spot.mapx.between(lng - dlng, lng + dlng),
     )
@@ -204,101 +233,15 @@ async def find_nearby_spots_bbox(
     ne_lng: float,
     category: NearbyCategory | None,
 ) -> list[NearbySpotRow]:
-    """Active+image spots inside the visible map rectangle (sw..ne), ordered by
-    distance from the box center. Same base/category rules as find_nearby_spots;
-    the map's bbox replaces the center+radius circle so results match what the
-    user sees on screen."""
     min_lat, max_lat = min(sw_lat, ne_lat), max(sw_lat, ne_lat)
     min_lng, max_lng = min(sw_lng, ne_lng), max(sw_lng, ne_lng)
     center_lat = (min_lat + max_lat) / 2
     center_lng = (min_lng + max_lng) / 2
 
-    inner = _base_select(_dist_expr(center_lat, center_lng), category).where(
+    inner = _base_select(_dist_expr(center_lat, center_lng), _predicate_for(category, False)).where(
         Spot.mapy.between(min_lat, max_lat),
         Spot.mapx.between(min_lng, max_lng),
     )
     sub = inner.subquery()
     stmt = select(sub).order_by(sub.c.dist).limit(_MAX_NUM_OF_ROWS)
     return _materialize(await session.execute(stmt))
-
-
-@dataclass
-class PickerSpotRow:
-    """One admin-picker search hit (SPT owns the query; admin only presents it)."""
-
-    content_id: str
-    title: str
-    region_cd: str | None
-    region_name: str | None
-    first_image_url: str | None
-
-
-def _escape_like(q: str) -> str:
-    """Escape LIKE wildcards so ``q`` matches literally (pairs with escape='\\\\')."""
-    return q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-
-
-async def search_spots_for_picker(
-    session: AsyncSession,
-    *,
-    q: str | None,
-    region: str | None,
-    sigungu: str | None,
-    category: NearbyCategory | None,
-    limit: int,
-    offset: int,
-) -> tuple[list[PickerSpotRow], int]:
-    """Admin picker search — SPT owns the Spot/Region/category query so the admin
-    module stays free of cross-module model imports (A01 §1.1). trgm ILIKE over
-    title/addr1 (q optional — filters alone allow browsing). Scoped to exposable
-    spots (show_flag=1 AND non-empty image) so results match the cover/handpick
-    save gate — an imageless spot the admin can't save never shows up.
-
-    Uses idx_spots_title_trgm / idx_spots_addr1_trgm (partial WHERE show_flag=1).
-    ``%``/``_`` in q are escaped (literal match). Category reuses the NearbyCategory
-    SSOT predicate. Ordered by (title, content_id) so offset pagination is
-    deterministic. Returns (page rows, total match count).
-    """
-    conds: list[ColumnElement[bool]] = [
-        Spot.show_flag == 1,
-        Spot.first_image_url.isnot(None),
-        Spot.first_image_url != "",
-    ]
-    if q:
-        pat = f"%{_escape_like(q)}%"
-        conds.append(or_(Spot.title.ilike(pat, escape="\\"), Spot.addr1.ilike(pat, escape="\\")))
-    if region:
-        conds.append(Spot.ldong_regn_cd == region)
-    if sigungu:
-        conds.append(Spot.ldong_signgu_cd == sigungu)
-    if category is not None:
-        conds.append(category_predicate(category))
-
-    total = (
-        await session.execute(select(func.count()).select_from(Spot).where(*conds))
-    ).scalar_one()
-    rows = await session.execute(
-        select(
-            Spot.content_id,
-            Spot.title,
-            Spot.ldong_regn_cd.label("region_cd"),
-            Region.ldong_regn_nm.label("region_name"),
-            Spot.first_image_url,
-        )
-        .outerjoin(Region, Region.ldong_regn_cd == Spot.ldong_regn_cd)
-        .where(*conds)
-        .order_by(Spot.title, Spot.content_id)
-        .limit(limit)
-        .offset(offset)
-    )
-    items = [
-        PickerSpotRow(
-            content_id=r.content_id,
-            title=r.title,
-            region_cd=r.region_cd,
-            region_name=r.region_name,
-            first_image_url=r.first_image_url,
-        )
-        for r in rows.all()
-    ]
-    return items, int(total)

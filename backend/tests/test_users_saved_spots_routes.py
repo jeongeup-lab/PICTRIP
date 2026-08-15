@@ -1,9 +1,3 @@
-"""Integration tests for the saved-spot (bookmark) routes.
-
-Routes live in USR but user_saved_spots + spot-card DB access goes through SPT
-services (no cross-module model imports — ADR-0002 / ADR-0011).
-"""
-
 from __future__ import annotations
 
 import uuid
@@ -17,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.config import settings
-from app.core.auth import create_access_token
 from app.main import app
+from app.security.jwt import create_access_token
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -197,7 +191,6 @@ async def test_list_returns_saved_spot_cards(
     data = resp.json()["data"]
     assert {c["contentId"] for c in data} == {"SAVE-A", "SAVE-B"}
     card = data[0]
-    # SPT spot-card shape
     assert {"contentId", "title", "firstImageUrl", "addr1", "mapx", "mapy"} <= set(card)
 
 
@@ -222,7 +215,6 @@ async def test_list_paginates_with_cursor(
     client: AsyncClient, override_db_and_seed: AsyncSession
 ) -> None:
     uid = await _seed_user(override_db_and_seed)
-    # Seed 30 saved spots so a limit=24 page has a next cursor.
     for i in range(30):
         cid = f"CUR-{i:03d}"
         await _seed_spot(override_db_and_seed, cid)
@@ -248,7 +240,6 @@ async def test_list_paginates_with_cursor(
     assert meta2["nextCursor"] is None
     page2_ids = [c["contentId"] for c in body2["data"]]
 
-    # No overlap, full coverage.
     assert set(page1_ids).isdisjoint(page2_ids)
     assert len(set(page1_ids) | set(page2_ids)) == 30
 
@@ -303,8 +294,6 @@ async def test_list_without_auth_returns_401(client: AsyncClient) -> None:
 async def test_save_hidden_spot_returns_404(
     client: AsyncClient, override_db_and_seed: AsyncSession
 ) -> None:
-    # A spot with show_flag=0 must be unsavable: GET /spots/{id} 404s on it, so
-    # allowing a save would create a dead-end card. Same path as an unknown spot.
     uid = await _seed_user(override_db_and_seed)
     await _seed_hidden_spot(override_db_and_seed, "SAVE-HIDDEN")
 
@@ -318,9 +307,6 @@ async def test_save_hidden_spot_returns_404(
 async def test_list_excludes_now_hidden_saved_spot(
     client: AsyncClient, override_db_and_seed: AsyncSession
 ) -> None:
-    # A spot saved while visible, then later hidden (show_flag=0), must drop out
-    # of the saved list — otherwise the card dead-ends on GET /spots/{id} 404.
-    # Insert the join row directly so we bypass the save-time guard.
     uid = await _seed_user(override_db_and_seed)
     await _seed_spot(override_db_and_seed, "SAVE-VISIBLE")
     await _seed_hidden_spot(override_db_and_seed, "SAVE-GONE")

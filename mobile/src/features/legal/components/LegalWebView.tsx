@@ -5,13 +5,7 @@ import * as WebBrowser from "expo-web-browser";
 import { colors, spacing } from "@/constants/theme";
 import { LEGAL_BASE_URL } from "@/features/legal/constants";
 
-/** In-app document viewer (S06 D1/D3). Loads only pictrip.org/legal/* in the
- * WebView; any other navigation opens in the system browser. On load failure,
- * offers retry + open-in-browser. */
 export function LegalWebView({ url }: { url: string }) {
-  // react-native-webview 14's `WebView<P = undefined>` collapses its props to
-  // `never` under React 19's JSX typing; instantiating the generic as `<object>`
-  // resolves `WebViewProps & object` back to `WebViewProps`. Runtime unchanged.
   const ref = useRef<WebView<object>>(null);
   const [loading, setLoading] = useState(true);
   const [errored, setErrored] = useState(false);
