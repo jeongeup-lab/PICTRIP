@@ -20,6 +20,11 @@ const items: SourceItem[] = [
     kind: "kto",
     title: "관광지 원천 데이터",
   },
+  {
+    kind: "kakao",
+    title: "카카오 장소 검색",
+    url: "https://place.map.kakao.com/42",
+  },
 ];
 
 async function mount(onClose = jest.fn()) {
@@ -40,7 +45,7 @@ describe("SourcesSheet", () => {
     jest.restoreAllMocks();
   });
 
-  it("KTO 입력은 보이지 않고 소스 제목은 유지한다", async () => {
+  it("블로그가 아닌 입력은 보이지 않고 소스 제목은 유지한다", async () => {
     const tree = await mount();
     const output = rendered(tree);
 
@@ -48,6 +53,7 @@ describe("SourcesSheet", () => {
     expect(output).not.toContain("관광지 원천 데이터");
     expect(output).not.toContain("한국관광공사 TourAPI");
     expect(output).not.toContain("관광지 정보 출처");
+    expect(output).not.toContain("카카오 장소 검색");
     expect(tree.root.findAllByProps({ testID: "travel-source-kto" })).toHaveLength(0);
   });
 
