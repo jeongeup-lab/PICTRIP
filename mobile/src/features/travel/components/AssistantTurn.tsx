@@ -64,6 +64,7 @@ export function AssistantTurn({
 
   const mapSpots = useMemo(() => placed(turn.spots), [turn.spots]);
   const pins = useMemo(() => pinsFrom(mapSpots), [mapSpots]);
+  const visibleSources = turn.sources.filter((source) => source.kind !== "kto");
   const fit = useMemo(() => {
     const box = bounds(mapSpots);
     if (!box) return null;
@@ -146,16 +147,16 @@ export function AssistantTurn({
         </View>
       ) : null}
 
-      {turn.sources.length > 0 ? (
+      {visibleSources.length > 0 ? (
         <Pressable
           testID="travel-sources"
           accessibilityRole="button"
-          accessibilityLabel={`${SOURCES_LABEL} ${turn.sources.length}개 보기`}
+          accessibilityLabel={`${SOURCES_LABEL} ${visibleSources.length}개 보기`}
           style={({ pressed }) => [styles.sourcesRow, pressed && styles.pressed]}
           onPress={() => setSourcesOpen(true)}
         >
           <View style={styles.faviconStack}>
-            {turn.sources.slice(0, 3).map((source, index) => (
+            {visibleSources.slice(0, 3).map((source, index) => (
               <View
                 key={`${index}-${source.title}`}
                 style={[styles.favicon, index > 0 && styles.faviconOverlap]}
@@ -170,7 +171,7 @@ export function AssistantTurn({
             ))}
           </View>
           <Text style={styles.sourcesText}>
-            {SOURCES_LABEL} {turn.sources.length}
+            {SOURCES_LABEL} {visibleSources.length}
           </Text>
         </Pressable>
       ) : null}
@@ -194,7 +195,7 @@ export function AssistantTurn({
 
       <SourcesSheet
         visible={sourcesOpen}
-        items={turn.sources}
+        items={visibleSources}
         onClose={() => setSourcesOpen(false)}
       />
     </View>

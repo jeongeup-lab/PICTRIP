@@ -5,8 +5,6 @@ import type { SourceItem, SourceKind } from "@/features/travel/api";
 import { colors, radii, spacing } from "@/constants/theme";
 
 export const SOURCES_TITLE = "소스";
-export const KTO_SOURCE_TITLE = "한국관광공사 TourAPI";
-export const KTO_SOURCE_NOTE = "관광지 정보 출처";
 
 export const KIND_ICONS: Record<SourceKind, IconName> = {
   naver_blog: "globe",
@@ -73,19 +71,21 @@ export function SourcesSheet({ visible, items, onClose }: Props) {
           onPress={(e) => e.stopPropagation()}
         >
           <View style={styles.grabber} />
-          <Text style={styles.title}>{SOURCES_TITLE}</Text>
+          <View style={styles.header}>
+            <Text style={styles.title}>{SOURCES_TITLE}</Text>
+            <Pressable
+              accessibilityLabel="소스 닫기"
+              accessibilityRole="button"
+              onPress={onClose}
+              style={({ pressed }) => [styles.close, pressed && styles.pressed]}
+              testID="travel-sources-close"
+            >
+              <Icon name="close" size={20} color={colors.sec} />
+            </Pressable>
+          </View>
           {listed.map((item, index) => (
             <SourceRow key={`${index}-${item.title}`} item={item} />
           ))}
-          <View testID="travel-source-kto" style={styles.row}>
-            <View style={styles.kindBadge}>
-              <Icon name={KIND_ICONS.kto} size={14} color={colors.sec} strokeWidth={1.9} />
-            </View>
-            <View style={styles.copy}>
-              <Text style={styles.rowTitle}>{KTO_SOURCE_TITLE}</Text>
-              <Text style={styles.rowNote}>{KTO_SOURCE_NOTE}</Text>
-            </View>
-          </View>
         </Pressable>
       </Pressable>
     </Modal>
@@ -109,7 +109,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.line,
     marginBottom: spacing.md,
   },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   title: { fontSize: 18, fontWeight: "800", letterSpacing: -0.3, color: colors.ink },
+  close: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   pressed: { opacity: 0.7 },
   row: {
     flexDirection: "row",
@@ -131,5 +133,5 @@ const styles = StyleSheet.create({
   },
   copy: { flex: 1, minWidth: 0 },
   rowTitle: { fontSize: 14, fontWeight: "600", letterSpacing: -0.2, color: colors.ink },
-  rowNote: { marginTop: 2, fontSize: 12, color: colors.ter },
+  rowNote: { marginTop: 2, fontSize: 12, color: colors.sec },
 });
