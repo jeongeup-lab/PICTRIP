@@ -102,6 +102,29 @@ describe("ExploreGrid", () => {
     expect(hosts(r, "carousel").length).toBe(0);
   });
 
+  it("closes the modal when the empty space around the post is tapped", async () => {
+    setFeed();
+    const r = await mount();
+    await act(async () => {
+      r.root.findAllByProps({ testID: "explore-tile" })[0].props.onPress();
+    });
+    await act(async () => {
+      r.root.findByProps({ testID: "post-modal-backdrop" }).props.onPress();
+    });
+    expect(hosts(r, "carousel").length).toBe(0);
+  });
+
+  it("keeps the modal open when the post itself is tapped", async () => {
+    setFeed();
+    const r = await mount();
+    await act(async () => {
+      r.root.findAllByProps({ testID: "explore-tile" })[0].props.onPress();
+    });
+    const sheet = r.root.findByProps({ testID: "post-modal-sheet" });
+    expect(sheet.props.onStartShouldSetResponder()).toBe(true);
+    expect(hosts(r, "carousel").length).toBe(1);
+  });
+
   it("wires the grid list into the tab re-tap scroll-to-top hook", async () => {
     setFeed();
     const r = await mount();

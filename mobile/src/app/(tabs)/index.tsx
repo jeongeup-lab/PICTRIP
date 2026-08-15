@@ -96,7 +96,7 @@ export default function HomeScreen() {
             showNational
               ? "전국 인기 장소"
               : regionLabel
-                ? `${regionLabel} 인기 장소`
+                ? `${regionLabel} 근처 인기 장소`
                 : "지금 주변 인기 장소"
           }
           note={cards.length > 0 ? formatBaseDate(active.data?.baseDate) : null}
