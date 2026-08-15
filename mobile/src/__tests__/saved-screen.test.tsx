@@ -6,9 +6,13 @@ import { useRecentSpots } from "@/features/spots/stores/recent-store";
 import { unsaveMessage } from "@/features/saved/lib/undo-message";
 import type { SpotCard } from "@/lib/api-types";
 
-jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
+jest.mock("expo-router", () => ({
+  router: { push: jest.fn(), navigate: jest.fn(), back: jest.fn() },
+}));
 
 const routerPush = jest.requireMock<{ router: { push: jest.Mock } }>("expo-router").router.push;
+const routerNavigate = jest.requireMock<{ router: { navigate: jest.Mock } }>("expo-router").router
+  .navigate;
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
@@ -262,6 +266,15 @@ describe("SavedScreen", () => {
     const tree = await mount();
 
     expect(tree.root.findAllByProps({ testID: "recent-seen" }).length).toBeGreaterThan(0);
-    expect(tree.root.findAllByProps({ testID: "open-travel" }).length).toBeGreaterThan(0);
+    expect(tree.root.findAllByProps({ testID: "open-explore" }).length).toBeGreaterThan(0);
+  });
+
+  it("opens Explore from the empty scrap CTA", async () => {
+    useSavedListMock.mockReturnValue({ data: [], isLoading: false });
+    const tree = await mount();
+
+    expect(tree.root.findAllByProps({ testID: "open-explore" }).length).toBeGreaterThan(0);
+    await press(tree, "open-explore");
+    expect(routerNavigate).toHaveBeenCalledWith("/(tabs)/explore");
   });
 });
