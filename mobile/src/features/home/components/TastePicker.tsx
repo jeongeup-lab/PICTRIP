@@ -168,11 +168,7 @@ export function TastePicker() {
           <Text
             style={styles.leadTitle}
           >{`마음이 가는 곳을\n${MIN_PICKS}곳 이상 골라주세요.`}</Text>
-          <Text style={styles.leadBody}>
-            {canRotate
-              ? "마음에 드는 게 없으면 오른쪽 위에서 새로고침하세요."
-              : "고른 곳과 닮은 장소를 홈에서 추천해 드려요."}
-          </Text>
+          <Text style={styles.leadBody}>고른 곳과 닮은 장소를 홈에서 추천해 드려요.</Text>
         </View>
 
         <View style={styles.grid}>
