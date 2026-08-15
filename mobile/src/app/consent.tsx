@@ -3,6 +3,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { InfoBox } from "@/components/InfoBox";
+import { ListGroup } from "@/components/ListGroup";
+import { ListRow } from "@/components/ListRow";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { useConsents } from "@/features/consent/queries";
@@ -40,23 +42,20 @@ export default function ConsentScreen() {
               </Pressable>
             </View>
           ) : (
-            <>
-              <View style={styles.group}>
-                <View style={styles.row}>
-                  <Text style={styles.label}>[필수] 약관·개인정보 수집·이용</Text>
-                  <Text style={[styles.value, data.termsVersion && styles.valueOn]}>
-                    {data.termsVersion ? "동의함" : "기록 없음"}
-                  </Text>
-                </View>
-                <View style={styles.divider} />
-                <View style={styles.row}>
-                  <Text style={styles.label}>[선택] 위치정보 수집·이용</Text>
-                  <Text style={[styles.value, data.locationConsent && styles.valueOn]}>
-                    {data.locationConsent ? "동의함" : "동의 안 함"}
-                  </Text>
-                </View>
-              </View>
-            </>
+            <ListGroup style={styles.group}>
+              <ListRow
+                title="[필수] 약관·개인정보 수집·이용"
+                value={data.termsVersion ? "동의함" : "기록 없음"}
+                tone={data.termsVersion ? "on" : "off"}
+                testID="consent-terms"
+              />
+              <ListRow
+                title="[선택] 위치정보 수집·이용"
+                value={data.locationConsent ? "동의함" : "동의 안 함"}
+                tone={data.locationConsent ? "on" : "off"}
+                testID="consent-location"
+              />
+            </ListGroup>
           )}
         </ScrollView>
       )}
@@ -65,20 +64,8 @@ export default function ConsentScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.inset },
-  group: { backgroundColor: colors.bg, marginTop: 9 },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.md,
-    paddingVertical: 16,
-    paddingHorizontal: spacing.lg,
-  },
-  label: { flex: 1, fontSize: 15.5, fontWeight: "600", color: colors.ink },
-  value: { fontSize: 14, color: colors.ter },
-  valueOn: { color: colors.accentText, fontWeight: "700" },
-  divider: { height: 1, marginLeft: spacing.lg, backgroundColor: colors.line },
+  root: { flex: 1, backgroundColor: colors.bg },
+  group: { marginTop: spacing.md },
   note: { textAlign: "center", color: colors.ter, fontSize: 14, marginTop: spacing.xxl },
   errBox: { alignItems: "center", gap: spacing.md, marginTop: spacing.xxl },
   retry: { color: colors.ink, fontSize: 14, fontWeight: "700" },

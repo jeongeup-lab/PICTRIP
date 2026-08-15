@@ -21,7 +21,7 @@ interface Props {
 const TONE_STYLE = {
   muted: undefined,
   on: { color: colors.positive },
-  off: { color: colors.ter },
+  off: { color: colors.sec },
   danger: { color: colors.accentText },
 } as const;
 
