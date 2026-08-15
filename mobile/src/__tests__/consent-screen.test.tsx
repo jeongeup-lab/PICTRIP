@@ -73,6 +73,17 @@ describe("ConsentScreen", () => {
       .join("|");
     expect(termsRow.findAllByType(Text).map((node) => node.props.children)).toContain("동의함");
     expect(locationRow.findAllByType(Text).map((node) => node.props.children)).toContain("동의함");
+    expect(
+      termsRow
+        .findAllByType(Text)
+        .find((node) => node.props.children === "[필수] 약관·개인정보 수집·이용")?.props
+        .numberOfLines,
+    ).toBe(2);
+    expect(
+      locationRow
+        .findAllByType(Text)
+        .find((node) => node.props.children === "[선택] 위치정보 수집·이용")?.props.numberOfLines,
+    ).toBe(2);
     expect(shown).toContain("[필수] 약관·개인정보 수집·이용");
     expect(shown).toContain("[선택] 위치정보 수집·이용");
     expect(shown).not.toContain("재동의");
