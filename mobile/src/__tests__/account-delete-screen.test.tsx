@@ -75,7 +75,7 @@ describe("AccountDeleteScreen", () => {
     expect(expoRouterMock.router.replace).toHaveBeenCalledWith("/(tabs)");
   });
 
-  it("presents irreversible PicTrip data in a dedicated consequences section", async () => {
+  it("states the loss in one line and names each item once", async () => {
     await act(async () => {
       mounted = renderer.create(<AccountDeleteScreen />);
     });
@@ -86,8 +86,11 @@ describe("AccountDeleteScreen", () => {
       .findAllByType(Text)
       .map((node) => JSON.stringify(node.props.children))
       .join("|");
-    expect(shown).toContain("삭제되는 PicTrip 데이터");
-    expect(shown).toContain("PicTrip에 저장된 소셜 로그인 연결 정보가 삭제돼요");
+    expect(shown).toContain("탈퇴하면 되돌릴 수 없어요.");
+    expect(shown).toContain("저장한 장소 1곳");
+    expect(shown).toContain("취향에 맞춘 추천");
+    expect(shown).toContain("계정 정보와 로그인 연결");
+    expect(shown).not.toContain("PicTrip에 저장된");
   });
 
   it("prevents removal only while account deletion is in flight", async () => {

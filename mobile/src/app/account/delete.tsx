@@ -71,36 +71,18 @@ export default function AccountDeleteScreen() {
           contentContainerStyle={[styles.scroll, { paddingBottom: spacing.lg + insets.bottom }]}
         >
           <View style={styles.content}>
-            <View style={styles.heading}>
-              <View style={styles.headingIcon}>
-                <Icon name="user-x" size={22} color={colors.accentText} />
-              </View>
-              <View style={styles.headingCopy}>
-                <Text style={styles.eyebrow}>{accountDeletion.eyebrow}</Text>
-                <Text style={styles.headingTitle}>{accountDeletion.heading}</Text>
-                <Text lineBreakStrategyIOS="hangul-word" style={styles.lead}>
-                  {accountDeletion.lead}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.consequencesBlock}>
-              <Text style={styles.sectionLabel}>{accountDeletion.consequencesLabel}</Text>
-              <View style={styles.losses} testID="delete-consequences">
-                {losses.map((loss) => (
-                  <View key={loss} style={styles.loss}>
-                    <Icon name="close" size={15} color={colors.danger} />
-                    <Text lineBreakStrategyIOS="hangul-word" style={styles.lossText}>
-                      {loss}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-              <View style={styles.irreversibleNotice}>
-                <Icon name="info" size={16} color={colors.accentText} />
-                <Text lineBreakStrategyIOS="hangul-word" style={styles.irreversibleNoticeText}>
-                  {accountDeletion.irreversibleNotice}
-                </Text>
-              </View>
+            <Text lineBreakStrategyIOS="hangul-word" style={styles.lead}>
+              {accountDeletion.lead}
+            </Text>
+            <View style={styles.losses} testID="delete-consequences">
+              {losses.map((loss) => (
+                <View key={loss} style={styles.loss}>
+                  <Icon name="close" size={17} color={colors.danger} />
+                  <Text lineBreakStrategyIOS="hangul-word" style={styles.lossText}>
+                    {loss}
+                  </Text>
+                </View>
+              ))}
             </View>
             <Pressable
               accessibilityRole="checkbox"
@@ -150,50 +132,23 @@ export default function AccountDeleteScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { flexGrow: 1, justifyContent: "space-between", padding: spacing.lg },
-  content: { gap: spacing.lg },
-  heading: { flexDirection: "row", alignItems: "flex-start", gap: spacing.md },
-  headingIcon: {
-    width: spacing.xxl + spacing.sm,
-    height: spacing.xxl + spacing.sm,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radii.lg,
-    backgroundColor: colors.accentFill,
-  },
-  headingCopy: { flex: 1, gap: spacing.xs },
-  eyebrow: { fontSize: 13, fontWeight: "800", letterSpacing: -0.1, color: colors.accentText },
-  headingTitle: {
+  content: { gap: spacing.xl },
+  lead: {
+    marginTop: spacing.sm,
     fontSize: 22,
-    lineHeight: 28,
+    lineHeight: 30,
     fontWeight: "800",
     letterSpacing: -0.5,
     color: colors.ink,
   },
-  lead: { fontSize: 14, lineHeight: 21, color: colors.sec },
-  consequencesBlock: { gap: spacing.sm },
-  sectionLabel: { fontSize: 13, fontWeight: "800", letterSpacing: -0.1, color: colors.sec },
-  losses: {
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: radii.lg,
-    backgroundColor: colors.accentFill,
-  },
-  loss: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm },
-  lossText: { flex: 1, fontSize: 14, lineHeight: 20, color: colors.sec },
-  irreversibleNotice: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacing.sm,
-    padding: spacing.sm,
-    borderRadius: radii.md,
-    backgroundColor: colors.fill,
-  },
-  irreversibleNoticeText: { flex: 1, fontSize: 13, lineHeight: 19, color: colors.sec },
+  losses: { gap: spacing.md },
+  loss: { flexDirection: "row", alignItems: "center", gap: 11 },
+  lossText: { flex: 1, fontSize: 15, lineHeight: 22, fontWeight: "600", color: colors.ink },
   acknowledgement: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: spacing.sm,
-    padding: spacing.sm,
+    paddingVertical: spacing.sm,
     borderRadius: radii.md,
   },
   acknowledgementText: { flex: 1, fontSize: 14, lineHeight: 21, color: colors.sec },
