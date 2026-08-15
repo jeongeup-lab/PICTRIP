@@ -8,6 +8,7 @@ export type ListRowTone = "muted" | "on" | "off" | "danger";
 interface Props {
   icon?: IconName;
   title: string;
+  titleLines?: 1 | 2;
   sub?: string | null;
   value?: string | null;
   tone?: ListRowTone;
@@ -28,6 +29,7 @@ const TONE_STYLE = {
 export function ListRow({
   icon,
   title,
+  titleLines = 1,
   sub,
   value,
   tone = "muted",
@@ -45,7 +47,7 @@ export function ListRow({
         </View>
       ) : null}
       <View style={styles.main}>
-        <Text style={[styles.title, danger && styles.titleDanger]} numberOfLines={1}>
+        <Text style={[styles.title, danger && styles.titleDanger]} numberOfLines={titleLines}>
           {title}
         </Text>
         {sub ? (

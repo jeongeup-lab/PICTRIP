@@ -45,12 +45,14 @@ export default function ConsentScreen() {
             <ListGroup style={styles.group}>
               <ListRow
                 title="[필수] 약관·개인정보 수집·이용"
+                titleLines={2}
                 value={data.termsVersion ? "동의함" : "기록 없음"}
                 tone={data.termsVersion ? "on" : "off"}
                 testID="consent-terms"
               />
               <ListRow
                 title="[선택] 위치정보 수집·이용"
+                titleLines={2}
                 value={data.locationConsent ? "동의함" : "동의 안 함"}
                 tone={data.locationConsent ? "on" : "off"}
                 testID="consent-location"
