@@ -44,9 +44,6 @@ QUESTION_TAIL = re.compile(
     r"(추천\s*해?\s*줘|추천해주세요|알려\s*줘|알려주세요|찾아\s*줘|찾아주세요|"
     r"어디야|어디\s*있어|있을까|해줘|하고\s*싶어|좀|요\?|\?|!)"
 )
-KTO_SOURCE = SourceItem(
-    kind="kto", title="한국관광공사 TourAPI", url="https://api.visitkorea.or.kr"
-)
 
 
 def encode(name: str, payload: BaseModel) -> str:
@@ -114,7 +111,7 @@ async def events(
         yield "cards", ChatCardsEvent(spots=result.spots, tagBasis=result.tagBasis)
 
     posts = await _ground_with_blogs(result, message=payload.message)
-    sources = _sources(result, posts)
+    sources = _sources(posts)
 
     if _llm_is_down(result):
         logger.warning("agent.chat.writer_skipped", results=len(result.spots))
@@ -287,14 +284,11 @@ async def _blog_call(client: httpx.AsyncClient, query: str) -> list[naver.NaverB
         return []
 
 
-def _sources(result: AskResponse, posts: list[naver.NaverBlogPost]) -> list[SourceItem]:
-    items = [
+def _sources(posts: list[naver.NaverBlogPost]) -> list[SourceItem]:
+    return [
         SourceItem(kind="naver_blog", title=post.title, url=post.link, date=post.postdate)
         for post in posts
     ]
-    if result.spots:
-        items.append(KTO_SOURCE)
-    return items
 
 
 def _llm_is_down(result: AskResponse) -> bool:

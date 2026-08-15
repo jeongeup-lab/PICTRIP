@@ -152,15 +152,15 @@ async def test_chat_cards_event_carries_the_ask_spots_and_tag_basis(monkeypatch)
     assert cards["tagBasis"] == "혼잡도 예측 기준"
 
 
-async def test_chat_sources_hold_the_grounding_blogs_plus_the_fixed_kto_row(monkeypatch) -> None:
+async def test_chat_sources_hold_only_the_grounding_blogs(monkeypatch) -> None:
     _wire(monkeypatch, gemini=_FakeGemini(PIECES))
 
     events = await _collect(ChatRequest(message="부산 계곡"))
 
     sources = next(event.model_dump() for name, event in events if name == "sources")
     kinds = [item["kind"] for item in sources["items"]]
-    assert "naver_blog" in kinds
-    assert kinds[-1] == "kto"
+    assert kinds
+    assert set(kinds) == {"naver_blog"}
     blog = next(item for item in sources["items"] if item["kind"] == "naver_blog")
     assert blog["url"].startswith("https://blog.naver.com/")
     assert blog["date"] == "20260801"
