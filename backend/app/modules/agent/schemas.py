@@ -137,7 +137,7 @@ class AskContext(BaseModel):
 
 
 class AskRequest(BaseModel):
-    question: str | None = None
+    question: Annotated[str, StringConstraints(max_length=MAX_MESSAGE_CHARS)] | None = None
     lat: float | None = Field(None, ge=-90.0, le=90.0)
     lng: float | None = Field(None, ge=-180.0, le=180.0)
     intent: QueryIntent | None = None

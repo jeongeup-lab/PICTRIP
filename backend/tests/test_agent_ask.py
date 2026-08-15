@@ -25,10 +25,12 @@ from app.modules.agent.routes import MAX_BODY_BYTES
 from app.modules.agent.schemas import (
     MAX_HINT_TOKENS,
     MAX_KEYWORDS,
+    MAX_MESSAGE_CHARS,
     MAX_NAMED_PLACES,
     MAX_REGION_HINTS,
     MAX_TEXT_CHARS,
     AgentSpotCard,
+    AskRequest,
     AskResponse,
     ExtractedPlace,
     Mood,
@@ -485,6 +487,33 @@ async def test_ask_rejects_a_request_without_question_or_photo(db_session, clien
     _override(db_session)
     try:
         res = await client.post("/v1/agent/ask", json={})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "VALIDATION_FAILED"
+
+
+def test_ask_question_accepts_the_documented_character_limit() -> None:
+    question = "가" * MAX_MESSAGE_CHARS
+
+    assert AskRequest(question=question).question == question
+
+
+@pytest.mark.integration
+async def test_ask_rejects_a_question_over_the_character_limit_before_service_execution(
+    db_session, client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def should_not_run(*args: object, **kwargs: object) -> AskResponse:
+        raise AssertionError("ask service must not run for an oversized question")
+
+    monkeypatch.setattr(ask_service, "ask", should_not_run)
+    _override(db_session)
+    try:
+        res = await client.post(
+            "/v1/agent/ask",
+            json={"question": "가" * (MAX_MESSAGE_CHARS + 1)},
+        )
     finally:
         app.dependency_overrides.clear()
 
