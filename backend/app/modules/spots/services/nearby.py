@@ -204,11 +204,18 @@ async def find_nearby_spots(
     radius: int,
     category: NearbyCategory | None,
     travel_only: bool = False,
+    title_terms: list[str] | None = None,
 ) -> list[NearbySpotRow]:
     dlat = radius / 111_320.0
     dlng = radius / (111_320.0 * max(math.cos(math.radians(lat)), 0.01))
 
-    inner = _base_select(_dist_expr(lat, lng), _predicate_for(category, travel_only)).where(
+    predicate = _predicate_for(category, travel_only)
+    if title_terms:
+        predicate = and_(
+            predicate,
+            *(Spot.title.ilike(f"%{term}%") for term in title_terms),
+        )
+    inner = _base_select(_dist_expr(lat, lng), predicate).where(
         Spot.mapy.between(lat - dlat, lat + dlat),
         Spot.mapx.between(lng - dlng, lng + dlng),
     )

@@ -182,6 +182,7 @@ WITH scored AS (
       AND ({attraction})
       {code_clause}
       {region_clause}
+      {title_clause}
       {indoor_clause}
       {mood_clause}
       {locatable_clause}
@@ -195,6 +196,7 @@ LIMIT :lim
 
 _CODE_CLAUSE = "AND spots.lcls_systm3 = ANY(CAST(:codes AS text[]))"
 _REGION_CLAUSE = "AND spots.addr1 LIKE ANY(CAST(:region_patterns AS text[]))"
+_TITLE_CLAUSE = "AND spots.title ILIKE ALL(CAST(:title_patterns AS text[]))"
 _LOCATABLE_CLAUSE = "AND spots.mapx IS NOT NULL AND spots.mapy IS NOT NULL"
 _INDOOR_CLAUSE = (
     "AND (spots.lcls_systm2 = ANY(CAST(:indoor_l2 AS text[])) "
@@ -243,6 +245,7 @@ async def find_candidates(
     indoor_only: bool = False,
     mood_ids: list[int] | None = None,
     pool_sql: str | None = None,
+    title_terms: list[str] | None = None,
     rank_seed: str | None = None,
 ) -> list[CandidateRow]:
     params: dict[str, object] = {"lim": limit, "rank_seed": rank_seed or rank_seed_for_today()}
@@ -261,6 +264,10 @@ async def find_candidates(
     if region_prefixes:
         region_clause = _REGION_CLAUSE
         params["region_patterns"] = [f"{prefix}%" for prefix in region_prefixes]
+    title_clause = ""
+    if title_terms:
+        title_clause = _TITLE_CLAUSE
+        params["title_patterns"] = [f"%{term}%" for term in title_terms]
     params["indoor_l2"] = list(INDOOR_L2)
     params["indoor_l3"] = list(INDOOR_L3)
     indoor_clause = _INDOOR_CLAUSE if indoor_only else ""
@@ -278,6 +285,7 @@ async def find_candidates(
         attraction=pool_sql or travel_category_sql(),
         code_clause=code_clause,
         region_clause=region_clause,
+        title_clause=title_clause,
         indoor_clause=indoor_clause,
         mood_clause=mood_clause,
         locatable_clause=_LOCATABLE_CLAUSE if order == "distance" else "",
