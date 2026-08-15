@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Literal
 
@@ -73,6 +74,36 @@ DISH_WORDS = (
 )
 EXACT_DISH_WORDS = frozenset({"회", "고기", "구이", "찜", "탕"})
 MIN_FOOD_SUFFIX_CHARS = 2
+DISH_PARTICLES = frozenset({"", "을", "를", "이", "가", "은", "는", "도", "만", "로", "으로"})
+DISH_PLACE_SUFFIXES = frozenset((*FOOD_SUFFIXES, "맛집", "식당"))
+DISH_NEGATIONS = frozenset({"말고", "빼고", "제외", "제외하고"})
+
+
+def _targets_dish(token: str, word: str) -> bool:
+    if not token.startswith(word):
+        return False
+    suffix = token[len(word) :]
+    if suffix in DISH_PARTICLES:
+        return True
+    return any(
+        suffix.startswith(place_suffix) and suffix[len(place_suffix) :] in DISH_PARTICLES
+        for place_suffix in DISH_PLACE_SUFFIXES
+    )
+
+
+def dish_search_terms(question: str) -> list[str]:
+    tokens = re.findall(r"[가-힣]+", question)
+    picked: list[str] = []
+    for word in (*DISH_WORDS, *sorted(EXACT_DISH_WORDS)):
+        for index, token in enumerate(tokens):
+            if not _targets_dish(token, word):
+                continue
+            if index + 1 < len(tokens) and tokens[index + 1] in DISH_NEGATIONS:
+                continue
+            if not any(word in existing for existing in picked):
+                picked.append(word)
+            break
+    return picked
 
 
 def food_word(keywords: list[str]) -> Literal["food", "cafe"] | None:
@@ -240,6 +271,7 @@ async def search_candidates(
     indoor_only: bool = False,
     mood_ids: list[int] | None = None,
     pool_sql: str | None = None,
+    title_terms: list[str] | None = None,
 ) -> list[CandidateRow]:
     quiet = preference == "quiet"
 
@@ -258,6 +290,7 @@ async def search_candidates(
             indoor_only=indoor_only,
             mood_ids=mood_ids,
             pool_sql=pool_sql,
+            title_terms=title_terms,
         )
 
     if preference == "any":
@@ -280,6 +313,7 @@ async def search_food(
     lat: float | None = None,
     lng: float | None = None,
     near: bool = False,
+    title_terms: list[str] | None = None,
 ) -> list[CandidateRow]:
     pool = NearbyCategory.cafe if action == "cafe" else NearbyCategory.food
     return await search_candidates(
@@ -293,6 +327,7 @@ async def search_food(
         indoor_only=indoor_only,
         mood_ids=mood_ids,
         pool_sql=category_sql(pool),
+        title_terms=title_terms,
     )
 
 
