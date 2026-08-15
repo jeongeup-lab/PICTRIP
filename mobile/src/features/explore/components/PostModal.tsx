@@ -7,12 +7,13 @@ import { colors } from "@/constants/theme";
 export function PostModal({ post, onClose }: { post: OverseasPost; onClose: () => void }) {
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable
-        testID="post-modal-backdrop"
-        style={styles.backdrop}
-        onPress={onClose}
-        accessibilityLabel="닫기"
-      >
+      <View style={styles.stage}>
+        <Pressable
+          testID="post-modal-backdrop"
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+          accessibilityLabel="닫기"
+        />
         <Pressable
           testID="post-modal-close"
           style={styles.close}
@@ -22,16 +23,14 @@ export function PostModal({ post, onClose }: { post: OverseasPost; onClose: () =
         >
           <Icon name="close" size={20} color={colors.onImage} strokeWidth={1.8} />
         </Pressable>
-        <View testID="post-modal-sheet" onStartShouldSetResponder={() => true}>
-          <PostCarousel post={post} onNavigate={onClose} />
-        </View>
-      </Pressable>
+        <PostCarousel post={post} onNavigate={onClose} />
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
+  stage: {
     flex: 1,
     backgroundColor: "rgba(16,14,18,0.92)",
     alignItems: "center",
