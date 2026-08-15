@@ -12,6 +12,7 @@ import { PhotoViewer } from "@/features/spots/components/PhotoViewer";
 import { LocationSection } from "@/features/spots/components/LocationSection";
 import { VisitSection } from "@/features/spots/components/VisitSection";
 import { NearbyRail } from "@/features/spots/components/NearbyRail";
+import { SourceCredit } from "@/features/legal/components/SourceCredit";
 import { colors, spacing } from "@/constants/theme";
 
 export default function SpotScreen() {
@@ -122,6 +123,8 @@ export default function SpotScreen() {
           lng={data?.mapx ?? null}
           excludeId={data?.contentId ?? ""}
         />
+
+        <SourceCredit />
       </ScrollView>
       <PhotoViewer
         visible={galleryOpen}
