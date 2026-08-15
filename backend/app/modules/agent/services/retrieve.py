@@ -76,7 +76,8 @@ EXACT_DISH_WORDS = frozenset({"회", "고기", "구이", "찜", "탕"})
 MIN_FOOD_SUFFIX_CHARS = 2
 DISH_PARTICLES = frozenset({"", "을", "를", "이", "가", "은", "는", "도", "만", "로", "으로"})
 DISH_PLACE_SUFFIXES = frozenset((*FOOD_SUFFIXES, "맛집", "식당"))
-DISH_NEGATIONS = frozenset({"말고", "빼고", "제외", "제외하고"})
+DISH_NEGATIONS = frozenset({"말고", "빼고", "대신", "아닌", "제외", "제외한", "제외하고"})
+GENERIC_EATING_WORDS = frozenset((*FOOD_WORDS, *CAFE_WORDS))
 
 
 def _targets_dish(token: str, word: str) -> bool:
@@ -91,18 +92,48 @@ def _targets_dish(token: str, word: str) -> bool:
     )
 
 
+def _generic_eating_token(token: str) -> bool:
+    return any(
+        token == f"{word}{particle}" for word in GENERIC_EATING_WORDS for particle in DISH_PARTICLES
+    )
+
+
+def _specific_place_term(token: str) -> str | None:
+    if _generic_eating_token(token):
+        return None
+    endings = (
+        f"{place_suffix}{particle}"
+        for place_suffix in sorted(DISH_PLACE_SUFFIXES, key=len, reverse=True)
+        for particle in sorted(DISH_PARTICLES, key=len, reverse=True)
+    )
+    for ending in endings:
+        if token.endswith(ending):
+            term = token[: -len(ending)]
+            return term if len(term) >= MIN_FOOD_SUFFIX_CHARS else None
+    return None
+
+
 def dish_search_terms(question: str) -> list[str]:
     tokens = re.findall(r"[가-힣]+", question)
+    replacements = [index for index, token in enumerate(tokens) if token in DISH_NEGATIONS]
+    if replacements:
+        tokens = tokens[replacements[-1] + 1 :]
     picked: list[str] = []
-    for word in (*DISH_WORDS, *sorted(EXACT_DISH_WORDS)):
-        for index, token in enumerate(tokens):
-            if not _targets_dish(token, word):
-                continue
-            if index + 1 < len(tokens) and tokens[index + 1] in DISH_NEGATIONS:
-                continue
-            if not any(word in existing for existing in picked):
-                picked.append(word)
-            break
+    positions: list[int] = []
+    known_words = (*DISH_WORDS, *sorted(EXACT_DISH_WORDS))
+    for index, token in enumerate(tokens):
+        term = next((word for word in known_words if _targets_dish(token, word)), None)
+        term = term or _specific_place_term(token)
+        if term is None:
+            continue
+        positions.append(index)
+        if not any(term in existing for existing in picked):
+            picked.append(term)
+    cafe_positions = [
+        index for index, token in enumerate(tokens) if any(word in token for word in CAFE_WORDS)
+    ]
+    if positions and cafe_positions and cafe_positions[-1] > positions[-1]:
+        return []
     return picked
 
 
