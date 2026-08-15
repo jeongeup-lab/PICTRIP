@@ -12,12 +12,8 @@
       "url": "https://u.expo.dev/b4beab09-95ca-45e7-8726-4b3dbcb520fa"
     },
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "icon": "./assets/icon.png",
-    "splash": {
-      "backgroundColor": "#000000",
-      "resizeMode": "contain"
-    },
     "ios": {
       "bundleIdentifier": "com.jeongeup.pictrip",
       "associatedDomains": ["applinks:pictrip.org"],
@@ -53,7 +49,6 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-location",
       [
         "expo-image-picker",
         {
@@ -64,7 +59,27 @@
       ],
       "expo-web-browser",
       "expo-apple-authentication",
-      "expo-image"
+      "expo-image",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "내 주변 여행지를 찾기 위해 현재 위치를 사용합니다. 위치는 검색에 한 번 쓰고 저장하지 않아요.",
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#000000",
+          "image": "./assets/icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#000000"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
