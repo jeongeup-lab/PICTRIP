@@ -43,3 +43,36 @@ def test_mixing_food_and_cafe_picks_neither() -> None:
 
 def test_no_keywords_is_not_food() -> None:
     assert retrieve.food_word([]) is None
+
+
+def test_a_dish_place_in_the_raw_question_yields_its_canonical_title_term() -> None:
+    assert retrieve.dish_search_terms("정읍 삼겹살집") == ["삼겹살"]
+
+
+@pytest.mark.parametrize("question", ["정읍 맛집", "정읍 카페"])
+def test_a_generic_food_question_has_no_dish_title_constraint(question: str) -> None:
+    assert retrieve.dish_search_terms(question) == []
+
+
+def test_an_exact_dish_word_is_not_inferred_from_an_unrelated_word() -> None:
+    assert retrieve.dish_search_terms("정읍 회 맛집") == ["회"]
+    assert retrieve.dish_search_terms("정읍 교회 근처") == []
+
+
+@pytest.mark.parametrize(
+    ("question", "expected"),
+    [
+        ("국밥 말고 삼겹살집", ["삼겹살"]),
+        ("국밥은 말고 삼겹살집", ["삼겹살"]),
+        ("한국수자원공사 근처", []),
+        ("삼겹살마을 근처 카페", []),
+        ("국밥을 먹고 싶어", ["국밥"]),
+        ("돈까스전문점 추천", ["돈까스"]),
+        ("거기 근처 삼겹살집은?", ["삼겹살"]),
+        ("거기 근처 보쌈집은?", ["보쌈"]),
+    ],
+)
+def test_only_a_positively_requested_dish_becomes_a_title_term(
+    question: str, expected: list[str]
+) -> None:
+    assert retrieve.dish_search_terms(question) == expected
