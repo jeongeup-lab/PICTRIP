@@ -35,7 +35,15 @@ jest.mock("@/features/saved/hooks/use-save-optimistic", () => ({
   useSaveOptimistic: () => ({ saved: false, toggle: jest.fn(async () => true) }),
 }));
 jest.mock("@/features/spots/queries", () => ({ prefetchSpot: jest.fn() }));
+jest.mock("@/lib/storage", () => ({
+  getAiConsent: jest.fn(async () => true),
+  setAiConsent: jest.fn(async () => {}),
+}));
 
+const storageMock = jest.requireMock("@/lib/storage") as {
+  getAiConsent: jest.Mock;
+  setAiConsent: jest.Mock;
+};
 const streamChatMock = streamChat as jest.Mock;
 const useNearbyCoordsMock = useNearbyCoords as jest.Mock;
 const { pickTravelPhoto } = jest.requireMock("@/features/travel/usecases/pick-travel-photo") as {
@@ -375,5 +383,55 @@ describe("TravelScreen 핀 탭", () => {
     expect(carousel.props.focusedIndex).toBe(1);
     expect(carousel.props.scrollToIndex).toBe(1);
     expect(map.props.anchorId).toBe("126509");
+  });
+});
+
+describe("TravelScreen Gemini 동의", () => {
+  beforeEach(() => storageMock.getAiConsent.mockResolvedValue(false));
+  afterEach(() => storageMock.getAiConsent.mockResolvedValue(true));
+
+  it("동의 전에는 질문을 보내지 않고 시트를 띄운다", async () => {
+    const tree = await mount();
+
+    await send(tree, "제주 조용한 바다");
+
+    expect(streamChatMock).not.toHaveBeenCalled();
+    expect(rendered(tree)).toContain("Google Gemini");
+  });
+
+  it("동의하면 기억하고 보류한 질문을 그대로 보낸다", async () => {
+    const tree = await mount();
+    await send(tree, "제주 조용한 바다");
+
+    await press(tree, "ai-consent-agree");
+
+    expect(storageMock.setAiConsent).toHaveBeenCalledTimes(1);
+    expect(streamChatMock).toHaveBeenCalledTimes(1);
+    expect((streamChatMock.mock.calls[0][0] as ChatInput).message).toBe("제주 조용한 바다");
+  });
+
+  it("거절하면 질문을 버리고 이유를 알린다", async () => {
+    const tree = await mount();
+    await send(tree, "제주 조용한 바다");
+
+    await press(tree, "ai-consent-decline");
+
+    expect(streamChatMock).not.toHaveBeenCalled();
+    expect(storageMock.setAiConsent).not.toHaveBeenCalled();
+    expect(rendered(tree)).toContain("동의하지 않아 질문을 보내지 않았어요");
+  });
+
+  it("사진만 보낼 때는 동의를 묻지 않는다", async () => {
+    pickTravelPhoto.mockResolvedValueOnce(PHOTO);
+    jest
+      .spyOn(ActionSheetIOS, "showActionSheetWithOptions")
+      .mockImplementation((_options, handler) => handler(1));
+    const tree = await mount();
+
+    await press(tree, "travel-attach");
+    await press(tree, "travel-send");
+
+    expect(streams[0].input.message).toBeNull();
+    expect(rendered(tree)).not.toContain("Google Gemini");
   });
 });
