@@ -113,7 +113,12 @@ export default function SpotScreen() {
             <IntroSection overview={data.overview} />
             <View style={styles.band} />
             <LocationSection spot={data} />
-            <VisitSection title={data.title} onShare={onShare} onScrap={onToggleSave} />
+            <VisitSection
+              title={data.title}
+              saved={saved}
+              onShare={onShare}
+              onScrap={onToggleSave}
+            />
           </>
         )}
 
