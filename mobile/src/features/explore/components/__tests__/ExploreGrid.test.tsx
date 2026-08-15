@@ -114,14 +114,14 @@ describe("ExploreGrid", () => {
     expect(hosts(r, "carousel").length).toBe(0);
   });
 
-  it("keeps the modal open when the post itself is tapped", async () => {
+  it("keeps the post outside the backdrop so tapping it cannot close the modal", async () => {
     setFeed();
     const r = await mount();
     await act(async () => {
       r.root.findAllByProps({ testID: "explore-tile" })[0].props.onPress();
     });
-    const sheet = r.root.findByProps({ testID: "post-modal-sheet" });
-    expect(sheet.props.onStartShouldSetResponder()).toBe(true);
+    const backdrop = r.root.findAllByProps({ testID: "post-modal-backdrop" })[0];
+    expect(backdrop.findAllByProps({ testID: "carousel" })).toHaveLength(0);
     expect(hosts(r, "carousel").length).toBe(1);
   });
 
