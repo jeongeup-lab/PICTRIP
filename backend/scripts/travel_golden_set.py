@@ -53,6 +53,7 @@ class Case:
     forbid_text: tuple[str, ...] = ()
     expect_error: str | None = None
     expect_region: str | None = None
+    expect_title_terms: tuple[str, ...] | None = None
     expect_images: bool = False
     expect_placed: bool = False
     expect_unique: bool = True
@@ -457,6 +458,22 @@ CASES: list[Case] = [
         ask("한옥마을 근처 맛집"),
         expect_spots="some",
     ),
+    edge(
+        "N8",
+        "작은 지역 삼겹살",
+        "정읍 삼겹살집",
+        expect_spots="any",
+        expect_region="전북",
+        expect_title_terms=("삼겹살",),
+    ),
+    edge(
+        "N9",
+        "작은 지역 국밥",
+        "정읍 국밥집",
+        expect_spots="any",
+        expect_region="전북",
+        expect_title_terms=("국밥",),
+    ),
     guard("G1", "이모지만", ask("🏖️🌊"), expect_spots="any"),
     guard("G2", "이모지 반복", ask("😀" * 200), expect_spots="any"),
     guard("G3", "영어", ask("beaches near Busan"), expect_spots="any"),
@@ -693,6 +710,19 @@ def _km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
 def _judge_spots(case_: Case, spots: list[dict[str, Any]], res: Result) -> None:
     if not spots:
         return
+    if case_.expect_title_terms is not None:
+        without_title_evidence = [
+            spot
+            for spot in spots
+            if not all(term in spot["title"] for term in case_.expect_title_terms)
+        ]
+        if without_title_evidence:
+            res.ok = False
+            names = ", ".join(spot["title"] for spot in without_title_evidence[:3])
+            terms = "·".join(case_.expect_title_terms)
+            res.reasons.append(
+                f"{len(without_title_evidence)}곳에 {terms} 제목 근거가 없다: {names}"
+            )
     if case_.expect_region:
         stray = [
             s for s in spots if not (s.get("regionLabel") or "").startswith(case_.expect_region)
