@@ -57,7 +57,7 @@ afterEach(async () => {
 });
 
 describe("ConsentScreen", () => {
-  it("renders the two consent records as read-only statuses", async () => {
+  it("renders current consent statuses in stable rows", async () => {
     const tree: { tree: renderer.ReactTestRenderer | null } = { tree: null };
     await act(async () => {
       tree.tree = renderer.create(<ConsentScreen />);
@@ -65,10 +65,14 @@ describe("ConsentScreen", () => {
 
     if (tree.tree === null) throw new Error("screen did not mount");
     holder = tree.tree;
+    const termsRow = tree.tree.root.findByProps({ testID: "consent-terms" });
+    const locationRow = tree.tree.root.findByProps({ testID: "consent-location" });
     const shown = tree.tree.root
       .findAllByType(Text)
       .map((node) => JSON.stringify(node.props.children))
       .join("|");
+    expect(termsRow.findAllByType(Text).map((node) => node.props.children)).toContain("동의함");
+    expect(locationRow.findAllByType(Text).map((node) => node.props.children)).toContain("동의함");
     expect(shown).toContain("[필수] 약관·개인정보 수집·이용");
     expect(shown).toContain("[선택] 위치정보 수집·이용");
     expect(shown).not.toContain("재동의");
