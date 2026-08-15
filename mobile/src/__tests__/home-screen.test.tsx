@@ -147,6 +147,19 @@ describe("HomeScreen", () => {
     expect(rank(r).props.accessibilityHint).toBe("near-1");
   });
 
+  it("falls back to the nationwide ranking when nothing is nearby", async () => {
+    mockNearby.mockReturnValue(query([]));
+    const r = await mount();
+    expect(rank(r).props.accessibilityLabel).toBe("전국 인기 장소");
+    expect(rank(r).props.accessibilityHint).toBe("trend-1");
+  });
+
+  it("keeps showing the nearby ranking while it is still loading", async () => {
+    mockNearby.mockReturnValue(query([], { isLoading: true }));
+    const r = await mount();
+    expect(rank(r).props.accessibilityLabel).toBe("광진구 화양동 근처 인기 장소");
+  });
+
   it("swaps to the nationwide ranking when the 전국 인기 tab is picked", async () => {
     const r = await mount();
     await act(async () => {

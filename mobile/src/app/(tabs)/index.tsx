@@ -33,7 +33,9 @@ export default function HomeScreen() {
   const recommendations = useRecommendations(coords);
 
   const locationDenied = status === "denied" || status === "undetermined";
-  const showNational = scope === "national" || locationDenied;
+  const nearbyIsEmpty =
+    !nearby.isLoading && !nearby.isError && (nearby.data?.items.length ?? 0) === 0;
+  const showNational = scope === "national" || locationDenied || (!!coords && nearbyIsEmpty);
   const active = showNational ? national : nearby;
   const waitingForFix = !showNational && !coords;
   const cards = active.data?.items ?? [];
