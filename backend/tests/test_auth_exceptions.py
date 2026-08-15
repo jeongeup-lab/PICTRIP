@@ -1,4 +1,4 @@
-from app.core.exceptions import (
+from app.web.errors import (
     AppError,
     AuthSessionRevoked,
     OAuthIdTokenInvalid,

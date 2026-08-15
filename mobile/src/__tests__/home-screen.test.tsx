@@ -1,21 +1,30 @@
 import renderer, { act } from "react-test-renderer";
-import { FlatList } from "react-native";
+import { ScrollView, Text } from "react-native";
 import HomeScreen from "@/app/(tabs)/index";
-import { prefetchMatches, usePostsFeed } from "@/features/feed/posts-queries";
-import type { OverseasPost } from "@/features/feed/posts-api";
+import { useHomeLocation } from "@/features/home/hooks/use-home-location";
+import {
+  useNearby,
+  useRecommendations,
+  useRegionLabel,
+  useTrending,
+} from "@/features/home/queries";
 import { queryClient } from "@/lib/query-client";
+import type { HomeSpotCard } from "@/features/home/api";
 
-let seedCounter = 0;
-jest.mock("@/lib/seed", () => ({ makeSeed: () => `seed-${(seedCounter += 1)}` }));
 jest.mock("expo-router", () => ({
-  router: { back: jest.fn(), push: jest.fn() },
+  router: { push: jest.fn() },
+  useScrollToTop: jest.fn(),
 }));
 jest.mock("react-native-safe-area-context", () => ({
   SafeAreaView: (props: { children?: unknown }) => props.children,
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
-jest.mock("@/features/feed/posts-queries", () => ({
-  usePostsFeed: jest.fn(),
-  prefetchMatches: jest.fn(),
+jest.mock("@/features/home/hooks/use-home-location", () => ({ useHomeLocation: jest.fn() }));
+jest.mock("@/features/home/queries", () => ({
+  useNearby: jest.fn(),
+  useTrending: jest.fn(),
+  useRegionLabel: jest.fn(),
+  useRecommendations: jest.fn(),
 }));
 jest.mock("@/features/channels/components/ChannelTiles", () => {
   const React = require("react");
@@ -24,195 +33,197 @@ jest.mock("@/features/channels/components/ChannelTiles", () => {
     ChannelTiles: ({ onOpen }: { onOpen: (k: string) => void }) =>
       React.createElement(Pressable, {
         testID: "channel-tiles",
-        onPress: () => onOpen("hot"),
+        onPress: () => onOpen("hidden"),
       }),
   };
 });
-jest.mock("@/features/feed/components/PostCarousel", () => {
+jest.mock("@/features/home/components/RankSection", () => {
   const React = require("react");
-  const { Text } = require("react-native");
+  const { View } = require("react-native");
   return {
-    PostCarousel: ({ post }: { post: { nameKo: string } }) =>
-      React.createElement(Text, { testID: "carousel" }, post.nameKo),
+    RankSection: ({ title, cards }: { title: string; cards: HomeSpotCard[] }) =>
+      React.createElement(View, {
+        testID: "rank-section",
+        accessibilityLabel: title,
+        accessibilityHint: cards.map((c) => c.contentId).join(","),
+      }),
+  };
+});
+jest.mock("@/features/home/components/AiSection", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+  return {
+    AiSection: ({ displayName }: { displayName: string | null }) =>
+      React.createElement(View, { testID: "ai-section", accessibilityLabel: displayName ?? "" }),
   };
 });
 
-const usePostsFeedMock = usePostsFeed as jest.Mock;
-const prefetchMatchesMock = prefetchMatches as jest.Mock;
+const mockLocation = useHomeLocation as jest.Mock;
+const mockNearby = useNearby as jest.Mock;
+const mockTrending = useTrending as jest.Mock;
+const mockRegion = useRegionLabel as jest.Mock;
+const mockRecommendations = useRecommendations as jest.Mock;
 const { router } = jest.requireMock("expo-router") as { router: { push: jest.Mock } };
 
-function posts(n: number): OverseasPost[] {
-  return Array.from({ length: n }, (_, i) => ({
-    id: i + 1,
-    nameKo: `장소 ${i + 1}`,
-    countryCode: "JP",
-    countryNameKo: "일본",
-    descriptionKo: null,
-    imageUrl: `https://upload.wikimedia.org/${i + 1}.jpg`,
-    imageAuthor: null,
-    imageLicense: null,
-    imageLicenseUrl: null,
-    imageSourceUrl: `https://commons.wikimedia.org/${i + 1}`,
-  }));
+const COORDS = { lat: 37.54, lng: 127.07 };
+
+function card(contentId: string): HomeSpotCard {
+  return {
+    contentId,
+    title: `스팟 ${contentId}`,
+    regionLabel: "서울특별시 광진구",
+    imageUrl: null,
+    rank: 1,
+    dist: 1000,
+    category: null,
+    tag: null,
+    anchorTitle: null,
+  };
 }
 
-let fetchNextPage: jest.Mock;
-let refetch: jest.Mock;
-
-function setFeed(over: Record<string, unknown> = {}) {
-  fetchNextPage = jest.fn();
-  refetch = jest.fn();
-  usePostsFeedMock.mockReturnValue({
-    data: {
-      pages: [
-        { seed: "seed-abc", items: posts(4), nextCursor: "c1", hasMore: true },
-        { seed: "seed-abc", items: posts(2), nextCursor: null, hasMore: false },
-      ],
-    },
-    fetchNextPage,
-    hasNextPage: true,
-    isFetchingNextPage: false,
-    isFetching: false,
+function query(items: HomeSpotCard[], over: Record<string, unknown> = {}) {
+  return {
+    data: { items },
     isLoading: false,
     isError: false,
-    refetch,
+    isFetching: false,
+    dataUpdatedAt: Date.now(),
+    refetch: jest.fn(),
     ...over,
-  });
+  };
 }
 
-function hosts(r: renderer.ReactTestRenderer, testID: string) {
-  return r.root.findAllByProps({ testID }).filter((n) => typeof n.type === "string");
-}
+let request: jest.Mock;
 
-let tree: renderer.ReactTestRenderer | null = null;
+beforeEach(() => {
+  request = jest.fn(async () => {});
+  mockLocation.mockReturnValue({ coords: COORDS, status: "granted", request });
+  mockNearby.mockReturnValue(query([card("near-1")]));
+  mockTrending.mockReturnValue(query([card("trend-1")]));
+  mockRegion.mockReturnValue({ data: { label: "광진구 화양동" } });
+  mockRecommendations.mockReturnValue({ data: undefined, isLoading: false });
+});
+
+let mounted: renderer.ReactTestRenderer | null = null;
 
 afterEach(() => {
-  act(() => tree?.unmount());
-  tree = null;
+  act(() => mounted?.unmount());
+  mounted = null;
   jest.clearAllMocks();
 });
 
 async function mount() {
   await act(async () => {
-    tree = renderer.create(<HomeScreen />);
+    mounted = renderer.create(<HomeScreen />);
   });
-  return tree!;
+  return mounted!;
 }
+
+const rank = (r: renderer.ReactTestRenderer) => r.root.findByProps({ testID: "rank-section" });
+const texts = (r: renderer.ReactTestRenderer) =>
+  r.root
+    .findAllByType(Text)
+    .flatMap((n) => (Array.isArray(n.props.children) ? n.props.children : [n.props.children]))
+    .filter((c): c is string => typeof c === "string");
 
 describe("HomeScreen", () => {
   it("renders the PICTRIP wordmark", async () => {
-    setFeed();
     const r = await mount();
     expect(r.root.findAllByProps({ children: "PICTRIP" }).length).toBeGreaterThan(0);
   });
 
-  it("renders the channel tiles header and routes to the channel viewer on open", async () => {
-    setFeed();
+  it("keeps the channel rail and routes into the channel viewer", async () => {
     const r = await mount();
-    expect(hosts(r, "channel-tiles").length).toBe(1);
     await act(async () => {
       r.root.findByProps({ testID: "channel-tiles" }).props.onPress();
     });
-    expect(router.push).toHaveBeenCalledWith("/channels?start=hot");
+    expect(router.push).toHaveBeenCalledWith("/channels?start=hidden");
   });
 
-  it("renders one post carousel per flattened feed item", async () => {
-    setFeed();
+  it("shows nearby cards under the region-named tab by default", async () => {
     const r = await mount();
-    expect(hosts(r, "carousel").length).toBe(6);
+    expect(texts(r)).toContain("광진구 화양동");
+    expect(rank(r).props.accessibilityLabel).toBe("광진구 화양동 근처 인기 장소");
+    expect(rank(r).props.accessibilityHint).toBe("near-1");
   });
 
-  it("shows loading skeletons before the first page resolves", async () => {
-    setFeed({ data: undefined, isLoading: true });
+  it("falls back to the nationwide ranking when nothing is nearby", async () => {
+    mockNearby.mockReturnValue(query([]));
     const r = await mount();
-    expect(hosts(r, "carousel").length).toBe(0);
-    expect(r.root.findAllByType(FlatList).length).toBe(0);
+    expect(rank(r).props.accessibilityLabel).toBe("전국 인기 장소");
+    expect(rank(r).props.accessibilityHint).toBe("trend-1");
   });
 
-  it("shows the error view with a retry that refetches", async () => {
-    setFeed({ data: undefined, isError: true });
+  it("keeps showing the nearby ranking while it is still loading", async () => {
+    mockNearby.mockReturnValue(query([], { isLoading: true }));
     const r = await mount();
-    expect(hosts(r, "carousel").length).toBe(0);
-    await act(async () => {
-      r.root.findByProps({ testID: "home-retry" }).props.onPress();
-    });
-    expect(refetch).toHaveBeenCalled();
+    expect(rank(r).props.accessibilityLabel).toBe("광진구 화양동 근처 인기 장소");
   });
 
-  it("renders footer legal links that route to terms, privacy and data-sources", async () => {
-    setFeed();
+  it("swaps to the nationwide ranking when the 전국 인기 tab is picked", async () => {
     const r = await mount();
     await act(async () => {
-      r.root.findByProps({ testID: "footer-terms" }).props.onPress();
+      r.root.findByProps({ testID: "home-scope-national" }).props.onPress();
     });
-    expect(router.push).toHaveBeenCalledWith("/legal/terms");
-    await act(async () => {
-      r.root.findByProps({ testID: "footer-privacy" }).props.onPress();
-    });
-    expect(router.push).toHaveBeenCalledWith("/legal/privacy");
-    await act(async () => {
-      r.root.findByProps({ testID: "footer-data-source" }).props.onPress();
-    });
-    expect(router.push).toHaveBeenCalledWith("/legal/data-sources");
+    expect(rank(r).props.accessibilityLabel).toBe("전국 인기 장소");
+    expect(rank(r).props.accessibilityHint).toBe("trend-1");
   });
 
-  it("fetches the next page when the list end is reached", async () => {
-    setFeed();
+  it("falls back to the national ranking and prompts for location when permission is missing", async () => {
+    mockLocation.mockReturnValue({ coords: null, status: "denied", request });
     const r = await mount();
-    const list = r.root.findAllByType(FlatList)[0];
+    expect(rank(r).props.accessibilityHint).toBe("trend-1");
     await act(async () => {
-      list.props.onEndReached();
+      r.root.findByProps({ testID: "home-location-cta" }).props.onPress();
     });
-    expect(fetchNextPage).toHaveBeenCalled();
+    expect(request).toHaveBeenCalled();
   });
 
-  it("does not fetch the next page while one is already loading", async () => {
-    setFeed({ isFetchingNextPage: true, isFetching: true });
+  it("labels the tab 내 주변 until the reverse geocode lands", async () => {
+    mockRegion.mockReturnValue({ data: undefined });
     const r = await mount();
-    const list = r.root.findAllByType(FlatList)[0];
-    await act(async () => {
-      list.props.onEndReached();
-    });
-    expect(fetchNextPage).not.toHaveBeenCalled();
+    expect(texts(r)).toContain("내 주변");
   });
 
-  it("pull-to-refresh generates a new client seed for a fresh shuffle", async () => {
+  it("asks for location when the user taps back to the nearby tab without coords", async () => {
+    mockLocation.mockReturnValue({ coords: null, status: "denied", request });
+    const r = await mount();
+    await act(async () => {
+      r.root.findByProps({ testID: "home-scope-nearby" }).props.onPress();
+    });
+    expect(request).toHaveBeenCalled();
+  });
+
+  it("renders the AI section under the ranking", async () => {
+    const r = await mount();
+    expect(r.root.findAllByProps({ testID: "ai-section" }).length).toBeGreaterThan(0);
+  });
+
+  it("pull-to-refresh invalidates the home queries and the channel rail", async () => {
     const invalidate = jest.spyOn(queryClient, "invalidateQueries");
-    setFeed();
     const r = await mount();
-    const list = r.root.findAllByType(FlatList)[0];
-    const before = usePostsFeedMock.mock.calls.at(-1)?.[0];
+    const list = r.root.findAllByType(ScrollView)[0];
     await act(async () => {
       list.props.refreshControl.props.onRefresh();
     });
-    const after = usePostsFeedMock.mock.calls.at(-1)?.[0];
-    expect(typeof before).toBe("string");
-    expect(typeof after).toBe("string");
-    expect(after).not.toBe(before);
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["matches"] });
+    const predicate = invalidate.mock.calls[0][0]?.predicate as unknown as (q: {
+      queryKey: unknown[];
+    }) => boolean;
+    expect(predicate({ queryKey: ["home-nearby", null] })).toBe(true);
+    expect(predicate({ queryKey: ["channels"] })).toBe(true);
+    expect(predicate({ queryKey: ["saved"] })).toBe(false);
     invalidate.mockRestore();
   });
 
-  it("shows the refresh spinner while a refetch is in flight", async () => {
-    setFeed({ isFetching: true });
-    const r = await mount();
-    const list = r.root.findAllByType(FlatList)[0];
-    expect(list.props.refreshControl.props.refreshing).toBe(true);
+  it("wires the scroll view into the tab re-tap scroll-to-top hook", async () => {
+    const { useScrollToTop } = jest.requireMock("expo-router") as { useScrollToTop: jest.Mock };
+    await mount();
+    expect(useScrollToTop).toHaveBeenCalled();
   });
 
-  it("prefetches matches for posts as they become viewable", async () => {
-    setFeed();
+  it("does not render a shorts player anywhere on the home screen", async () => {
     const r = await mount();
-    const list = r.root.findAllByType(FlatList)[0];
-    await act(async () => {
-      list.props.onViewableItemsChanged({
-        viewableItems: [
-          { item: posts(2)[0], index: 0, isViewable: true, key: "1" },
-          { item: posts(2)[1], index: 1, isViewable: true, key: "2" },
-        ],
-      });
-    });
-    expect(prefetchMatchesMock).toHaveBeenCalledWith(1);
-    expect(prefetchMatchesMock).toHaveBeenCalledWith(2);
+    expect(r.root.findAllByProps({ testID: "shorts-card" })).toHaveLength(0);
+    expect(r.root.findAllByProps({ testID: "shorts-player-sheet" })).toHaveLength(0);
   });
 });

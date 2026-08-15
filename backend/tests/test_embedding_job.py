@@ -1,11 +1,3 @@
-"""IMG embedding job — embed_spots records successes/failures, collect_targets scopes.
-
-Exercises the shared embed path (CLI backfill + admin re-embed button) against the
-per-test rolled-back session: CLIP is faked (no model load) and image downloads
-are mocked (no network), so we assert the DB side-effects — ``spot_embeddings``
-upsert + ``embedding_failures`` upsert/clear — and the target-selection filters.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -16,18 +8,12 @@ from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.embedding import ClipEmbedder
+from app.ml.embedding import ClipEmbedder
 from app.modules.images.embedding_job import collect_targets, count_missing, embed_spots
 
 
 @pytest.fixture
 def fake_clip(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Patch CLIP at the class boundary (no model load).
-
-    Must patch the CLASS, not the singleton instance — an instance-attribute
-    monkeypatch leaks onto the shared ``embedder`` and shadows the class-level
-    patching other suites (taste/photo-search) rely on.
-    """
     monkeypatch.setattr(ClipEmbedder, "embed_image", lambda _self, _b: [0.1] * 512)
 
 
@@ -78,7 +64,6 @@ async def test_embed_spots_clears_failure_on_later_success(
     db_session: AsyncSession, httpx_mock, fake_clip: None
 ) -> None:
     await _seed_spot(db_session, "sp-1", "https://img/sp-1.jpg")
-    # Pre-existing failure row for the same spot.
     await db_session.execute(
         text(
             "INSERT INTO embedding_failures (content_id, reason, attempts) "
@@ -96,7 +81,6 @@ async def test_embed_spots_clears_failure_on_later_success(
             dl_sem=asyncio.Semaphore(2),
         )
 
-    # success → embedding written AND failure row removed.
     assert (
         await db_session.execute(
             text("SELECT count(*) FROM spot_embeddings WHERE content_id='sp-1'")
@@ -221,12 +205,9 @@ async def test_embed_spots_does_not_record_failure_for_changed_source(
 
 @pytest.mark.asyncio
 async def test_collect_targets_scopes(db_session: AsyncSession) -> None:
-    # image-bearing, no embedding → target
     await _seed_spot(db_session, "miss-old", "https://img/a.jpg", days_ago=10)
     await _seed_spot(db_session, "miss-new", "https://img/b.jpg", days_ago=0)
-    # no image → never a target
     await _seed_spot(db_session, "no-img", None)
-    # already embedded → excluded
     await _seed_spot(db_session, "done", "https://img/c.jpg")
     await db_session.execute(
         text(
@@ -243,7 +224,6 @@ async def test_collect_targets_scopes(db_session: AsyncSession) -> None:
         ),
         {"v": "[" + ",".join(["0.0"] * 512) + "]"},
     )
-    # a failure record on miss-old
     await db_session.execute(
         text(
             "INSERT INTO embedding_failures (content_id, reason) VALUES "

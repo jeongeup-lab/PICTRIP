@@ -125,5 +125,5 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     backgroundColor: colors.onImage,
   },
-  detailText: { fontSize: 15, fontWeight: "800", color: colors.ink },
+  detailText: { fontSize: 15, fontWeight: "800", color: colors.onLight },
 });

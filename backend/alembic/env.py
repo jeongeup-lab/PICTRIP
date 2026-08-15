@@ -1,9 +1,3 @@
-"""Alembic environment for async SQLAlchemy 2.0.
-
-All ORM models are imported here so `Base.metadata` is fully populated before
-Alembic compares it to the live database.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -17,16 +11,12 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from app.config import settings
 from app.core.db import Base
 
-# --- Import all models so Base.metadata is complete ---
-# Side-effect imports: F401 is suppressed for the whole alembic/* tree via ruff
-# per-file-ignores; no explicit noqa is needed (it would trigger RUF100).
 from app.modules.admin import models as _admin_models
 from app.modules.feed import models as _feed_models
 from app.modules.images import models as _images_models
 from app.modules.map import models as _map_models
 from app.modules.spots import models as _spots_models
 from app.modules.system import models as _system_models
-from app.modules.taste import models as _taste_models
 from app.modules.users import models as _users_models
 
 config = context.config
@@ -38,14 +28,10 @@ target_metadata = Base.metadata
 
 
 def include_object(object_, name, type_, reflected, compare_to):
-    # `sync_runs` is owned by pipeline/ (CREATE TABLE IF NOT EXISTS in
-    # pictrip_data/sync/audit.py). It is never a backend model; exclude it from
-    # autogenerate so a drop is never emitted. (Monorepo invariant, CLAUDE.md.)
-    return not (type_ == "table" and name == "sync_runs")
+    return not (type_ == "table" and name in {"sync_runs", "curations", "curation_spots", "plans"})
 
 
 def run_migrations_offline() -> None:
-    """Generate SQL without a live DB connection."""
     context.configure(
         url=settings.sqlalchemy_database_url,
         target_metadata=target_metadata,

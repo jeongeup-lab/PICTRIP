@@ -1,10 +1,3 @@
-"""hot·hidden 채널 — 집중률 DB 시드 + Redis 캐시.
-
-집중률은 오프라인 sync(scripts.sync_concentration)로만 바뀌는 전역 데이터라
-festa·pets·snap과 같은 캐시 대상이다. 캐싱으로 콜드 버퍼 캐시 스파이크 변동과
-동시 홈 오픈 시 반복 DB 조회를 없앤다. 카드·메타가 같은 키를 공유한다.
-"""
-
 from __future__ import annotations
 
 import json
@@ -20,7 +13,7 @@ from app.modules.spots import services as spots_services
 logger = get_logger(__name__)
 
 _CARD_COUNT = 10
-_CACHE_VERSION = "v1"
+_CACHE_VERSION = "v4"
 _TTL = 3600
 
 
@@ -29,25 +22,16 @@ def _cache_key(key: str) -> str:
 
 
 async def _query(session: AsyncSession, key: str) -> list[ChannelCardRow]:
-    if key == "hot":
-        rows = await spots_services.load_hot_spots(session, limit=_CARD_COUNT)
-        return [
-            ChannelCardRow(
-                content_id=r.content_id,
-                title=r.title,
-                region_label=r.region_label,
-                image_url=r.first_image_url,
-                rank=r.rank,
-            )
-            for r in rows
-        ]
-    rows = await spots_services.load_hidden_spots(session, limit=_CARD_COUNT)
+    load = spots_services.load_hot_spots if key == "hot" else spots_services.load_hidden_spots
+    rows = await load(session, limit=_CARD_COUNT)
     return [
         ChannelCardRow(
             content_id=r.content_id,
             title=r.title,
             region_label=r.region_label,
             image_url=r.first_image_url,
+            rank=r.rank,
+            cpyrht_div_cd=r.cpyrht_div_cd,
         )
         for r in rows
     ]

@@ -1,9 +1,7 @@
-"""SPT service layer — re-exports the public surface from the submodules."""
-
 from __future__ import annotations
 
-from app.modules.spots.services import curations, feed
 from app.modules.spots.services.cards import (
+    attraction_image_spots_stmt,
     image_bearing_spots_stmt,
     load_active_spot_cards_by_ids,
     load_overview_map,
@@ -13,19 +11,32 @@ from app.modules.spots.services.cards import (
 )
 from app.modules.spots.services.concentration import (
     ConcentrationCardRow,
+    load_concentration_rates,
     load_hidden_spots,
     load_hot_spots,
 )
-from app.modules.spots.services.detail import load_spot_detail
+from app.modules.spots.services.detail import (
+    fetch_detail_common,
+    invalidate_spot_detail_cache,
+    load_spot_detail,
+    parse_kto_detail_images,
+    persist_detail_common,
+    refresh_spot_detail,
+    refresh_spot_detail_in_background,
+    replace_spot_images,
+)
 from app.modules.spots.services.nearby import (
     NearbyCategory,
     NearbySpotRow,
     all_categories_predicate,
     all_categories_sql,
+    attraction_category_sql,
     category_predicate,
+    category_sql,
     derive_category,
     find_nearby_spots,
     find_nearby_spots_bbox,
+    travel_category_sql,
 )
 from app.modules.spots.services.rows import (
     SpotCardRow,
@@ -33,25 +44,42 @@ from app.modules.spots.services.rows import (
     SpotImageRow,
 )
 from app.modules.spots.services.saved import list_saved_spots, save_spot, unsave_spot
+from app.modules.spots.services.search import (
+    MAX_REGION_TOKENS,
+    RegionPrefix,
+    SpotSearchRow,
+    canonical_region_token,
+    map_region_tokens_to_prefixes,
+    map_region_tokens_to_sido,
+    search_spots_by_title,
+)
 
 __all__ = [
+    "MAX_REGION_TOKENS",
     "ConcentrationCardRow",
     "NearbyCategory",
     "NearbySpotRow",
+    "RegionPrefix",
     "SpotCardRow",
     "SpotDetailRow",
     "SpotImageRow",
+    "SpotSearchRow",
     "all_categories_predicate",
     "all_categories_sql",
+    "attraction_category_sql",
+    "attraction_image_spots_stmt",
+    "canonical_region_token",
     "category_predicate",
-    "curations",
+    "category_sql",
     "derive_category",
-    "feed",
+    "fetch_detail_common",
     "find_nearby_spots",
     "find_nearby_spots_bbox",
     "image_bearing_spots_stmt",
+    "invalidate_spot_detail_cache",
     "list_saved_spots",
     "load_active_spot_cards_by_ids",
+    "load_concentration_rates",
     "load_hidden_spots",
     "load_hot_spots",
     "load_overview_map",
@@ -59,6 +87,15 @@ __all__ = [
     "load_spot_cards_by_ids",
     "load_spot_detail",
     "lock_current_spot_image",
+    "map_region_tokens_to_prefixes",
+    "map_region_tokens_to_sido",
+    "parse_kto_detail_images",
+    "persist_detail_common",
+    "refresh_spot_detail",
+    "refresh_spot_detail_in_background",
+    "replace_spot_images",
     "save_spot",
+    "search_spots_by_title",
+    "travel_category_sql",
     "unsave_spot",
 ]

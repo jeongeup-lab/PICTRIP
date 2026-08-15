@@ -1,5 +1,3 @@
-"""Kakao OIDC: JWKS cache (1h fresh / 24h stale-on-error, §4.5) + id_token verification."""
-
 from __future__ import annotations
 
 import time
@@ -8,16 +6,14 @@ from typing import Any
 import httpx
 
 from app.config import settings
-from app.core.exceptions import OAuthProviderUnavailable
+from app.web.errors import OAuthProviderUnavailable
 
 _JWKS_TIMEOUT = httpx.Timeout(connect=2.0, read=3.0, write=2.0, pool=2.0)
 
-# Cache keys: "value" (JWKS), "fresh_until", "stale_until" (unix ts).
 _jwks_cache: dict[str, Any] = {}
 
 
 async def _fetch_jwks() -> dict[str, Any]:
-    """One-shot fetch with a single retry."""
     last_exc: Exception | None = None
     async with httpx.AsyncClient(timeout=_JWKS_TIMEOUT) as client:
         for _ in range(2):
@@ -26,14 +22,13 @@ async def _fetch_jwks() -> dict[str, Any]:
                 resp.raise_for_status()
                 data: dict[str, Any] = resp.json()
                 return data
-            except Exception as exc:  # surface any transport/HTTP error uniformly
+            except Exception as exc:
                 last_exc = exc
                 continue
     raise OAuthProviderUnavailable() from last_exc
 
 
 async def get_jwks() -> dict[str, Any]:
-    """Return a cached JWKS, refreshing or serving stale-on-error per policy."""
     now = int(time.time())
     if _jwks_cache and now < _jwks_cache.get("fresh_until", 0):
         return _jwks_cache["value"]  # type: ignore[no-any-return]
@@ -66,7 +61,6 @@ class KakaoClaims:
 
 
 def _jwk_to_pem(jwk: dict[str, Any]) -> bytes:
-    """Convert a single RSA JWK dict into PEM bytes for PyJWT verification."""
     from base64 import urlsafe_b64decode
 
     from cryptography.hazmat.primitives import serialization
@@ -84,10 +78,9 @@ def _jwk_to_pem(jwk: dict[str, Any]) -> bytes:
 
 
 async def verify_id_token(token: str, *, expected_nonce: str | None = None) -> KakaoClaims:
-    """Verify a Kakao OIDC id_token. Failure paths log the exception class only, never token PII."""
     import logging
 
-    from app.core.exceptions import OAuthIdTokenInvalid
+    from app.web.errors import OAuthIdTokenInvalid
 
     log = logging.getLogger("app.auth.oidc")
 
@@ -107,10 +100,10 @@ async def verify_id_token(token: str, *, expected_nonce: str | None = None) -> K
         log.info("verify_id_token: kid not in JWKS")
         raise OAuthIdTokenInvalid()
 
-    # `aud` is either REST API key (web/server) or Native App Key (mobile SDK).
-    valid_audiences = [a for a in (settings.KAKAO_REST_API_KEY, settings.KAKAO_NATIVE_APP_KEY) if a]
+    valid_audiences = [a for a in settings.KAKAO_OIDC_CLIENT_IDS if a] or [
+        a for a in (settings.KAKAO_REST_API_KEY, settings.KAKAO_NATIVE_APP_KEY) if a
+    ]
 
-    # SECURITY: empty audiences would make PyJWT skip `aud` checks (token-substitution hole) — fail loudly.
     if not valid_audiences:
         log.error("verify_id_token: no configured Kakao audience — provider misconfigured")
         raise OAuthProviderUnavailable()
@@ -121,9 +114,9 @@ async def verify_id_token(token: str, *, expected_nonce: str | None = None) -> K
             token,
             pem,
             algorithms=["RS256"],
-            audience=valid_audiences,  # never None — empty audiences rejected above
+            audience=valid_audiences,
             issuer=settings.KAKAO_OIDC_ISSUER,
-            leeway=300,  # spec §1.2 allows ±5 min skew
+            leeway=300,
         )
     except jwt.InvalidTokenError as exc:
         log.info("verify_id_token: jwt.decode rejected (%s)", type(exc).__name__)

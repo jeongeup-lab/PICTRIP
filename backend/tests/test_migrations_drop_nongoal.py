@@ -1,10 +1,3 @@
-"""M4 (0014_drop_nongoal_tables) DB-level regression test.
-
-Pins that the non-goal tables (courses / course_days / course_items /
-notifications / analytics_events) are dropped at head, while spot_concentration
-(the congestion source) is preserved.
-"""
-
 from __future__ import annotations
 
 import pytest

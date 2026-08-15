@@ -1,5 +1,3 @@
-"""GET /v1/users/me serialization (displayName/avatarUrl) + /users/me/saved cursor pagination."""
-
 from __future__ import annotations
 
 import uuid
@@ -12,8 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.config import settings
-from app.core.auth import create_access_token
 from app.main import app
+from app.security.jwt import create_access_token
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -173,7 +171,6 @@ async def test_saved_card_shape_is_canonical(
 async def test_saved_card_category_is_subtype_label(
     client: AsyncClient, override_db_and_seed: AsyncSession
 ) -> None:
-    """saved-list card.category is the KTO subtype label (lcls_systm3_nm), aligned with other cards."""
     session = override_db_and_seed
     uid = await _seed_user(session)
     await session.execute(
@@ -196,3 +193,33 @@ async def test_saved_card_category_is_subtype_label(
     assert r.status_code == 200
     card = next(c for c in r.json()["data"] if c["contentId"] == "CATSPOT-1")
     assert card["category"] == "사적지"
+
+
+async def test_saved_cards_sign_type1_images_at_tile_width(
+    client: AsyncClient,
+    override_db_and_seed: AsyncSession,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(settings, "IMG_PROXY_T1_SECRET", "s3cret")
+    uid = await _seed_user(override_db_and_seed)
+    await override_db_and_seed.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, first_image_url, "
+            "cpyrht_div_cd, show_flag) VALUES ('SV-T1', 12, 't', "
+            "'http://tong.visitkorea.or.kr/cms/resource/5/5_image2_1.jpg', 'Type1', 1), "
+            "('SV-T3', 12, 't', "
+            "'http://tong.visitkorea.or.kr/cms/resource/6/6_image2_1.jpg', 'Type3', 1)"
+        )
+    )
+    await override_db_and_seed.commit()
+    await _insert_saved_row(override_db_and_seed, user_id=uid, content_id="SV-T1")
+    await _insert_saved_row(override_db_and_seed, user_id=uid, content_id="SV-T3")
+
+    r = await client.get("/v1/users/me/saved", headers=_auth(uid))
+
+    cards = {c["contentId"]: c for c in r.json()["data"]}
+    assert cards["SV-T1"]["firstImageUrl"].startswith("https://img.pictrip.org/t1/320/")
+    assert cards["SV-T1"]["firstImageUrl"].endswith("/5_image1_1.jpg")
+    assert cards["SV-T3"]["firstImageUrl"] == (
+        "https://tong.visitkorea.or.kr/cms/resource/6/6_image2_1.jpg"
+    )

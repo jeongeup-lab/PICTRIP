@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.ink,
+    backgroundColor: colors.accent,
   },
   primaryText: { fontSize: 16, fontWeight: "700", color: colors.onImage },
   secondary: { height: 50, alignItems: "center", justifyContent: "center" },

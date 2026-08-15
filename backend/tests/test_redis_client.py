@@ -1,5 +1,3 @@
-"""Tests for async Redis client + fakeredis fixture."""
-
 import pytest
 
 

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.spots.services import all_categories_sql
+from app.modules.spots.services import all_categories_sql, attraction_category_sql
 
-_CATEGORY_SQL = all_categories_sql()
+_CATEGORY_SQL = attraction_category_sql()
+_ALL_CATEGORIES_SQL = all_categories_sql()
 
 _KEY_EXPR = (
     "power(greatest("
@@ -47,20 +50,44 @@ class OverseasPostRow:
 
 
 _NEIGHBORS_SQL = f"""
-SELECT se.content_id, se.image_url,
-       (se.embedding <=> (SELECT embedding FROM overseas_spots WHERE id = :oid))::float AS distance
-FROM spot_embeddings se
-JOIN spots ON spots.content_id = se.content_id
-          AND spots.first_image_url = se.image_url
-          AND spots.show_flag = 1
-          AND spots.first_image_url IS NOT NULL
-          AND spots.first_image_url <> ''
-          AND ({_CATEGORY_SQL})
+WITH single AS (
+    SELECT se.content_id, se.image_url,
+           (se.embedding <=> (SELECT embedding FROM overseas_spots WHERE id = :oid))::float
+               AS distance
+    FROM spot_embeddings se
+    JOIN spots ON spots.content_id = se.content_id
+              AND spots.first_image_url = se.image_url
+              AND spots.show_flag = 1
+              AND spots.first_image_url IS NOT NULL
+              AND spots.first_image_url <> ''
+              AND ({_CATEGORY_SQL})
+    ORDER BY se.embedding <=> (SELECT embedding FROM overseas_spots WHERE id = :oid)
+    LIMIT :lim
+), gallery AS (
+    SELECT ge.content_id, ge.image_url,
+           (ge.embedding <=> (SELECT embedding FROM overseas_spots WHERE id = :oid))::float
+               AS distance
+    FROM spot_embeddings_gallery ge
+    JOIN spots ON spots.content_id = ge.content_id
+              AND spots.first_image_url = ge.image_url
+              AND spots.show_flag = 1
+              AND spots.first_image_url IS NOT NULL
+              AND spots.first_image_url <> ''
+              AND ({_CATEGORY_SQL})
+    ORDER BY ge.embedding <=> (SELECT embedding FROM overseas_spots WHERE id = :oid)
+    LIMIT :lim
+)
+SELECT content_id, image_url, distance
+FROM (
+    SELECT DISTINCT ON (content_id) content_id, image_url, distance
+    FROM (SELECT * FROM single UNION ALL SELECT * FROM gallery) candidates
+    ORDER BY content_id, distance
+) best
 WHERE EXISTS (
     SELECT 1 FROM overseas_spots o
     WHERE o.id = :oid AND o.is_hidden = false AND o.embedding IS NOT NULL
 )
-ORDER BY se.embedding <=> (SELECT embedding FROM overseas_spots WHERE id = :oid)
+ORDER BY distance
 LIMIT :lim
 """
 
@@ -128,3 +155,264 @@ async def fetch_posts_page(
         {"seed": seed, "cursor_key": cursor_key, "cursor_id": cursor_id or 0, "lim": limit},
     )
     return [OverseasPostRow(**row._mapping) for row in result]
+
+
+@dataclass(frozen=True)
+class ShortRow:
+    video_id: str
+    title: str
+    channel_title: str
+    thumbnail_url: str
+    view_count: int
+    anchor_label: str
+    rank: int
+
+
+@dataclass(frozen=True)
+class ShortSpotRow:
+    video_id: str
+    content_id: str
+    title: str
+    first_image_url: str | None
+    cpyrht_div_cd: str | None
+
+
+_SHORTS_PAGE_SQL = """
+SELECT video_id, title, channel_title, thumbnail_url, view_count, anchor_label, rank
+FROM travel_shorts
+WHERE ((:cursor_rank)::int IS NULL) OR (rank > (:cursor_rank)::int)
+ORDER BY rank ASC
+LIMIT (:lim)::int
+"""
+
+_SHORTS_SPOTS_SQL = """
+SELECT ts.video_id, ts.content_id, spots.title, spots.first_image_url, spots.cpyrht_div_cd
+FROM travel_shorts_spots ts
+JOIN spots ON spots.content_id = ts.content_id AND spots.show_flag = 1
+WHERE ts.video_id = ANY(CAST(:video_ids AS text[]))
+ORDER BY ts.video_id, ts.rank ASC
+"""
+
+
+async def fetch_shorts_page(
+    session: AsyncSession, *, cursor_rank: int | None, limit: int
+) -> list[ShortRow]:
+    result = await session.execute(
+        text(_SHORTS_PAGE_SQL), {"cursor_rank": cursor_rank, "lim": limit}
+    )
+    return [ShortRow(**row._mapping) for row in result]
+
+
+async def fetch_shorts_spots(
+    session: AsyncSession, video_ids: list[str]
+) -> dict[str, list[ShortSpotRow]]:
+    if not video_ids:
+        return {}
+    result = await session.execute(text(_SHORTS_SPOTS_SQL), {"video_ids": video_ids})
+    grouped: dict[str, list[ShortSpotRow]] = {}
+    for row in result:
+        item = ShortSpotRow(**row._mapping)
+        grouped.setdefault(item.video_id, []).append(item)
+    return grouped
+
+
+@dataclass(frozen=True)
+class HomeSpotRow:
+    content_id: str
+    title: str
+    first_image_url: str | None
+    cpyrht_div_cd: str | None
+    category: str | None
+    region_name: str | None
+    sigungu_name: str | None
+    dist: float | None = None
+    anchor_content_id: str | None = None
+    base_ymd: date | None = None
+
+
+_SPOT_COLUMNS_SQL = """
+       spots.content_id,
+       spots.title,
+       spots.first_image_url,
+       spots.cpyrht_div_cd,
+       c.lcls_systm3_nm AS category,
+       r.ldong_regn_nm AS region_name,
+       sg.ldong_signgu_nm AS sigungu_name
+"""
+
+_SPOT_JOINS_SQL = """
+    LEFT JOIN lcls_systm_codes c ON c.lcls_systm3_cd = spots.lcls_systm3
+    LEFT JOIN regions r ON r.ldong_regn_cd = spots.ldong_regn_cd
+    LEFT JOIN sigungus sg ON sg.ldong_signgu_cd = spots.ldong_signgu_cd
+"""
+
+_HAVERSINE_SQL = """
+    6371000.0 * acos(least(1.0, greatest(-1.0,
+        cos(radians((:lat)::double precision))
+      * cos(radians(spots.mapy::double precision))
+      * cos(radians(spots.mapx::double precision) - radians((:lng)::double precision))
+      + sin(radians((:lat)::double precision))
+      * sin(radians(spots.mapy::double precision))
+    )))
+"""
+
+_NEARBY_RANKED_SQL = f"""
+SELECT * FROM (
+    SELECT {_SPOT_COLUMNS_SQL},
+           sc.concentration_rate AS rate,
+           sc.base_ymd AS base_ymd,
+           {_HAVERSINE_SQL} AS dist
+    FROM spots
+    LEFT JOIN spot_concentration sc ON sc.content_id = spots.content_id
+    {_SPOT_JOINS_SQL}
+    WHERE spots.show_flag = 1
+      AND spots.first_image_url IS NOT NULL
+      AND spots.first_image_url <> ''
+      AND spots.mapx IS NOT NULL
+      AND spots.mapy IS NOT NULL
+      AND spots.mapy BETWEEN (:min_lat)::double precision AND (:max_lat)::double precision
+      AND spots.mapx BETWEEN (:min_lng)::double precision AND (:max_lng)::double precision
+      AND ({_ALL_CATEGORIES_SQL})
+) near
+WHERE dist <= (:radius)::double precision
+ORDER BY rate DESC NULLS LAST, dist ASC, content_id ASC
+LIMIT (:lim)::int
+"""
+
+_TASTE_PICKS_SQL = f"""
+SELECT content_id, title, first_image_url, cpyrht_div_cd, category, region_name, sigungu_name
+FROM (
+    SELECT DISTINCT ON (spots.ldong_signgu_cd)
+           {_SPOT_COLUMNS_SQL},
+           sc.concentration_rate AS rate
+    FROM spots
+    JOIN spot_concentration sc ON sc.content_id = spots.content_id
+    {_SPOT_JOINS_SQL}
+    WHERE spots.show_flag = 1
+      AND spots.first_image_url IS NOT NULL
+      AND spots.first_image_url <> ''
+      AND ({_CATEGORY_SQL})
+      AND EXISTS (SELECT 1 FROM spot_embeddings e WHERE e.content_id = spots.content_id)
+    ORDER BY spots.ldong_signgu_cd, sc.concentration_rate DESC, spots.content_id
+) picks
+ORDER BY rate DESC, content_id
+LIMIT (:lim)::int
+"""
+
+_TASTE_NEIGHBORS_SQL = f"""
+WITH seed AS (
+    SELECT se.content_id, se.embedding::vector(512) AS emb
+    FROM spot_embeddings se
+    WHERE se.content_id = ANY(CAST(:seed_ids AS text[]))
+), centroid AS (
+    SELECT AVG(emb)::halfvec(512) AS vec FROM seed
+), hit AS (
+    SELECT spots.content_id,
+           spots.title,
+           spots.first_image_url,
+           spots.cpyrht_div_cd,
+           spots.lcls_systm3,
+           spots.ldong_regn_cd,
+           spots.ldong_signgu_cd,
+           se.embedding AS emb,
+           (se.embedding <=> (SELECT vec FROM centroid))::float AS score,
+           {_HAVERSINE_SQL} AS dist
+    FROM spot_embeddings se
+    JOIN spots ON spots.content_id = se.content_id
+              AND spots.show_flag = 1
+              AND spots.first_image_url IS NOT NULL
+              AND spots.first_image_url <> ''
+              AND ({_CATEGORY_SQL})
+    WHERE se.content_id <> ALL (CAST(:seed_ids AS text[]))
+      AND (SELECT vec FROM centroid) IS NOT NULL
+    ORDER BY se.embedding <=> (SELECT vec FROM centroid)
+    LIMIT (:lim)::int
+)
+SELECT spots.content_id,
+       spots.title,
+       spots.first_image_url,
+       spots.cpyrht_div_cd,
+       c.lcls_systm3_nm AS category,
+       r.ldong_regn_nm AS region_name,
+       sg.ldong_signgu_nm AS sigungu_name,
+       spots.dist,
+       anchor.content_id AS anchor_content_id
+FROM hit AS spots
+LEFT JOIN lcls_systm_codes c ON c.lcls_systm3_cd = spots.lcls_systm3
+LEFT JOIN regions r ON r.ldong_regn_cd = spots.ldong_regn_cd
+LEFT JOIN sigungus sg ON sg.ldong_signgu_cd = spots.ldong_signgu_cd
+LEFT JOIN LATERAL (
+    SELECT seed.content_id
+    FROM seed
+    ORDER BY seed.emb::halfvec(512) <=> spots.emb
+    LIMIT 1
+) anchor ON true
+ORDER BY spots.score, spots.content_id
+"""
+
+
+async def fetch_nearby_ranked(
+    session: AsyncSession,
+    *,
+    lat: float,
+    lng: float,
+    min_lat: float,
+    max_lat: float,
+    min_lng: float,
+    max_lng: float,
+    radius: int,
+    limit: int,
+) -> list[HomeSpotRow]:
+    result = await session.execute(
+        text(_NEARBY_RANKED_SQL),
+        {
+            "lat": lat,
+            "lng": lng,
+            "min_lat": min_lat,
+            "max_lat": max_lat,
+            "min_lng": min_lng,
+            "max_lng": max_lng,
+            "radius": radius,
+            "lim": limit,
+        },
+    )
+    return [_home_spot_row(row) for row in result]
+
+
+async def fetch_taste_picks(session: AsyncSession, *, limit: int) -> list[HomeSpotRow]:
+    result = await session.execute(text(_TASTE_PICKS_SQL), {"lim": limit})
+    return [_home_spot_row(row) for row in result]
+
+
+async def fetch_taste_neighbors(
+    session: AsyncSession,
+    *,
+    seed_ids: list[str],
+    lat: float | None,
+    lng: float | None,
+    limit: int,
+) -> list[HomeSpotRow]:
+    if not seed_ids:
+        return []
+    result = await session.execute(
+        text(_TASTE_NEIGHBORS_SQL),
+        {"seed_ids": seed_ids, "lat": lat, "lng": lng, "lim": limit},
+    )
+    return [_home_spot_row(row) for row in result]
+
+
+def _home_spot_row(row: Any) -> HomeSpotRow:
+    mapping = row._mapping
+    dist = mapping.get("dist")
+    return HomeSpotRow(
+        content_id=mapping["content_id"],
+        title=mapping["title"] or "",
+        first_image_url=mapping["first_image_url"],
+        cpyrht_div_cd=mapping["cpyrht_div_cd"],
+        category=mapping["category"],
+        region_name=mapping["region_name"],
+        sigungu_name=mapping["sigungu_name"],
+        dist=float(dist) if dist is not None else None,
+        anchor_content_id=mapping.get("anchor_content_id"),
+        base_ymd=mapping.get("base_ymd"),
+    )

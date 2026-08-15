@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   View,
   FlatList,
@@ -9,12 +9,14 @@ import {
   StyleSheet,
 } from "react-native";
 import Svg, { Defs, LinearGradient, Stop, Rect } from "react-native-svg";
+import { useScrollToTop } from "expo-router";
 import { RemoteImage } from "@/components/RemoteImage";
 import { useExploreFeed } from "@/features/explore/queries";
 import { toGridBlocks, type GridBlock } from "@/features/explore/lib/grid-blocks";
 import { PostModal } from "@/features/explore/components/PostModal";
 import type { OverseasPost } from "@/features/feed/posts-api";
 import { makeSeed } from "@/lib/seed";
+import { commonsWidthFor } from "@/lib/commons-width";
 import { colors } from "@/constants/theme";
 
 const GAP = 2;
@@ -24,6 +26,9 @@ export function ExploreGrid() {
   const { width } = useWindowDimensions();
   const [seed, setSeed] = useState(() => makeSeed());
   const [selected, setSelected] = useState<OverseasPost | null>(null);
+  const listRef = useRef<FlatList<GridBlock>>(null);
+
+  useScrollToTop(listRef);
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isFetching, isLoading } =
     useExploreFeed(seed);
@@ -55,6 +60,7 @@ export function ExploreGrid() {
         uri={post.imageUrl}
         withUA
         cropBanner={false}
+        commonsWidth={commonsWidthFor(size)}
         style={{ width: size, height: size }}
       />
     </Pressable>
@@ -76,6 +82,7 @@ export function ExploreGrid() {
     <View style={styles.root}>
       <StatusBar barStyle="light-content" />
       <FlatList
+        ref={listRef}
         data={blocks}
         keyExtractor={(b) => (b.type === "big" ? `big-${b.big.id}` : `row3-${b.items[0].id}`)}
         renderItem={renderBlock}
@@ -114,7 +121,7 @@ export function ExploreGrid() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.ink },
+  root: { flex: 1, backgroundColor: colors.bg },
   row: { flexDirection: "row", gap: GAP, marginBottom: GAP },
   sideCol: { gap: GAP, justifyContent: "space-between" },
   scrim: { position: "absolute", top: 0, left: 0, right: 0, height: SCRIM_HEIGHT },

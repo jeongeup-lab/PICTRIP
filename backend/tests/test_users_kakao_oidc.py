@@ -1,7 +1,7 @@
 import pytest
 
-from app.core.exceptions import OAuthProviderUnavailable
 from app.modules.users.kakao_oidc import _jwks_cache, get_jwks
+from app.web.errors import OAuthProviderUnavailable
 
 
 @pytest.fixture(autouse=True)
@@ -15,14 +15,13 @@ def reset_jwks_cache():
 async def test_get_jwks_caches_after_fetch(mock_kakao_jwks, kakao_signing_key):
     _, expected = kakao_signing_key
     first = await get_jwks()
-    second = await get_jwks()  # served from cache, no second HTTP call
+    second = await get_jwks()
     assert first == expected
     assert second == expected
 
 
 @pytest.mark.asyncio
 async def test_get_jwks_raises_on_initial_failure(httpx_mock):
-    # _fetch_jwks retries once → two attempts, each needs a registered response
     for _ in range(2):
         httpx_mock.add_exception(
             Exception("network down"),
@@ -35,13 +34,9 @@ async def test_get_jwks_raises_on_initial_failure(httpx_mock):
 @pytest.mark.asyncio
 async def test_get_jwks_serves_stale_on_error(httpx_mock, kakao_signing_key):
     _, jwks = kakao_signing_key
-    # first call succeeds and populates cache
     httpx_mock.add_response(url="https://kauth.kakao.com/.well-known/jwks.json", json=jwks)
     await get_jwks()
-    # force expiry of fresh TTL
     _jwks_cache["fresh_until"] = 0
-    # next call: upstream is down, but stale value should be served
-    # _fetch_jwks retries once → two attempts, each needs a registered response
     for _ in range(2):
         httpx_mock.add_exception(
             Exception("network down"),
@@ -51,12 +46,8 @@ async def test_get_jwks_serves_stale_on_error(httpx_mock, kakao_signing_key):
     assert stale == jwks
 
 
-# ---------------------------------------------------------------------------
-# verify_id_token tests
-# ---------------------------------------------------------------------------
-
-from app.core.exceptions import OAuthIdTokenInvalid  # noqa: E402
 from app.modules.users.kakao_oidc import KakaoClaims, verify_id_token  # noqa: E402
+from app.web.errors import OAuthIdTokenInvalid  # noqa: E402
 from tests.conftest import make_kakao_id_token  # noqa: E402 — plain helper, not a fixture
 
 
@@ -137,12 +128,39 @@ async def test_verify_id_token_unknown_kid_with_fresh_jwks(
 
 
 @pytest.mark.asyncio
+async def test_login_audience_is_independent_of_the_local_api_key(
+    mock_kakao_jwks, kakao_signing_key, monkeypatch
+):
+    monkeypatch.setattr("app.config.settings.KAKAO_OIDC_CLIENT_IDS", ["login-client-id"])
+    monkeypatch.setattr("app.config.settings.KAKAO_REST_API_KEY", "local-api-key")
+    monkeypatch.setattr("app.config.settings.KAKAO_NATIVE_APP_KEY", "")
+    priv, _ = kakao_signing_key
+
+    claims = await verify_id_token(
+        make_kakao_id_token(sub="12345", aud="login-client-id", key=priv)
+    )
+    assert claims.sub == "12345"
+
+    with pytest.raises(OAuthIdTokenInvalid):
+        await verify_id_token(make_kakao_id_token(sub="12345", aud="local-api-key", key=priv))
+
+
+@pytest.mark.asyncio
+async def test_audience_falls_back_to_rest_key_when_oidc_ids_unset(
+    mock_kakao_jwks, kakao_signing_key, monkeypatch
+):
+    monkeypatch.setattr("app.config.settings.KAKAO_OIDC_CLIENT_IDS", [])
+    monkeypatch.setattr("app.config.settings.KAKAO_REST_API_KEY", "test-rest-api-key")
+    priv, _ = kakao_signing_key
+    claims = await verify_id_token(make_kakao_id_token(sub="12345", key=priv))
+    assert claims.sub == "12345"
+
+
+@pytest.mark.asyncio
 async def test_kakao_rejected_when_no_audience_configured(
     mock_kakao_jwks, kakao_signing_key, monkeypatch
 ):
-    # With NO Kakao audience configured, `valid_audiences` is empty. A validly
-    # signed id_token from ANY Kakao app must be REJECTED (OAuthProviderUnavailable),
-    # never accepted via PyJWT's audience=None aud-validation skip (account takeover).
+    monkeypatch.setattr("app.config.settings.KAKAO_OIDC_CLIENT_IDS", [])
     monkeypatch.setattr("app.config.settings.KAKAO_REST_API_KEY", "")
     monkeypatch.setattr("app.config.settings.KAKAO_NATIVE_APP_KEY", "")
     priv, _ = kakao_signing_key

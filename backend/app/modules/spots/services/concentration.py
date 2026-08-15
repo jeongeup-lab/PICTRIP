@@ -1,8 +1,8 @@
-"""집중률 서빙 쿼리 — Hot(붐비는) / Hidden(조용하지만 볼거리) 채널 시드."""
-
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +19,8 @@ class ConcentrationCardRow:
     first_image_url: str
     region_label: str
     rank: int
+    cpyrht_div_cd: str | None = None
+    base_ymd: date | None = None
 
 
 async def load_hot_spots(session: AsyncSession, *, limit: int = 10) -> list[ConcentrationCardRow]:
@@ -29,6 +31,18 @@ async def load_hidden_spots(
     session: AsyncSession, *, limit: int = 10
 ) -> list[ConcentrationCardRow]:
     return await _load(session, limit=limit, ascending=True, require_overview=True)
+
+
+async def load_concentration_rates(
+    session: AsyncSession, content_ids: Sequence[str]
+) -> dict[str, float]:
+    if not content_ids:
+        return {}
+    stmt = select(SpotConcentration.content_id, SpotConcentration.concentration_rate).where(
+        SpotConcentration.content_id.in_(set(content_ids))
+    )
+    rows = (await session.execute(stmt)).all()
+    return {row.content_id: float(row.concentration_rate) for row in rows}
 
 
 async def _load(
@@ -44,7 +58,13 @@ async def _load(
         else SpotConcentration.concentration_rate.desc()
     )
     stmt = (
-        select(Spot.content_id, Spot.title, Spot.first_image_url)
+        select(
+            Spot.content_id,
+            Spot.title,
+            Spot.first_image_url,
+            Spot.cpyrht_div_cd,
+            SpotConcentration.base_ymd,
+        )
         .join(SpotConcentration, SpotConcentration.content_id == Spot.content_id)
         .where(
             Spot.show_flag == 1,
@@ -69,6 +89,8 @@ async def _load(
             first_image_url=r.first_image_url,
             region_label=_region_label(meta.get(r.content_id, (None, None))),
             rank=idx,
+            cpyrht_div_cd=r.cpyrht_div_cd,
+            base_ymd=r.base_ymd,
         )
         for idx, r in enumerate(rows, start=1)
     ]

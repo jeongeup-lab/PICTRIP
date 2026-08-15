@@ -1,6 +1,7 @@
 import { Pressable, View, Text, StyleSheet } from "react-native";
 import { RemoteImage } from "@/components/RemoteImage";
 import { Icon } from "@/components/Icon";
+import { subline } from "@/features/saved/lib/region";
 import type { SpotCard } from "@/lib/api-types";
 import { colors, radii } from "@/constants/theme";
 
@@ -9,75 +10,69 @@ interface Props {
   onPress: () => void;
   onPressIn?: () => void;
   onUnsave: () => void;
+  testID?: string;
 }
 
-export function SavedCard({ spot, onPress, onPressIn, onUnsave }: Props) {
-  const region = spot.addr1?.trim().split(/\s+/)[0];
-  const subline = [region, spot.category].filter(Boolean).join(" · ");
+export function SavedCard({ spot, onPress, onPressIn, onUnsave, testID }: Props) {
+  const sub = subline(spot);
 
   return (
-    <Pressable style={styles.card} onPress={onPress} onPressIn={onPressIn}>
-      <RemoteImage uri={spot.firstImageUrl} style={styles.img} />
-      <View style={styles.ov} pointerEvents="none" />
-      <Pressable style={styles.heart} onPress={onUnsave} hitSlop={8}>
-        <Icon name="heart-fill" size={19} color={colors.onImage} />
-      </Pressable>
-      <View style={styles.caption}>
-        <Text numberOfLines={1} style={styles.name}>
-          {spot.title}
-        </Text>
-        {subline ? (
-          <Text numberOfLines={1} style={styles.sub}>
-            {subline}
-          </Text>
-        ) : null}
+    <Pressable style={styles.card} onPress={onPress} onPressIn={onPressIn} testID={testID}>
+      <View style={styles.frame}>
+        <RemoteImage uri={spot.firstImageUrl} style={styles.img} />
+        <Pressable
+          style={styles.heart}
+          onPress={onUnsave}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="스크랩 해제"
+          testID={testID ? `${testID}-unsave` : undefined}
+        >
+          <Icon name="bookmark-fill" size={17} color={colors.onImage} />
+        </Pressable>
       </View>
+      <Text numberOfLines={1} style={styles.name}>
+        {spot.title}
+      </Text>
+      {sub ? (
+        <Text numberOfLines={1} style={styles.sub}>
+          {sub}
+        </Text>
+      ) : null}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    width: "48.5%",
-    height: 150,
+  card: { width: "48.5%" },
+  frame: {
+    width: "100%",
+    aspectRatio: 1,
     borderRadius: radii.md,
     overflow: "hidden",
     backgroundColor: colors.inset,
   },
   img: { width: "100%", height: "100%" },
-  ov: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: "55%",
-    backgroundColor: colors.scrim,
-  },
   heart: {
     position: "absolute",
-    top: 9,
-    right: 9,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    top: 8,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: colors.control,
     alignItems: "center",
     justifyContent: "center",
   },
-  caption: {
-    position: "absolute",
-    left: 12,
-    right: 12,
-    bottom: 11,
-  },
   name: {
-    color: colors.onImage,
-    fontSize: 13,
+    marginTop: 8,
+    fontSize: 13.5,
     fontWeight: "600",
+    color: colors.ink,
   },
   sub: {
     marginTop: 2,
-    color: "rgba(255,255,255,0.8)",
-    fontSize: 11,
+    fontSize: 11.5,
+    color: colors.ter,
   },
 });

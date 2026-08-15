@@ -1,5 +1,3 @@
-"""Smoke tests: app boots and responds with the standard envelope."""
-
 from __future__ import annotations
 
 import pytest
@@ -25,7 +23,7 @@ async def test_meta_version(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_openapi_schema_includes_all_6_domains(client: AsyncClient) -> None:
+async def test_openapi_schema_includes_all_domains(client: AsyncClient) -> None:
     resp = await client.get("/v1/openapi.json")
     assert resp.status_code == 200
     tags_in_schema = {
@@ -34,18 +32,14 @@ async def test_openapi_schema_includes_all_6_domains(client: AsyncClient) -> Non
         for method in op.values()
         for tag in method.get("tags", [])
     }
-    # IMG exposes no HTTP operations (admin embedding-status WIP stub removed;
-    # public flow is served by TST), so its tag never appears in the schema —
-    # tags are collected from operations only. The other 5 domains do.
     expected = {
         "USR · user/auth",
-        "TST · mood analysis",
         "SPT · spots",
         "MAP · map",
         "SYS · system/meta",
+        "feed",
     }
     assert expected.issubset(tags_in_schema)
-    # courses/recommendations removed in the refactor (6-module surface).
     assert "REC · recommendation" not in tags_in_schema
     assert "CRS · course" not in tags_in_schema
 

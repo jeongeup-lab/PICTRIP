@@ -1,5 +1,3 @@
-"""MAP service layer — nearby enrichment + region reverse geocode."""
-
 from __future__ import annotations
 
 import json
@@ -8,8 +6,8 @@ from typing import Any
 from redis.asyncio import Redis
 
 from app.core.db import AsyncSession
-from app.core.exceptions import ValidationFailed
 from app.core.logging import get_logger
+from app.kto.display import T1_TILE_WIDTH, t1_display_url
 from app.modules.map import repositories as repo
 from app.modules.map.kakao_local import kakao_local_get
 from app.modules.map.schemas import NearbySpotCard, RegionLabel
@@ -20,20 +18,20 @@ from app.modules.spots.services import (
     find_nearby_spots_bbox,
     load_region_meta,
 )
+from app.web.errors import ValidationFailed
 
 logger = get_logger(__name__)
 
 _NEARBY_LIMIT = 30
 _REGION_CACHE_KEY = "region:{lat:.3f}:{lng:.3f}"
-_REGION_CACHE_TTL = 86_400  # 1 day
+_REGION_CACHE_TTL = 86_400
 _COORD2REGIONCODE_PATH = "/geo/coord2regioncode.json"
 
 REGIONS_TREE_KEY = "regions:tree"
-_REGIONS_TREE_TTL = 86_400  # 24h — the tree is administrative + slow-moving.
+_REGIONS_TREE_TTL = 86_400
 
 
 async def _enrich(session: AsyncSession, rows: list[NearbySpotRow]) -> list[NearbySpotRow]:
-    """Merge region meta onto SPT's distance-ranked rows, capped at 30."""
     rows = rows[:_NEARBY_LIMIT]
     if not rows:
         return rows
@@ -55,7 +53,6 @@ async def nearby_spots(
     radius: int,
     category: NearbyCategory | None,
 ) -> list[NearbySpotRow]:
-    """Center+radius nearby (legacy/fallback path)."""
     rows = await find_nearby_spots(session, lat=lat, lng=lng, radius=radius, category=category)
     return await _enrich(session, rows)
 
@@ -69,7 +66,6 @@ async def nearby_spots_bbox(
     ne_lng: float,
     category: NearbyCategory | None,
 ) -> list[NearbySpotRow]:
-    """Nearby spots inside the visible map rectangle (what the user sees on screen)."""
     rows = await find_nearby_spots_bbox(
         session,
         sw_lat=sw_lat,
@@ -93,7 +89,6 @@ async def nearby_cards(
     ne_lat: float | None,
     ne_lng: float | None,
 ) -> list[NearbySpotCard]:
-    """/map/nearby entry: bbox (all four corners) beats center+radius; neither → 422."""
     if sw_lat is not None and sw_lng is not None and ne_lat is not None and ne_lng is not None:
         rows = await nearby_spots_bbox(
             session, sw_lat=sw_lat, sw_lng=sw_lng, ne_lat=ne_lat, ne_lng=ne_lng, category=category
@@ -106,7 +101,7 @@ async def nearby_cards(
         NearbySpotCard(
             contentId=r.content_id,
             title=r.title,
-            firstImageUrl=r.first_image_url,
+            firstImageUrl=t1_display_url(r.first_image_url, r.cpyrht_div_cd, width=T1_TILE_WIDTH),
             addr1=r.addr1,
             mapx=r.mapx,
             mapy=r.mapy,
@@ -125,7 +120,6 @@ def _to_region_label(payload: dict[str, Any]) -> RegionLabel | None:
     docs = payload.get("documents") or []
     if not docs:
         return None
-    # Prefer administrative-dong (H), else first document.
     doc = next((d for d in docs if d.get("region_type") == "H"), docs[0])
     sido = doc.get("region_1depth_name") or None
     sigungu = doc.get("region_2depth_name") or None
@@ -137,15 +131,11 @@ def _to_region_label(payload: dict[str, Any]) -> RegionLabel | None:
 
 
 async def reverse_geocode(redis: Redis, *, lat: float, lng: float) -> RegionLabel | None:
-    """Return a region label from Kakao coord2regioncode with Redis caching.
-
-    Failures and empty responses degrade to None for a generic "near me" fallback.
-    """
     key = _REGION_CACHE_KEY.format(lat=lat, lng=lng)
     cached = None
     try:
         cached = await redis.get(key)
-    except Exception as exc:  # cache is non-critical
+    except Exception as exc:
         logger.warning("map.region.cache_get_failed", error=str(exc))
     if cached is not None:
         try:
@@ -153,7 +143,7 @@ async def reverse_geocode(redis: Redis, *, lat: float, lng: float) -> RegionLabe
             if raw == "null":
                 return None
             return RegionLabel.model_validate_json(raw)
-        except ValueError as exc:  # UnicodeDecodeError + pydantic ValidationError
+        except ValueError as exc:
             logger.warning("map.region.cache_corrupt", error=str(exc))
 
     payload = await kakao_local_get(_COORD2REGIONCODE_PATH, params={"x": lng, "y": lat})
@@ -163,16 +153,15 @@ async def reverse_geocode(redis: Redis, *, lat: float, lng: float) -> RegionLabe
 
     try:
         await redis.set(key, label.model_dump_json() if label else "null", ex=_REGION_CACHE_TTL)
-    except Exception as exc:  # cache write best-effort
+    except Exception as exc:
         logger.warning("map.region.cache_set_failed", error=str(exc))
     return label
 
 
 async def regions_tree(session: AsyncSession, redis: Redis) -> list[dict[str, Any]]:
-    """17 sido + their sigungus, each with a runtime-AVG centroid, cached 24h."""
     try:
         cached = await redis.get(REGIONS_TREE_KEY)
-    except Exception as exc:  # cache is non-critical — degrade to a rebuild.
+    except Exception as exc:
         logger.warning("map.regions_tree.cache_get_failed", error=str(exc))
         cached = None
     if cached is not None:
@@ -196,7 +185,6 @@ async def regions_tree(session: AsyncSession, redis: Redis) -> list[dict[str, An
         sido_lng, sido_lat = sido_centroids.get(region.ldong_regn_cd, (0.0, 0.0))
         sg_nodes: list[dict[str, Any]] = []
         for sg in sigungus_by_regn.get(region.ldong_regn_cd, []):
-            # A sigungu with no visible spots falls back to its sido centroid.
             lng, lat = sigungu_centroids.get(sg.ldong_signgu_cd, (sido_lng, sido_lat))
             sg_nodes.append(
                 {
@@ -216,6 +204,6 @@ async def regions_tree(session: AsyncSession, redis: Redis) -> list[dict[str, An
 
     try:
         await redis.set(REGIONS_TREE_KEY, json.dumps(tree), ex=_REGIONS_TREE_TTL)
-    except Exception as exc:  # cache write best-effort
+    except Exception as exc:
         logger.warning("map.regions_tree.cache_set_failed", error=str(exc))
     return tree

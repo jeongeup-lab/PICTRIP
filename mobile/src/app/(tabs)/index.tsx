@@ -1,154 +1,121 @@
-import { useCallback, useState } from "react";
-import {
-  FlatList,
-  View,
-  Text,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  type ViewToken,
-} from "react-native";
+import { useCallback, useRef, useState } from "react";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useScrollToTop } from "expo-router";
+import { Icon } from "@/components/Icon";
 import { ChannelTiles } from "@/features/channels/components/ChannelTiles";
-import { PostCarousel } from "@/features/feed/components/PostCarousel";
-import { prefetchMatches, usePostsFeed } from "@/features/feed/posts-queries";
-import type { OverseasPost } from "@/features/feed/posts-api";
-import { Skeleton } from "@/components/Skeleton";
-import { PrimaryButton } from "@/components/PrimaryButton";
+import { AiSection } from "@/features/home/components/AiSection";
+import { RankSection } from "@/features/home/components/RankSection";
+import { ScopeTabs, type HomeScope } from "@/features/home/components/ScopeTabs";
+import { useHomeLocation } from "@/features/home/hooks/use-home-location";
+import { formatBaseDate } from "@/features/home/lib/base-date";
+import {
+  useNearby,
+  useRecommendations,
+  useRegionLabel,
+  useTrending,
+} from "@/features/home/queries";
+import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { queryClient } from "@/lib/query-client";
-import { makeSeed } from "@/lib/seed";
 import { colors, spacing } from "@/constants/theme";
 
-const VIEWABILITY = { itemVisiblePercentThreshold: 30 };
-
-function Header() {
-  return (
-    <View style={styles.headerBlock}>
-      <ChannelTiles onOpen={(key) => router.push(`/channels?start=${key}`)} />
-    </View>
-  );
-}
-
-function Footer() {
-  return (
-    <View style={styles.footer}>
-      <View style={styles.footerLinks}>
-        <Pressable
-          testID="footer-terms"
-          accessibilityRole="link"
-          hitSlop={8}
-          onPress={() => router.push("/legal/terms")}
-        >
-          <Text style={styles.footerLink}>이용약관</Text>
-        </Pressable>
-        <View style={styles.footerSep} />
-        <Pressable
-          testID="footer-privacy"
-          accessibilityRole="link"
-          hitSlop={8}
-          onPress={() => router.push("/legal/privacy")}
-        >
-          <Text style={styles.footerLinkStrong}>개인정보처리방침</Text>
-        </Pressable>
-        <View style={styles.footerSep} />
-        <Pressable
-          testID="footer-data-source"
-          accessibilityRole="link"
-          hitSlop={8}
-          onPress={() => router.push("/legal/data-sources")}
-        >
-          <Text style={styles.footerLink}>데이터 출처</Text>
-        </Pressable>
-      </View>
-      <Text style={styles.footerNote}>ⓒ PicTrip</Text>
-    </View>
-  );
-}
-
 export default function HomeScreen() {
-  const [seed, setSeed] = useState(() => makeSeed());
+  const listRef = useRef<ScrollView>(null);
+  useScrollToTop(listRef);
 
-  const {
-    data,
-    isLoading,
-    isError,
-    isFetching,
-    isFetchingNextPage,
-    hasNextPage,
-    fetchNextPage,
-    refetch,
-  } = usePostsFeed(seed);
+  const [scope, setScope] = useState<HomeScope>("nearby");
+  const { coords, status, request } = useHomeLocation();
+  const displayName = useAuthStore((s) => s.user?.displayName ?? null);
 
-  const posts: OverseasPost[] = data?.pages.flatMap((p) => p.items) ?? [];
+  const region = useRegionLabel(coords);
+  const nearby = useNearby(coords);
+  const national = useTrending();
+  const recommendations = useRecommendations(coords);
+
+  const locationDenied = status === "denied" || status === "undetermined";
+  const nearbyIsEmpty =
+    !nearby.isLoading && !nearby.isError && (nearby.data?.items.length ?? 0) === 0;
+  const showNational = scope === "national" || locationDenied || (!!coords && nearbyIsEmpty);
+  const active = showNational ? national : nearby;
+  const waitingForFix = !showNational && !coords;
+  const cards = active.data?.items ?? [];
+  const regionLabel = region.data?.label ?? null;
 
   const onRefresh = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: ["matches"] });
-    setSeed(makeSeed());
+    void queryClient.invalidateQueries({
+      predicate: (q) => {
+        const root = String(q.queryKey[0]);
+        return root.startsWith("home-") || root === "channels";
+      },
+    });
   }, []);
-
-  const onViewableItemsChanged = useCallback(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      for (const token of viewableItems) {
-        const post = token.item as OverseasPost | undefined;
-        if (post) prefetchMatches(post.id);
-      }
-    },
-    [],
-  );
-
-  const onEndReached = () => {
-    if (hasNextPage && !isFetching) void fetchNextPage();
-  };
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.bar}>
-        <View style={styles.wordmarkRow}>
-          <Text style={styles.wordmark}>PICTRIP</Text>
-          <View style={styles.wordmarkDot} />
-        </View>
+        <Text style={styles.wordmark}>PICTRIP</Text>
       </View>
 
-      {isLoading ? (
-        <View style={styles.loading}>
-          <View style={styles.tileRow}>
-            <Skeleton width={86} height={110} radius={14} />
-            <Skeleton width={86} height={110} radius={14} />
-            <Skeleton width={86} height={110} radius={14} />
-          </View>
-          <Skeleton height={520} radius={16} style={{ marginTop: spacing.xxl }} />
+      <ScrollView
+        ref={listRef}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={active.isFetching && !active.isLoading}
+            onRefresh={onRefresh}
+            tintColor={colors.ter}
+          />
+        }
+      >
+        <View style={styles.channels}>
+          <ChannelTiles onOpen={(key) => router.push(`/channels?start=${key}`)} />
         </View>
-      ) : isError || !data ? (
-        <View style={styles.error}>
-          <Text style={styles.errorText}>피드를 불러오지 못했어요.</Text>
-          <PrimaryButton testID="home-retry" label="다시 시도" onPress={() => refetch()} />
-        </View>
-      ) : (
-        <FlatList
-          data={posts}
-          keyExtractor={(post) => String(post.id)}
-          renderItem={({ item }) => (
-            <View style={styles.cardBlock}>
-              <PostCarousel post={item} />
-            </View>
-          )}
-          ListHeaderComponent={Header}
-          ListFooterComponent={Footer}
-          showsVerticalScrollIndicator={false}
-          onViewableItemsChanged={onViewableItemsChanged}
-          viewabilityConfig={VIEWABILITY}
-          onEndReached={onEndReached}
-          onEndReachedThreshold={0.8}
-          refreshControl={
-            <RefreshControl
-              refreshing={isFetching && !isLoading && !isFetchingNextPage}
-              onRefresh={onRefresh}
-              tintColor={colors.ter}
-            />
-          }
+
+        <ScopeTabs
+          scope={showNational ? "national" : "nearby"}
+          nearbyLabel={regionLabel ?? "내 주변"}
+          onChange={(next) => {
+            setScope(next);
+            if (next === "nearby" && !coords) void request();
+          }}
         />
-      )}
+
+        {locationDenied && scope === "nearby" ? (
+          <Pressable
+            testID="home-location-cta"
+            onPress={() => void request()}
+            style={styles.permit}
+          >
+            <Icon name="location" size={18} color={colors.accentText} />
+            <Text style={styles.permitText}>위치를 켜면 지금 주변 인기 장소를 보여드려요</Text>
+            <Icon name="chevron-right" size={16} color={colors.ter} />
+          </Pressable>
+        ) : null}
+
+        <RankSection
+          title={
+            showNational
+              ? "전국 인기 장소"
+              : regionLabel
+                ? `${regionLabel} 근처 인기 장소`
+                : "지금 주변 인기 장소"
+          }
+          note={cards.length > 0 ? formatBaseDate(active.data?.baseDate) : null}
+          cards={cards}
+          isLoading={active.isLoading || waitingForFix}
+          isError={active.isError}
+          onRetry={() => void active.refetch()}
+        />
+
+        <AiSection
+          displayName={displayName}
+          data={recommendations.data}
+          isLoading={recommendations.isLoading}
+          isError={recommendations.isError}
+          onRetry={() => void recommendations.refetch()}
+        />
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -162,39 +129,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
   },
-  wordmarkRow: { flexDirection: "row", alignItems: "flex-end" },
   wordmark: { fontSize: 20, fontWeight: "800", letterSpacing: -0.5, color: colors.ink },
-  wordmarkDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginLeft: 3,
-    marginBottom: 4,
-    backgroundColor: colors.accent,
-  },
-  headerBlock: { paddingTop: spacing.md, paddingBottom: spacing.sm },
-  cardBlock: { paddingBottom: spacing.xxl },
-  loading: { padding: spacing.lg },
-  tileRow: { flexDirection: "row", gap: 10 },
-  error: {
-    flex: 1,
+  content: { paddingTop: spacing.md, paddingBottom: spacing.xxl },
+  channels: { paddingBottom: spacing.lg },
+  permit: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.md,
-    padding: spacing.xl,
+    gap: 8,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: colors.accentFill,
   },
-  errorText: { fontSize: 15, color: colors.sec },
-  footer: {
-    backgroundColor: colors.inset,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
-  },
-  footerLinks: { flexDirection: "row", alignItems: "center", gap: 12 },
-  footerLink: { fontSize: 12, fontWeight: "600", color: colors.sec },
-  footerLinkStrong: { fontSize: 12, fontWeight: "700", color: colors.ink },
-  footerSep: { width: 1, height: 10, backgroundColor: colors.line },
-  footerNote: { fontSize: 11.5, lineHeight: 17, color: colors.ter },
+  permitText: { flex: 1, fontSize: 13.5, fontWeight: "700", color: colors.ink },
 });

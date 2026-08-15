@@ -1,10 +1,3 @@
-"""M3 (0013_drop_dead_columns) DB-level regression test.
-
-Pins that the dead columns refresh_token_enc / notification_consent are gone at
-head, so the DB matches the post-Task-6/13 ORM. If a future migration re-adds
-them, this fails.
-"""
-
 from __future__ import annotations
 
 import pytest

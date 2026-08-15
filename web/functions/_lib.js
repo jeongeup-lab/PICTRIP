@@ -1,9 +1,5 @@
-// Shared helpers for deep-link fallback pages (CF Pages Functions).
-// Files prefixed with _ are not routed.
-
 const API_BASE = "https://api.pictrip.org/v1";
 const APP_STORE = "https://apps.apple.com/app/id6778157312";
-const PLAY_STORE = "https://play.google.com/store/apps/details?id=com.jeongeup.pictrip";
 
 export function escapeHtml(s) {
   if (s == null) return "";
@@ -15,14 +11,12 @@ export function escapeHtml(s) {
     .replaceAll("'", "&#39;");
 }
 
-// Collapse whitespace/newlines and truncate for meta descriptions.
 export function summarize(text, max = 160) {
   if (!text) return "";
   const flat = String(text).replace(/\s+/g, " ").trim();
   return flat.length > max ? flat.slice(0, max - 1).trimEnd() + "…" : flat;
 }
 
-// Fetch a JSend endpoint; return its `data` or null on any failure.
 export async function fetchData(path) {
   try {
     const res = await fetch(`${API_BASE}${path}`, {
@@ -36,7 +30,6 @@ export async function fetchData(path) {
   }
 }
 
-// Full HTML document with Open Graph / Twitter / smart-banner meta.
 export function renderPage({ url, title, description, image, bodyHtml }) {
   const t = escapeHtml(title);
   const d = escapeHtml(description);
@@ -48,11 +41,11 @@ export function renderPage({ url, title, description, image, bodyHtml }) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${t} · PicTrip</title>
+  <title>${t} · PICTRIP</title>
   <meta name="description" content="${d}" />
   <link rel="canonical" href="${escapeHtml(url)}" />
   <meta name="apple-itunes-app" content="app-id=6778157312, app-argument=${escapeHtml(url)}" />
-  <meta property="og:site_name" content="PicTrip" />
+  <meta property="og:site_name" content="PICTRIP" />
   <meta property="og:type" content="article" />
   <meta property="og:title" content="${t}" />
   <meta property="og:description" content="${d}" />
@@ -76,11 +69,10 @@ export function renderPage({ url, title, description, image, bodyHtml }) {
   </style>
 </head>
 <body>
-  <div class="brand">PicTrip</div>
+  <div class="brand">PICTRIP</div>
 ${bodyHtml}
   <div class="cta">
     <a class="primary" href="${APP_STORE}">App Store에서 받기</a>
-    <a href="${PLAY_STORE}">Google Play에서 받기</a>
   </div>
   <footer>
     <a href="https://pictrip.org/legal/data-sources">데이터 출처 고지</a>
@@ -94,7 +86,6 @@ export function htmlResponse(html, status = 200) {
     status,
     headers: {
       "content-type": "text/html; charset=utf-8",
-      // Short edge cache; deep-link previews don't need to be real-time.
       "cache-control": "public, max-age=300",
     },
   });

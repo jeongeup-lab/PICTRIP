@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { create } from "zustand";
+import { Image } from "expo-image";
+import { fullSizeSourceUri } from "@/components/RemoteImage";
 import { getChannelCards, getChannels, type ChannelKey } from "@/features/channels/api";
 import { loadSeen, saveSeen } from "@/features/channels/lib/seen-store";
 import { todayKst } from "@/features/channels/lib/kst";
@@ -14,28 +16,30 @@ export function useChannels() {
   });
 }
 
-export function channelCardsKey(key: ChannelKey, coords?: { lat: number; lng: number }) {
-  return [
-    "channel-cards",
-    key,
-    coords ? [Math.round(coords.lat * 1000), Math.round(coords.lng * 1000)] : null,
-  ];
+export function channelCardsKey(key: ChannelKey) {
+  return ["channel-cards", key];
 }
 
-export function useChannelCards(key: ChannelKey, coords?: { lat: number; lng: number }) {
+export function useChannelCards(key: ChannelKey) {
   return useQuery({
-    queryKey: channelCardsKey(key, coords),
-    queryFn: () => getChannelCards(key, coords),
-    enabled: key !== "around" || !!coords,
+    queryKey: channelCardsKey(key),
+    queryFn: () => getChannelCards(key),
   });
 }
 
 export function prefetchChannelCards(key: ChannelKey) {
-  if (key === "around") return;
-  void queryClient.prefetchQuery({
-    queryKey: channelCardsKey(key),
-    queryFn: () => getChannelCards(key),
-  });
+  void queryClient
+    .prefetchQuery({
+      queryKey: channelCardsKey(key),
+      queryFn: () => getChannelCards(key),
+    })
+    .then(() => {
+      const data = queryClient.getQueryData<Awaited<ReturnType<typeof getChannelCards>>>(
+        channelCardsKey(key),
+      );
+      const first = data?.cards[0]?.imageUrl;
+      if (first) void Image.prefetch(fullSizeSourceUri(first), { cachePolicy: "memory-disk" });
+    });
 }
 
 interface SeenState {

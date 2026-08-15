@@ -1,21 +1,21 @@
-"""Spot detail with lazy KTO enrichment + 7-day cache (ADR-0007)."""
-
 from __future__ import annotations
 
 import asyncio
 import json
+import secrets
+from collections.abc import Awaitable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 from redis.asyncio import Redis
 from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import KtoApiUnavailable, ResourceNotFound
-from app.core.kto_client import KtoClient, KtoService
+from app.core.db import async_session_factory
 from app.core.logging import get_logger
+from app.kto.client import KtoClient, KtoService
 from app.modules.spots.models import (
     LclsSystmCode,
     Region,
@@ -30,26 +30,28 @@ from app.modules.spots.services.rows import (
     SpotIntroRow,
 )
 from app.modules.spots.text import clean_homepage, clean_scalar, verbatim
+from app.web.errors import KtoApiUnavailable, ResourceNotFound
 
 logger = get_logger(__name__)
 
-_DETAIL_TTL = timedelta(days=7)
+_DETAIL_TTL = timedelta(days=90)
 
-# Redis hot front cache for the KTO-derived detail bundle (overview/images/intro).
-# Postgres (spot_details + spot_images) stays the 7-day authority; Redis just
-# skips its two reads on a hit. Shorter TTL bounds staleness from a pipeline
-# modified_time bump between Redis writes — the modified_time supersede check
-# below still runs on every request (cached_at travels in the bundle), so a bump
-# is honoured immediately regardless of TTL.
-_REDIS_KEY = "spotdetail:v1:{content_id}"
+_REDIS_KEY = "spotdetail:v2:{content_id}"
 _REDIS_TTL_SECONDS = int(timedelta(hours=1).total_seconds())
+_REFRESH_LOCK_KEY = "spotdetail:refresh:v1:{content_id}"
+_REFRESH_LOCK_TTL_SECONDS = 20
+_REFRESH_BACKOFF_KEY = "spotdetail:refresh-backoff:v1:{content_id}"
+_REFRESH_BACKOFF_TTL_SECONDS = 60
+_RELEASE_REFRESH_LOCK_SCRIPT = """
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("del", KEYS[1])
+end
+return 0
+"""
 
 
 @dataclass(frozen=True)
 class _DetailCache:
-    """The KTO-derived detail bundle, sourced from Redis or Postgres. cached_at
-    drives the TTL + modified_time freshness check identically for both sources."""
-
     overview: str | None
     homepage: str | None
     tel: str | None
@@ -59,11 +61,10 @@ class _DetailCache:
 
 
 async def _redis_get_detail(redis: Redis, content_id: str) -> _DetailCache | None:
-    """Read the cached detail bundle. Fail-open: any Redis/parse error is a miss."""
     key = _REDIS_KEY.format(content_id=content_id)
     try:
         raw = await redis.get(key)
-    except Exception as exc:  # cache is non-critical — fall back to Postgres
+    except Exception as exc:
         logger.warning("spot.detail.cache_get_failed", content_id=content_id, error=str(exc))
         return None
     if raw is None:
@@ -76,7 +77,10 @@ async def _redis_get_detail(redis: Redis, content_id: str) -> _DetailCache | Non
             tel=d["tel"],
             intro_data=d["intro_data"],
             cached_at=datetime.fromisoformat(d["cached_at"]),
-            images=[SpotImageRow(origin_image_url=o, small_image_url=s) for o, s in d["images"]],
+            images=[
+                SpotImageRow(origin_image_url=o, small_image_url=s, cpyrht_div_cd=c)
+                for o, s, c in d["images"]
+            ],
         )
     except (ValueError, KeyError, TypeError) as exc:
         logger.warning("spot.detail.cache_corrupt", content_id=content_id, error=str(exc))
@@ -84,7 +88,6 @@ async def _redis_get_detail(redis: Redis, content_id: str) -> _DetailCache | Non
 
 
 async def _redis_set_detail(redis: Redis, content_id: str, cache: _DetailCache) -> None:
-    """Write the detail bundle. Best-effort: a Redis failure never breaks the request."""
     key = _REDIS_KEY.format(content_id=content_id)
     payload = json.dumps(
         {
@@ -93,41 +96,140 @@ async def _redis_set_detail(redis: Redis, content_id: str, cache: _DetailCache) 
             "tel": cache.tel,
             "intro_data": cache.intro_data,
             "cached_at": cache.cached_at.isoformat(),
-            "images": [[i.origin_image_url, i.small_image_url] for i in cache.images],
+            "images": [
+                [i.origin_image_url, i.small_image_url, i.cpyrht_div_cd] for i in cache.images
+            ],
         }
     )
     try:
         await redis.set(key, payload, ex=_REDIS_TTL_SECONDS)
-    except Exception as exc:  # cache write best-effort
+    except Exception as exc:
         logger.warning("spot.detail.cache_set_failed", content_id=content_id, error=str(exc))
 
 
-def _is_fresh(cached_at: datetime, modified_time: datetime | None) -> bool:
-    """Fresh = within TTL AND not superseded by a newer KTO change (pipeline bumps
-    spots.modified_time on content change). modified_time is NULL until the
-    pipeline sync lands the field, so the supersede clause is a safe no-op until
-    then (#37)."""
+async def invalidate_spot_detail_cache(redis: Redis, content_id: str) -> None:
+    try:
+        await redis.delete(_REDIS_KEY.format(content_id=content_id))
+    except Exception as exc:
+        logger.warning("spot.detail.cache_del_failed", content_id=content_id, error=str(exc))
+
+
+async def _refresh_in_backoff(redis: Redis, content_id: str) -> bool:
+    try:
+        return bool(await redis.get(_REFRESH_BACKOFF_KEY.format(content_id=content_id)))
+    except Exception as exc:
+        logger.warning("spot.detail.backoff_get_failed", content_id=content_id, error=str(exc))
+        return False
+
+
+async def _set_refresh_backoff(redis: Redis, content_id: str) -> None:
+    try:
+        await redis.set(
+            _REFRESH_BACKOFF_KEY.format(content_id=content_id),
+            "1",
+            ex=_REFRESH_BACKOFF_TTL_SECONDS,
+        )
+    except Exception as exc:
+        logger.warning("spot.detail.backoff_set_failed", content_id=content_id, error=str(exc))
+
+
+async def _acquire_refresh_lock(redis: Redis, content_id: str) -> tuple[bool, str | None]:
+    token = secrets.token_hex(16)
+    try:
+        acquired = await redis.set(
+            _REFRESH_LOCK_KEY.format(content_id=content_id),
+            token,
+            ex=_REFRESH_LOCK_TTL_SECONDS,
+            nx=True,
+        )
+    except Exception as exc:
+        logger.warning("spot.detail.refresh_lock_failed", content_id=content_id, error=str(exc))
+        return True, None
+    return bool(acquired), token if acquired else None
+
+
+async def _release_refresh_lock(redis: Redis, content_id: str, token: str | None) -> None:
+    if token is None:
+        return
+    try:
+        await cast(
+            Awaitable[Any],
+            redis.eval(
+                _RELEASE_REFRESH_LOCK_SCRIPT,
+                1,
+                _REFRESH_LOCK_KEY.format(content_id=content_id),
+                token,
+            ),
+        )
+    except Exception as exc:
+        logger.warning("spot.detail.refresh_unlock_failed", content_id=content_id, error=str(exc))
+
+
+def is_detail_fresh(cached_at: datetime, modified_time: datetime | None) -> bool:
     return (datetime.now(UTC) - cached_at) < _DETAIL_TTL and (
         modified_time is None or cached_at >= modified_time
     )
 
 
+def _is_fresh(cached_at: datetime, modified_time: datetime | None) -> bool:
+    return is_detail_fresh(cached_at, modified_time)
+
+
 async def _load_detail_images(session: AsyncSession, content_id: str) -> list[SpotImageRow]:
     rows = (
         await session.execute(
-            select(SpotImage.origin_image_url, SpotImage.small_image_url)
+            select(
+                SpotImage.origin_image_url,
+                SpotImage.small_image_url,
+                SpotImage.cpyrht_div_cd,
+            )
             .where(SpotImage.content_id == content_id)
             .order_by(SpotImage.sort_order)
         )
     ).all()
     return [
-        SpotImageRow(origin_image_url=r.origin_image_url, small_image_url=r.small_image_url)
+        SpotImageRow(
+            origin_image_url=r.origin_image_url,
+            small_image_url=r.small_image_url,
+            cpyrht_div_cd=r.cpyrht_div_cd,
+        )
         for r in rows
     ]
 
 
+async def replace_spot_images(
+    session: AsyncSession, content_id: str, images: list[SpotImageRow]
+) -> None:
+    if images:
+        img_stmt = pg_insert(SpotImage).values(
+            [
+                {
+                    "content_id": content_id,
+                    "origin_image_url": image.origin_image_url,
+                    "small_image_url": image.small_image_url,
+                    "cpyrht_div_cd": image.cpyrht_div_cd,
+                    "sort_order": order,
+                }
+                for order, image in enumerate(images)
+            ]
+        )
+        img_stmt = img_stmt.on_conflict_do_update(
+            index_elements=["content_id", "sort_order"],
+            set_={
+                "origin_image_url": img_stmt.excluded.origin_image_url,
+                "small_image_url": img_stmt.excluded.small_image_url,
+                "cpyrht_div_cd": img_stmt.excluded.cpyrht_div_cd,
+            },
+        )
+        await session.execute(img_stmt)
+
+    await session.execute(
+        text("DELETE FROM spot_images WHERE content_id = :cid AND sort_order >= :n"),
+        {"cid": content_id, "n": len(images)},
+    )
+
+
 def _extract_intro(content_type_id: int, intro_data: dict[str, Any] | None) -> SpotIntroRow | None:
-    """Map detailIntro2 keys -> SpotIntroRow by contentTypeId; None if no intro_data."""
     if not intro_data:
         return None
     d = intro_data
@@ -139,9 +241,10 @@ def _extract_intro(content_type_id: int, intro_data: dict[str, Any] | None) -> S
                 return v
         return None
 
-    if content_type_id == 39:  # restaurant
+    if content_type_id == 39:
         return SpotIntroRow(
             usetime=g("opentimefood"),
+            usefee=None,
             restdate=g("restdatefood"),
             parking=g("parkingfood"),
             infocenter=g("infocenterfood"),
@@ -150,6 +253,7 @@ def _extract_intro(content_type_id: int, intro_data: dict[str, Any] | None) -> S
         )
     return SpotIntroRow(
         usetime=g("usetime", "usetimeculture", "usetimeleports"),
+        usefee=g("usefee", "usefeeculture", "usefeeleports"),
         restdate=g("restdate", "restdateculture", "restdateleports"),
         parking=g("parking", "parkingculture", "parkingleports"),
         infocenter=g("infocenter", "infocenterculture", "infocenterleports"),
@@ -186,6 +290,7 @@ def _assemble_detail(
         images=images,
         category=category,
         intro=intro,
+        cpyrht_div_cd=spot.cpyrht_div_cd,
     )
 
 
@@ -196,7 +301,7 @@ async def _persist_detail(
     overview: str | None,
     homepage: str | None,
     tel: str | None,
-    images: list[tuple[str, str | None]],
+    images: list[SpotImageRow],
     intro_data: dict[str, Any] | None = None,
 ) -> None:
     detail_stmt = pg_insert(SpotDetail).values(
@@ -220,43 +325,45 @@ async def _persist_detail(
         },
     )
     await session.execute(detail_stmt)
-
-    if images:
-        # One multi-row upsert instead of a per-image round trip (a 20-image spot
-        # was ~20 sequential writes on every cold refresh). excluded.* applies each
-        # row's own proposed value on conflict.
-        img_stmt = pg_insert(SpotImage).values(
-            [
-                {
-                    "content_id": content_id,
-                    "origin_image_url": origin,
-                    "small_image_url": small,
-                    "sort_order": order,
-                }
-                for order, (origin, small) in enumerate(images)
-            ]
-        )
-        img_stmt = img_stmt.on_conflict_do_update(
-            index_elements=["content_id", "sort_order"],
-            set_={
-                "origin_image_url": img_stmt.excluded.origin_image_url,
-                "small_image_url": img_stmt.excluded.small_image_url,
-            },
-        )
-        await session.execute(img_stmt)
-
-    await session.execute(
-        text("DELETE FROM spot_images WHERE content_id = :cid AND sort_order >= :n"),
-        {"cid": content_id, "n": len(images)},
-    )
+    await replace_spot_images(session, content_id, images)
     await session.commit()
+
+
+async def persist_detail_common(
+    session: AsyncSession,
+    content_id: str,
+    content_type_id: int,
+    overview: str | None,
+    homepage: str | None,
+    tel: str | None,
+) -> None:
+    columns = {
+        "content_type_id": content_type_id,
+        "overview": overview,
+        "homepage": homepage,
+        "tel": tel,
+        "cached_at": func.now(),
+    }
+    stmt = pg_insert(SpotDetail).values(content_id=content_id, **columns)
+    stmt = stmt.on_conflict_do_update(index_elements=["content_id"], set_=columns)
+    await session.execute(stmt)
+    await session.commit()
+
+
+async def fetch_detail_common(
+    kto: KtoClient, content_id: str
+) -> tuple[str | None, str | None, str | None]:
+    items = await kto.call(KtoService.KOR, "detailCommon2", contentId=content_id)
+    common = items[0] if items else {}
+    return (
+        verbatim(common.get("overview")),
+        clean_homepage(common.get("homepage")),
+        clean_scalar(common.get("tel")),
+    )
 
 
 @dataclass(frozen=True)
 class _DetailContext:
-    """Spot base row + scalar meta — the fixed inputs to every `_assemble_detail`
-    call, so the orchestrator only varies the KTO-derived fields."""
-
     spot: Any
     region_name: str | None
     sigungu_name: str | None
@@ -287,9 +394,6 @@ class _DetailContext:
 
 
 async def _load_spot_context(session: AsyncSession, content_id: str) -> Any:
-    """Load the visible Spot row plus its (region, sigungu, category) label scalars
-    in one LEFT-JOINed query; raise ResourceNotFound if absent or hidden. The code
-    columns are PKs of the label tables, so the joins can't multiply the row."""
     row = (
         await session.execute(
             select(
@@ -301,6 +405,7 @@ async def _load_spot_context(session: AsyncSession, content_id: str) -> Any:
                 Spot.addr2,
                 Spot.mapx,
                 Spot.mapy,
+                Spot.cpyrht_div_cd,
                 Spot.modified_time,
                 Region.ldong_regn_nm.label("region_name"),
                 Sigungu.ldong_signgu_nm.label("sigungu_name"),
@@ -321,7 +426,6 @@ async def _load_spot_context(session: AsyncSession, content_id: str) -> Any:
 async def _read_cached_detail(
     session: AsyncSession, content_id: str
 ) -> tuple[Any, list[SpotImageRow]]:
-    """Read the cached SpotDetail row (or None) plus its persisted images."""
     detail = (
         await session.execute(
             select(
@@ -337,18 +441,28 @@ async def _read_cached_detail(
     return detail, existing_images
 
 
-# Wall-clock ceiling for the user-facing KTO detail fetch. Each kto.call already
-# retries 3x with exponential backoff on a 10s timeout, so one flaky endpoint can
-# stall the gather for ~30s. This caps it: on timeout we raise KtoApiUnavailable
-# and fall back to the stale/unavailable path rather than making the user wait.
+def parse_kto_detail_images(items: list[dict[str, Any]]) -> list[SpotImageRow]:
+    images: list[SpotImageRow] = []
+    for item in items:
+        origin = clean_scalar(item.get("originimgurl"))
+        if origin is None:
+            continue
+        images.append(
+            SpotImageRow(
+                origin_image_url=origin,
+                small_image_url=clean_scalar(item.get("smallimageurl")),
+                cpyrht_div_cd=clean_scalar(item.get("cpyrhtDivCd")),
+            )
+        )
+    return images
+
+
 _KTO_DETAIL_BUDGET = 8.0
 
 
 async def _fetch_kto_detail(
     kto: KtoClient, content_id: str, content_type_id: int
-) -> tuple[str | None, str | None, str | None, list[tuple[str, str | None]], dict[str, Any]]:
-    """Fetch + parse the 3 KTO detail endpoints concurrently, under a wall-clock
-    budget. Propagates KtoApiUnavailable (also on budget timeout)."""
+) -> tuple[str | None, str | None, str | None, list[SpotImageRow], dict[str, Any]]:
     try:
         common_items, image_items, intro_items = await asyncio.wait_for(
             asyncio.gather(
@@ -370,15 +484,16 @@ async def _fetch_kto_detail(
     overview = verbatim(common.get("overview"))
     homepage = clean_homepage(common.get("homepage"))
     tel = clean_scalar(common.get("tel"))
-    images: list[tuple[str, str | None]] = []
-    for item in image_items:
-        origin = clean_scalar(item.get("originimgurl"))
-        if origin is None:
-            continue
-        images.append((origin, clean_scalar(item.get("smallimageurl"))))
+    images = parse_kto_detail_images(image_items)
 
     intro_data: dict[str, Any] = intro_items[0] if intro_items else {}
     return overview, homepage, tel, images, intro_data
+
+
+def _serves(cache: _DetailCache | None, *, require_intro: bool) -> bool:
+    if cache is None:
+        return False
+    return not require_intro or cache.intro_data is not None
 
 
 async def load_spot_detail(
@@ -386,21 +501,16 @@ async def load_spot_detail(
     kto: KtoClient,
     redis: Redis,
     content_id: str,
+    *,
+    defer_refresh: bool = False,
+    require_intro: bool = False,
 ) -> SpotDetailRow:
-    """Spot detail with lazy KTO enrichment (ADR-0007). Reads the detail bundle
-    from Redis (hot front cache) then Postgres (7-day authority), commits the read
-    txn before any HTTP, then fetches/upserts on miss/stale outside a txn. On KTO
-    failure serves stale or partial — never 502. 404 if absent or show_flag=0."""
     spot = await _load_spot_context(session, content_id)
     ctx = _DetailContext(spot, spot.region_name, spot.sigungu_name, spot.category)
 
     cache = await _redis_get_detail(redis, content_id)
-    # Fast path only when Redis is FRESH. A stale (or missing) Redis bundle must
-    # defer to Postgres, the authority, before any KTO call — otherwise a
-    # best-effort Redis SET that failed after a PG refresh would pin a stale
-    # response (and re-hit KTO) for up to the TTL even though PG is already fresh.
     redis_fresh = cache is not None and _is_fresh(cache.cached_at, spot.modified_time)
-    if not redis_fresh:
+    if not redis_fresh or not _serves(cache, require_intro=require_intro):
         detail, existing_images = await _read_cached_detail(session, content_id)
         if detail is not None:
             cache = _DetailCache(
@@ -412,12 +522,15 @@ async def load_spot_detail(
                 images=existing_images,
             )
 
-    # End read txn before HTTP. commit() (not rollback) keeps rows under savepoint test fixtures.
     await session.commit()
 
-    if cache is not None and _is_fresh(cache.cached_at, spot.modified_time):
+    if (
+        cache is not None
+        and _is_fresh(cache.cached_at, spot.modified_time)
+        and _serves(cache, require_intro=require_intro)
+    ):
         if not redis_fresh:
-            await _redis_set_detail(redis, content_id, cache)  # warm / heal from Postgres
+            await _redis_set_detail(redis, content_id, cache)
         return ctx.assemble(
             overview=cache.overview,
             homepage=cache.homepage,
@@ -425,6 +538,26 @@ async def load_spot_detail(
             images=cache.images,
             status="fresh",
             intro=_extract_intro(spot.content_type_id, cache.intro_data),
+        )
+
+    if defer_refresh:
+        if cache is not None:
+            return ctx.assemble(
+                overview=cache.overview,
+                homepage=cache.homepage,
+                tel=cache.tel,
+                images=cache.images,
+                status="stale",
+                intro=_extract_intro(spot.content_type_id, cache.intro_data),
+            )
+        status = "unavailable" if await _refresh_in_backoff(redis, content_id) else "pending"
+        return ctx.assemble(
+            overview=None,
+            homepage=None,
+            tel=None,
+            images=[],
+            status=status,
+            intro=None,
         )
 
     try:
@@ -453,7 +586,6 @@ async def load_spot_detail(
     await _persist_detail(
         session, content_id, spot.content_type_id, overview, homepage, tel, images, intro_data
     )
-    image_rows = [SpotImageRow(origin_image_url=o, small_image_url=s) for o, s in images]
     await _redis_set_detail(
         redis,
         content_id,
@@ -463,7 +595,7 @@ async def load_spot_detail(
             tel=tel,
             intro_data=intro_data,
             cached_at=datetime.now(UTC),
-            images=image_rows,
+            images=images,
         ),
     )
 
@@ -471,7 +603,38 @@ async def load_spot_detail(
         overview=overview,
         homepage=homepage,
         tel=tel,
-        images=image_rows,
+        images=images,
         status="fresh",
         intro=_extract_intro(spot.content_type_id, intro_data),
     )
+
+
+async def refresh_spot_detail(
+    session: AsyncSession,
+    kto: KtoClient,
+    redis: Redis,
+    content_id: str,
+) -> None:
+    if await _refresh_in_backoff(redis, content_id):
+        return
+    acquired, lock_token = await _acquire_refresh_lock(redis, content_id)
+    if not acquired:
+        return
+    try:
+        row = await load_spot_detail(session, kto, redis, content_id)
+        if row.detail_status in {"stale", "unavailable"}:
+            await _set_refresh_backoff(redis, content_id)
+    except Exception as exc:
+        await _set_refresh_backoff(redis, content_id)
+        logger.warning("spot.detail.refresh_failed", content_id=content_id, error=str(exc))
+    finally:
+        await _release_refresh_lock(redis, content_id, lock_token)
+
+
+async def refresh_spot_detail_in_background(
+    kto: KtoClient,
+    redis: Redis,
+    content_id: str,
+) -> None:
+    async with async_session_factory() as session:
+        await refresh_spot_detail(session, kto, redis, content_id)

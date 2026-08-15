@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, field_validator
 
-from app.core.kto_images import hires_kto_image, https_kto_image
+from app.kto.client import https_kto_image
 
 
 class OverseasPost(BaseModel):
@@ -35,7 +35,7 @@ class MatchCard(BaseModel):
     @field_validator("imageUrl")
     @classmethod
     def _upgrade_image(cls, v: str) -> str:
-        return hires_kto_image(v) or v
+        return https_kto_image(v) or v
 
 
 class MatchesResponse(BaseModel):
@@ -58,7 +58,7 @@ class ChannelCard(BaseModel):
     @field_validator("imageUrl")
     @classmethod
     def _upgrade_image(cls, v: str | None) -> str | None:
-        return hires_kto_image(v) or v
+        return https_kto_image(v) or v
 
 
 class ChannelCardsResponse(BaseModel):
@@ -81,3 +81,60 @@ class ChannelMeta(BaseModel):
 
 class ChannelsResponse(BaseModel):
     channels: list[ChannelMeta]
+
+
+class HomeSpotCard(BaseModel):
+    contentId: str
+    title: str
+    regionLabel: str
+    imageUrl: str | None
+    rank: int | None = None
+    dist: float | None = None
+    category: str | None = None
+    tag: str | None = None
+    anchorTitle: str | None = None
+
+    @field_validator("imageUrl")
+    @classmethod
+    def _upgrade_image(cls, v: str | None) -> str | None:
+        return https_kto_image(v) or v
+
+
+class HomeCardsResponse(BaseModel):
+    items: list[HomeSpotCard]
+    baseDate: str | None = None
+
+
+class RecommendationsResponse(BaseModel):
+    ready: bool
+    savedCount: int
+    minSaved: int
+    items: list[HomeSpotCard]
+
+
+class ShortsSpotCard(BaseModel):
+    contentId: str
+    title: str
+    regionLabel: str
+    imageUrl: str | None
+
+    @field_validator("imageUrl")
+    @classmethod
+    def _upgrade_image(cls, v: str | None) -> str | None:
+        return https_kto_image(v) or v
+
+
+class ShortsCard(BaseModel):
+    videoId: str
+    title: str
+    channelTitle: str
+    thumbnailUrl: str
+    viewCount: int
+    anchorLabel: str
+    spots: list[ShortsSpotCard]
+
+
+class ShortsResponse(BaseModel):
+    items: list[ShortsCard]
+    nextCursor: str | None
+    hasMore: bool

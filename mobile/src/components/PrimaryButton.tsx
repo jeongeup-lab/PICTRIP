@@ -24,7 +24,10 @@ export function PrimaryButton({
       disabled={disabled}
       style={[
         styles.base,
-        { backgroundColor: isPrimary ? colors.ink : colors.inset, opacity: disabled ? 0.4 : 1 },
+        {
+          backgroundColor: isPrimary ? colors.accent : colors.fillStrong,
+          opacity: disabled ? 0.4 : 1,
+        },
       ]}
     >
       <Text style={[styles.label, { color: isPrimary ? colors.onImage : colors.ink }]}>

@@ -1,5 +1,3 @@
-"""spot_images (content_id, sort_order) uniqueness regression (migration 0006)."""
-
 from __future__ import annotations
 
 import pytest

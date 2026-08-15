@@ -1,5 +1,3 @@
-"""KTO OpenAPI client (areaBasedSyncList2 etc.)."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -18,13 +16,10 @@ _OPERATION = "areaBasedSyncList2"
 
 
 def _is_transient(exc: BaseException) -> bool:
-    """Retry only on transient errors: connection/timeout problems, HTTP 429,
-    and 5xx. A non-transient 4xx (e.g. a bad serviceKey) must raise immediately
-    instead of burning retries against the daily quota."""
     if isinstance(exc, httpx.HTTPStatusError):
         status = exc.response.status_code
         return status == 429 or status >= 500
-    return isinstance(exc, httpx.RequestError)
+    return isinstance(exc, (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError))
 
 
 class KtoClient:
@@ -44,10 +39,6 @@ class KtoClient:
         reraise=True,
     )
     def call(self, operation: str, **params: Any) -> list[dict[str, Any]]:
-        """Generic GET against a KorService2 operation. Sends the baseline auth
-        params + `_type=json` + the given params, unwraps `response.body.items.item`
-        (single dict or list; empty -> []). Same transient-only retry as the sync
-        list. Used by master-code loaders (ldongCode2, lclsSystmCode2)."""
         merged: dict[str, Any] = {
             "serviceKey": settings.kto_api_key,
             "MobileOS": "ETC",
@@ -74,14 +65,12 @@ class KtoClient:
     def area_based_sync_list(
         self, *, page: int, rows: int = 100, modifiedtime: str | None = None
     ) -> tuple[list[dict[str, Any]], int]:
-        """One page of the sync list. showflag omitted on purpose so hidden
-        (showflag=0) items arrive and can be soft-deleted."""
         params = {
             "serviceKey": settings.kto_api_key,
             "MobileOS": "ETC",
             "MobileApp": settings.kto_mobile_app,
             "_type": "json",
-            "arrange": "C",  # by modified date
+            "arrange": "C",
             "numOfRows": rows,
             "pageNo": page,
         }

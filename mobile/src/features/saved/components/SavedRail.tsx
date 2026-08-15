@@ -5,7 +5,7 @@ import { colors, spacing, radii } from "@/constants/theme";
 
 interface Props {
   spots: SpotCard[];
-  onPressItem: (contentId: string) => void;
+  onPressItem: (spot: SpotCard) => void;
 }
 
 export function SavedRail({ spots, onPressItem }: Props) {
@@ -16,7 +16,7 @@ export function SavedRail({ spots, onPressItem }: Props) {
       contentContainerStyle={styles.rail}
     >
       {spots.map((s) => (
-        <Pressable key={s.contentId} style={styles.item} onPress={() => onPressItem(s.contentId)}>
+        <Pressable key={s.contentId} style={styles.item} onPress={() => onPressItem(s)}>
           <View style={styles.imgWrap}>
             <RemoteImage uri={s.firstImageUrl} style={styles.img} />
           </View>

@@ -10,17 +10,12 @@ import { colors } from "@/constants/theme";
 
 interface Props {
   data: SpotDetail | undefined;
-  /** Controls rendered inside the nav row (glass buttons — see HeroNavButton). */
   nav: ReactNode;
-  /** 62 on the full screen (clears the status bar); smaller inside a sheet. */
   navTopPadding: number;
   onViewAll: () => void;
-  /** Reports the hero's laid-out height (the detail sheet derives its base snap). */
   onHeroHeight?: (h: number) => void;
 }
 
-/** Full-bleed spot hero: KTO image + scrim + glass nav row + title/subline/lead
- * + gallery strip. Shared by the spot-detail screen and the map detail sheet. */
 export function SpotHero({ data, nav, navTopPadding, onViewAll, onHeroHeight }: Props) {
   const subline = data
     ? [data.category, [data.regionName, data.sigunguName].filter(Boolean).join(" ")]
@@ -79,8 +74,6 @@ export function HeroNavButton({
 
 const styles = StyleSheet.create({
   hero: { backgroundColor: colors.sec, paddingBottom: 22, overflow: "hidden" },
-  // Push the KTO image down past the hero's bottom edge so its embedded
-  // "한국관광공사" watermark (baked into the bottom-right of the source) is clipped.
   heroImage: { position: "absolute", left: 0, right: 0, top: 0, bottom: -56 },
   nav: {
     flexDirection: "row",

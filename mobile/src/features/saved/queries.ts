@@ -6,7 +6,8 @@ import { containsId, removeById } from "@/features/saved/lib/optimistic";
 
 export const savedKeys = { list: ["saved"] as const };
 
-/** Saved list — enabled only when authenticated (guests get []). */
+const RECOMMENDATIONS_ROOT = ["home-recommendations"] as const;
+
 export function useSavedList() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   return useQuery({
@@ -16,27 +17,19 @@ export function useSavedList() {
   });
 }
 
-/** Heart state for a spot, derived from the saved-list cache (spec §5 limit:
- * spots beyond the loaded page may read false until saved). */
 export function useIsSaved(contentId: string): boolean {
   const { data } = useSavedList();
   return containsId(data, contentId);
 }
 
-/**
- * Save uses invalidate-on-success (not a full optimistic cache write) by design,
- * asymmetric with useUnsaveMutation below. A save never removes a visible row:
- * the saved grid simply refetches on its next mount, and the spot-detail heart
- * already reflects the save via its own local optimistic state — so there is no
- * in-place item to mutate/roll back. Unsave, by contrast, deletes a row that is
- * currently rendered in the grid, so it does a full optimistic mutation +
- * rollback to avoid a flash of the stale item.
- */
 export function useSaveMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (contentId: string) => saveSpot(contentId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: savedKeys.list }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: savedKeys.list });
+      void qc.invalidateQueries({ queryKey: RECOMMENDATIONS_ROOT });
+    },
   });
 }
 
@@ -53,6 +46,9 @@ export function useUnsaveMutation() {
     onError: (_e, _id, ctx) => {
       if (ctx?.prev) qc.setQueryData(savedKeys.list, ctx.prev);
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: savedKeys.list }),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: savedKeys.list });
+      void qc.invalidateQueries({ queryKey: RECOMMENDATIONS_ROOT });
+    },
   });
 }

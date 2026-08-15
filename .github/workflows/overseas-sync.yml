@@ -38,3 +38,11 @@ jobs:
           cid="$(docker ps -q --filter "publish=8000" | head -n1)"
           if [ -z "$cid" ]; then echo "api container not found on :8000"; exit 1; fi
           docker exec "$cid" python -m scripts.embed_overseas
+
+  # ETL 이 새 해외 스팟을 넣으면 그 이미지들은 엣지 캐시에 없어 첫 조회가 느리다.
+  # 임베딩과 무관하게 이미지 URL 은 ETL 직후 확정되므로 etl 에만 연쇄한다.
+  warm:
+    needs: etl
+    uses: ./.github/workflows/img-cache-warm.yml
+    permissions:
+      contents: read

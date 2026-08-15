@@ -1,124 +1,139 @@
-import { View, Text, Pressable, ScrollView, Alert, StyleSheet } from "react-native";
+import { useCallback, useState } from "react";
+import { View, Pressable, ScrollView, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
+import { router, useFocusEffect } from "expo-router";
 import { Icon } from "@/components/Icon";
+import { ListGroup } from "@/components/ListGroup";
+import { ListRow } from "@/components/ListRow";
+import { SectionTitle } from "@/components/SectionTitle";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { useSavedList } from "@/features/saved/queries";
-import { prefetchSpot } from "@/features/spots/queries";
 import { SavedRail } from "@/features/saved/components/SavedRail";
 import { EmptyBoard } from "@/features/saved/components/EmptyBoard";
-import { ProfileHeader } from "@/features/profile/components/ProfileHeader";
-import { GuestLoginRow } from "@/features/profile/components/GuestLoginRow";
-import { SettingsRows } from "@/features/profile/components/SettingsRows";
+import { prefetchSpot } from "@/features/spots/queries";
+import { ProfileHero } from "@/features/profile/components/ProfileHero";
+import { GuestHero } from "@/features/profile/components/GuestHero";
+import { StatTiles } from "@/features/profile/components/StatTiles";
+import { profileStats } from "@/features/profile/lib/stats";
+import { APP_BUILD_LABEL } from "@/lib/app-meta";
 import { colors, spacing } from "@/constants/theme";
+
+const SUPPORT_URL = "https://pictrip.org/support";
 
 export default function ProfileTab() {
   const insets = useSafeAreaInsets();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
-  const deleteAccount = useAuthStore((s) => s.deleteAccount);
   const { data: saved } = useSavedList();
+  const [today, setToday] = useState(() => Date.now());
+  useFocusEffect(
+    useCallback(() => {
+      setToday(Date.now());
+    }, []),
+  );
 
-  const confirmDelete = () =>
-    Alert.alert("회원 탈퇴", "탈퇴하면 스크랩과 계정 정보가 삭제돼요. 계속할까요?", [
-      { text: "취소", style: "cancel" },
-      { text: "탈퇴", style: "destructive", onPress: () => void deleteAccount() },
-    ]);
+  const stats = isAuthenticated ? profileStats(saved, user?.createdAt, today) : null;
+  const scraps = saved ?? [];
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.nav}>
-        <Text style={styles.navTitle}>마이</Text>
+      <View style={styles.nav} testID="profile-nav">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="마이 설정"
+          hitSlop={8}
+          style={styles.navBtn}
+          onPress={() => router.push("/settings")}
+          testID="open-settings"
+        >
+          <Icon name="settings" size={20} color={colors.ink} />
+        </Pressable>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {isAuthenticated && user ? (
-          <ProfileHeader user={user} />
+          <ProfileHero user={user} onPress={() => router.push("/account")} />
         ) : (
-          <GuestLoginRow onPress={() => router.push("/auth/login")} />
+          <GuestHero onPress={() => router.push("/auth/login")} />
         )}
 
-        <View style={styles.sep} />
+        <StatTiles stats={stats} onPressSaved={() => router.push("/saved")} />
 
-        <View style={styles.scrapWrap}>
-          <View style={styles.secHead}>
-            <Text style={styles.secTitle}>
-              스크랩
-              {isAuthenticated && saved && saved.length > 0 ? (
-                <Text style={styles.secCount}> {saved.length}</Text>
-              ) : null}
-            </Text>
-            {isAuthenticated && saved && saved.length > 0 ? (
-              <Pressable style={styles.seeAll} onPress={() => router.push("/saved")}>
-                <Text style={styles.seeAllText}>전체보기</Text>
-                <Icon name="chevron-right" size={15} color={colors.sec} />
-              </Pressable>
-            ) : null}
-          </View>
-
-          {isAuthenticated ? (
-            saved && saved.length > 0 ? (
+        {isAuthenticated ? (
+          <>
+            <SectionTitle
+              title="스크랩"
+              actionLabel={scraps.length > 0 ? `전체 ${scraps.length}` : undefined}
+              onAction={scraps.length > 0 ? () => router.push("/saved") : undefined}
+              testID="see-all-saved"
+            />
+            {scraps.length > 0 ? (
               <SavedRail
-                spots={saved}
-                onPressItem={(id) => {
-                  prefetchSpot(id);
-                  router.push(`/spots/${id}`);
+                spots={scraps}
+                onPressItem={(spot) => {
+                  prefetchSpot(spot);
+                  router.push(`/spots/${spot.contentId}`);
                 }}
               />
             ) : (
               <EmptyBoard
                 text="아직 스크랩한 곳이 없어요"
-                actionLabel="둘러보러 가기"
-                actionIcon="home"
-                onAction={() => router.push("/(tabs)")}
+                actionLabel="탐색 탭 열기"
+                actionIcon="search"
+                onAction={() => router.navigate("/(tabs)/explore")}
               />
-            )
-          ) : (
-            <EmptyBoard
-              text="로그인하고 마음에 든 곳을 스크랩하세요"
-              actionLabel="로그인하기"
-              actionIcon="log-in"
-              onAction={() => router.push("/auth/login")}
+            )}
+          </>
+        ) : null}
+
+        <SectionTitle title="설정" />
+        <ListGroup>
+          {isAuthenticated ? (
+            <ListRow icon="person" title="계정" chevron onPress={() => router.push("/account")} />
+          ) : null}
+          <ListRow
+            icon="settings"
+            title="기기 권한"
+            chevron
+            onPress={() => router.push("/settings")}
+          />
+          {isAuthenticated ? (
+            <ListRow
+              icon="check"
+              title="동의 내역"
+              chevron
+              onPress={() => router.push("/consent")}
             />
-          )}
-        </View>
-
-        <View style={styles.sep} />
-
-        <SettingsRows
-          onLogout={isAuthenticated ? () => void logout() : undefined}
-          onDeleteAccount={isAuthenticated ? confirmDelete : undefined}
-        />
-
-        <View style={styles.foot} />
+          ) : null}
+          <ListRow
+            icon="shield-check"
+            title="약관·정책"
+            chevron
+            onPress={() => router.push("/legal")}
+          />
+          <ListRow
+            icon="chat"
+            title="문의"
+            chevron
+            onPress={() => void WebBrowser.openBrowserAsync(SUPPORT_URL)}
+          />
+          <ListRow icon="info" title="앱 버전" value={APP_BUILD_LABEL} />
+        </ListGroup>
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.inset },
-  nav: { height: 50, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg },
-  navTitle: { fontSize: 17, fontWeight: "700", color: colors.ink },
-  sep: { height: 9, backgroundColor: colors.inset },
-  scrapWrap: { backgroundColor: colors.bg, paddingBottom: 2 },
-  secHead: {
+  root: { flex: 1, backgroundColor: colors.bg },
+  nav: {
+    height: 50,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: 11,
   },
-  secTitle: { fontSize: 18, fontWeight: "800", letterSpacing: -0.3, color: colors.ink },
-  secCount: { color: colors.accentText },
-  seeAll: { flexDirection: "row", alignItems: "center", gap: 3 },
-  seeAllText: { color: colors.sec, fontSize: 13.5, fontWeight: "600" },
-  foot: {
-    height: 30,
-    backgroundColor: colors.inset,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-  },
+  navBtn: { width: 48, height: 48, alignItems: "center", justifyContent: "center" },
+  scroll: { paddingBottom: spacing.xxl },
 });

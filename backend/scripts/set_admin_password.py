@@ -1,21 +1,3 @@
-"""Set / rotate an admin-console password (admin_users table).
-
-The admin console authenticates against the ``admin_users`` DB table, not an env
-var. Use this to replace the weak seeded default (``admin``/``admin``) with a
-strong password, or to add another admin login. Connects with the same
-``DATABASE_URL`` / ``POSTGRES_*`` settings as the app (``app.config``).
-
-Usage (from ``backend/``):
-
-    # interactive (password not echoed, never on the command line / shell history):
-    uv run python -m scripts.set_admin_password --username admin
-
-    # non-interactive (e.g. from a secret store) — avoid in shared shells:
-    ADMIN_NEW_PASSWORD='...' uv run python -m scripts.set_admin_password --username admin
-
-Upserts: creates the user if absent, else updates the hash + bumps updated_at.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -27,7 +9,7 @@ import sys
 from sqlalchemy import text
 
 from app.core.db import engine
-from app.core.passwords import hash_password
+from app.security.passwords import hash_password
 
 
 async def _upsert(username: str, password: str) -> None:

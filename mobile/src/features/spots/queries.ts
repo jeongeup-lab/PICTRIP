@@ -1,44 +1,70 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getSpot, getNearby } from "@/features/spots/api";
+import { preferredSeedImageUrl } from "@/features/spots/lib/seed-image";
 import { queryClient } from "@/lib/query-client";
-import type { NearbySpot, SpotCard, SpotDetail } from "@/lib/api-types";
+import type { SpotDetail } from "@/lib/api-types";
 
-/** Hero-relevant fields a tapped card hands off so the detail hero (image +
- * title + subline) paints instantly while the cold KTO detail loads. A
- * NearbySpot carries the richer subline (overview / region); a plain SpotCard
- * fills those with null. */
-type SpotSeed = SpotCard & Partial<Pick<NearbySpot, "overview" | "regionName" | "sigunguName">>;
+interface SpotSeed {
+  contentId: string;
+  title: string;
+  firstImageUrl?: string | null;
+  imageUrl?: string | null;
+  addr1?: string | null;
+  mapx?: number | null;
+  mapy?: number | null;
+  lng?: number | null;
+  lat?: number | null;
+  category?: string | null;
+  overview?: string | null;
+  overviewFirst?: string | null;
+  regionName?: string | null;
+  sigunguName?: string | null;
+  regionLabel?: string | null;
+}
 
-/** In-memory handoff from a tapped card to the full `[contentId]` screen, which
- * only receives `contentId` via route params. Written on onPressIn (next to the
- * prefetch), read once by `useSpot` as placeholderData — kept out of route
- * params so navigation stays a plain path push. Session-bounded; soft-capped so
- * a long browsing session can't grow it without bound. */
-const seedStash = new Map<string, SpotSeed>();
+interface StashedSeed {
+  seed: SpotSeed;
+  expiresAt: number;
+}
+
+const seedStash = new Map<string, StashedSeed>();
+const SEED_STASH_TTL_MS = 30_000;
+const PENDING_REFETCH_INTERVAL_MS = 750;
 
 function stashSeed(seed: SpotSeed) {
   if (seedStash.size > 300) seedStash.clear();
-  seedStash.set(seed.contentId, seed);
+  seedStash.set(seed.contentId, {
+    seed,
+    expiresAt: Date.now() + SEED_STASH_TTL_MS,
+  });
 }
 
-/** Partial SpotDetail from a seed card so the hero renders instantly. Body
- * sections stay skeletoned (isPlaceholderData) until the authoritative row
- * arrives — the snippet overview never flashes as the final text. */
+function activeSeed(contentId: string): SpotSeed | null {
+  const stashed = seedStash.get(contentId);
+  if (!stashed || stashed.expiresAt < Date.now()) return null;
+  return stashed.seed;
+}
+
+function seedImageUrl(seed: SpotSeed | null | undefined): string | null {
+  return seed?.imageUrl ?? seed?.firstImageUrl ?? null;
+}
+
 function seedToDetail(seed: SpotSeed | null | undefined): SpotDetail | undefined {
   if (!seed) return undefined;
   return {
     contentId: seed.contentId,
     title: seed.title,
-    firstImageUrl: seed.firstImageUrl,
+    firstImageUrl: seedImageUrl(seed),
     addr1: seed.addr1 ?? null,
     addr2: null,
-    mapx: seed.mapx ?? null,
-    mapy: seed.mapy ?? null,
-    overview: seed.overview ?? null,
+    mapx: seed.mapx ?? seed.lng ?? null,
+    mapy: seed.mapy ?? seed.lat ?? null,
+    overview: seed.overview ?? seed.overviewFirst ?? null,
     homepage: null,
     tel: null,
-    category: seed.category,
-    regionName: seed.regionName ?? null,
+    category: seed.category ?? null,
+    regionName: seed.regionName ?? seed.regionLabel ?? null,
     sigunguName: seed.sigunguName ?? null,
     detailStatus: "placeholder",
     images: [],
@@ -47,18 +73,28 @@ function seedToDetail(seed: SpotSeed | null | undefined): SpotDetail | undefined
 }
 
 export function useSpot(contentId: string, seed?: SpotSeed | null) {
-  const resolved = seed ?? seedStash.get(contentId) ?? null;
+  const [stashedSeed] = useState(() => activeSeed(contentId));
+  const resolved = seed ?? (stashedSeed?.contentId === contentId ? stashedSeed : null);
+  const preferredImageUrl = seedImageUrl(resolved);
   return useQuery({
     queryKey: ["spot", contentId],
     queryFn: () => getSpot(contentId),
     enabled: !!contentId,
     placeholderData: () => seedToDetail(resolved),
+    select: (detail) => {
+      if (!preferredImageUrl) return detail;
+      const chosen = preferredSeedImageUrl(preferredImageUrl, detail.firstImageUrl);
+      return detail.firstImageUrl === chosen ? detail : { ...detail, firstImageUrl: chosen };
+    },
+    refetchInterval: (query) => {
+      const status = query.state.data?.detailStatus;
+      if (status === "pending") return PENDING_REFETCH_INTERVAL_MS;
+      if (status === "unavailable") return 60_000;
+      return false;
+    },
   });
 }
 
-/** Warm the spot-detail cache before navigation (cold detail can take seconds).
- * Passing the card (not just its id) also stashes a hero seed so the next
- * detail screen paints instantly instead of skeletoning. */
 export function prefetchSpot(spot: SpotSeed | string) {
   const contentId = typeof spot === "string" ? spot : spot.contentId;
   if (!contentId) return;

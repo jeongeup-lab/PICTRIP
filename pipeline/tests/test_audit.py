@@ -1,5 +1,3 @@
-"""Tests for the sync_runs audit table (DDL + run lifecycle)."""
-
 import pytest
 
 from pictrip_data.sync.audit import ensure_table, last_success_watermark, record_run
@@ -39,7 +37,6 @@ def test_last_success_watermark_none_when_empty(db_conn):
 
 def test_last_success_watermark_round_trip(db_conn):
     ensure_table(db_conn)
-    # Watermark is the raw KTO modifiedtime text 'YYYYMMDDHHMMSS'.
     wm = "20260627043000"
     with record_run(db_conn, "daily") as c:
         c["watermark_to"] = wm

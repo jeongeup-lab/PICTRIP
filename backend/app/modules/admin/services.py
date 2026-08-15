@@ -1,44 +1,23 @@
-"""admin services — read-only aggregation + health probes (A01 §2/§3).
-
-Transaction-free (read-only). Calls :mod:`repositories`, shapes rows into the
-§3 DTOs. No HTTP concerns (routes wrap the DTO in the JSend envelope).
-"""
-
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import date
 
 from fastapi import BackgroundTasks
 from redis.asyncio import Redis
-from sqlalchemy.exc import NoResultFound, SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.db import engine
-from app.core.exceptions import (
-    AdminCurationNotFound,
-    AdminHistoryNotFound,
-    AdminOverseasNotFound,
-    AdminTriggerFailed,
-    AdminValidationFailed,
-)
 from app.core.logging import get_logger
 from app.core.version import API_VERSION, uptime_seconds
 from app.modules.admin import repositories as repo
 from app.modules.admin.schemas import (
     CollectionSource,
     CollectionStatus,
-    CoverSpot,
-    CurationDetail,
-    CurationList,
-    CurationListItem,
-    CurationPreview,
-    CurationUpdate,
     EmbeddingRecent,
     EmbeddingStatus,
     EmbeddingTriggerResult,
-    Handpick,
-    HandpickList,
     Health,
     HealthApi,
     HealthDb,
@@ -52,34 +31,23 @@ from app.modules.admin.schemas import (
     OverseasList,
     OverseasListItem,
     OverseasVisibility,
-    PositionsUpdate,
-    PreviewSpot,
-    SpotSearchItem,
-    SpotSearchResult,
-    SpotsUpdate,
     TriggerResult,
 )
 from app.modules.admin.triggers import get_collection_trigger
 from app.modules.feed.services import invalidate_all_match_cache, invalidate_match_cache
 from app.modules.images import services as image_services
-from app.modules.spots.services.curations import (
-    invalidate_curation_cache,
-    load_curation,
-    resolve_curation_spots,
+from app.web.errors import (
+    AdminHistoryNotFound,
+    AdminOverseasNotFound,
+    AdminTriggerFailed,
+    AdminValidationFailed,
 )
-from app.modules.spots.services.nearby import NearbyCategory, search_spots_for_picker
 
 _SOURCE_NAME = "국문 관광정보 서비스"
 _SOURCE_ENDPOINT = "areaBasedSyncList2"
 
-# Fixed admin actor (A04 single Basic user); no role/user table exists (out of scope).
 _ADMIN_ACTOR = "admin"
-_MAX_HANDPICKS = 8
 
-# Re-embed trigger: a Redis lock doubles as the "running" flag for the status card
-# and the concurrency guard for the button (SET NX). TTL auto-releases a crashed
-# job. The "missing" (full-backlog) scope is capped so a background run never pins
-# the serving process — larger backlogs go through scripts.backfill_embeddings.
 _EMBED_TRIGGER_MAX = 2000
 
 _logger = get_logger(__name__)
@@ -95,7 +63,6 @@ async def get_collection_status(session: AsyncSession) -> CollectionStatus:
         last_run = LastRun(
             status=row.status,
             finishedAt=row.finished_at,
-            # ranAt = finished_at when present, else started_at (A01 §2.1).
             ranAt=row.finished_at or row.started_at,
             apiCalls=row.api_calls,
             inserted=row.inserted,
@@ -112,20 +79,11 @@ async def get_collection_status(session: AsyncSession) -> CollectionStatus:
             endpoint=_SOURCE_ENDPOINT,
             lastRun=last_run,
         ),
-        # Honest null: no scheduler metadata is wired yet (A01 §2.1 allows it).
         nextScheduledAt=None,
     )
 
 
-# --- embedding status + re-embed trigger (collection/embedding are separate) ---
 async def get_embedding_status(session: AsyncSession, redis: Redis) -> EmbeddingStatus:
-    """Coverage + failure backlog + "this collection" progress (A01-extension).
-
-    Embedding runs after collection: a spot can have ``first_image_url`` but no
-    ``spot_embeddings`` row. ``embedding_failures`` makes "failed" distinguishable
-    from "not yet attempted". The "recent" view scopes to the latest sync run's
-    start so the operator sees whether today's newly-collected spots are embedded.
-    """
     totals = await repo.embedding_totals(session)
     reasons = {r.reason: r.n for r in await repo.embedding_failures_by_reason(session)}
 
@@ -134,9 +92,6 @@ async def get_embedding_status(session: AsyncSession, redis: Redis) -> Embedding
     embedded = with_image - missing
     failed = totals.failed
 
-    # Scope "this collection" to the latest sync run's start. sync_runs is
-    # pipeline-owned and always present in prod; guard defensively so a DB that
-    # has never been synced degrades to a null window instead of 500ing.
     since = None
     recent_target = recent_embedded = 0
     try:
@@ -177,14 +132,6 @@ async def trigger_embedding(
     scope: str = "failed",
     actor: str = _ADMIN_ACTOR,
 ) -> EmbeddingTriggerResult:
-    """Kick an in-process re-embed job (A01-extension; admin-owned action).
-
-    ``scope='failed'`` retries only spots in ``embedding_failures``; ``'missing'``
-    processes the (capped) all-time backlog. A Redis ``SET NX`` lock rejects a
-    second concurrent trigger and marks the status card "running"; the background
-    task releases it on completion. The write itself goes through
-    :mod:`app.modules.images.services` (cross-module via services, never models).
-    """
     if scope not in ("failed", "missing"):
         raise AdminValidationFailed(
             details=[{"field": "scope", "issue": "scope는 failed 또는 missing이어야 합니다."}]
@@ -208,11 +155,10 @@ async def _run_embed_job(
     limit: int | None,
     lock: image_services.EmbeddingJobLock,
 ) -> None:
-    """Background worker: run the embed job, always releasing the Redis lock."""
     try:
         await invalidate_all_match_cache(redis)
         await image_services.run_embedding_job(only_failed=only_failed, limit=limit)
-    except Exception:  # never let a background failure leave the lock dangling
+    except Exception:
         _logger.exception("embed.job.error")
     finally:
         await invalidate_all_match_cache(redis)
@@ -275,12 +221,6 @@ async def get_history_detail(session: AsyncSession, day: date) -> HistoryDetail:
 
 
 def _pool_stats() -> tuple[int, int]:
-    """(poolInUse, poolSize) from the live serving engine.
-
-    Read from the module-level ``engine`` (the real QueuePool), not the request
-    session — that's the pool the spec's ``poolSize=20`` refers to. Guarded with
-    ``getattr`` so a NullPool (tests) degrades to zeros instead of raising.
-    """
     pool = engine.pool
     size_fn = getattr(pool, "size", None)
     checkedout_fn = getattr(pool, "checkedout", None)
@@ -291,7 +231,7 @@ def _pool_stats() -> tuple[int, int]:
 
 async def get_health(session: AsyncSession) -> Health:
     db_ok = await repo.db_ping(session)
-    in_use, pool_size = _pool_stats()  # reads the engine pool, not the DB
+    in_use, pool_size = _pool_stats()
 
     if db_ok:
         spots = await repo.count_spots(session)
@@ -304,41 +244,22 @@ async def get_health(session: AsyncSession) -> Health:
             kakao=users_row.kakao,
         )
     else:
-        # DB is down — the health page exists precisely to show this. Skip the
-        # DB-touching aggregates (they would raise → 500) and report zeros so the
-        # endpoint degrades to db.ok=false instead of 500ing (A01 §2.3/§3).
         spots = 0
         users = HealthUsers(total=0, active=0, new7d=0, deleted30d=0, kakao=0)
 
     return Health(
         api=HealthApi(version=API_VERSION, uptimeSec=uptime_seconds(), p95Ms=None),
         db=HealthDb(ok=db_ok, poolInUse=in_use, poolSize=pool_size, spots=spots),
-        # Tunnel health check deferred (A01 §2.3) → honest nulls.
         tunnel=HealthTunnel(ok=None, detail=None),
         users=users,
     )
 
 
-# --- collection trigger (A01 §3/§5 Phase 2 / ADM-009·010) ---------------------
 async def trigger_collection(
     session: AsyncSession,
     actor: str = _ADMIN_ACTOR,
 ) -> TriggerResult:
-    """Kick the daily collection (``sync-daily``) via the A7 trigger adapter.
-
-    Read-only on our DB: the actual write (``sync_runs``) happens in the
-    pipeline run the trigger kicks. No transaction boundary here.
-
-    CONCURRENCY (my decision; A7 left it open): if the latest sync_run is still
-    ``running`` we REJECT (the button must not double-fire) before touching the
-    adapter, so a stuck/in-flight run can't be stampeded.
-    """
     latest = await repo.latest_sync_run(session)
-    # App-level guard — best-effort. There is a TOCTOU window between this read
-    # and the workflow_dispatch below (two requests can race through). The
-    # AUTHORITATIVE guard against double-runs is the GitHub Actions
-    # ``concurrency.group: pipeline-sync`` in
-    # ``.github/workflows/pipeline-sync.yml`` — that serialises at the CI layer.
     if latest is not None and latest.status == "running":
         _audit_trigger(actor, accepted=False, ref=None, reason="already-running")
         raise AdminTriggerFailed("이미 수집이 진행 중입니다.")
@@ -346,9 +267,6 @@ async def trigger_collection(
     try:
         ref = await get_collection_trigger().trigger("sync-daily")
     except AdminTriggerFailed:
-        # Distinguish the two failure modes in the audit so operators can tell
-        # a misconfiguration from a live GitHub error without reading the message.
-        # Token check mirrors WorkflowDispatchTrigger.trigger() — no token value logged.
         audit_reason = "not-configured" if not settings.GITHUB_DISPATCH_TOKEN else "github-error"
         _audit_trigger(actor, accepted=False, ref=None, reason=audit_reason)
         raise
@@ -358,9 +276,6 @@ async def trigger_collection(
 
 
 def _audit_trigger(actor: str, *, accepted: bool, ref: str | None, reason: str | None) -> None:
-    # ADM-010 audit: one structured log line per trigger call via app.core.logging
-    # (same JSON pipeline as the curation-write audit below). No audit table —
-    # the structured line is the record (actor · action · job · result · ref).
     _logger.info(
         "collection.trigger",
         actor=actor,
@@ -372,303 +287,9 @@ def _audit_trigger(actor: str, *, accepted: bool, ref: str | None, reason: str |
     )
 
 
-# --- curation editor (A01 §7 / ADM-012~016) -----------------------------------
-# This is the admin module's only write surface; transaction commit boundaries
-# live here (repos mutate the passed session, services commit). Every write
-# invalidates the curation spot cache and emits a structured audit line.
-
-
-async def list_curations(session: AsyncSession) -> CurationList:
-    rows = await repo.list_curations(session)
-    by_type: dict[str, list[CurationListItem]] = {"region": [], "mood": []}
-    for r in rows:
-        if r.type not in by_type:  # legacy 'editorial' rows are ignored
-            continue
-        by_type[r.type].append(
-            CurationListItem(
-                id=r.id,
-                type=r.type,
-                slug=r.slug,
-                title=r.title,
-                subtitle=r.subtitle,
-                coverUrl=r.cover_url,
-                position=r.position,
-            )
-        )
-    # rows arrive ordered by (type, position); the per-group lists preserve it.
-    return CurationList(heroes=by_type["region"], rails=by_type["mood"])
-
-
-async def _build_detail(session: AsyncSession, curation) -> CurationDetail:  # type: ignore[no-untyped-def]
-    cover: CoverSpot | None = None
-    if curation.cover_spot_id is not None:
-        row = await repo.get_cover_spot(session, curation.cover_spot_id)
-        if row is not None:
-            cover = CoverSpot(
-                contentId=row.content_id, name=row.title, imageUrl=row.first_image_url
-            )
-    hp_rows = await repo.curation_handpicks(session, curation.id)
-    handpicks = [
-        Handpick(
-            contentId=h.content_id,
-            name=h.title,
-            category=h.category,
-            imageUrl=h.first_image_url,
-            position=h.position,
-        )
-        for h in hp_rows
-    ]
-    return CurationDetail(
-        id=curation.id,
-        type=curation.type,
-        slug=curation.slug,
-        title=curation.title,
-        subtitle=curation.subtitle,
-        lead=curation.lead,
-        intro=curation.intro,
-        coverSpot=cover,
-        regionCd=curation.region_cd,
-        moodId=curation.mood_id,
-        position=curation.position,
-        handpicks=handpicks,
-    )
-
-
-async def get_curation_detail(session: AsyncSession, curation_id: int) -> CurationDetail:
-    curation = await repo.get_curation(session, curation_id)
-    if curation is None:
-        raise AdminCurationNotFound
-    return await _build_detail(session, curation)
-
-
-async def get_curation_preview(
-    session: AsyncSession, redis: Redis, curation_id: int
-) -> CurationPreview:
-    """Resolved display spots (handpicked, else the quality-gate auto-fill pool).
-
-    Reuses the live feed resolver so the editor preview matches what the app
-    actually renders — crucially, it surfaces the auto-filled spots for curations
-    with no handpicks instead of a placeholder.
-    """
-    try:
-        row = await load_curation(session, curation_id)
-    except NoResultFound as exc:
-        raise AdminCurationNotFound from exc
-    spots = await resolve_curation_spots(session, redis, row)
-    return CurationPreview(
-        spots=[
-            PreviewSpot(
-                contentId=s.content_id,
-                name=s.title,
-                category=s.lcls_systm3_nm or s.category,
-                imageUrl=s.first_image_url,
-            )
-            for s in spots
-        ]
-    )
-
-
-async def update_curation(
-    session: AsyncSession,
-    redis: Redis,
-    curation_id: int,
-    body: CurationUpdate,
-) -> CurationDetail:
-    curation = await repo.get_curation(session, curation_id)
-    if curation is None:
-        raise AdminCurationNotFound
-
-    details: list[dict[str, str]] = []
-    title = body.title  # newlines allowed; only reject blank-after-strip
-    if not title.strip():
-        details.append({"field": "title", "issue": "제목은 비워둘 수 없습니다."})
-    if body.coverSpotId is not None and not await repo.spot_exposable_with_image(
-        session, body.coverSpotId
-    ):
-        # 표지 스팟은 존재 + 노출(show_flag=1) + 대표 이미지가 모두 있어야 함 (A01 §7).
-        details.append(
-            {
-                "field": "coverSpotId",
-                "issue": "표지 스팟이 없거나 노출 불가하거나 이미지가 없습니다.",
-            }
-        )
-    if details:
-        raise AdminValidationFailed(details=details)
-
-    await repo.update_curation_fields(
-        session,
-        curation,
-        title=title,
-        subtitle=body.subtitle,
-        lead=body.lead,
-        intro=body.intro,
-        cover_spot_id=body.coverSpotId,
-    )
-    # Defensive: type/scope are not editable here, so ck_curation_scope still
-    # holds; the COMMIT would surface any DB-level CHECK violation regardless.
-    await session.commit()
-    await invalidate_curation_cache(redis, curation_id)  # ADM-016 on-write DEL
-    _audit("curation.update", curation)
-    return await _build_detail(session, curation)
-
-
-async def set_curation_spots(
-    session: AsyncSession,
-    redis: Redis,
-    curation_id: int,
-    body: SpotsUpdate,
-) -> HandpickList:
-    curation = await repo.get_curation(session, curation_id)
-    if curation is None:
-        raise AdminCurationNotFound
-
-    spot_ids = body.spotIds
-    details: list[dict[str, str]] = []
-    if len(spot_ids) > _MAX_HANDPICKS:
-        details.append(
-            {"field": "spotIds", "issue": f"손픽 스팟은 최대 {_MAX_HANDPICKS}개까지 가능합니다."}
-        )
-    if len(set(spot_ids)) != len(spot_ids):
-        details.append({"field": "spotIds", "issue": "중복된 스팟이 있습니다."})
-    if spot_ids:
-        # Quality gate: handpicks must be servable as-is — exists, show_flag=1,
-        # non-empty image (same policy as the cover check).
-        exposable = await repo.exposable_spot_ids(session, spot_ids)
-        rejected = [cid for cid in spot_ids if cid not in exposable]
-        if rejected:
-            details.append(
-                {
-                    "field": "spotIds",
-                    "issue": f"노출할 수 없는 스팟(없음/숨김/이미지 없음): {', '.join(rejected)}",
-                }
-            )
-    if details:
-        raise AdminValidationFailed(details=details)
-
-    await repo.replace_curation_spots(session, curation_id, spot_ids)
-    curation.updated_at = datetime.now(tz=UTC)
-    await session.commit()
-    await invalidate_curation_cache(redis, curation_id)  # ADM-016 on-write DEL
-    _audit("curation.spots", curation, count=len(spot_ids))
-
-    hp_rows = await repo.curation_handpicks(session, curation_id)
-    return HandpickList(
-        handpicks=[
-            Handpick(
-                contentId=h.content_id,
-                name=h.title,
-                category=h.category,
-                imageUrl=h.first_image_url,
-                position=h.position,
-            )
-            for h in hp_rows
-        ]
-    )
-
-
-async def update_curation_positions(session: AsyncSession, body: PositionsUpdate) -> CurationList:
-    """Atomic per-type reorder: position = array index, one transaction (ADM-013).
-
-    ``orderedIds`` must be an exact permutation of ALL curation ids of ``type``
-    (set equality, no duplicates) so a stale board can never silently drop or
-    duplicate a row. Returns the refreshed grouped board. No spot-cache
-    invalidation — ordering never enters the ``curation:{id}:spots`` cache.
-    """
-    if body.type not in ("region", "mood"):
-        raise AdminValidationFailed(
-            details=[{"field": "type", "issue": "type은 region 또는 mood여야 합니다."}]
-        )
-
-    ordered = body.orderedIds
-    existing = set(await repo.curation_ids_by_type(session, body.type))
-    details: list[dict[str, str]] = []
-    if len(set(ordered)) != len(ordered):
-        details.append({"field": "orderedIds", "issue": "중복된 큐레이션 id가 있습니다."})
-    if set(ordered) != existing:
-        details.append(
-            {
-                "field": "orderedIds",
-                "issue": f"orderedIds는 {body.type} 큐레이션 전체 id의 순열이어야 합니다.",
-            }
-        )
-    if details:
-        raise AdminValidationFailed(details=details)
-
-    await repo.set_curation_positions(session, {cid: i for i, cid in enumerate(ordered)})
-    await session.commit()
-    # ADM-016 audit: one structured line per reorder (same pipeline as _audit).
-    _logger.info(
-        "curation.positions",
-        actor=_ADMIN_ACTOR,
-        action="curation.positions",
-        type=body.type,
-        count=len(ordered),
-        orderedIds=ordered,
-    )
-    return await list_curations(session)
-
-
-async def search_spots(
-    session: AsyncSession,
-    *,
-    q: str | None,
-    region: str | None,
-    sigungu: str | None,
-    category: str | None,
-    limit: int,
-    offset: int,
-) -> SpotSearchResult:
-    """Picker search — q optional (region/sigungu/category alone allow browsing);
-    invalid category → 422 ADMIN_VALIDATION (NearbyCategory is the SSOT)."""
-    cat: NearbyCategory | None = None
-    if category:
-        try:
-            cat = NearbyCategory(category)
-        except ValueError:
-            allowed = ", ".join(c.value for c in NearbyCategory)
-            raise AdminValidationFailed(
-                details=[
-                    {"field": "category", "issue": f"category는 {allowed} 중 하나여야 합니다."}
-                ]
-            ) from None
-
-    q_norm = q.strip() if q else None
-    rows, total = await search_spots_for_picker(
-        session,
-        q=q_norm or None,
-        region=region,
-        sigungu=sigungu,
-        category=cat,
-        limit=limit,
-        offset=offset,
-    )
-    return SpotSearchResult(
-        spots=[
-            SpotSearchItem(
-                contentId=r.content_id,
-                name=r.title,
-                regionCd=r.region_cd,
-                regionName=r.region_name,
-                imageUrl=r.first_image_url,
-            )
-            for r in rows
-        ],
-        total=total,
-        hasMore=offset + len(rows) < total,
-    )
-
-
-# --- 게시물(해외 스팟) 숨김 관리 (A7) — admin's 2nd scoped-write surface --------
-# Only overseas_spots.is_hidden is written here (CLAUDE.md grant). Hiding a spot
-# is exactly the filter /v1/feed applies, so the toggle removes it from the app
-# feed. One structured audit line per toggle (same pipeline as the curation audit).
-
-
 async def list_overseas(
     session: AsyncSession, *, q: str | None, cursor_id: int | None, limit: int
 ) -> OverseasList:
-    """One id-cursor page. Fetches limit+1 to know whether more rows follow;
-    ``nextCursor`` is the last returned id when they do, else None."""
     q_norm = q.strip() if q else None
     rows = await repo.list_overseas(session, q=q_norm or None, cursor_id=cursor_id, limit=limit + 1)
     has_more = len(rows) > limit
@@ -709,16 +330,3 @@ async def set_overseas_visibility(
         isHidden=hidden,
     )
     return OverseasVisibility(id=overseas_id, isHidden=hidden)
-
-
-def _audit(action: str, curation, **extra) -> None:  # type: ignore[no-untyped-def]
-    # ADM-016 audit: no audit table exists (creating one is scope creep). Emit a
-    # single structured log line per write via the app logger instead — actor +
-    # action + what changed. Ingested by the same JSON log pipeline (app.core.logging).
-    _logger.info(
-        action,
-        actor=_ADMIN_ACTOR,
-        curationId=curation.id,
-        slug=curation.slug,
-        **extra,
-    )

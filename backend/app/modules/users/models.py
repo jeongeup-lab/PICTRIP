@@ -1,5 +1,3 @@
-"""USR ORM models."""
-
 from __future__ import annotations
 
 from datetime import datetime
@@ -21,7 +19,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
-from app.core.embedding import EMBEDDING_DIM
+from app.ml.embedding import EMBEDDING_DIM
 
 
 class User(Base):
@@ -85,6 +83,7 @@ class UserAuthProvider(Base):
     )
     provider: Mapped[str] = mapped_column(String(16), nullable=False)
     provider_user_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    provider_refresh_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
     linked_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -102,7 +101,6 @@ class UserConsent(Base):
     )
     location_consent: Mapped[bool] = mapped_column(Boolean, server_default=false(), nullable=False)
     photo_consent: Mapped[bool] = mapped_column(Boolean, server_default=false(), nullable=False)
-    # `notification_consent` DB column intentionally unmapped (expand/contract; has DB default false).
     terms_version: Mapped[str] = mapped_column(String(16), nullable=False)
     consented_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

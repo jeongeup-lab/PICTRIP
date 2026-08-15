@@ -1,13 +1,8 @@
-"""Integration tests for DELETE /v1/users/me (account deletion).
-
-App Store/Play review 5.1.1(v) requires real in-app deletion: soft-delete but scrub
-PII and unlink auth providers so the account is genuinely gone.
-"""
-
 from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
@@ -17,8 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.config import settings
-from app.core.auth import create_access_token
 from app.main import app
+from app.security.jwt import create_access_token, create_refresh_token
 
 
 @pytest.fixture(autouse=True)
@@ -108,56 +103,124 @@ async def test_delete_anonymizes_unlinks_and_blocks_profile(
         )
     ).first()
     assert row is not None
-    assert row.deleted_at is not None  # soft-deleted
-    assert row.email is None and row.name is None  # PII scrubbed
+    assert row.deleted_at is not None
+    assert row.email is None and row.name is None
 
     providers = (
         await override_db_and_seed.execute(
             text("SELECT count(*) AS n FROM user_auth_providers WHERE user_id = :u"), {"u": uid}
         )
     ).scalar_one()
-    assert providers == 0  # OAuth unlinked
+    assert providers == 0
 
-    # The token still decodes, but the user is now deleted → profile is blocked.
     me = await client.get("/v1/users/me", headers=_auth(uid))
     assert me.status_code == 401
     assert me.json()["error"]["code"] == "AUTH_TOKEN_INVALID"
 
 
 @pytest.mark.asyncio
-async def test_delete_clears_password_and_blocks_email_login(
+async def test_delete_revokes_the_stored_apple_refresh_token(
+    client: AsyncClient, override_db_and_seed: AsyncSession
+) -> None:
+    row = (
+        await override_db_and_seed.execute(
+            text("INSERT INTO users (email, name) VALUES (NULL, '애플유저') RETURNING id")
+        )
+    ).first()
+    assert row is not None
+    uid = int(row.id)
+    await override_db_and_seed.execute(
+        text(
+            "INSERT INTO user_auth_providers "
+            "(user_id, provider, provider_user_id, provider_refresh_token) "
+            "VALUES (:u, 'apple', :pid, 'r-apple-stored')"
+        ),
+        {"u": uid, "pid": f"apple-{uuid.uuid4().hex}"},
+    )
+    await override_db_and_seed.commit()
+
+    revoked: list[str] = []
+
+    async def fake_revoke(token: str) -> bool:
+        revoked.append(token)
+        return True
+
+    with patch(
+        "app.modules.users.services.apple_tokens.revoke_refresh_token",
+        side_effect=fake_revoke,
+    ):
+        resp = await client.delete("/v1/users/me", headers=_auth(uid))
+
+    assert resp.status_code == 204
+    assert revoked == ["r-apple-stored"]
+
+
+@pytest.mark.asyncio
+async def test_delete_succeeds_even_if_apple_revoke_fails(
+    client: AsyncClient, override_db_and_seed: AsyncSession
+) -> None:
+    row = (
+        await override_db_and_seed.execute(
+            text("INSERT INTO users (email, name) VALUES (NULL, '애플유저2') RETURNING id")
+        )
+    ).first()
+    assert row is not None
+    uid = int(row.id)
+    await override_db_and_seed.execute(
+        text(
+            "INSERT INTO user_auth_providers "
+            "(user_id, provider, provider_user_id, provider_refresh_token) "
+            "VALUES (:u, 'apple', :pid, 'r-apple-bad')"
+        ),
+        {"u": uid, "pid": f"apple-{uuid.uuid4().hex}"},
+    )
+    await override_db_and_seed.commit()
+
+    with patch(
+        "app.modules.users.services.apple_tokens.revoke_refresh_token",
+        AsyncMock(side_effect=RuntimeError("apple down")),
+    ):
+        resp = await client.delete("/v1/users/me", headers=_auth(uid))
+
+    assert resp.status_code == 204
+
+    deleted_at = (
+        await override_db_and_seed.execute(
+            text("SELECT deleted_at FROM users WHERE id = :u"), {"u": uid}
+        )
+    ).scalar_one()
+    assert deleted_at is not None
+
+
+@pytest.mark.asyncio
+async def test_delete_clears_a_legacy_email_password(
     client: AsyncClient, override_db_and_seed: AsyncSession
 ) -> None:
     email = f"pw-{uuid.uuid4().hex[:10]}@e.st"
-    password = "correct-horse-battery"  # test fixture, not a real secret
-
-    signup = await client.post(
-        "/v1/auth/email/signup",
-        json={"email": email, "password": password, "name": "비번유저"},
-    )
-    assert signup.status_code == 201
-    uid = signup.json()["data"]["user"]["id"]
-
-    # Sanity: the credential exists and login works before deletion.
-    pre = await client.post("/v1/auth/email/login", json={"email": email, "password": password})
-    assert pre.status_code == 200
+    row = (
+        await override_db_and_seed.execute(
+            text(
+                "INSERT INTO users (email, name, password_hash) "
+                "VALUES (:e, '비번유저', 'legacy-hash') RETURNING id"
+            ),
+            {"e": email},
+        )
+    ).first()
+    assert row is not None
+    uid = int(row.id)
+    await override_db_and_seed.commit()
 
     resp = await client.delete("/v1/users/me", headers=_auth(uid))
     assert resp.status_code == 204
 
-    row = (
+    after = (
         await override_db_and_seed.execute(
             text("SELECT password_hash, deleted_at FROM users WHERE id = :u"), {"u": uid}
         )
     ).first()
-    assert row is not None
-    assert row.deleted_at is not None  # soft-deleted
-    assert row.password_hash is None  # credential cleared
-
-    # The email login can no longer authenticate this account.
-    post = await client.post("/v1/auth/email/login", json={"email": email, "password": password})
-    assert post.status_code == 401
-    assert post.json()["error"]["code"] == "AUTH_INVALID_CREDENTIALS"
+    assert after is not None
+    assert after.deleted_at is not None
+    assert after.password_hash is None
 
 
 @pytest.mark.asyncio
@@ -169,9 +232,53 @@ async def test_delete_is_idempotent(
     first = await client.delete("/v1/users/me", headers=_auth(uid))
     assert first.status_code == 204
 
-    # A second call with the same (still-valid-signature) token is a no-op 204.
     second = await client.delete("/v1/users/me", headers=_auth(uid))
     assert second.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_delete_destroys_saved_spots(
+    client: AsyncClient, override_db_and_seed: AsyncSession
+) -> None:
+    uid = await _seed_user_with_provider(override_db_and_seed)
+    content_id = f"del-{uuid.uuid4().hex[:8]}"
+    await override_db_and_seed.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, show_flag) "
+            "VALUES (:c, 12, '탈퇴검증', 1) ON CONFLICT (content_id) DO NOTHING"
+        ),
+        {"c": content_id},
+    )
+    await override_db_and_seed.execute(
+        text("INSERT INTO user_saved_spots (user_id, content_id) VALUES (:u, :c)"),
+        {"u": uid, "c": content_id},
+    )
+    await override_db_and_seed.commit()
+
+    resp = await client.delete("/v1/users/me", headers=_auth(uid))
+    assert resp.status_code == 204
+
+    left = await override_db_and_seed.scalar(
+        text("SELECT count(*) FROM user_saved_spots WHERE user_id = :u"), {"u": uid}
+    )
+    assert left == 0
+
+
+@pytest.mark.asyncio
+async def test_delete_revokes_the_refresh_token(
+    client: AsyncClient, override_db_and_seed: AsyncSession
+) -> None:
+    uid = await _seed_user_with_provider(override_db_and_seed)
+    refresh = create_refresh_token(user_id=uid, jti=str(uuid.uuid4()))
+
+    resp = await client.request(
+        "DELETE", "/v1/users/me", headers=_auth(uid), json={"refreshToken": refresh}
+    )
+    assert resp.status_code == 204
+
+    again = await client.post("/v1/auth/refresh", json={"refreshToken": refresh})
+    assert again.status_code == 401
+    assert again.json()["error"]["code"] == "AUTH_SESSION_REVOKED"
 
 
 @pytest.mark.asyncio
@@ -179,3 +286,44 @@ async def test_delete_without_auth_returns_401(client: AsyncClient) -> None:
     resp = await client.delete("/v1/users/me")
     assert resp.status_code == 401
     assert resp.json()["error"]["code"] == "AUTH_TOKEN_INVALID"
+
+
+@pytest.mark.asyncio
+async def test_delete_accepts_an_optional_reason(
+    client: AsyncClient, override_db_and_seed: AsyncSession
+) -> None:
+    uid = await _seed_user_with_provider(override_db_and_seed)
+
+    resp = await client.request(
+        "DELETE",
+        "/v1/users/me",
+        headers=_auth(uid),
+        json={"refreshToken": None, "reason": "taking_a_break"},
+    )
+    assert resp.status_code == 204
+
+    row = (
+        await override_db_and_seed.execute(
+            text("SELECT deleted_at FROM users WHERE id = :u"), {"u": uid}
+        )
+    ).first()
+    assert row is not None and row.deleted_at is not None
+
+
+@pytest.mark.asyncio
+async def test_delete_rejects_an_overlong_reason(
+    client: AsyncClient, override_db_and_seed: AsyncSession
+) -> None:
+    uid = await _seed_user_with_provider(override_db_and_seed)
+
+    resp = await client.request(
+        "DELETE", "/v1/users/me", headers=_auth(uid), json={"reason": "x" * 65}
+    )
+    assert resp.status_code == 422
+
+    row = (
+        await override_db_and_seed.execute(
+            text("SELECT deleted_at FROM users WHERE id = :u"), {"u": uid}
+        )
+    ).first()
+    assert row is not None and row.deleted_at is None
