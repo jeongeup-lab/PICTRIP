@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 12,
     lineHeight: 19,
-    color: colors.ter,
+    color: colors.sec,
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.lg,
   },
