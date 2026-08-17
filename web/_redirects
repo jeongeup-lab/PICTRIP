@@ -2,7 +2,3 @@
 https://www.pictrip.org/* https://pictrip.org/:splat 301
 
 /curations/* / 302
-
-# /about/play = 같은 문서를 시네마틱 모드로 (rewrite, 주소 유지)
-/about/play /about/index.html 200
-/about/play/* /about/index.html 200
