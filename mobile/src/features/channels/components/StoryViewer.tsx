@@ -18,7 +18,7 @@ import { useChannelCards, useChannels, useSeenChannels } from "@/features/channe
 import type { ChannelKey } from "@/features/channels/api";
 import { StoryCard } from "@/features/channels/components/StoryCard";
 import { prefetchSpot } from "@/features/spots/queries";
-import { colors } from "@/constants/theme";
+import { darkColors as colors } from "@/constants/theme";
 
 interface Props {
   start: ChannelKey;

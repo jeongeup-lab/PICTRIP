@@ -81,11 +81,11 @@ describe("Onboarding access notice", () => {
       tree = renderer.create(<Onboarding />);
     });
 
-    expect(texts(tree!)).not.toContain("필수 접근권한");
+    expect(texts(tree!)).not.toContain("필수적 접근 권한");
 
     pressLabel(tree!, "건너뛰기");
 
-    expect(texts(tree!).join("\n")).toContain("필수 접근권한");
+    expect(texts(tree!).join("\n")).toContain("필수적 접근 권한");
     expect(router.replace).not.toHaveBeenCalled();
   });
 });

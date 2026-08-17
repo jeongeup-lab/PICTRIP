@@ -61,8 +61,9 @@ const cards = (r: renderer.ReactTestRenderer) =>
     .findAll((n) => typeof n.props.testID === "string" && /^taste-card-/.test(n.props.testID))
     .filter((n) => !!n.props.onPress);
 
-const meter = (r: renderer.ReactTestRenderer) =>
-  r.root.findByProps({ testID: "taste-meter" }).props.children as unknown;
+const doneDisabled = (r: renderer.ReactTestRenderer) =>
+  r.root.findAll((n) => n.props.testID === "taste-done" && !!n.props.onPress)[0].props
+    .accessibilityState?.disabled === true;
 
 const tap = async (r: renderer.ReactTestRenderer, testID: string) => {
   const target = r.root.findAll((n) => n.props.testID === testID && !!n.props.onPress)[0];
@@ -88,7 +89,10 @@ describe("TastePicker", () => {
     const r = await mount();
     await tap(r, "taste-card-p1");
     expect(picked(r)).toEqual(["p1"]);
-    expect(JSON.stringify(meter(r))).toContain("2곳");
+    expect(doneDisabled(r)).toBe(true);
+    await tap(r, "taste-card-p2");
+    await tap(r, "taste-card-p3");
+    expect(doneDisabled(r)).toBe(false);
   });
 
   it("takes the selection back on a second tap", async () => {

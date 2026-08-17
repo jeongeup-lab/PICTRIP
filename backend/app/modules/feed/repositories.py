@@ -7,7 +7,12 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.spots.services import all_categories_sql, attraction_category_sql
+from app.modules.spots.services import (
+    NearbyCategory,
+    all_categories_sql,
+    attraction_category_sql,
+    category_sql,
+)
 
 _CATEGORY_SQL = attraction_category_sql()
 _ALL_CATEGORIES_SQL = all_categories_sql()
@@ -279,7 +284,10 @@ ORDER BY rate DESC NULLS LAST, dist ASC, content_id ASC
 LIMIT (:lim)::int
 """
 
-_TASTE_PICKS_SQL = f"""
+
+def _taste_picks_concentration_sql(category_sql: str, *, ascending: bool) -> str:
+    direction = "ASC" if ascending else "DESC"
+    return f"""
 SELECT content_id, title, first_image_url, cpyrht_div_cd, category, region_name, sigungu_name
 FROM (
     SELECT DISTINCT ON (spots.ldong_signgu_cd)
@@ -291,13 +299,47 @@ FROM (
     WHERE spots.show_flag = 1
       AND spots.first_image_url IS NOT NULL
       AND spots.first_image_url <> ''
-      AND ({_CATEGORY_SQL})
+      AND ({category_sql})
       AND EXISTS (SELECT 1 FROM spot_embeddings e WHERE e.content_id = spots.content_id)
-    ORDER BY spots.ldong_signgu_cd, sc.concentration_rate DESC, spots.content_id
+    ORDER BY spots.ldong_signgu_cd, sc.concentration_rate {direction}, spots.content_id
 ) picks
-ORDER BY rate DESC, content_id
+ORDER BY rate {direction}, content_id
 LIMIT (:lim)::int
 """
+
+
+def _taste_picks_shuffle_sql(category_sql: str) -> str:
+    return f"""
+SELECT content_id, title, first_image_url, cpyrht_div_cd, category, region_name, sigungu_name
+FROM (
+    SELECT DISTINCT ON (spots.ldong_signgu_cd)
+           {_SPOT_COLUMNS_SQL},
+           md5(spots.content_id) AS shuffle_key
+    FROM spots
+    {_SPOT_JOINS_SQL}
+    WHERE spots.show_flag = 1
+      AND spots.first_image_url IS NOT NULL
+      AND spots.first_image_url <> ''
+      AND ({category_sql})
+      AND EXISTS (SELECT 1 FROM spot_embeddings e WHERE e.content_id = spots.content_id)
+    ORDER BY spots.ldong_signgu_cd, md5(spots.content_id)
+) picks
+ORDER BY shuffle_key
+LIMIT (:lim)::int
+"""
+
+
+_FESTA_CATEGORY_SQL = "spots.lcls_systm1 = 'EV'"
+
+_TASTE_PICKS_SQL = _taste_picks_concentration_sql(_CATEGORY_SQL, ascending=False)
+
+_TASTE_CATEGORY_PICKS_SQL: dict[str, str] = {
+    "SPOT": _TASTE_PICKS_SQL,
+    "HIDDEN": _taste_picks_concentration_sql(_CATEGORY_SQL, ascending=True),
+    "CAFE": _taste_picks_shuffle_sql(category_sql(NearbyCategory.cafe)),
+    "FOOD": _taste_picks_shuffle_sql(category_sql(NearbyCategory.food)),
+    "FESTA": _taste_picks_shuffle_sql(_FESTA_CATEGORY_SQL),
+}
 
 _TASTE_NEIGHBORS_SQL = f"""
 WITH seed AS (
@@ -379,8 +421,11 @@ async def fetch_nearby_ranked(
     return [_home_spot_row(row) for row in result]
 
 
-async def fetch_taste_picks(session: AsyncSession, *, limit: int) -> list[HomeSpotRow]:
-    result = await session.execute(text(_TASTE_PICKS_SQL), {"lim": limit})
+async def fetch_taste_picks(
+    session: AsyncSession, *, limit: int, category: str | None = None
+) -> list[HomeSpotRow]:
+    sql = _TASTE_CATEGORY_PICKS_SQL.get(category or "", _TASTE_PICKS_SQL)
+    result = await session.execute(text(sql), {"lim": limit})
     return [_home_spot_row(row) for row in result]
 
 
