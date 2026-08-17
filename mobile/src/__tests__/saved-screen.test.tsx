@@ -1,9 +1,8 @@
 import renderer, { act } from "react-test-renderer";
-import SavedScreen, { RESAVE_FAILED, UNSAVE_FAILED } from "@/app/saved";
-import { useSavedList, useSaveMutation, useUnsaveMutation } from "@/features/saved/queries";
+import SavedScreen, { UNSAVE_FAILED } from "@/app/saved";
+import { useSavedList, useUnsaveMutation } from "@/features/saved/queries";
 import { SavedCard } from "@/features/saved/components/SavedCard";
 import { useRecentSpots } from "@/features/spots/stores/recent-store";
-import { unsaveMessage } from "@/features/saved/lib/undo-message";
 import type { SpotCard } from "@/lib/api-types";
 
 jest.mock("expo-router", () => ({
@@ -28,11 +27,9 @@ jest.mock("@/features/saved/components/SavedCard", () => ({
 }));
 
 const useSavedListMock = useSavedList as jest.Mock;
-const useSaveMutationMock = useSaveMutation as jest.Mock;
 const useUnsaveMutationMock = useUnsaveMutation as jest.Mock;
 const SavedCardMock = SavedCard as unknown as jest.Mock;
 
-const save = jest.fn();
 const unsave = jest.fn();
 const unsaveAsync = jest.fn();
 
@@ -83,7 +80,6 @@ const renderedOrder = () =>
 
 beforeEach(() => {
   useSavedListMock.mockReturnValue({ data: LIST, isLoading: false });
-  useSaveMutationMock.mockReturnValue({ mutate: save });
   unsaveAsync.mockResolvedValue(undefined);
   useUnsaveMutationMock.mockReturnValue({ mutate: unsave, mutateAsync: unsaveAsync });
   useRecentSpots.setState({ spots: [] });
@@ -108,145 +104,30 @@ describe("SavedScreen", () => {
     expect(tree.root.findAllByProps({ testID: "toggle-view" })).toHaveLength(0);
   });
 
-  it("unsaves from the tile heart and restores it from the undo toast", async () => {
+  it("unsaves from the tile heart without an undo detour", async () => {
     const tree = await mount();
 
     await unsaveTile("far");
-    expect(unsaveAsync).toHaveBeenCalledWith("far");
+    expect(unsave).toHaveBeenCalledWith("far", expect.any(Object));
 
     const toast = tree.root.findAll(
       (n) => n.props.testID === "unsave-toast" && typeof n.props.message === "string",
-    )[0];
-    expect(toast.props.message).toBe(unsaveMessage("향일암"));
-
-    await press(tree, "unsave-toast-action");
-    expect(save).toHaveBeenCalledWith("far", expect.any(Object));
-  });
-
-  it("holds the re-save until the unsave request has settled", async () => {
-    let releaseUnsave: () => void = () => undefined;
-    unsaveAsync.mockReturnValue(
-      new Promise<void>((resolve) => {
-        releaseUnsave = () => resolve();
-      }),
     );
-
-    const tree = await mount();
-    await unsaveTile("far");
-    await press(tree, "unsave-toast-action");
-
-    expect(save).not.toHaveBeenCalled();
-
-    await act(async () => {
-      releaseUnsave();
-    });
-
-    expect(save).toHaveBeenCalledWith("far", expect.any(Object));
+    expect(toast).toHaveLength(0);
+    expect(tree.root.findAllByProps({ testID: "unsave-toast-action" })).toHaveLength(0);
   });
 
-  it("reports the failure instead of offering to undo a delete that never happened", async () => {
-    unsaveAsync.mockRejectedValue(new Error("network"));
+  it("reports an unsave failure in the toast", async () => {
+    unsave.mockImplementation((_id: string, opts: { onError: () => void }) => opts.onError());
 
     const tree = await mount();
     await unsaveTile("far");
-    await act(async () => undefined);
 
     const toast = tree.root.findAll(
       (n) => n.props.testID === "unsave-toast" && typeof n.props.message === "string",
     )[0];
     expect(toast.props.message).toBe(UNSAVE_FAILED);
-    expect(toast.props.action).toBeNull();
-    expect(save).not.toHaveBeenCalled();
-  });
-
-  it("says so when the re-save itself fails", async () => {
-    save.mockImplementationOnce((_id: string, opts?: { onError?: () => void }) =>
-      opts?.onError?.(),
-    );
-
-    const tree = await mount();
-    await unsaveTile("far");
-    await press(tree, "unsave-toast-action");
-    await act(async () => undefined);
-
-    const toast = tree.root.findAll(
-      (n) => n.props.testID === "unsave-toast" && typeof n.props.message === "string",
-    )[0];
-    expect(toast.props.message).toBe(RESAVE_FAILED);
-  });
-
-  it("still reports a failure that lands after the undo toast expired", async () => {
-    let failLate: () => void = () => undefined;
-    unsaveAsync.mockReturnValueOnce(
-      new Promise<void>((_resolve, reject) => {
-        failLate = () => reject(new Error("timeout"));
-      }),
-    );
-
-    const tree = await mount();
-    await unsaveTile("far");
-
-    const toast = tree.root.findAll((n) => n.props.testID === "unsave-toast")[0];
-    await act(async () => {
-      toast.props.onHide();
-    });
-
-    await act(async () => {
-      failLate();
-    });
-
-    const after = tree.root.findAll(
-      (n) => n.props.testID === "unsave-toast" && typeof n.props.message === "string",
-    )[0];
-    expect(after.props.message).toBe(UNSAVE_FAILED);
-  });
-
-  it("keeps the newest undo when an older unsave fails late", async () => {
-    let failFirst: () => void = () => undefined;
-    unsaveAsync
-      .mockReturnValueOnce(
-        new Promise<void>((_resolve, reject) => {
-          failFirst = () => reject(new Error("network"));
-        }),
-      )
-      .mockResolvedValueOnce(undefined);
-
-    const tree = await mount();
-    await unsaveTile("far");
-    await unsaveTile("near");
-
-    await act(async () => {
-      failFirst();
-    });
-
-    const toast = tree.root.findAll(
-      (n) => n.props.testID === "unsave-toast" && typeof n.props.message === "string",
-    )[0];
-    expect(toast.props.message).toBe(unsaveMessage("덕수궁"));
-    expect(toast.props.action).not.toBeNull();
-  });
-
-  it("keeps the newest undo when an older re-save fails late", async () => {
-    let failResave: () => void = () => undefined;
-    save.mockImplementationOnce((_id: string, opts?: { onError?: () => void }) => {
-      failResave = () => opts?.onError?.();
-    });
-
-    const tree = await mount();
-    await unsaveTile("far");
-    await press(tree, "unsave-toast-action");
-    await act(async () => undefined);
-    await unsaveTile("near");
-
-    await act(async () => {
-      failResave();
-    });
-
-    const toast = tree.root.findAll(
-      (n) => n.props.testID === "unsave-toast" && typeof n.props.message === "string",
-    )[0];
-    expect(toast.props.message).toBe(unsaveMessage("덕수궁"));
-    expect(toast.props.action).not.toBeNull();
+    expect(toast.props.action ?? null).toBeNull();
   });
 
   it("shows the simplified empty state without recent spots", async () => {

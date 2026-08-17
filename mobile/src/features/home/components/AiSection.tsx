@@ -54,7 +54,6 @@ function EmptyState({ onPress }: { onPress: () => void }) {
         <Icon name="sparkle" size={26} color={colors.accentText} />
       </View>
       <Text style={styles.emptyTitle}>취향 카드로 시작하기</Text>
-      <Text style={styles.emptyDescription}>마음에 드는 곳을 고르면 맞춤 추천을 준비해요.</Text>
       <View style={styles.emptyAction}>
         <PrimaryButton testID="home-taste-cta" label="카드 고르러 가기" onPress={onPress} />
       </View>
@@ -84,7 +83,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   emptyTitle: { fontSize: 16, fontWeight: "800", letterSpacing: -0.3, color: colors.ink },
-  emptyDescription: { fontSize: 14, fontWeight: "500", color: colors.sec, textAlign: "center" },
   emptyAction: { alignSelf: "stretch", marginTop: spacing.xs },
   error: { alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg },
   errorText: { fontSize: 14, color: colors.sec },

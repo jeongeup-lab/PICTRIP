@@ -187,7 +187,12 @@ export function TastePicker() {
         <Text style={styles.leadTitle}>마음에 드는 곳을 골라주세요</Text>
       </View>
 
-      <View style={styles.chips}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chips}
+        style={styles.chipsBar}
+      >
         {CATEGORIES.map((c) => {
           const active = c === category;
           return (
@@ -203,7 +208,7 @@ export function TastePicker() {
             </Pressable>
           );
         })}
-      </View>
+      </ScrollView>
 
       <ScrollView
         ref={scrollRef}
@@ -325,6 +330,7 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     color: colors.ink,
   },
+  chipsBar: { flexGrow: 0 },
   chips: {
     flexDirection: "row",
     gap: 7,

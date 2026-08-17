@@ -1,4 +1,5 @@
 import { Appearance } from "react-native";
+import * as SecureStore from "expo-secure-store";
 
 const light = {
   bg: "#FFFFFF",
@@ -62,7 +63,24 @@ export const palettes: { light: Palette; dark: Palette } = { light, dark };
 
 export type ThemeName = keyof typeof palettes;
 
-export const themeName: ThemeName = Appearance.getColorScheme() === "dark" ? "dark" : "light";
+export const THEME_OVERRIDE_KEY = "theme_override";
+
+function resolveThemeName(): ThemeName {
+  let stored: string | null = null;
+  try {
+    stored = SecureStore.getItem(THEME_OVERRIDE_KEY);
+  } catch {
+    stored = null;
+  }
+  if (stored === "light" || stored === "dark") return stored;
+  return Appearance.getColorScheme() === "dark" ? "dark" : "light";
+}
+
+export const themeName: ThemeName = resolveThemeName();
+
+export async function setThemeOverride(name: ThemeName): Promise<void> {
+  await SecureStore.setItemAsync(THEME_OVERRIDE_KEY, name);
+}
 
 export const colors: Palette = palettes[themeName];
 

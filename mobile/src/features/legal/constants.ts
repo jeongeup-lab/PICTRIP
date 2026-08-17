@@ -12,8 +12,6 @@ export const LEGAL_DOCS: readonly LegalDoc[] = [
   { slug: "data-sources", title: "데이터 출처와 이용 조건" },
 ] as const;
 
-export const KTO_CREDIT = "관광 정보 제공: 한국관광공사";
-
 export const LEGAL_BASE_URL = "https://pictrip.org/legal";
 
 export function legalUrl(slug: LegalSlug): string {
