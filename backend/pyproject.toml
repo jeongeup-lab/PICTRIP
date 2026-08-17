@@ -304,7 +304,7 @@ name = "Shared packages are layered (modules > security|kto|ml > web > core)"
 type = "layers"
 layers = [
     "app.modules",
-    "app.security | app.kto | app.ml",
+    "app.security | app.kto | app.ml | app.naver",
     "app.web",
     "app.core",
 ]

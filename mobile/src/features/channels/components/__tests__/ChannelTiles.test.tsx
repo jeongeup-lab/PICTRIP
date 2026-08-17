@@ -48,7 +48,7 @@ afterEach(() => jest.clearAllMocks());
 
 describe("ChannelTiles", () => {
   it("renders a tile per channel with its English label", async () => {
-    setChannels([meta("hidden"), meta("festa"), meta("pets"), meta("snap")]);
+    setChannels([meta("hidden"), meta("festa"), meta("festa"), meta("spot")]);
     setSeen([]);
     const r = await mount(() => {});
     expect(tiles(r)).toHaveLength(4);
@@ -65,7 +65,7 @@ describe("ChannelTiles", () => {
   });
 
   it("available:false tile is dimmed and loses its new badge", async () => {
-    setChannels([meta("pets", { available: false })]);
+    setChannels([meta("festa", { available: false })]);
     setSeen([]);
     const r = await mount(() => {});
     const tile = tiles(r)[0];
@@ -81,7 +81,7 @@ describe("ChannelTiles", () => {
   });
 
   it("pressing in a tile prefetches its cards", async () => {
-    setChannels([meta("snap"), meta("hidden")]);
+    setChannels([meta("spot"), meta("hidden")]);
     setSeen([]);
     const r = await mount(() => {});
     await act(async () => tiles(r)[1].props.onPressIn());
@@ -89,7 +89,7 @@ describe("ChannelTiles", () => {
   });
 
   it("tapping a tile calls onOpen with its key", async () => {
-    setChannels([meta("snap"), meta("hidden")]);
+    setChannels([meta("spot"), meta("hidden")]);
     setSeen([]);
     const onOpen = jest.fn();
     const r = await mount(onOpen);
@@ -99,7 +99,7 @@ describe("ChannelTiles", () => {
   });
 
   it("tapping an available:false tile does not call onOpen", async () => {
-    setChannels([meta("pets", { available: false })]);
+    setChannels([meta("festa", { available: false })]);
     setSeen([]);
     const onOpen = jest.fn();
     const r = await mount(onOpen);

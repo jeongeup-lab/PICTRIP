@@ -5,8 +5,8 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime
 
-from app.modules.agent.naver import NaverBlogPost
 from app.modules.agent.schemas import AgentSpotCard, ChatHistoryItem, QueryIntent
+from app.naver.client import NaverBlogPost
 
 CARDS_MARKER = "[[cards]]"
 

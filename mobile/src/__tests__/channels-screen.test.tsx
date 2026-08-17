@@ -31,15 +31,15 @@ describe("ChannelsScreen", () => {
     expect(startProp()).toBe("hidden");
   });
 
-  it("falls back to hidden for an invalid start deeplink", async () => {
+  it("falls back to the first channel for an invalid start deeplink", async () => {
     useLocalSearchParamsMock.mockReturnValue({ start: "evil" });
     await mount();
-    expect(startProp()).toBe("hidden");
+    expect(startProp()).toBe("spot");
   });
 
-  it("falls back to hidden when no start is provided", async () => {
+  it("falls back to the first channel when no start is provided", async () => {
     useLocalSearchParamsMock.mockReturnValue({});
     await mount();
-    expect(startProp()).toBe("hidden");
+    expect(startProp()).toBe("spot");
   });
 });

@@ -61,7 +61,6 @@ export function SlideChat() {
           </View>
         ))}
       </View>
-      <Text style={styles.credit}>사진 · 한국관광공사</Text>
     </View>
   );
 }
@@ -111,5 +110,4 @@ const styles = StyleSheet.create({
   spotBody: { paddingHorizontal: 10, paddingVertical: 8 },
   spotTitle: { fontSize: 12.5, fontWeight: "800", color: colors.ink },
   spotMeta: { fontSize: 10.5, fontWeight: "600", color: colors.sec, marginTop: 2 },
-  credit: { fontSize: 10, fontWeight: "600", color: colors.ter },
 });

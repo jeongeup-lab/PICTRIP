@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Annotated, Literal, get_args
+from uuid import uuid4
 
 from pydantic import BaseModel, Field, StringConstraints, computed_field
 
@@ -160,6 +161,9 @@ class ChatHistoryItem(BaseModel):
 
 
 class ChatRequest(BaseModel):
+    clientRequestId: Annotated[str, StringConstraints(min_length=1, max_length=128)] = Field(
+        default_factory=lambda: uuid4().hex
+    )
     message: Annotated[str, StringConstraints(max_length=MAX_MESSAGE_CHARS)] | None = None
     lat: float | None = Field(None, ge=-90.0, le=90.0)
     lng: float | None = Field(None, ge=-180.0, le=180.0)

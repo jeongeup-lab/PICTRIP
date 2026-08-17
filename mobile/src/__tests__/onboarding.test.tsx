@@ -14,6 +14,10 @@ jest.mock("react-native-safe-area-context", () => {
 });
 jest.mock("expo-router", () => ({ router: { replace: jest.fn() } }));
 jest.mock("@/lib/storage", () => ({ setOnboardingSeen: jest.fn() }));
+jest.mock("@/features/map/usecases/request-location", () => ({
+  getPermissionStatus: jest.fn().mockResolvedValue("denied"),
+  requestPermission: jest.fn().mockResolvedValue("denied"),
+}));
 
 describe("Onboarding skip button", () => {
   let tree: renderer.ReactTestRenderer | null = null;
@@ -87,5 +91,24 @@ describe("Onboarding access notice", () => {
 
     expect(texts(tree!).join("\n")).toContain("필수적 접근 권한");
     expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("asks for location permission once when it was never decided", async () => {
+    const loc = jest.requireMock("@/features/map/usecases/request-location") as {
+      getPermissionStatus: jest.Mock;
+      requestPermission: jest.Mock;
+    };
+    loc.getPermissionStatus.mockResolvedValueOnce("undetermined");
+
+    await act(async () => {
+      tree = renderer.create(<Onboarding />);
+    });
+    pressLabel(tree!, "건너뛰기");
+    await act(async () => {
+      tree!.root.findAll((n) => n.props?.testID === "access-confirm")[0].props.onPress();
+    });
+
+    expect(loc.requestPermission).toHaveBeenCalledTimes(1);
+    expect(router.replace).toHaveBeenCalledWith("/(tabs)");
   });
 });

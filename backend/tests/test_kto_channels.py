@@ -15,8 +15,6 @@ from app.modules.feed.services.kto_channels import (
     _cache_key,
     _today,
     fetch_festa_cards,
-    fetch_pets_cards,
-    fetch_snap_cards,
     load_kto_channel_cached,
 )
 from app.web.errors import KtoApiUnavailable
@@ -83,46 +81,6 @@ FESTA_FUTURE_START = [
     },
 ]
 
-PETS_ITEMS = [
-    {
-        "contentid": f"P{i}",
-        "contenttypeid": "12",
-        "title": f"반려동물 여행지 {i}",
-        "addr1": "제주 제주시 애월읍",
-        "firstimage": f"http://tong.visitkorea.or.kr/p{i}.jpg",
-        "cpyrhtDivCd": "Type3",
-    }
-    for i in range(15)
-]
-
-PETS_WITH_IMAGELESS = [
-    *PETS_ITEMS[:3],
-    {
-        "contentid": "PX",
-        "contenttypeid": "12",
-        "title": "이미지 없는 반려동물 여행지",
-        "addr1": "서울 강남구",
-        "firstimage": "",
-    },
-]
-
-SNAP_ITEMS = [
-    {
-        "galContentId": "G1",
-        "galTitle": "노을 진 통영 앞바다",
-        "galWebImageUrl": "http://tong.visitkorea.or.kr/g1.jpg",
-        "galPhotographyLocation": "경남 통영시",
-        "galPhotographer": "홍길동",
-    },
-    {
-        "galContentId": "G2",
-        "galTitle": "가을 내장산 단풍",
-        "galWebImageUrl": "http://tong.visitkorea.or.kr/g2.jpg",
-        "galPhotographyLocation": "전북 정읍시",
-        "galPhotographer": "김사진",
-    },
-]
-
 
 def _kto_returning(items: list[dict]) -> KtoClient:
     kto = AsyncMock(spec=KtoClient)
@@ -138,16 +96,6 @@ def kto_mock() -> KtoClient:
 @pytest.fixture
 def kto_mock_with_bad_rows() -> KtoClient:
     return _kto_returning(FESTA_BAD_ROWS)
-
-
-@pytest.fixture
-def kto_mock_pets() -> KtoClient:
-    return _kto_returning(PETS_ITEMS)
-
-
-@pytest.fixture
-def kto_mock_snap() -> KtoClient:
-    return _kto_returning(SNAP_ITEMS)
 
 
 async def test_festa_cards_dday_and_line(kto_mock: KtoClient) -> None:
@@ -219,78 +167,58 @@ async def test_festa_paginates_to_find_ongoing_on_second_page() -> None:
     assert kto.call.await_count == 2
 
 
-async def test_pets_static_tag_and_saveable(kto_mock_pets: KtoClient) -> None:
-    cards = await fetch_pets_cards(kto_mock_pets)
-    assert len(cards) == 10
-    assert all(c.tag == "반려동물 동반 가능" for c in cards)
-    assert all(c.saveable is True and c.content_id for c in cards)
-    assert all(c.image_url for c in cards)
+EVERGREEN_FESTA = [
+    {
+        "contentid": "F1",
+        "title": "상시 축제",
+        "addr1": "전북 무주군 무주읍",
+        "firstimage": "http://tong.visitkorea.or.kr/f1.jpg",
+        "eventstartdate": "20260101",
+        "eventenddate": "20991231",
+        "cpyrhtDivCd": "Type3",
+    }
+]
 
 
-async def test_pets_requests_attractions_only(kto_mock_pets: KtoClient) -> None:
-    await fetch_pets_cards(kto_mock_pets)
-    _, call_kwargs = kto_mock_pets.call.call_args
-    assert call_kwargs["contentTypeId"] == 12
-
-
-async def test_pets_excludes_imageless() -> None:
-    kto = _kto_returning(PETS_WITH_IMAGELESS)
-    cards = await fetch_pets_cards(kto)
-    assert len(cards) == 3
-    assert all(c.image_url for c in cards)
-
-
-async def test_snap_cards_are_view_only(kto_mock_snap: KtoClient) -> None:
-    cards = await fetch_snap_cards(kto_mock_snap)
-    assert cards[0].content_id is None
-    assert cards[0].saveable is False
-    assert cards[0].title == "노을 진 통영 앞바다"
-    assert cards[0].region_label == ""
-    assert cards[0].line == "경남 통영시"
-
-
-async def test_snap_upgrades_image_to_https(kto_mock_snap: KtoClient) -> None:
-    cards = await fetch_snap_cards(kto_mock_snap)
-    assert all((c.image_url or "").startswith("https://") for c in cards)
-
-
-async def test_channel_cache_roundtrip(redis_client_fake, kto_mock_snap: KtoClient) -> None:
-    first = await load_kto_channel_cached(redis_client_fake, kto_mock_snap, "snap")
-    second = await load_kto_channel_cached(redis_client_fake, kto_mock_snap, "snap")
+async def test_channel_cache_roundtrip(redis_client_fake) -> None:
+    kto = _kto_returning(EVERGREEN_FESTA)
+    first = await load_kto_channel_cached(redis_client_fake, kto, "festa")
+    second = await load_kto_channel_cached(redis_client_fake, kto, "festa")
     assert first == second
-    assert kto_mock_snap.call.await_count == 1
+    assert first[0].content_id == "F1"
+    assert kto.call.await_count == 1
 
 
-async def test_channel_serves_stale_then_refreshes_in_background(
-    redis_client_fake, kto_mock_snap: KtoClient
-) -> None:
+async def test_channel_serves_stale_then_refreshes_in_background(redis_client_fake) -> None:
+    kto_mock = _kto_returning(EVERGREEN_FESTA)
     stale_card = ChannelCardRow(
         content_id=None, title="어제 카드", region_label="", image_url="x", saveable=False
     )
     stale = json.dumps(
         {"date": (_today() - timedelta(days=1)).isoformat(), "cards": [asdict(stale_card)]}
     )
-    await redis_client_fake.set(_cache_key("snap"), stale)
+    await redis_client_fake.set(_cache_key("festa"), stale)
 
-    served = await load_kto_channel_cached(redis_client_fake, kto_mock_snap, "snap")
+    served = await load_kto_channel_cached(redis_client_fake, kto_mock, "festa")
     assert served[0].title == "어제 카드"
 
     for task in list(_bg_tasks):
         await task
-    assert kto_mock_snap.call.await_count == 1
+    assert kto_mock.call.await_count == 1
 
-    fresh = await load_kto_channel_cached(redis_client_fake, kto_mock_snap, "snap")
-    assert fresh[0].title == "노을 진 통영 앞바다"
-    assert kto_mock_snap.call.await_count == 1
+    fresh = await load_kto_channel_cached(redis_client_fake, kto_mock, "festa")
+    assert fresh[0].content_id == "F1"
+    assert kto_mock.call.await_count == 1
 
 
-async def test_channel_cache_fail_open_on_redis_error(kto_mock_snap: KtoClient) -> None:
+async def test_channel_cache_fail_open_on_redis_error() -> None:
+    kto_mock = _kto_returning(EVERGREEN_FESTA)
     broken = AsyncMock()
     broken.get = AsyncMock(side_effect=RuntimeError("redis down"))
     broken.set = AsyncMock(side_effect=RuntimeError("redis down"))
-    cards = await load_kto_channel_cached(broken, kto_mock_snap, "snap")
-    assert cards[0].title == "노을 진 통영 앞바다"
-    assert kto_mock_snap.call.await_count == 1
+    cards = await load_kto_channel_cached(broken, kto_mock, "festa")
+    assert cards[0].content_id == "F1"
+    assert kto_mock.call.await_count == 1
 
 
 async def test_channel_cache_propagates_kto_failure(redis_client_fake) -> None:
@@ -309,36 +237,26 @@ async def test_festa_calls_kor_searchfestival2(kto_mock: KtoClient) -> None:
     assert call_args[1] == "searchFestival2"
 
 
-async def test_warm_all_channels_populates_every_key(
-    redis_client_fake, kto_mock_snap: KtoClient
-) -> None:
+async def test_warm_all_channels_populates_every_key(redis_client_fake) -> None:
     from app.modules.feed.services.kto_channels import warm_all_channels
 
-    await warm_all_channels(redis_client_fake, kto_mock_snap)
+    await warm_all_channels(redis_client_fake, _kto_returning(EVERGREEN_FESTA))
 
-    for key in ("festa", "pets", "snap"):
-        raw = await redis_client_fake.get(_cache_key(key))
-        assert raw is not None
-        assert json.loads(raw)["date"] == _today().isoformat()
+    raw = await redis_client_fake.get(_cache_key("festa"))
+    assert raw is not None
+    assert json.loads(raw)["date"] == _today().isoformat()
 
 
 async def test_warm_all_channels_is_fail_soft_per_channel(redis_client_fake) -> None:
     from app.modules.feed.services.kto_channels import warm_all_channels
 
-    async def _call(service: object, operation: object, *_a: object, **_k: object) -> list[dict]:
-        if "Festival" in str(operation):
-            raise RuntimeError("kto down")
-        return SNAP_ITEMS
-
     kto = AsyncMock(spec=KtoClient)
-    kto.call = AsyncMock(side_effect=_call)
+    kto.call = AsyncMock(side_effect=RuntimeError("kto down"))
 
     result = await warm_all_channels(redis_client_fake, kto)
 
     assert result["festa"] is False
-    assert result["snap"] is True
     assert await redis_client_fake.get(_cache_key("festa")) is None
-    assert await redis_client_fake.get(_cache_key("snap")) is not None
 
 
 FESTIVAL_POOL_ITEMS = [

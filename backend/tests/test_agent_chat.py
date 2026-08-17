@@ -5,8 +5,9 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
+import pytest
 from fakeredis.aioredis import FakeRedis
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.core.db import get_db
 from app.core.redis import get_redis
@@ -34,6 +35,7 @@ PIECES = [
     "[[cards]]\n",
     "- **계곡-v1** 물이 맑아요.\n",
 ]
+CLIENT_REQUEST_ID = "request-1"
 
 
 def _result(answer: list[AnswerSegment] | None = None) -> AskResponse:
@@ -96,6 +98,7 @@ def _wire(monkeypatch, *, gemini: _FakeGemini, result: AskResponse | None = None
     monkeypatch.setattr(naver, "is_configured", lambda: True)
     monkeypatch.setattr(naver, "search_blog", _fake_blog)
     monkeypatch.setattr(llm, "get_client", lambda: gemini)
+    monkeypatch.setattr(llm, "get_writer_client", lambda: gemini, raising=False)
 
 
 async def _collect(payload: ChatRequest) -> list[tuple[str, BaseModel]]:
@@ -116,7 +119,7 @@ async def test_chat_sends_cards_before_the_writer_starts_streaming(
 ) -> None:
     _wire(monkeypatch, gemini=_FakeGemini(PIECES))
 
-    events = await _collect(ChatRequest(message="부산 계곡"))
+    events = await _collect(ChatRequest(message="부산 계곡", clientRequestId=CLIENT_REQUEST_ID))
 
     names = [name for name, _ in events]
     assert names == [
@@ -145,7 +148,7 @@ async def test_chat_sends_cards_before_the_writer_starts_streaming(
 async def test_chat_cards_event_carries_the_ask_spots_and_tag_basis(monkeypatch) -> None:
     _wire(monkeypatch, gemini=_FakeGemini(PIECES))
 
-    events = await _collect(ChatRequest(message="부산 계곡"))
+    events = await _collect(ChatRequest(message="부산 계곡", clientRequestId=CLIENT_REQUEST_ID))
 
     cards = next(event.model_dump() for name, event in events if name == "cards")
     assert [spot["contentId"] for spot in cards["spots"]] == ["v1"]
@@ -155,7 +158,7 @@ async def test_chat_cards_event_carries_the_ask_spots_and_tag_basis(monkeypatch)
 async def test_chat_sources_hold_only_the_grounding_blogs(monkeypatch) -> None:
     _wire(monkeypatch, gemini=_FakeGemini(PIECES))
 
-    events = await _collect(ChatRequest(message="부산 계곡"))
+    events = await _collect(ChatRequest(message="부산 계곡", clientRequestId=CLIENT_REQUEST_ID))
 
     sources = next(event.model_dump() for name, event in events if name == "sources")
     kinds = [item["kind"] for item in sources["items"]]
@@ -176,7 +179,7 @@ async def test_chat_turns_an_ask_error_into_a_delta_and_a_clean_done(monkeypatch
     monkeypatch.setattr(ask_service, "ask", failing_ask)
     monkeypatch.setattr(llm, "get_client", forbidden_client)
 
-    events = await _collect(ChatRequest(message="아무거나"))
+    events = await _collect(ChatRequest(message="아무거나", clientRequestId=CLIENT_REQUEST_ID))
 
     assert [name for name, _ in events] == ["delta", "done"]
     assert events[0][1].model_dump()["text"] == AgentNoResults.message
@@ -206,7 +209,7 @@ async def test_a_writer_that_dies_before_any_text_falls_back_to_the_ask_answer(
         ),
     )
 
-    events = await _collect(ChatRequest(message="부산 계곡"))
+    events = await _collect(ChatRequest(message="부산 계곡", clientRequestId=CLIENT_REQUEST_ID))
 
     names = [name for name, _ in events]
     assert names[-1] == "done"
@@ -228,7 +231,7 @@ async def test_a_writer_that_dies_mid_sentence_keeps_what_it_already_streamed(
         result=_result([AnswerSegment(text="부산 계곡 조건으로 1곳이에요.")]),
     )
 
-    events = await _collect(ChatRequest(message="부산 계곡"))
+    events = await _collect(ChatRequest(message="부산 계곡", clientRequestId=CLIENT_REQUEST_ID))
 
     names = [name for name, _ in events]
     assert names[-1] == "done"
@@ -242,7 +245,7 @@ async def test_a_writer_failure_with_nothing_to_say_still_ends_with_an_error_eve
 ) -> None:
     _wire(monkeypatch, gemini=_FakeGemini([], error=httpx.ReadError("boom")))
 
-    events = await _collect(ChatRequest(message="부산 계곡"))
+    events = await _collect(ChatRequest(message="부산 계곡", clientRequestId=CLIENT_REQUEST_ID))
 
     names = [name for name, _ in events]
     assert names[-1] == "error"
@@ -275,7 +278,10 @@ async def test_chat_route_streams_sse_instead_of_a_jsend_envelope(client, monkey
     _wire(monkeypatch, gemini=_FakeGemini(PIECES))
     _override()
     try:
-        res = await client.post("/v1/agent/chat", json={"message": "부산 계곡"})
+        res = await client.post(
+            "/v1/agent/chat",
+            json={"message": "부산 계곡", "clientRequestId": CLIENT_REQUEST_ID},
+        )
     finally:
         app.dependency_overrides.clear()
 
@@ -290,12 +296,34 @@ async def test_chat_route_streams_sse_instead_of_a_jsend_envelope(client, monkey
     assert set(done) >= {"answerText", "spots", "sources", "intent", "totalCount"}
     assert "data" not in done
     assert "meta" not in done
+    assert [payload["requestId"] for _, payload in events] == [CLIENT_REQUEST_ID] * len(events)
+    assert [payload["sequence"] for _, payload in events] == list(range(len(events)))
+
+
+async def test_chat_route_generates_a_stable_request_id_when_omitted(client, monkeypatch) -> None:
+    _wire(monkeypatch, gemini=_FakeGemini(PIECES))
+    _override()
+    try:
+        res = await client.post("/v1/agent/chat", json={"message": "부산 계곡"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert res.status_code == 200
+    events = _parse_sse(res.text)
+    request_ids = {payload["requestId"] for _, payload in events}
+    assert len(request_ids) == 1
+    request_id = request_ids.pop()
+    assert 1 <= len(request_id) <= 128
+    assert [payload["sequence"] for _, payload in events] == list(range(len(events)))
 
 
 async def test_chat_route_rejects_an_invalid_payload_with_jsend_before_streaming(client) -> None:
     _override()
     try:
-        res = await client.post("/v1/agent/chat", json={"message": "가" * 501})
+        res = await client.post(
+            "/v1/agent/chat",
+            json={"message": "가" * 501, "clientRequestId": CLIENT_REQUEST_ID},
+        )
     finally:
         app.dependency_overrides.clear()
 
@@ -370,11 +398,34 @@ async def test_blank_message_gets_korean_guidance_not_an_internal_error(monkeypa
 
     monkeypatch.setattr(ask_service, "ask", failing_ask)
 
-    events = await _collect(ChatRequest(message="   "))
+    events = await _collect(ChatRequest(message="   ", clientRequestId=CLIENT_REQUEST_ID))
 
     assert [name for name, _ in events] == ["delta", "done"]
     assert events[0][1].model_dump()["text"] == ask_service.BLANK_ANSWER
     assert events[-1][1].model_dump()["answerText"] == ask_service.BLANK_ANSWER
+
+
+@pytest.mark.parametrize("client_request_id", ["", "x" * 129])
+def test_chat_request_requires_bounded_non_empty_client_request_id(client_request_id: str) -> None:
+    with pytest.raises(ValidationError):
+        ChatRequest(message="부산 계곡", clientRequestId=client_request_id)
+
+
+def test_chat_request_generates_client_request_id_when_omitted() -> None:
+    request = ChatRequest(message="부산 계곡")
+
+    assert 1 <= len(request.clientRequestId) <= 128
+
+
+async def test_empty_writer_without_a_deterministic_answer_ends_with_an_error(monkeypatch) -> None:
+    _wire(monkeypatch, gemini=_FakeGemini([]), result=_result([]))
+
+    events = await _collect(ChatRequest(message="부산 계곡", clientRequestId=CLIENT_REQUEST_ID))
+
+    assert [name for name, _ in events][-1] == "error"
+    assert all(name != "done" for name, _ in events)
+    error = events[-1][1].model_dump()
+    assert error["code"] == AgentWriterUnavailable.code
 
 
 def test_region_alone_does_not_keep_an_off_topic_post() -> None:
