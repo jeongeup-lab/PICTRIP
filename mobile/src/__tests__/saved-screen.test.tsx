@@ -249,23 +249,14 @@ describe("SavedScreen", () => {
     expect(toast.props.action).not.toBeNull();
   });
 
-  it("saves from the recent row without opening the spot", async () => {
-    useSavedListMock.mockReturnValue({ data: [], isLoading: false });
-    useRecentSpots.setState({ spots: [spot("seen", { title: "바람의 언덕" })] });
-
-    const tree = await mount();
-    await press(tree, "recent-seen-heart");
-
-    expect(routerPush).not.toHaveBeenCalledWith("/spots/seen");
-  });
-
-  it("offers recently viewed spots when nothing is saved", async () => {
+  it("shows the simplified empty state without recent spots", async () => {
     useSavedListMock.mockReturnValue({ data: [], isLoading: false });
     useRecentSpots.setState({ spots: [spot("seen", { title: "바람의 언덕" })] });
 
     const tree = await mount();
 
-    expect(tree.root.findAllByProps({ testID: "recent-seen" }).length).toBeGreaterThan(0);
+    expect(tree.root.findAllByProps({ testID: "recent-seen" })).toHaveLength(0);
+    expect(JSON.stringify(tree.toJSON())).toContain("아직 스크랩한 곳이 없어요");
     expect(tree.root.findAllByProps({ testID: "open-explore" }).length).toBeGreaterThan(0);
   });
 

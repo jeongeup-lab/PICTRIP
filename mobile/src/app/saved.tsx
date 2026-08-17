@@ -5,15 +5,10 @@ import { router } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { Skeleton } from "@/components/Skeleton";
 import { Toast, TOAST_UNDO_MS } from "@/components/Toast";
-import { InfoBox } from "@/components/InfoBox";
-import { ListGroup } from "@/components/ListGroup";
-import { SectionTitle } from "@/components/SectionTitle";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SavedCard } from "@/features/saved/components/SavedCard";
-import { RecentSpotRow } from "@/features/saved/components/RecentSpotRow";
 import { useSavedList, useSaveMutation, useUnsaveMutation } from "@/features/saved/queries";
 import { unsaveMessage } from "@/features/saved/lib/undo-message";
-import { useRecentSpots } from "@/features/spots/stores/recent-store";
 import { prefetchSpot } from "@/features/spots/queries";
 import type { SpotCard } from "@/lib/api-types";
 import { colors, spacing, radii } from "@/constants/theme";
@@ -34,7 +29,6 @@ export default function SavedScreen() {
   const { data, isLoading } = useSavedList();
   const unsave = useUnsaveMutation();
   const resave = useSaveMutation();
-  const recents = useRecentSpots((s) => s.spots);
   const [notice, setNotice] = useState<Notice | null>(null);
   const unsaving = useRef<Promise<boolean> | null>(null);
 
@@ -93,7 +87,7 @@ export default function SavedScreen() {
             ))}
           </View>
         ) : list.length === 0 ? (
-          <EmptyState recents={recents} onOpenSpot={openSpot} />
+          <EmptyState />
         ) : (
           <View style={styles.album}>
             {list.map((spot) => (
@@ -122,48 +116,23 @@ export default function SavedScreen() {
   );
 }
 
-function EmptyState({
-  recents,
-  onOpenSpot,
-}: {
-  recents: SpotCard[];
-  onOpenSpot: (spot: SpotCard) => void;
-}) {
+function EmptyState() {
   return (
-    <View>
-      <View style={styles.emptyHead}>
-        <View style={styles.emptyIcon}>
-          <Icon name="search" size={28} color={colors.accent} strokeWidth={1.7} />
-        </View>
+    <View style={styles.empty}>
+      <View style={styles.emptyBody}>
+        <Icon name="bookmark" size={32} color={colors.ter} strokeWidth={1.6} />
         <Text style={styles.emptyTitle}>{EMPTY_HEADLINE}</Text>
-        <Text style={styles.emptySub}>탐색 탭에서 마음에 드는 곳을 스크랩해 보세요.</Text>
+        <Text style={styles.emptySub}>
+          {"마음에 드는 곳을 스크랩하면\n여기에 모아 볼 수 있어요"}
+        </Text>
       </View>
-
-      <InfoBox title="이렇게 쓰면 편해요" text="마음에 드는 곳을 스크랩해 다음 여행을 계획하세요.">
-        <View style={styles.emptyAction}>
-          <PrimaryButton
-            label="탐색 탭 열기"
-            onPress={() => router.navigate("/(tabs)/explore")}
-            testID="open-explore"
-          />
-        </View>
-      </InfoBox>
-
-      {recents.length > 0 ? (
-        <>
-          <SectionTitle title="최근 본 곳" />
-          <ListGroup>
-            {recents.map((spot) => (
-              <RecentSpotRow
-                key={spot.contentId}
-                spot={spot}
-                onPress={() => onOpenSpot(spot)}
-                testID={`recent-${spot.contentId}`}
-              />
-            ))}
-          </ListGroup>
-        </>
-      ) : null}
+      <View style={styles.emptyAction}>
+        <PrimaryButton
+          label="여행지 둘러보기"
+          onPress={() => router.navigate("/(tabs)/explore")}
+          testID="open-explore"
+        />
+      </View>
     </View>
   );
 }
@@ -191,24 +160,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
   },
-  emptyHead: { alignItems: "center", paddingHorizontal: spacing.xl, paddingTop: 40 },
-  emptyIcon: {
-    width: 68,
-    height: 68,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.raise,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  empty: { flex: 1, minHeight: 480, paddingHorizontal: spacing.xl },
+  emptyBody: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.md },
   emptyTitle: {
-    marginTop: 18,
-    fontSize: 18,
-    fontWeight: "800",
+    fontSize: 17,
+    fontWeight: "700",
     letterSpacing: -0.4,
     color: colors.ink,
   },
-  emptySub: { marginTop: 8, fontSize: 13, color: colors.sec, textAlign: "center" },
-  emptyAction: { marginTop: spacing.md },
+  emptySub: { fontSize: 13.5, lineHeight: 21, color: colors.sec, textAlign: "center" },
+  emptyAction: { alignSelf: "stretch", marginBottom: 34 },
 });

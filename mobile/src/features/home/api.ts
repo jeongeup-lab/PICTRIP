@@ -39,8 +39,12 @@ export async function getTrending(): Promise<HomeCards> {
   return (await api.get("/home/trending")) as unknown as HomeCards;
 }
 
-export async function getTastePicks(limit: number): Promise<HomeCards> {
-  return (await api.get("/home/taste-picks", { params: { limit } })) as unknown as HomeCards;
+export type TasteCategory = "SPOT" | "CAFE" | "FOOD" | "FESTA" | "HIDDEN";
+
+export async function getTastePicks(limit: number, category?: TasteCategory): Promise<HomeCards> {
+  return (await api.get("/home/taste-picks", {
+    params: { limit, ...(category ? { category } : {}) },
+  })) as unknown as HomeCards;
 }
 
 export async function getRecommendations(coords?: {

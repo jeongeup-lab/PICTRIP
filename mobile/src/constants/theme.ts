@@ -1,4 +1,34 @@
-export const colors = {
+import { Appearance } from "react-native";
+
+const light = {
+  bg: "#FFFFFF",
+  inset: "#F7F7F8",
+  skeleton: "#ECEDEF",
+  ink: "#171719",
+  sec: "rgba(55,56,60,0.61)",
+  ter: "rgba(55,56,60,0.47)",
+  line: "rgba(112,115,124,0.16)",
+  fill: "rgba(112,115,124,0.05)",
+  fillStrong: "rgba(112,115,124,0.09)",
+  control: "rgba(12,14,18,0.35)",
+  accent: "#FF3B53",
+  accentText: "#E5334B",
+  accentFill: "rgba(255,59,83,0.10)",
+  scrim: "rgba(23,23,25,0.62)",
+  glassFill: "rgba(255,255,255,0.85)",
+  glassBorder: "rgba(112,115,124,0.22)",
+  raise: "rgba(112,115,124,0.04)",
+  raiseStrong: "#FFFFFF",
+  onImage: "#FFFFFF",
+  onDim: "rgba(255,255,255,0.85)",
+  onLight: "#171719",
+  danger: "#E5334B",
+  positive: "#00BF40",
+  caution: "#C77700",
+  info: "#1B72E8",
+} as const;
+
+const dark = {
   bg: "#14161A",
   inset: "#1A1D22",
   skeleton: "#22262C",
@@ -26,6 +56,18 @@ export const colors = {
   info: "#4A9EFF",
 } as const;
 
+export type Palette = { [K in keyof typeof dark]: string };
+
+export const palettes: { light: Palette; dark: Palette } = { light, dark };
+
+export type ThemeName = keyof typeof palettes;
+
+export const themeName: ThemeName = Appearance.getColorScheme() === "dark" ? "dark" : "light";
+
+export const colors: Palette = palettes[themeName];
+
+export const darkColors: Palette = palettes.dark;
+
 export const mapTones = {
   land: "#23262C",
   water: "#0B3042",
@@ -52,7 +94,31 @@ export const radii = {
   pill: 999,
 } as const;
 
-export const shadows = {
+const lightShadows = {
+  card: {
+    shadowColor: "#171717",
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  fab: {
+    shadowColor: "#171717",
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  sheet: {
+    shadowColor: "#171717",
+    shadowOpacity: 0.14,
+    shadowRadius: 48,
+    shadowOffset: { width: 0, height: -20 },
+    elevation: 12,
+  },
+} as const;
+
+const darkShadows = {
   card: {
     shadowColor: "#000000",
     shadowOpacity: 0.55,
@@ -75,3 +141,17 @@ export const shadows = {
     elevation: 12,
   },
 } as const;
+
+type ShadowStyle = {
+  shadowColor: string;
+  shadowOpacity: number;
+  shadowRadius: number;
+  shadowOffset: { width: number; height: number };
+  elevation: number;
+};
+
+export type Shadows = { card: ShadowStyle; fab: ShadowStyle; sheet: ShadowStyle };
+
+export const shadows: Shadows = themeName === "dark" ? darkShadows : lightShadows;
+
+export const darkOnlyShadows: Shadows = darkShadows;
