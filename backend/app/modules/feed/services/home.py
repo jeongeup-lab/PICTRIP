@@ -65,20 +65,32 @@ class RecommendationRow:
     items: list[HomeCardRow]
 
 
+_CATEGORY_POOLS = {"SPOT": "spot", "CAFE": "cafe", "FOOD": "food"}
+
+
 async def load_nearby_ranked(
-    session: AsyncSession, redis: Redis, *, lat: float, lng: float, limit: int = CARD_COUNT
+    session: AsyncSession,
+    redis: Redis,
+    *,
+    lat: float,
+    lng: float,
+    limit: int = CARD_COUNT,
+    category: str | None = None,
 ) -> HomeRanking:
-    key = f"home:nearby:{_CACHE_VERSION}:{lat:.3f}:{lng:.3f}:{limit}"
+    key = f"home:nearby:{_CACHE_VERSION}:{category or 'all'}:{lat:.3f}:{lng:.3f}:{limit}"
     cached = await _cache_get(redis, key)
     if cached is not None:
         return cached
 
     dlat = _NEARBY_RADIUS_M / 111_320.0
     dlng = _NEARBY_RADIUS_M / (111_320.0 * max(math.cos(math.radians(lat)), 0.01))
+    wanted = (
+        [_CATEGORY_POOLS[category]] if category in _CATEGORY_POOLS else ["spot", "cafe", "food"]
+    )
     pools = {
-        category: await repo.fetch_nearby_by_category(
+        pool: await repo.fetch_nearby_by_category(
             session,
-            category=category,
+            category=pool,
             lat=lat,
             lng=lng,
             min_lat=lat - dlat,
@@ -88,9 +100,12 @@ async def load_nearby_ranked(
             radius=float(_NEARBY_RADIUS_M),
             limit=limit,
         )
-        for category in ("spot", "cafe", "food")
+        for pool in wanted
     }
-    rows = interleave(pools, NEARBY_PATTERN, limit=limit, key_of=lambda r: r.content_id)
+    if len(wanted) == 1:
+        rows = list(pools[wanted[0]])[:limit]
+    else:
+        rows = interleave(pools, NEARBY_PATTERN, limit=limit, key_of=lambda r: r.content_id)
     ranking = HomeRanking(
         cards=[_card(row, rank=idx) for idx, row in enumerate(rows, start=1)],
         base_date=_shared_base_date(row.base_ymd for row in rows),
@@ -105,8 +120,9 @@ async def load_trending(
     kto: KtoClient | None = None,
     *,
     limit: int = CARD_COUNT,
+    category: str | None = None,
 ) -> HomeRanking:
-    key = f"home:trending:{_CACHE_VERSION}:{limit}"
+    key = f"home:trending:{_CACHE_VERSION}:{category or 'all'}:{limit}"
     cached = await _cache_get(redis, key)
     if cached is not None:
         return cached
@@ -114,18 +130,25 @@ async def load_trending(
     from app.modules.feed.services.kto_channels import load_kto_channel_cached
     from app.modules.feed.services.signal_channels import load_signal_channel_cached
 
+    wanted = (
+        [_CATEGORY_POOLS[category]] if category in _CATEGORY_POOLS else ["spot", "cafe", "food"]
+    )
     pools: dict[str, list[Any]] = {}
-    for channel in ("spot", "cafe", "food"):
+    for channel in wanted:
         pools[channel] = list(await load_signal_channel_cached(session, redis, channel))
-    festa: list[Any] = []
-    if kto is not None:
-        try:
-            festa = list(await asyncio.wait_for(load_kto_channel_cached(redis, kto, "festa"), 4.0))
-        except Exception:
-            festa = []
-    pools["festa"] = [c for c in festa if c.content_id]
-
-    rows = interleave(pools, TRENDING_PATTERN, limit=limit, key_of=lambda r: r.content_id)
+    if len(wanted) == 1:
+        rows = pools[wanted[0]][:limit]
+    else:
+        festa: list[Any] = []
+        if kto is not None:
+            try:
+                festa = list(
+                    await asyncio.wait_for(load_kto_channel_cached(redis, kto, "festa"), 4.0)
+                )
+            except Exception:
+                festa = []
+        pools["festa"] = [c for c in festa if c.content_id]
+        rows = interleave(pools, TRENDING_PATTERN, limit=limit, key_of=lambda r: r.content_id)
     ranking = HomeRanking(
         cards=[
             HomeCardRow(
