@@ -2,7 +2,7 @@ import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Icon } from "@/components/Icon";
 import { useSaveOptimistic } from "@/features/saved/hooks/use-save-optimistic";
 import type { ChannelCard } from "@/features/channels/api";
-import { colors } from "@/constants/theme";
+import { darkColors as colors } from "@/constants/theme";
 
 interface Props {
   card: ChannelCard;

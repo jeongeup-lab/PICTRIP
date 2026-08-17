@@ -1,6 +1,6 @@
 import { Text } from "react-native";
 import renderer, { act } from "react-test-renderer";
-import { AccessNotice, DENIED_TOGGLE_LABEL } from "@/features/consent/components/AccessNotice";
+import { AccessNotice } from "@/features/consent/components/AccessNotice";
 
 const flatten = (node: unknown): string =>
   Array.isArray(node)
@@ -15,6 +15,7 @@ function lines(tree: renderer.ReactTestRenderer): string[] {
 
 describe("AccessNotice", () => {
   let tree: renderer.ReactTestRenderer | null = null;
+  let onConfirm: jest.Mock;
 
   afterEach(() => {
     act(() => tree?.unmount());
@@ -22,49 +23,43 @@ describe("AccessNotice", () => {
   });
 
   function mount() {
+    onConfirm = jest.fn();
     act(() => {
-      tree = renderer.create(<AccessNotice />);
+      tree = renderer.create(<AccessNotice onConfirm={onConfirm} />);
     });
-    return lines(tree!);
-  }
-
-  function toggleDenied() {
-    act(() =>
-      tree!.root
-        .findAll((node) => node.props?.testID === "access-denied-toggle")[0]
-        .props.onPress(),
-    );
     return lines(tree!);
   }
 
   it("separates required from optional access permissions", () => {
     const text = mount();
 
-    expect(text).toContain("필수 접근권한");
-    expect(text).toContain("선택 접근권한");
-    expect(text.join("\n")).toContain("카메라");
-    expect(text.join("\n")).toContain("사진");
-    expect(text.join("\n")).toContain("위치");
+    expect(text).toContain("필수적 접근 권한");
+    expect(text).toContain("필수적 접근 권한 없음");
+    expect(text).toContain("선택적 접근 권한");
+    expect(text.join("\n")).toContain("사진 · 카메라");
+    expect(text.join("\n")).toContain("위치 정보");
   });
 
   it("states the purpose of every optional permission up front", () => {
     const text = mount().join("\n");
 
-    expect(text).toContain("고른 사진 한 장으로 닮은 여행지를 찾을 때만");
-    expect(text).toContain("내 주변 여행지");
+    expect(text).toContain("사진 한 장으로 닮은 여행지 검색");
+    expect(text).toContain("내 주변 인기 여행지 추천");
   });
 
-  it("keeps the denial detail folded away until asked", () => {
-    const collapsed = mount().join("\n");
+  it("explains that optional permissions are asked lazily and reversible", () => {
+    const text = mount().join("\n");
 
-    expect(collapsed).toContain(DENIED_TOGGLE_LABEL);
-    expect(collapsed).not.toContain("보관함 전체를 읽지 않아요");
-    expect(collapsed).not.toContain("서울 도심");
+    expect(text).toContain("처음 쓸 때 물어보며");
+    expect(text).toContain("언제든 바꿀 수 있어요");
+  });
 
-    const expanded = toggleDenied().join("\n");
-
-    expect(expanded).toContain("보관함 전체를 읽지 않아요");
-    expect(expanded).toContain("서울 도심");
+  it("confirms through the in-card button", () => {
+    mount();
+    act(() => {
+      tree!.root.findAll((n) => n.props?.testID === "access-confirm")[0].props.onPress();
+    });
+    expect(onConfirm).toHaveBeenCalled();
   });
 
   it("does not announce permissions the app never requests", () => {

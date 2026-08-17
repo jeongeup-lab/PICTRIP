@@ -4,7 +4,7 @@
     "slug": "pictrip",
     "owner": "seeeeeeong",
     "scheme": "pictrip",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -12,7 +12,7 @@
       "url": "https://u.expo.dev/b4beab09-95ca-45e7-8726-4b3dbcb520fa"
     },
     "orientation": "portrait",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
     "ios": {
       "bundleIdentifier": "com.jeongeup.pictrip",

@@ -143,8 +143,9 @@ async def home_taste_picks(
     session: DbSession,
     redis: RedisDep,
     limit: int = Query(home.TASTE_PICK_COUNT, ge=1, le=30),
+    category: str | None = Query(None, pattern="^(SPOT|CAFE|FOOD|FESTA|HIDDEN)$"),
 ) -> dict[str, Any]:
-    rows = await home.load_taste_picks(session, redis, limit=limit)
+    rows = await home.load_taste_picks(session, redis, limit=limit, category=category)
     return ok(HomeCardsResponse(items=[_home_card(r) for r in rows]))
 
 

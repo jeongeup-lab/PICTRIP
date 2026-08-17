@@ -7,6 +7,7 @@ import {
   getTastePicks,
   getTrending,
 } from "@/features/home/api";
+import type { TasteCategory } from "@/features/home/api";
 import type { Coords } from "@/features/map/usecases/request-location";
 
 const NEARBY_STALE_MS = 5 * 60 * 1000;
@@ -52,10 +53,10 @@ export function useRegionLabel(coords: Coords | null) {
   });
 }
 
-export function useTastePicks(limit: number) {
+export function useTastePicks(limit: number, category?: TasteCategory) {
   return useQuery({
-    queryKey: [...homeKeys.tastePicks, limit],
-    queryFn: () => getTastePicks(limit),
+    queryKey: [...homeKeys.tastePicks, limit, category ?? "all"],
+    queryFn: () => getTastePicks(limit, category),
     staleTime: TRENDING_STALE_MS,
   });
 }
