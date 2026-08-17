@@ -8,6 +8,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet" />
+<script>
+document.documentElement.dataset.mode =
+  /\/about\/play(\/|$)/.test(location.pathname) ? 'play' : 'still';
+</script>
 <style>
 :root{
   /* page — light */
@@ -545,7 +549,9 @@ html{scrollbar-color:#C7CBD1 transparent}
 .ssub{margin-top:2px;font-size:11.5px;color:var(--ter)}
 
 
-/* ---- 라이더: 로고가 밧줄을 타고 내려와 시연한다 ---- */
+/* ---- 라이더: 로고가 밧줄을 타고 내려와 시연한다 (play 전용) ---- */
+#rope,#rider{display:none}
+[data-mode="play"] #rope,[data-mode="play"] #rider{display:block}
 #rope{position:fixed;top:0;width:3px;background:var(--ink);opacity:0;z-index:70;
   pointer-events:none;transition:opacity .35s ease;border-radius:2px;
   box-shadow:0 0 0 1.5px rgba(255,255,255,.9)}
@@ -586,14 +592,16 @@ html{scrollbar-color:#C7CBD1 transparent}
 #rider.scrub .rig{animation:none;transition:transform .32s ease}
 #rope{transform-origin:top center;will-change:height,transform,opacity}
 @media (min-width:1001px){
-  #ch2{height:560vh}
-  #ch1{height:360vh}
-  #chex{height:380vh}
-  #ch3{height:320vh}
-  #ch4{height:380vh}
-  #save{height:320vh}
-  #saved{height:320vh}
-  #ch2 .pin,#ch1 .pin,#chex .pin,#ch3 .pin,#ch4 .pin,#save .pin,#saved .pin{
+  [data-mode="play"] #ch2{height:560vh}
+  [data-mode="play"] #ch1{height:360vh}
+  [data-mode="play"] #chex{height:380vh}
+  [data-mode="play"] #ch3{height:320vh}
+  [data-mode="play"] #ch4{height:380vh}
+  [data-mode="play"] #save{height:320vh}
+  [data-mode="play"] #saved{height:320vh}
+  [data-mode="play"] #ch2 .pin,[data-mode="play"] #ch1 .pin,[data-mode="play"] #chex .pin,
+  [data-mode="play"] #ch3 .pin,[data-mode="play"] #ch4 .pin,[data-mode="play"] #save .pin,
+  [data-mode="play"] #saved .pin{
     position:sticky;top:0;min-height:0;height:100svh;padding:0}
 }
 
@@ -755,6 +763,45 @@ footer{border-top:1px solid var(--rule);padding:56px 0 76px;background:var(--pap
 .flinks a{color:var(--ink3);text-decoration:none;transition:color .3s}
 .flinks a:hover{color:var(--ink)}
 
+/* ================= 모드 전환 ================= */
+.modeswitch{display:inline-flex;align-items:center;gap:9px;margin-top:clamp(30px,4vw,44px);
+  height:46px;padding:0 22px;border-radius:999px;border:1px solid var(--rule);
+  background:var(--paper2);color:var(--ink);font-size:14px;font-weight:700;
+  letter-spacing:-.01em;text-decoration:none;cursor:pointer;
+  transition:border-color .25s,box-shadow .25s,transform .25s}
+.modeswitch:hover{border-color:var(--ink);box-shadow:0 8px 22px rgba(17,19,21,.10);transform:translateY(-1px)}
+.modeswitch:active{transform:translateY(0)}
+.modeswitch svg{width:17px;height:17px;fill:var(--accent);stroke:none;flex:none}
+.modeswitch .hint{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--ink3);font-weight:400}
+.modeswitch .narrow{display:none}
+@media (max-width:1000px){
+  .modeswitch .wide{display:none}
+  .modeswitch .narrow{display:inline}
+}
+.flinks .playonly{display:none}
+[data-mode="play"] .flinks .playonly{display:inline}
+.backstill{display:none;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;
+  letter-spacing:.08em;color:var(--ink3);text-decoration:none;transition:color .25s}
+.backstill:hover{color:var(--ink)}
+[data-mode="play"] .backstill{display:inline-flex}
+[data-mode="play"] .modeswitch{display:none}
+@media (max-width:900px){
+  [data-mode="play"] .backstill{display:none}
+}
+
+/* ---- still: 페이지가 멈춰 있다 ---- */
+html:not([data-mode="play"]) *{animation:none!important}
+html:not([data-mode="play"]) .cover .wordmark,
+html:not([data-mode="play"]) .cover .tagline,
+html:not([data-mode="play"]) .cover .rule,
+html:not([data-mode="play"]) .cover .entry,
+html:not([data-mode="play"]) .cover .modeswitch{opacity:1!important;transform:none!important}
+html:not([data-mode="play"]) .pair .pf.l,
+html:not([data-mode="play"]) .pair .pf.r{transform:none}
+html:not([data-mode="play"]) .approx{opacity:1}
+html:not([data-mode="play"]) #saved .scard{opacity:1;transform:none}
+html:not([data-mode="play"]) .glyph{transition:none}
+
 /* ================= responsive ================= */
 @media (max-width:1180px){:root{--k:.74}}
 @media (max-width:1000px){
@@ -818,6 +865,7 @@ footer{border-top:1px solid var(--rule);padding:56px 0 76px;background:var(--pap
       <a href="#save">저장</a>
       <a href="#saved">스크랩</a>
     </nav>
+    <a class="backstill" href="/about/">← 정지 버전</a>
   </div>
 </header>
 
@@ -843,6 +891,12 @@ footer{border-top:1px solid var(--rule);padding:56px 0 76px;background:var(--pap
   <p class="tagline">사진으로 찾는 국내 여행지</p>
   <div class="rule"></div>
   <p class="entry">2026 한국관광공사 관광 데이터 활용 공모전</p>
+  <a class="modeswitch" href="/about/play/">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.4v13.2L19 12z"/></svg>
+    영상처럼 보기
+    <span class="hint wide">스크롤 연출</span>
+    <span class="hint narrow">넓은 화면에서 재생됩니다</span>
+  </a>
 </section>
 
 <!-- ============ thesis ============ -->
@@ -1410,6 +1464,7 @@ footer{border-top:1px solid var(--rule);padding:56px 0 76px;background:var(--pap
       <a href="https://pictrip.org/legal/terms">이용약관</a>
       <a href="https://pictrip.org/legal/privacy">개인정보처리방침</a>
       <a href="https://pictrip.org/legal/data-sources">데이터 출처 고지</a>
+      <a class="playonly" href="/about/">정지 버전으로</a>
     </div>
   </div>
 </footer>
@@ -1466,6 +1521,8 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({'&':'&amp;
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const PLAY = document.documentElement.dataset.mode === 'play';
+const ASK_ANSWER = '강원특별자치도 강릉시 조건으로 20곳이에요. 이 중 7곳은 사람이 적은 편이에요.';
 
 /* ---------- feed (ch1) ---------- */
 function slidesHTML(p){
@@ -1518,7 +1575,7 @@ function stepPost(p){
 /* ---------- cover: 한 번 뛰어 사진을 집는다 ---------- */
 (function coverIntro(){
   const cover = $('cover');
-  if (reduce){ cover.classList.remove('intro'); return; }
+  if (!PLAY || reduce){ cover.classList.remove('intro'); return; }
   setTimeout(() => cover.classList.remove('intro'), 1550);
 })();
 
@@ -1526,7 +1583,7 @@ function stepPost(p){
 (function pairMeet(){
   const el = $('pair');
   if (!el) return;
-  if (reduce){ el.classList.add('met'); return; }
+  if (!PLAY || reduce){ el.classList.add('met'); return; }
   new IntersectionObserver((es, ob) => es.forEach(e => {
     if (!e.isIntersecting) return;
     el.classList.add('met');
@@ -1632,15 +1689,15 @@ function inPoint(rect, W, axPct, lyPct){
 }
 
 const ZONES = [
-  {id:'ch2', stages:3, swipe:false,
+  {id:'ch2', stages:3, still:1, swipe:false,
    poses:[['0%','-46%','-116deg'],['0%','-46%','-116deg'],['26%','-26%','-60deg'],['26%','-26%','-60deg']],
    rings:{1:'#t-open'},
    apply(sec, dev, st){ dev.classList.toggle('open', st >= 1); storyGo(Math.min(2, Math.max(0, st - 1))); }},
-  {id:'ch1', stages:3, swipe:true,
+  {id:'ch1', stages:3, still:1, swipe:true,
    poses:[['0%','-14%','-58deg'],['0%','-14%','-58deg'],['0%','-14%','-58deg'],['0%','-14%','-58deg']],
    rings:{},
    apply(sec, dev, st){ setPostIdx(st); }},
-  {id:'chex', stages:4, swipe:true,
+  {id:'chex', stages:4, still:2, swipe:true,
    poses:[['0%','-30%','-106deg'],['0%','-8%','-58deg'],['0%','-8%','-58deg'],['0%','-8%','-58deg'],['0%','-8%','-58deg']],
    rings:{1:'#t-find'},
    apply(sec, dev, st){ dev.classList.toggle('picked', st >= 1); exGo(Math.max(0, st - 1)); }},
@@ -1871,7 +1928,7 @@ function renderZone(z, sec, dev, p, vh, vw){
 
 function askZone(z, sec, dev, rect, W, pp){
   const TXT = '강릉 관광지';
-  const ANS = '강원특별자치도 강릉시 조건으로 20곳이에요. 이 중 7곳은 사람이 적은 편이에요.';
+  const ANS = ASK_ANSWER;
   rider.classList.add('reach');
   let ax = '-14%', ly = '3%', arm = '-30deg';
   if (pp >= .30 && pp < .46){ ax = '14%'; arm = '-34deg'; }
@@ -1916,21 +1973,36 @@ function saveZone(z, sec, dev, rect, W, pp){
 }
 
 
-if (reduce || !deskOK){
+function applyFinal(z){
+  if (!z) return;
+  const sec = $(z.id); if (!sec) return;
+  const dev = sec.querySelector('.device'); if (!dev) return;
+  if (z.custom === 'ask'){
+    dev.classList.add('sent','st1','st2','cards','mapon');
+    $('ansText').textContent = ASK_ANSWER;
+  } else if (z.custom === 'save'){
+    dev.classList.add('savedon');
+    const vp = sec.querySelector('.vp');
+    if (vp) vp.scrollTop = vp.scrollHeight;
+  } else {
+    z.apply(sec, dev, PLAY || z.still == null ? z.stages : z.still);
+  }
+}
+
+if (!PLAY || reduce || !deskOK){
   rider.style.display = 'none';
   rope.style.display = 'none';
-  const io = new IntersectionObserver(es => es.forEach(e => {
-    const z = ZONES.find(x => x.id === e.target.id);
-    if (!z || !e.isIntersecting) return;
-    const sec = e.target, dev = sec.querySelector('.device');
-    if (z.custom === 'ask'){
-      dev.classList.add('sent','st1','st2','cards','mapon');
-      $('ansText').textContent = '강원특별자치도 강릉시 조건으로 20곳이에요. 이 중 7곳은 사람이 적은 편이에요.';
-    }
-    else if (z.custom === 'save'){ dev.classList.add('savedon'); }
-    else z.apply(sec, dev, z.stages);
-  }), {threshold:.35});
-  ZONES.forEach(z => { const el = $(z.id); if (el) io.observe(el); });
+  if (!PLAY){
+    const settle = () => ZONES.forEach(applyFinal);
+    settle();
+    addEventListener('load', settle);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(settle);
+  } else {
+    const io = new IntersectionObserver(es => es.forEach(e => {
+      if (e.isIntersecting) applyFinal(ZONES.find(x => x.id === e.target.id));
+    }), {threshold:.35});
+    ZONES.forEach(z => { const el = $(z.id); if (el) io.observe(el); });
+  }
 } else {
   const glyph = document.querySelector('.cover .glyph');
   const footer = document.querySelector('footer');
