@@ -21,12 +21,19 @@ import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { queryClient } from "@/lib/query-client";
 import { colors, spacing } from "@/constants/theme";
 
+const CATEGORY_NOUNS: Record<RankCategory, string> = {
+  SPOT: "관광지",
+  CAFE: "카페",
+  FOOD: "식당",
+};
+
 export default function HomeScreen() {
   const listRef = useRef<ScrollView>(null);
   useScrollToTop(listRef);
 
   const [scope, setScope] = useState<HomeScope>("nearby");
   const [category, setCategory] = useState<RankCategory | null>(null);
+  const categoryNoun = category === null ? "장소" : CATEGORY_NOUNS[category];
   const { coords, status, request } = useHomeLocation();
   const displayName = useAuthStore((s) => s.user?.displayName ?? null);
 
@@ -101,10 +108,10 @@ export default function HomeScreen() {
         <RankSection
           title={
             showNational
-              ? "전국 인기 장소"
+              ? `전국 인기 ${categoryNoun}`
               : regionLabel
-                ? `${regionLabel} 근처 인기 장소`
-                : "지금 주변 인기 장소"
+                ? `${regionLabel} 근처 인기 ${categoryNoun}`
+                : `지금 주변 인기 ${categoryNoun}`
           }
           note={cards.length > 0 ? formatBaseDate(active.data?.baseDate) : null}
           cards={cards}

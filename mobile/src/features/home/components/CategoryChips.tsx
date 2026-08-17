@@ -4,9 +4,9 @@ import { colors, spacing } from "@/constants/theme";
 
 const OPTIONS: { key: RankCategory | null; label: string }[] = [
   { key: null, label: "전체" },
-  { key: "SPOT", label: "SPOT" },
-  { key: "CAFE", label: "CAFE" },
-  { key: "FOOD", label: "FOOD" },
+  { key: "SPOT", label: "관광지" },
+  { key: "CAFE", label: "카페" },
+  { key: "FOOD", label: "식당" },
 ];
 
 interface Props {
@@ -55,6 +55,6 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   chipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
-  label: { fontSize: 12.5, fontWeight: "700", letterSpacing: 0.3, color: colors.sec },
+  label: { fontSize: 12.5, fontWeight: "700", letterSpacing: -0.2, color: colors.sec },
   labelActive: { color: colors.onImage, fontWeight: "800" },
 });
