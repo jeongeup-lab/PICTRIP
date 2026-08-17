@@ -386,16 +386,12 @@ async def test_nearby_category_filter_returns_only_that_pool(
     )
     await seeded.commit()
 
-    res = await client.get(
-        "/v1/home/nearby", params={"lat": LAT, "lng": LNG, "category": "CAFE"}
-    )
+    res = await client.get("/v1/home/nearby", params={"lat": LAT, "lng": LNG, "category": "CAFE"})
     assert res.status_code == 200
     ids = [i["contentId"] for i in res.json()["data"]["items"]]
     assert ids == ["flt-cafe"]
 
-    res = await client.get(
-        "/v1/home/nearby", params={"lat": LAT, "lng": LNG, "category": "SPOT"}
-    )
+    res = await client.get("/v1/home/nearby", params={"lat": LAT, "lng": LNG, "category": "SPOT"})
     ids = [i["contentId"] for i in res.json()["data"]["items"]]
     assert ids == ["flt-spot"]
 
@@ -422,7 +418,5 @@ async def test_trending_category_filter_serves_the_signal_pool(
 async def test_rank_category_rejects_unknown_values(
     client: AsyncClient, seeded: AsyncSession
 ) -> None:
-    res = await client.get(
-        "/v1/home/nearby", params={"lat": LAT, "lng": LNG, "category": "PETS"}
-    )
+    res = await client.get("/v1/home/nearby", params={"lat": LAT, "lng": LNG, "category": "PETS"})
     assert res.status_code == 422
