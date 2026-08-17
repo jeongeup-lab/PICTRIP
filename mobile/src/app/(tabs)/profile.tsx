@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { View, Pressable, ScrollView, StyleSheet } from "react-native";
+import { View, Pressable, ScrollView, StyleSheet, NativeModules } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as WebBrowser from "expo-web-browser";
 import { router, useFocusEffect } from "expo-router";
@@ -17,7 +17,8 @@ import { GuestHero } from "@/features/profile/components/GuestHero";
 import { StatTiles } from "@/features/profile/components/StatTiles";
 import { profileStats } from "@/features/profile/lib/stats";
 import { APP_BUILD_LABEL } from "@/lib/app-meta";
-import { colors, spacing } from "@/constants/theme";
+import * as Updates from "expo-updates";
+import { colors, spacing, themeName, setThemeOverride } from "@/constants/theme";
 
 const SUPPORT_URL = "https://pictrip.org/support";
 
@@ -41,13 +42,22 @@ export default function ProfileTab() {
       <View style={styles.nav} testID="profile-nav">
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="마이 설정"
+          accessibilityLabel={themeName === "dark" ? "라이트 모드로 전환" : "다크 모드로 전환"}
           hitSlop={8}
           style={styles.navBtn}
-          onPress={() => router.push("/settings")}
-          testID="open-settings"
+          onPress={() => {
+            void (async () => {
+              await setThemeOverride(themeName === "dark" ? "light" : "dark");
+              if (Updates.isEnabled) {
+                await Updates.reloadAsync();
+              } else {
+                (NativeModules.DevSettings as { reload?: () => void } | undefined)?.reload?.();
+              }
+            })();
+          }}
+          testID="theme-toggle"
         >
-          <Icon name="settings" size={20} color={colors.ink} />
+          <Icon name={themeName === "dark" ? "sun" : "moon"} size={20} color={colors.ink} />
         </Pressable>
       </View>
 

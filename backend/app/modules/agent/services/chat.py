@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -46,8 +47,11 @@ QUESTION_TAIL = re.compile(
 )
 
 
-def encode(name: str, payload: BaseModel) -> str:
-    return f"event: {name}\ndata: {payload.model_dump_json()}\n\n"
+def encode(name: str, payload: BaseModel, *, request_id: str, sequence: int) -> str:
+    event_payload = payload.model_dump(mode="json")
+    event_payload["requestId"] = request_id
+    event_payload["sequence"] = sequence
+    return f"event: {name}\ndata: {json.dumps(event_payload, ensure_ascii=False)}\n\n"
 
 
 async def stream(
@@ -59,10 +63,12 @@ async def stream(
     image_bytes: bytes | None,
     image_mime: str | None,
 ) -> AsyncIterator[str]:
+    sequence = 0
     async for name, event in events(
         session, redis, kto, payload=payload, image_bytes=image_bytes, image_mime=image_mime
     ):
-        yield encode(name, event)
+        yield encode(name, event, request_id=payload.clientRequestId, sequence=sequence)
+        sequence += 1
 
 
 async def events(
@@ -113,7 +119,7 @@ async def events(
     posts = await _ground_with_blogs(result, message=payload.message)
     sources = _sources(posts)
 
-    if _llm_is_down(result):
+    if llm.writer_depends_on_gemini() and _llm_is_down(result):
         logger.warning("agent.chat.writer_skipped", results=len(result.spots))
         rescue = _deterministic_answer(result) or ask_service.NO_AXIS_ANSWER
         yield "delta", ChatDeltaEvent(text=rescue)
@@ -139,7 +145,7 @@ async def events(
         client_time=payload.clientTime,
         history=payload.history[-HISTORY_TAIL:],
     )
-    chunks = llm.get_client().stream_text(system=system, user_text=user_text)
+    chunks = llm.get_writer_client().stream_text(system=system, user_text=user_text)
     guarded = _watchdog(chunks)
     parsed = writer.parse_stream(guarded)
     parts: list[str] = []
@@ -149,7 +155,7 @@ async def events(
                 if isinstance(event, writer.WriterDelta):
                     parts.append(event.text)
                     yield "delta", ChatDeltaEvent(text=event.text)
-        except Exception as exc:
+        except (httpx.HTTPError, llm.CodexStreamProtocolError, TimeoutError) as exc:
             logger.warning(
                 "agent.chat.writer_failed",
                 error_type=type(exc).__name__,
@@ -162,9 +168,16 @@ async def events(
     finally:
         await _shutdown(parsed, guarded, chunks)
 
-    if not _written(parts) and (rescue := _deterministic_answer(result)):
+    answer = _written(parts)
+    if not answer:
+        rescue = _deterministic_answer(result)
+        if not rescue:
+            failure = AgentWriterUnavailable()
+            yield "error", ChatErrorEvent(code=failure.code, message=failure.message)
+            return
         logger.warning("agent.chat.writer_fallback", segments=len(result.answer))
         parts.append(rescue)
+        answer = rescue
         yield "delta", ChatDeltaEvent(text=rescue)
 
     yield "sources", ChatSourcesEvent(items=sources)
@@ -176,7 +189,7 @@ async def events(
     yield (
         "done",
         ChatDoneEvent(
-            answerText=_written(parts),
+            answerText=answer,
             spots=result.spots,
             sources=sources,
             intent=result.intent,

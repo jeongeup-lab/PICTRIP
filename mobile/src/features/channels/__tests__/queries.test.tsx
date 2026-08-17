@@ -67,12 +67,12 @@ describe("prefetchChannelCards", () => {
     prefetch.mockClear();
     (getChannelCards as jest.Mock).mockClear();
     (getChannelCards as jest.Mock).mockResolvedValue({
-      key: "snap",
+      key: "food",
       label: "Snap",
       cards: [{ contentId: null, imageUrl: null }],
     });
     await act(async () => {
-      prefetchChannelCards("snap");
+      prefetchChannelCards("food");
     });
     expect(prefetch).not.toHaveBeenCalled();
     expect(getChannelCards).toHaveBeenCalledTimes(1);
@@ -115,17 +115,17 @@ describe("useSeenChannels day reset", () => {
     });
 
     await act(async () => {
-      hook!.markSeen("pets");
+      hook!.markSeen("cafe");
     });
-    expect(hook!.seen.has("pets")).toBe(true);
-    expect(mockSaveSeen).toHaveBeenLastCalledWith(["pets"], "2026-07-13");
+    expect(hook!.seen.has("cafe")).toBe(true);
+    expect(mockSaveSeen).toHaveBeenLastCalledWith(["cafe"], "2026-07-13");
 
     mockKst.day = "2026-07-14";
     await act(async () => {
       hook!.markSeen("festa");
     });
     expect([...hook!.seen]).toEqual(["festa"]);
-    expect(hook!.seen.has("pets")).toBe(false);
+    expect(hook!.seen.has("cafe")).toBe(false);
     expect(mockSaveSeen).toHaveBeenLastCalledWith(["festa"], "2026-07-14");
   });
 
@@ -142,9 +142,9 @@ describe("useSeenChannels day reset", () => {
       tree = mountHarness(Harness);
     });
     await act(async () => {
-      hook!.markSeen("pets");
+      hook!.markSeen("cafe");
     });
-    expect(hook!.seen.has("pets")).toBe(true);
+    expect(hook!.seen.has("cafe")).toBe(true);
 
     mockKst.day = "2026-07-14";
     await act(async () => {
@@ -173,16 +173,16 @@ describe("useSeenChannels day reset", () => {
     });
 
     await act(async () => {
-      hook!.markSeen("pets");
+      hook!.markSeen("cafe");
     });
-    expect(hook!.seen.has("pets")).toBe(true);
+    expect(hook!.seen.has("cafe")).toBe(true);
 
     await act(async () => {
       resolveLoad!(["hidden"]);
       await Promise.resolve();
     });
 
-    expect(hook!.seen.has("pets")).toBe(true);
+    expect(hook!.seen.has("cafe")).toBe(true);
     expect(hook!.seen.has("hidden")).toBe(true);
   });
 
@@ -206,9 +206,9 @@ describe("useSeenChannels day reset", () => {
     });
 
     await act(async () => {
-      hook!.markSeen("pets");
+      hook!.markSeen("cafe");
     });
-    expect(hook!.seen.has("pets")).toBe(true);
+    expect(hook!.seen.has("cafe")).toBe(true);
     expect(mockSaveSeen).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -216,11 +216,11 @@ describe("useSeenChannels day reset", () => {
       await Promise.resolve();
     });
 
-    expect(hook!.seen.has("pets")).toBe(true);
+    expect(hook!.seen.has("cafe")).toBe(true);
     expect(hook!.seen.has("hidden")).toBe(true);
     expect(mockSaveSeen).toHaveBeenCalledTimes(1);
     const persisted = new Set(mockSaveSeen.mock.calls[0][0] as string[]);
-    expect(persisted.has("pets")).toBe(true);
+    expect(persisted.has("cafe")).toBe(true);
     expect(persisted.has("hidden")).toBe(true);
   });
 });

@@ -1,6 +1,6 @@
 import { api } from "@/lib/api-client";
 
-export type ChannelKey = "hidden" | "festa" | "pets" | "snap";
+export type ChannelKey = "spot" | "cafe" | "food" | "festa" | "hidden";
 
 export type ChannelMeta = {
   key: ChannelKey;

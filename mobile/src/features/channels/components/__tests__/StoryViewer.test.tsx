@@ -205,10 +205,10 @@ describe("StoryViewer", () => {
     );
   });
 
-  it("hides the save and detail buttons on a non-saveable snap card", async () => {
-    setChannels([meta("snap", "Snap")]);
-    cardsByKey.snap = [card({ title: "S1", saveable: false, contentId: null })];
-    const r = await mount("snap");
+  it("hides the save and detail buttons on a non-saveable card", async () => {
+    setChannels([meta("festa", "FESTA")]);
+    cardsByKey.festa = [card({ title: "S1", saveable: false, contentId: null })];
+    const r = await mount("festa");
     expect(r.root.findAllByProps({ testID: "story-save" })).toHaveLength(0);
     expect(r.root.findAllByProps({ testID: "story-detail" })).toHaveLength(0);
   });

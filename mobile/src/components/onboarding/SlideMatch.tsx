@@ -56,7 +56,6 @@ export function SlideMatch() {
           </View>
         ))}
       </View>
-      <Text style={styles.credit}>사진 · 한국관광공사 · Wikimedia Commons</Text>
     </View>
   );
 }
@@ -98,11 +97,4 @@ const styles = StyleSheet.create({
   matchImage: { height: 60, borderRadius: 8 },
   matchTitle: { fontSize: 12, fontWeight: "800", color: colors.ink, marginTop: 7 },
   matchRegion: { fontSize: 10.5, fontWeight: "600", color: colors.sec, marginTop: 2 },
-  credit: {
-    fontSize: 10,
-    fontWeight: "600",
-    color: colors.ter,
-    marginTop: 12,
-    textAlign: "center",
-  },
 });

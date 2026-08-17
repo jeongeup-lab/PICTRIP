@@ -12,6 +12,7 @@ from app.modules.spots.services import (
     all_categories_sql,
     attraction_category_sql,
     category_sql,
+    travel_category_sql,
 )
 
 _CATEGORY_SQL = attraction_category_sql()
@@ -261,6 +262,56 @@ _HAVERSINE_SQL = """
     )))
 """
 
+_NEARBY_SIGNAL_SCORE = (
+    "coalesce(sc.concentration_rate, 0) / 100.0"
+    " + ln(1 + least(coalesce(bz.base_total, 0), 100000)) / 12.0"
+    " + coalesce(v.aesthetic_score, 0)"
+)
+
+_NEARBY_BUZZ_LATERAL = """
+LEFT JOIN LATERAL (
+    SELECT max(b.blog_total) AS base_total
+    FROM spot_buzz b
+    WHERE b.content_id = spots.content_id AND b.scope = 'base'
+) bz ON true
+"""
+
+
+def _nearby_category_sql(category_predicate: str) -> str:
+    return f"""
+SELECT * FROM (
+    SELECT {_SPOT_COLUMNS_SQL},
+           sc.concentration_rate AS rate,
+           sc.base_ymd AS base_ymd,
+           {_NEARBY_SIGNAL_SCORE} AS score,
+           {_HAVERSINE_SQL} AS dist
+    FROM spots
+    LEFT JOIN spot_concentration sc ON sc.content_id = spots.content_id
+    LEFT JOIN spot_visual v ON v.content_id = spots.content_id
+    {_NEARBY_BUZZ_LATERAL}
+    {_SPOT_JOINS_SQL}
+    WHERE spots.show_flag = 1
+      AND spots.first_image_url IS NOT NULL
+      AND spots.first_image_url <> ''
+      AND spots.mapx IS NOT NULL
+      AND spots.mapy IS NOT NULL
+      AND spots.mapy BETWEEN (:min_lat)::double precision AND (:max_lat)::double precision
+      AND spots.mapx BETWEEN (:min_lng)::double precision AND (:max_lng)::double precision
+      AND ({category_predicate})
+) near
+WHERE dist <= (:radius)::double precision
+ORDER BY score DESC, dist ASC, content_id ASC
+LIMIT (:lim)::int
+"""
+
+
+_NEARBY_CATEGORY_SQL: dict[str, str] = {
+    "spot": _nearby_category_sql(travel_category_sql()),
+    "cafe": _nearby_category_sql(category_sql(NearbyCategory.cafe)),
+    "food": _nearby_category_sql(category_sql(NearbyCategory.food)),
+}
+
+
 _NEARBY_RANKED_SQL = f"""
 SELECT * FROM (
     SELECT {_SPOT_COLUMNS_SQL},
@@ -391,6 +442,35 @@ LEFT JOIN LATERAL (
 ) anchor ON true
 ORDER BY spots.score, spots.content_id
 """
+
+
+async def fetch_nearby_by_category(
+    session: AsyncSession,
+    *,
+    category: str,
+    lat: float,
+    lng: float,
+    min_lat: float,
+    max_lat: float,
+    min_lng: float,
+    max_lng: float,
+    radius: float,
+    limit: int,
+) -> list[HomeSpotRow]:
+    result = await session.execute(
+        text(_NEARBY_CATEGORY_SQL[category]),
+        {
+            "lat": lat,
+            "lng": lng,
+            "min_lat": min_lat,
+            "max_lat": max_lat,
+            "min_lng": min_lng,
+            "max_lng": max_lng,
+            "radius": radius,
+            "lim": limit,
+        },
+    )
+    return [_home_spot_row(row) for row in result]
 
 
 async def fetch_nearby_ranked(

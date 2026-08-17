@@ -7,7 +7,7 @@ import {
   getTastePicks,
   getTrending,
 } from "@/features/home/api";
-import type { TasteCategory } from "@/features/home/api";
+import type { RankCategory, TasteCategory } from "@/features/home/api";
 import type { Coords } from "@/features/map/usecases/request-location";
 
 const NEARBY_STALE_MS = 5 * 60 * 1000;
@@ -27,19 +27,19 @@ export const homeKeys = {
     ["home-recommendations", userId, coordKey(coords)] as const,
 };
 
-export function useNearby(coords: Coords | null) {
+export function useNearby(coords: Coords | null, category?: RankCategory) {
   return useQuery({
-    queryKey: homeKeys.nearby(coords),
-    queryFn: () => getNearby(coords as Coords),
+    queryKey: [...homeKeys.nearby(coords), category ?? "all"],
+    queryFn: () => getNearby(coords as Coords, category),
     enabled: !!coords,
     staleTime: NEARBY_STALE_MS,
   });
 }
 
-export function useTrending() {
+export function useTrending(category?: RankCategory) {
   return useQuery({
-    queryKey: homeKeys.trending,
-    queryFn: getTrending,
+    queryKey: [...homeKeys.trending, category ?? "all"],
+    queryFn: () => getTrending(category),
     staleTime: TRENDING_STALE_MS,
   });
 }

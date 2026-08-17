@@ -12,6 +12,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { setOnboardingSeen } from "@/lib/storage";
+import { getPermissionStatus, requestPermission } from "@/features/map/usecases/request-location";
 import { SlideChat } from "@/components/onboarding/SlideChat";
 import { SlideHome } from "@/components/onboarding/SlideHome";
 import { SlideMatch } from "@/components/onboarding/SlideMatch";
@@ -65,6 +66,10 @@ export default function Onboarding() {
 
   const finish = async () => {
     await setOnboardingSeen();
+    const status = await getPermissionStatus().catch(() => "denied" as const);
+    if (status === "undetermined") {
+      await requestPermission().catch(() => undefined);
+    }
     router.replace("/(tabs)");
   };
 
