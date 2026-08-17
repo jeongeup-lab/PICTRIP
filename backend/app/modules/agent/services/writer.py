@@ -10,6 +10,36 @@ from app.naver.client import NaverBlogPost
 
 CARDS_MARKER = "[[cards]]"
 
+FULLWIDTH_OPEN = "\uff3b"
+FULLWIDTH_CLOSE = "\uff3d"
+LENTICULAR_OPEN = "\u3010"
+LENTICULAR_CLOSE = "\u3011"
+TORTOISE_OPEN = "\u3014"
+TORTOISE_CLOSE = "\u3015"
+
+_MARKER_OPENERS = ("[[", FULLWIDTH_OPEN * 2, LENTICULAR_OPEN, TORTOISE_OPEN)
+_PARTIAL_OPENERS = ("[", FULLWIDTH_OPEN)
+_BRACKET_FOLD = str.maketrans(
+    {
+        FULLWIDTH_OPEN: "[",
+        FULLWIDTH_CLOSE: "]",
+        LENTICULAR_OPEN: "[",
+        LENTICULAR_CLOSE: "]",
+        TORTOISE_OPEN: "[",
+        TORTOISE_CLOSE: "]",
+    }
+)
+_CARDS_FORMS = frozenset({CARDS_MARKER, "[cards]"})
+
+
+def _opens_marker(text: str) -> bool:
+    return any(opener in text for opener in _MARKER_OPENERS)
+
+
+def _is_cards_marker(text: str) -> bool:
+    return text.strip().translate(_BRACKET_FOLD) in _CARDS_FORMS
+
+
 SYSTEM_PROMPT = """\
 너는 한국 여행 앱 PICTRIP의 어시스턴트다. 아래에 주어지는 도구 결과 JSON만 근거로 한국어 답변 산문을 쓴다.
 
@@ -32,6 +62,12 @@ SYSTEM_PROMPT = """\
 - clientTime 이 있으면 시간대를 감안한다. 늦은 밤이면 야간에 갈 만한지, 이른 아침이면 아침 동선을 짚는 식이다.
 - spots 가 비어 있으면 결과가 없다는 사실을 짧게 알리고 조건을 바꿔 보라고 제안만 한다. 장소를 지어내지 않는다.
 """
+
+REMINDER = """\
+지금부터 답변을 쓴다. 아래 세 가지를 반드시 지킨다.
+- spots 목록에 없는 장소 이름을 절대 쓰지 않는다.
+- 영업시간·전화번호·요금은 언급하지 않는다.
+- [[cards]] 를 단독 줄로 정확히 1회 쓴다."""
 
 
 @dataclass(slots=True)
@@ -75,7 +111,8 @@ def build_prompt(
         ],
         "history": [{"role": item.role, "text": item.text} for item in history],
     }
-    return SYSTEM_PROMPT, json.dumps(payload, ensure_ascii=False)
+    body = json.dumps(payload, ensure_ascii=False)
+    return SYSTEM_PROMPT, f"{body}\n\n{REMINDER}"
 
 
 async def parse_stream(chunks: AsyncIterator[str]) -> AsyncIterator[WriterEvent]:
@@ -88,10 +125,10 @@ async def parse_stream(chunks: AsyncIterator[str]) -> AsyncIterator[WriterEvent]
         nonlocal line, sent, cards_done, body_seen
         events: list[WriterEvent] = []
         tail = line[sent:]
-        if "[[" in tail:
+        if _opens_marker(tail):
             if sent:
                 events.append(WriterDelta(text="\n"))
-            if tail.strip() == CARDS_MARKER and not cards_done:
+            if _is_cards_marker(tail) and not cards_done:
                 cards_done = True
                 events.append(WriterCards())
         else:
@@ -113,9 +150,9 @@ async def parse_stream(chunks: AsyncIterator[str]) -> AsyncIterator[WriterEvent]
             for event in end_line():
                 yield event
         tail = line[sent:]
-        if "[[" in tail:
+        if _opens_marker(tail):
             continue
-        flushable = tail[:-1] if tail.endswith("[") else tail
+        flushable = tail[:-1] if tail.endswith(_PARTIAL_OPENERS) else tail
         if flushable:
             yield WriterDelta(text=flushable)
             sent += len(flushable)
@@ -123,8 +160,8 @@ async def parse_stream(chunks: AsyncIterator[str]) -> AsyncIterator[WriterEvent]
                 body_seen = True
 
     tail = line[sent:]
-    if "[[" in tail:
-        if tail.strip() == CARDS_MARKER and not cards_done:
+    if _opens_marker(tail):
+        if _is_cards_marker(tail) and not cards_done:
             cards_done = True
             yield WriterCards()
     elif tail:

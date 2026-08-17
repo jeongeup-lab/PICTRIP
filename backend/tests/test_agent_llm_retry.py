@@ -50,3 +50,43 @@ def test_a_failure_without_a_response_has_no_body_to_report() -> None:
     request = httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models")
     assert _failure_detail(httpx.ConnectTimeout("timeout", request=request)) is None
     assert _failure_detail(ValueError("nope")) is None
+
+
+def _gemini_probe() -> tuple[object, list[httpx.Request]]:
+    from app.modules.agent import llm
+
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        payload = {"candidates": [{"content": {"parts": [{"text": "{}"}]}}]}
+        return httpx.Response(200, json=payload)
+
+    client = llm.GeminiClient()
+    client._client = httpx.AsyncClient(
+        base_url="https://example.invalid", transport=httpx.MockTransport(handler)
+    )
+    return client, seen
+
+
+async def test_structured_calls_bound_the_output_so_a_runaway_cannot_flood_the_turn() -> None:
+    from app.modules.agent.llm import STRUCTURED_MAX_OUTPUT_TOKENS
+
+    client, seen = _gemini_probe()
+    await client.generate_json(system="s", user_text="q", response_schema={"type": "OBJECT"})
+
+    import json as _json
+
+    body = _json.loads(seen[0].content)
+    assert body["generationConfig"]["maxOutputTokens"] == STRUCTURED_MAX_OUTPUT_TOKENS
+
+
+async def test_structured_calls_time_out_fast_enough_for_the_keyword_fallback_to_matter() -> None:
+    from app.modules.agent.llm import STRUCTURED_TIMEOUT_SECONDS
+
+    client, seen = _gemini_probe()
+    await client.generate_json(system="s", user_text="q", response_schema={"type": "OBJECT"})
+
+    timeout = seen[0].extensions["timeout"]
+    assert timeout["read"] == STRUCTURED_TIMEOUT_SECONDS
+    assert STRUCTURED_TIMEOUT_SECONDS <= 5.0

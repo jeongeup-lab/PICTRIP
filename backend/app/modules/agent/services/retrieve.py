@@ -303,12 +303,14 @@ async def search_candidates(
     mood_ids: list[int] | None = None,
     pool_sql: str | None = None,
     title_terms: list[str] | None = None,
+    theme: repositories.BuzzTheme = "spot",
 ) -> list[CandidateRow]:
     quiet = preference == "quiet"
 
     async def query(*, ceiling: int | None, floor: int | None) -> list[CandidateRow]:
         return await repositories.find_candidates(
             session,
+            theme=theme,
             codes=codes or None,
             region_prefixes=region_prefixes or None,
             limit=CANDIDATE_LIMIT,
@@ -349,6 +351,7 @@ async def search_food(
     pool = NearbyCategory.cafe if action == "cafe" else NearbyCategory.food
     return await search_candidates(
         session,
+        theme="cafe" if action == "cafe" else "food",
         codes=[],
         region_prefixes=region_prefixes,
         preference=preference,

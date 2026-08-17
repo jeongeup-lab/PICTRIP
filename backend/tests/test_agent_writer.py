@@ -87,3 +87,62 @@ async def test_the_cards_event_fires_at_most_once() -> None:
 
     assert _kinds(events).count("WriterCards") == 1
     assert "[[" not in _text(events)
+
+
+async def test_a_cjk_lenticular_marker_is_consumed_like_the_ascii_one() -> None:
+    events = await _collect(
+        [
+            "제주 박물관이라면 여기예요.\n",
+            f"{writer.LENTICULAR_OPEN}cards{writer.LENTICULAR_CLOSE}\n",
+            "- **국립제주박물관** 규모가 커요.\n",
+        ]
+    )
+
+    assert _kinds(events) == ["WriterDelta", "WriterCards", "WriterDelta"]
+    assert writer.LENTICULAR_OPEN not in _text(events)
+    assert "cards" not in _text(events)
+
+
+async def test_a_fullwidth_bracket_marker_is_consumed_like_the_ascii_one() -> None:
+    events = await _collect(
+        [
+            "결론이에요.\n",
+            f"{writer.FULLWIDTH_OPEN * 2}cards{writer.FULLWIDTH_CLOSE * 2}\n",
+            "- **여수** 좋아요.\n",
+        ]
+    )
+
+    assert _kinds(events) == ["WriterDelta", "WriterCards", "WriterDelta"]
+    assert writer.FULLWIDTH_OPEN not in _text(events)
+
+
+async def test_a_trailing_fullwidth_opener_is_held_back_until_the_line_ends() -> None:
+    events = await _collect(
+        [
+            "결론이에요.\n",
+            writer.FULLWIDTH_OPEN,
+            f"{writer.FULLWIDTH_OPEN}cards{writer.FULLWIDTH_CLOSE * 2}\n",
+            "- **통영** 좋아요.\n",
+        ]
+    )
+
+    assert _kinds(events) == ["WriterDelta", "WriterCards", "WriterDelta"]
+    assert writer.FULLWIDTH_OPEN not in _text(events)
+
+
+def test_the_hallucination_rule_sits_at_the_very_end_where_models_actually_follow_it() -> None:
+    from app.modules.agent.schemas import AgentSpotCard, QueryIntent
+
+    _system, user_text = writer.build_prompt(
+        question="제주 박물관",
+        intent=QueryIntent(regionHints=["제주"]),
+        spots=[AgentSpotCard(contentId="1", title="국립제주박물관", regionLabel="제주 제주시")],
+        blog_posts=[],
+        client_time=None,
+        history=[],
+    )
+
+    assert user_text.endswith(writer.REMINDER)
+    body_end = user_text.index(writer.REMINDER)
+    assert user_text.index("spots 목록에 없는 장소 이름을 절대") > body_end
+    assert "국립제주박물관" in user_text[:body_end]

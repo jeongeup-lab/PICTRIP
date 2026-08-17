@@ -24,6 +24,10 @@ logger = get_logger(__name__)
 
 MAX_ERROR_BODY_CHARS = 500
 
+STRUCTURED_TIMEOUT_SECONDS = 4.0
+STRUCTURED_MAX_OUTPUT_TOKENS = 2048
+STRUCTURED_ATTEMPTS = 2
+
 
 @dataclass(frozen=True, slots=True)
 class CodexStreamProtocolError(Exception):
@@ -58,13 +62,13 @@ class GeminiClient:
 
     @retry(
         retry=retry_if_exception(_is_transient),
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(STRUCTURED_ATTEMPTS),
         wait=wait_exponential(multiplier=0.5, max=4),
         reraise=True,
     )
-    async def _generate(self, body: dict[str, Any]) -> httpx.Response:
+    async def _generate(self, body: dict[str, Any], *, request_timeout: float) -> httpx.Response:
         resp = await self._client.post(
-            f"/models/{settings.GEMINI_MODEL}:generateContent", json=body
+            f"/models/{settings.GEMINI_MODEL}:generateContent", json=body, timeout=request_timeout
         )
         resp.raise_for_status()
         return resp
@@ -78,6 +82,7 @@ class GeminiClient:
         image_mime: str | None = None,
         video_uri: str | None = None,
         response_schema: dict[str, Any],
+        request_timeout: float = STRUCTURED_TIMEOUT_SECONDS,
     ) -> Any:
         parts: list[dict[str, Any]] = []
         if video_uri:
@@ -100,10 +105,11 @@ class GeminiClient:
                 "responseMimeType": "application/json",
                 "responseSchema": response_schema,
                 "temperature": 0.0,
+                "maxOutputTokens": STRUCTURED_MAX_OUTPUT_TOKENS,
             },
         }
         try:
-            resp = await self._generate(body)
+            resp = await self._generate(body, request_timeout=request_timeout)
             payload = resp.json()
             text = payload["candidates"][0]["content"]["parts"][0]["text"]
             return json.loads(text)
@@ -164,12 +170,13 @@ class WriterClient(Protocol):
     def stream_text(self, *, system: str, user_text: str) -> AsyncIterator[str]: ...
 
 
-class CodexClient:
+class OpenAIChatClient:
     def __init__(
         self,
         *,
         base_url: str,
         model: str,
+        api_key: str | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._client = httpx.AsyncClient(
@@ -177,6 +184,7 @@ class CodexClient:
             timeout=httpx.Timeout(60.0, connect=10.0),
             transport=transport,
             trust_env=False,
+            headers={"Authorization": f"Bearer {api_key}"} if api_key else None,
         )
         self._model = model
 
@@ -207,6 +215,14 @@ class CodexClient:
                     yield piece
         finally:
             await response.aclose()
+
+
+class CodexClient(OpenAIChatClient):
+    pass
+
+
+class DeepSeekClient(OpenAIChatClient):
+    pass
 
 
 def _stream_piece(line: str) -> str | None:
@@ -283,6 +299,15 @@ def get_writer_client() -> WriterClient:
             _writer_client = CodexClient(
                 base_url=settings.CODEX_BASE_URL,
                 model=settings.CODEX_MODEL,
+            )
+            return _writer_client
+        case "deepseek":
+            if isinstance(_writer_client, DeepSeekClient):
+                return _writer_client
+            _writer_client = DeepSeekClient(
+                base_url=settings.DEEPSEEK_BASE_URL,
+                model=settings.DEEPSEEK_MODEL,
+                api_key=settings.DEEPSEEK_API_KEY,
             )
             return _writer_client
         case unreachable:
