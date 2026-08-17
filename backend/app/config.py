@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, RedisDsn, computed_field
+from pydantic import Field, PostgresDsn, RedisDsn, computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["local", "staging", "production"]
@@ -88,6 +88,9 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-flash-latest"
     GEMINI_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta"
+    LLM_PROVIDER: Literal["gemini", "codex"] = "gemini"
+    CODEX_BASE_URL: Literal["http://127.0.0.1:18787/v1"] = "http://127.0.0.1:18787/v1"
+    CODEX_MODEL: Literal["gpt-5.4-mini"] = "gpt-5.4-mini"
     NAVER_CLIENT_ID: str = ""
     NAVER_CLIENT_SECRET: str = ""
     YOUTUBE_API_KEY: str = ""
@@ -109,6 +112,12 @@ class Settings(BaseSettings):
     SENTRY_DSN: str = ""
     SENTRY_TRACES_SAMPLE_RATE: float = 0.1
     SENTRY_PROFILES_SAMPLE_RATE: float = 0.05
+
+    @model_validator(mode="after")
+    def validate_codex_configuration(self) -> Settings:
+        if self.LLM_PROVIDER == "codex" and self.ENVIRONMENT != "local":
+            raise ValueError("Codex writer is only available in local environments")
+        return self
 
     @computed_field  # type: ignore[prop-decorator]
     @property

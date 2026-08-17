@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import random
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, replace
 from datetime import date, datetime, timedelta, timezone
@@ -27,8 +26,6 @@ _POOL_WINDOW_DAYS = 365
 _POOL_MAX_PAGES = 20
 _POOL_PAGE_ROWS = 300
 _POOL_WAVE = 4
-_PETS_TAG = "반려동물 동반 가능"
-_PETS_CONTENT_TYPE_ATTRACTION = 12
 
 _CACHE_VERSION = "v4"
 _STALE_TTL = 3 * 24 * 3600
@@ -166,53 +163,8 @@ async def fetch_festival_pool_cards(
     return _festival_cards(items, today=today)
 
 
-async def fetch_pets_cards(kto: KtoClient, *, today: date | None = None) -> list[ChannelCardRow]:
-    items = await kto.call(
-        KtoService.PET,
-        "areaBasedList2",
-        numOfRows=_ROWS,
-        arrange="C",
-        contentTypeId=_PETS_CONTENT_TYPE_ATTRACTION,
-    )
-    pool = [
-        ChannelCardRow(
-            content_id=str(it["contentid"]),
-            title=it["title"],
-            region_label=_short_addr(it.get("addr1")),
-            image_url=img,
-            tag=_PETS_TAG,
-            saveable=True,
-            cpyrht_div_cd=str(it.get("cpyrhtDivCd") or "") or None,
-        )
-        for it in items
-        if (img := it.get("firstimage") or None)
-    ]
-    if len(pool) <= _CARD_COUNT:
-        return pool
-    return random.sample(pool, _CARD_COUNT)
-
-
-async def fetch_snap_cards(kto: KtoClient, *, today: date | None = None) -> list[ChannelCardRow]:
-    items = await kto.call(KtoService.GALLERY, "galleryList1", numOfRows=_ROWS, arrange="A")
-    cards = [
-        ChannelCardRow(
-            content_id=None,
-            title=it["galTitle"],
-            region_label="",
-            image_url=img,
-            line=str(it.get("galPhotographyLocation") or "") or None,
-            saveable=False,
-        )
-        for it in items
-        if (img := _https(it.get("galWebImageUrl")))
-    ]
-    return cards[:_CARD_COUNT]
-
-
 _FETCHERS: dict[str, Callable[[KtoClient], Awaitable[list[ChannelCardRow]]]] = {
     "festa": fetch_festa_cards,
-    "pets": fetch_pets_cards,
-    "snap": fetch_snap_cards,
 }
 
 

@@ -3,7 +3,8 @@ from __future__ import annotations
 import base64
 import json
 from collections.abc import AsyncIterator
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Protocol, assert_never
 
 import httpx
 from tenacity import (
@@ -22,6 +23,14 @@ logger = get_logger(__name__)
 
 
 MAX_ERROR_BODY_CHARS = 500
+
+
+@dataclass(frozen=True, slots=True)
+class CodexStreamProtocolError(Exception):
+    reason: str
+
+    def __str__(self) -> str:
+        return f"Codex stream protocol error: {self.reason}"
 
 
 def _is_transient(exc: BaseException) -> bool:
@@ -149,6 +158,57 @@ class GeminiClient:
         return response
 
 
+class WriterClient(Protocol):
+    async def aclose(self) -> None: ...
+
+    def stream_text(self, *, system: str, user_text: str) -> AsyncIterator[str]: ...
+
+
+class CodexClient:
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        model: str,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        self._client = httpx.AsyncClient(
+            base_url=base_url,
+            timeout=httpx.Timeout(60.0, connect=10.0),
+            transport=transport,
+            trust_env=False,
+        )
+        self._model = model
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
+
+    async def stream_text(self, *, system: str, user_text: str) -> AsyncIterator[str]:
+        request = self._client.build_request(
+            "POST",
+            "/chat/completions",
+            json={
+                "model": self._model,
+                "stream": True,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_text},
+                ],
+            },
+        )
+        response = await self._client.send(request, stream=True)
+        try:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if line.startswith("data:") and line[len("data:") :].strip() == "[DONE]":
+                    return
+                piece = _codex_stream_piece(line)
+                if piece:
+                    yield piece
+        finally:
+            await response.aclose()
+
+
 def _stream_piece(line: str) -> str | None:
     if not line.startswith("data:"):
         return None
@@ -165,7 +225,41 @@ def _stream_piece(line: str) -> str | None:
     return "".join(texts) or None
 
 
+def _codex_stream_piece(line: str) -> str | None:
+    if not line.startswith("data:"):
+        return None
+    payload = line[len("data:") :].strip()
+    if not payload:
+        raise CodexStreamProtocolError(reason="empty data payload")
+    try:
+        event = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        raise CodexStreamProtocolError(reason="malformed JSON payload") from exc
+    if not isinstance(event, dict):
+        raise CodexStreamProtocolError(reason="payload must be an object")
+    if "error" in event:
+        raise CodexStreamProtocolError(reason="proxy returned an error payload")
+    choices = event.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise CodexStreamProtocolError(reason="payload is missing choices")
+    choice = choices[0]
+    if not isinstance(choice, dict):
+        raise CodexStreamProtocolError(reason="choice must be an object")
+    delta = choice.get("delta")
+    if delta is None and choice.get("finish_reason") is not None:
+        return None
+    if not isinstance(delta, dict):
+        raise CodexStreamProtocolError(reason="choice is missing delta")
+    content = delta.get("content")
+    if content is None:
+        return None
+    if not isinstance(content, str):
+        raise CodexStreamProtocolError(reason="delta content must be a string")
+    return content or None
+
+
 _client: GeminiClient | None = None
+_writer_client: WriterClient | None = None
 
 
 def get_client() -> GeminiClient:
@@ -175,8 +269,39 @@ def get_client() -> GeminiClient:
     return _client
 
 
+def get_writer_client() -> WriterClient:
+    global _writer_client
+    match settings.LLM_PROVIDER:
+        case "gemini":
+            if isinstance(_writer_client, GeminiClient):
+                return _writer_client
+            _writer_client = get_client()
+            return _writer_client
+        case "codex":
+            if isinstance(_writer_client, CodexClient):
+                return _writer_client
+            _writer_client = CodexClient(
+                base_url=settings.CODEX_BASE_URL,
+                model=settings.CODEX_MODEL,
+            )
+            return _writer_client
+        case unreachable:
+            assert_never(unreachable)
+
+
+def writer_depends_on_gemini() -> bool:
+    return settings.LLM_PROVIDER == "gemini"
+
+
 async def close_client() -> None:
-    global _client
-    if _client is not None:
-        await _client.aclose()
-        _client = None
+    global _client, _writer_client
+    if _writer_client is _client:
+        if _client is not None:
+            await _client.aclose()
+    else:
+        if _client is not None:
+            await _client.aclose()
+        if _writer_client is not None:
+            await _writer_client.aclose()
+    _writer_client = None
+    _client = None

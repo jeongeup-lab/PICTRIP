@@ -14,11 +14,14 @@ from app.kto.display import T1_TILE_WIDTH, t1_display_url
 from app.web.errors import ResourceNotFound
 
 CHANNEL_LABELS = {
-    "hidden": "Hidden",
-    "festa": "Festa",
-    "pets": "Pets",
-    "snap": "Snap",
+    "spot": "SPOT",
+    "cafe": "CAFE",
+    "food": "FOOD",
+    "festa": "FESTA",
+    "hidden": "HIDDEN",
 }
+
+SIGNAL_KEYS = ("spot", "cafe", "food", "hidden")
 _META_TIMEOUT = 4.0
 _T = TypeVar("_T")
 
@@ -57,12 +60,10 @@ async def load_channel_cards(
 ) -> list[ChannelCardRow]:
     if key not in CHANNEL_LABELS:
         raise ResourceNotFound(f"unknown channel {key}")
-    if key == "hidden":
-        from app.modules.feed.services.concentration_channels import (
-            load_concentration_channel_cached,
-        )
+    if key in SIGNAL_KEYS:
+        from app.modules.feed.services.signal_channels import load_signal_channel_cached
 
-        return await load_concentration_channel_cached(session, redis, key)
+        return await load_signal_channel_cached(session, redis, key)
     cards = await _load_kto_channel(redis, kto, key)
     return await _drop_unresolvable_details(session, cards)
 
@@ -123,22 +124,24 @@ def _meta_or_unavailable(key: str, rows: list[Any] | None) -> ChannelMetaRow:
 async def load_channel_metas(
     session: AsyncSession, redis: Redis, kto: KtoClient
 ) -> list[ChannelMetaRow]:
-    from app.modules.feed.services.concentration_channels import (
-        load_concentration_channel_cached,
-    )
     from app.modules.feed.services.kto_channels import load_kto_channel_cached
+    from app.modules.feed.services.signal_channels import load_signal_channel_cached
 
-    hidden, festa, pets, snap = await asyncio.gather(
-        load_concentration_channel_cached(session, redis, "hidden"),
+    spot, cafe, food, festa, hidden = await asyncio.gather(
+        load_signal_channel_cached(session, redis, "spot"),
+        load_signal_channel_cached(session, redis, "cafe"),
+        load_signal_channel_cached(session, redis, "food"),
         _safe(asyncio.wait_for(load_kto_channel_cached(redis, kto, "festa"), _META_TIMEOUT)),
-        _safe(asyncio.wait_for(load_kto_channel_cached(redis, kto, "pets"), _META_TIMEOUT)),
-        _safe(asyncio.wait_for(load_kto_channel_cached(redis, kto, "snap"), _META_TIMEOUT)),
+        load_signal_channel_cached(session, redis, "hidden"),
     )
-    metas = [_meta_from_rows("hidden", hidden)]
+    metas = [
+        _meta_or_unavailable("spot", spot or None),
+        _meta_or_unavailable("cafe", cafe or None),
+        _meta_or_unavailable("food", food or None),
+    ]
     if festa is None:
         metas.append(ChannelMetaRow("festa", CHANNEL_LABELS["festa"], None, False))
     elif festa:
         metas.append(_meta_from_rows("festa", festa))
-    metas.append(_meta_or_unavailable("pets", pets))
-    metas.append(_meta_or_unavailable("snap", snap))
+    metas.append(_meta_or_unavailable("hidden", hidden or None))
     return metas
