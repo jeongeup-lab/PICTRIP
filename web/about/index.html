@@ -3,15 +3,11 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>PICTRIP — 해외 사진을 넘기다, 닮은 국내 여행지를 만난다</title>
-<meta name="description" content="해외 여행 사진 피드를 넘기면 닮은 분위기의 국내 관광지를 찾아주는 추천 서비스. 한국관광공사 TourAPI + CLIP 이미지 임베딩. 2026 관광 데이터 활용 공모전 출품작." />
+<title>PICTRIP — 해외 사진을 고르면, 닮은 국내 여행지를 만난다</title>
+<meta name="description" content="해외 여행 사진을 고르면 닮은 분위기의 국내 관광지를 찾아주는 추천 서비스. 한국관광공사 TourAPI + CLIP 이미지 임베딩. 2026 관광 데이터 활용 공모전 출품작." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet" />
-<script>
-document.documentElement.dataset.mode =
-  /\/about\/play(\/|$)/.test(location.pathname) ? 'play' : 'still';
-</script>
 <style>
 :root{
   /* page — light */
@@ -29,16 +25,16 @@ document.documentElement.dataset.mode =
   --t-body:clamp(15px,1.6vw,18.5px);
   --t-meta:11.5px;
 
-  /* app tokens — 폰 목업 내부 전용 (mobile/src/constants/theme.ts) */
-  --bg:#14161A; --inset:#1A1D22; --skeleton:#22262C; --raiseStrong:rgba(48,52,60,.60);
-  --sec:rgba(235,238,245,.62); --ter:rgba(235,238,245,.34);
-  --line:rgba(255,255,255,.11); --fill:rgba(255,255,255,.06); --fillStrong:rgba(255,255,255,.10);
-  --raise:rgba(255,255,255,.05); --control:rgba(12,14,18,.55);
-  --glassFill:rgba(30,33,39,.72); --glassBorder:rgba(255,255,255,.16);
-  --accentText:#FF8494; --accentFill:rgba(255,59,83,.18);
+  /* app tokens — 폰 목업 내부 전용 (mobile/src/constants/theme.ts, light) */
+  --bg:#FFFFFF; --inset:#F7F7F8; --skeleton:#ECEDEF; --raiseStrong:#FFFFFF;
+  --sec:rgba(55,56,60,.61); --ter:rgba(55,56,60,.47);
+  --line:rgba(112,115,124,.16); --fill:rgba(112,115,124,.05); --fillStrong:rgba(112,115,124,.09);
+  --raise:rgba(112,115,124,.04); --control:rgba(12,14,18,.35);
+  --glassFill:rgba(255,255,255,.85); --glassBorder:rgba(112,115,124,.22);
+  --accentText:#E5334B; --accentFill:rgba(255,59,83,.10);
   --onImage:#fff; --onDim:rgba(255,255,255,.85); --onLight:#171719;
   --land:#23262C; --water:#0B3042; --coast:#155069; --road:#32373F; --roadTop:#4D545E;
-  --pos:#6FDC8C; --caution:#FFC46B;
+  --pos:#00BF40; --caution:#C77700;
   --k:.86;
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -101,40 +97,6 @@ html{scrollbar-color:#C7CBD1 transparent}
 .fig .larm{transform-origin:413px 398px}
 .fig .legl,.fig .legr{transform-origin:405px 629px}
 .fig .cam{transform-origin:629px 305px}
-.cover.intro .man{animation:manJump 1.7s cubic-bezier(.42,0,.22,1) both}
-.cover.intro .rarm{animation:armSwing 1.7s cubic-bezier(.42,0,.22,1) both}
-.cover.intro .larm{animation:larmSwing 1.7s cubic-bezier(.42,0,.22,1) both}
-.cover.intro .legl{animation:legLeft 1.7s ease-in-out both}
-.cover.intro .legr{animation:legRight 1.7s ease-in-out both}
-.cover.intro .cam{animation:camPick 1.7s cubic-bezier(.42,0,.22,1) both}
-.cover.intro .hover{animation:hover 1.7s ease-in-out both}
-@keyframes manJump{
-  0%,14%{transform:translateY(0) scaleY(1)}20%{transform:translateY(22px) scaleY(.93)}
-  34%{transform:translateY(-245px) scaleY(1.04)}50%{transform:translateY(-110px) scaleY(1.02)}
-  62%{transform:translateY(0) scaleY(.90)}72%{transform:translateY(0) scaleY(1.03)}
-  100%{transform:translateY(0) scaleY(1)}}
-@keyframes armSwing{
-  0%,14%{transform:rotate(80deg)}20%{transform:rotate(95deg)}34%{transform:rotate(-16deg)}
-  50%{transform:rotate(-6deg)}62%{transform:rotate(10deg)}78%,100%{transform:rotate(0)}}
-@keyframes larmSwing{
-  0%,14%{transform:rotate(0)}20%{transform:rotate(20deg)}34%{transform:rotate(-28deg)}
-  62%{transform:rotate(8deg)}80%,100%{transform:rotate(0)}}
-@keyframes legLeft{0%,20%{transform:rotate(0)}34%{transform:rotate(15deg)}58%,100%{transform:rotate(0)}}
-@keyframes legRight{0%,20%{transform:rotate(0)}34%{transform:rotate(-15deg)}58%,100%{transform:rotate(0)}}
-@keyframes camPick{
-  0%{opacity:0;transform:translate(0,-245px) rotate(7deg) scale(.62)}
-  8%,30%{opacity:1;transform:translate(0,-245px) rotate(7deg) scale(.62)}
-  34%{opacity:1;transform:translate(0,-245px) rotate(0) scale(1)}
-  50%{transform:translate(0,-110px) rotate(0) scale(1)}
-  62%,100%{transform:translate(0,0) rotate(0) scale(1)}}
-@keyframes hover{0%{transform:translateY(0)}15%{transform:translateY(-11px)}30%,100%{transform:translateY(0)}}
-.cover .wordmark,.cover .tagline,.cover .rule,.cover .entry{
-  transition:opacity .8s cubic-bezier(.2,.7,.3,1),transform .8s cubic-bezier(.2,.7,.3,1)}
-.cover .tagline{transition-delay:.09s}
-.cover .rule{transition-delay:.17s}
-.cover .entry{transition-delay:.25s}
-.cover.intro .wordmark,.cover.intro .tagline,.cover.intro .rule,
-.cover.intro .entry{opacity:0;transform:translateY(16px)}
 
 /* ================= thesis ================= */
 .thesis,.spec{scroll-margin-top:76px}
@@ -222,7 +184,7 @@ html{scrollbar-color:#C7CBD1 transparent}
   position:absolute;inset:11px;border-radius:calc(56px * var(--k));overflow:hidden;background:var(--bg);
 }
 .screen{
-  --ink:#F4F5F7;
+  --ink:#171719;
   width:390px;height:844px;transform:scale(var(--k));transform-origin:top left;
   display:flex;flex-direction:column;position:relative;background:var(--bg);
   font-size:14px;line-height:1.4;
@@ -235,8 +197,6 @@ html{scrollbar-color:#C7CBD1 transparent}
   .col{max-width:600px}
   :root{--k:.74}
   .pin{min-height:auto;padding:74px 0}
-  .beats{min-height:0!important}
-  .beatnav{display:none}
 }
 @media (min-width:941px) and (max-height:880px){:root{--k:.68}}
 @media (min-width:941px) and (max-height:790px){:root{--k:.60}}
@@ -247,11 +207,11 @@ html{scrollbar-color:#C7CBD1 transparent}
 .sbar{flex:none;height:47px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 24px 6px}
 .sbar .clock{font-size:15px;font-weight:600;letter-spacing:-.2px}
 .sbar .sig{display:flex;align-items:center;gap:4px}
-.sbar .sig i{width:3px;border-radius:1px;background:var(--onDim)}
+.sbar .sig i{width:3px;border-radius:1px;background:var(--ink)}
 .sbar .sig i:nth-child(1){height:5px}.sbar .sig i:nth-child(2){height:7px}
 .sbar .sig i:nth-child(3){height:9px}.sbar .sig i:nth-child(4){height:11px}
-.sbar .batt{width:24px;height:12px;border:1px solid var(--onDim);border-radius:3.5px;position:relative;margin-left:3px}
-.sbar .batt::after{content:"";position:absolute;inset:2px;right:7px;background:var(--onDim);border-radius:1.5px}
+.sbar .batt{width:24px;height:12px;border:1px solid var(--ink);border-radius:3.5px;position:relative;margin-left:3px}
+.sbar .batt::after{content:"";position:absolute;inset:2px;right:7px;background:var(--ink);border-radius:1.5px}
 .topbar{
   flex:none;padding:14px 20px;text-align:center;border-bottom:1px solid var(--line);
 }
@@ -261,7 +221,6 @@ html{scrollbar-color:#C7CBD1 transparent}
   scrollbar-width:none;-ms-overflow-style:none;
 }
 .vp::-webkit-scrollbar{width:0;height:0}
-.vp.locked{overflow:hidden}
 .tabbar{
   flex:none;display:flex;padding:8px 0 30px;border-top:1px solid var(--line);background:var(--bg);
 }
@@ -272,62 +231,49 @@ html{scrollbar-color:#C7CBD1 transparent}
 .tabitem span{font-size:10px;font-weight:700}
 
 /* ---- channel tiles (86x110 r14) ---- */
-.tiles{display:flex;gap:10px;padding:14px 16px 10px}
+.tiles{display:flex;gap:10px;padding:14px 16px 20px}
 .tile{flex:none;width:86px;height:110px;border-radius:14px;overflow:hidden;position:relative;background:var(--inset)}
 .tile img{width:100%;height:100%;object-fit:cover}
 .tile.seen{opacity:.55}
 .tile .scrim{position:absolute;inset:0;background:linear-gradient(rgba(16,14,18,0),rgba(16,14,18,.68))}
 .tile b{position:absolute;left:0;right:0;bottom:8px;text-align:center;font-size:11.5px;font-weight:800;color:var(--onImage)}
-.tile.around{background:linear-gradient(#FFEEF1,#FFDCE2);display:flex;align-items:center;justify-content:center}
-.tile.around svg{width:26px;height:26px;fill:none;stroke:var(--accentText);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
-.tile.around b{color:var(--accentText)}
 .tile .newdot{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:4px;background:var(--accent);border:1.5px solid var(--onImage)}
 
-/* ---- post carousel (w-32, h520, r16) ---- */
-.postblock{padding-bottom:32px}
-.pcard{
-  position:relative;margin:0 16px;height:520px;border-radius:16px;overflow:hidden;background:var(--inset);
-  box-shadow:0 10px 24px rgba(0,0,0,.55);
-}
-.ptrack{display:flex;height:100%;transition:transform .6s cubic-bezier(.62,.02,.24,1)}
-.pslide{flex:0 0 100%;height:100%;position:relative;background:var(--skeleton)}
-.pslide img{width:100%;height:100%;object-fit:cover}
-.pscrim{position:absolute;inset:0}
-.pscrim.hero{background:linear-gradient(rgba(20,18,22,.42),rgba(20,18,22,0) 42%,rgba(20,18,22,.18) 68%,rgba(20,18,22,.72))}
-.pscrim.match{background:linear-gradient(rgba(20,18,22,.28),rgba(20,18,22,.05) 50%,rgba(20,18,22,.78))}
-.pmeta{position:absolute;left:20px;right:20px;bottom:22px}
-.pmeta .hname{font-size:24px;font-weight:800;letter-spacing:-.5px;color:var(--onImage);line-height:1.25}
-.pmeta .crow{display:flex;align-items:center;gap:8px;margin-top:8px}
-.pmeta .crow i{width:1px;height:13px;background:var(--onDim)}
-.pmeta .crow span{font-size:13px;font-weight:600;color:var(--onDim)}
-.pmeta .hdesc{font-size:14.5px;line-height:21px;color:var(--onImage);margin-top:10px;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.pmeta .mrow{display:flex;align-items:flex-start;gap:7px}
-.pmeta .mno{font-size:15px;font-weight:800;color:var(--onDim);position:relative;top:-3px}
-.pmeta .mname{font-size:22px;font-weight:800;letter-spacing:-.4px;color:var(--onImage);line-height:1.24}
-.pmeta .mchip{
-  display:inline-flex;align-items:center;height:26px;padding:0 11px;border-radius:13px;margin-top:8px;
-  background:var(--glassFill);border:1px solid var(--glassBorder);font-size:12.5px;font-weight:600;color:var(--onImage);
-}
-.pmeta .mov{font-size:14px;line-height:20px;color:var(--onDim);margin-top:10px;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.pbtn{
-  position:absolute;top:14px;left:14px;width:32px;height:32px;border-radius:16px;
-  background:var(--glassFill);border:1px solid var(--glassBorder);display:flex;align-items:center;justify-content:center;
-}
-.pbtn svg{width:18px;height:18px;fill:none;stroke:var(--onImage);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.pcount{
-  position:absolute;top:14px;right:14px;height:28px;padding:0 11px;border-radius:14px;background:var(--control);
-  display:flex;align-items:center;font-size:12px;font-weight:700;color:var(--onImage);
-}
-.pdots{display:flex;justify-content:center;gap:6px;margin-top:12px}
-.pdots i{width:6px;height:6px;border-radius:3px;background:var(--line)}
-.pdots i.on{background:var(--ink)}
-.pcredit{
-  position:absolute;left:14px;right:14px;top:54px;font-size:10.5px;line-height:1.5;color:rgba(255,255,255,.86);
-  background:rgba(6,8,12,.6);border:1px solid rgba(255,255,255,.14);border-radius:9px;padding:6px 9px;
-}
-.pcredit a{color:#fff;text-decoration:underline;text-underline-offset:2px}
+/* ---- 홈: 범위 탭 · 인기 랭킹 · AI 추천 (features/home) ---- */
+.scopetabs{display:flex;gap:4px;margin:0 20px;padding:4px;border-radius:16px;background:var(--inset)}
+.scopetab{flex:1;height:46px;display:flex;align-items:center;justify-content:center;gap:6px;
+  border-radius:12px;font-size:14.5px;font-weight:700;letter-spacing:-.3px;color:var(--ter)}
+.scopetab.on{background:var(--raiseStrong);border:1px solid var(--glassBorder);color:var(--ink);font-weight:800}
+.scopetab svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.scopetab.on svg{stroke:var(--accentText)}
+.chips{display:flex;gap:7px;margin-top:10px;padding:0 20px}
+.chip{flex:none;display:flex;align-items:center;height:32px;padding:0 14px;border-radius:16px;
+  border:1px solid var(--line);background:var(--fill);
+  font-size:12.5px;font-weight:700;letter-spacing:-.2px;color:var(--sec)}
+.chip.on{background:var(--accent);border-color:var(--accent);color:var(--onImage);font-weight:800}
+.shead{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;padding:24px 20px 14px}
+.shead .st{font-size:20px;font-weight:800;letter-spacing:-.6px;color:var(--ink);min-width:0}
+.shead .st em{font-style:normal;color:var(--accentText)}
+.shead .sn{flex:none;padding-bottom:2px;font-size:12px;font-weight:600;color:var(--ter)}
+.hgrid{display:flex;flex-wrap:wrap;gap:10px;padding:0 20px}
+.hcard{width:170px;border-radius:16px;overflow:hidden;background:var(--inset)}
+.hshot{position:relative;height:184px}
+.hshot img{width:100%;height:100%;object-fit:cover}
+.hshot .sc{position:absolute;inset:0;
+  background:linear-gradient(rgba(11,13,17,.72),rgba(11,13,17,.06) 50%,rgba(11,13,17,.18))}
+.hrank{position:absolute;top:4px;left:12px;line-height:1.1;font-size:44px;font-weight:900;
+  font-style:italic;letter-spacing:-2px;color:var(--onImage)}
+.htag{position:absolute;top:56px;left:12px;right:12px;font-size:14px;font-weight:800;letter-spacing:-.3px;
+  color:var(--onImage);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hfoot{height:62px;display:flex;align-items:center;gap:8px;padding:0 12px}
+.hfoot .tx{flex:1;min-width:0}
+.hfoot .nm{font-size:14px;font-weight:800;letter-spacing:-.3px;color:var(--ink)}
+.hfoot .sb{margin-top:3px;font-size:12.5px;font-weight:600;color:var(--sec)}
+.hfoot .nm,.hfoot .sb{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hfoot svg{width:24px;height:24px;flex:none;fill:none;stroke:var(--ter);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.hmore{display:flex;align-items:center;justify-content:center;gap:6px;height:52px;margin:14px 20px 0;
+  border-radius:16px;background:var(--fill);font-size:15px;font-weight:700;letter-spacing:-.3px;color:var(--sec)}
+.hmore svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 
 /* ---- explore grid (GAP 2, unit=(w-4)/3, big=2x2) ---- */
 .exgrid{display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:calc((390px - 4px) / 3);gap:2px}
@@ -393,7 +339,13 @@ html{scrollbar-color:#C7CBD1 transparent}
 .prow .vv.on{color:var(--pos)}
 .prow .cv{width:17px;height:17px;fill:none;stroke:var(--ter);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
 
-/* ---- story viewer (#141216, centered 520 card) ---- */
+/* ---- story viewer (#141216, centered 520 card) — 앱에서 darkColors 고정 ---- */
+.story{
+  --ink:#F4F5F7;--sec:rgba(235,238,245,.62);--ter:rgba(235,238,245,.34);
+  --inset:#1A1D22;--skeleton:#22262C;--line:rgba(255,255,255,.11);
+  --glassFill:rgba(30,33,39,.72);--glassBorder:rgba(255,255,255,.16);
+  --control:rgba(12,14,18,.55);
+}
 .story{position:absolute;inset:0;background:#141216}
 .stcard{
   position:absolute;left:16px;right:16px;top:50%;transform:translateY(-50%);height:520px;
@@ -549,61 +501,14 @@ html{scrollbar-color:#C7CBD1 transparent}
 .ssub{margin-top:2px;font-size:11.5px;color:var(--ter)}
 
 
-/* ---- 라이더: 로고가 밧줄을 타고 내려와 시연한다 (play 전용) ---- */
-#rope,#rider{display:none}
-[data-mode="play"] #rope,[data-mode="play"] #rider{display:block}
-#rope{position:fixed;top:0;width:3px;background:var(--ink);opacity:0;z-index:70;
-  pointer-events:none;transition:opacity .35s ease;border-radius:2px;
-  box-shadow:0 0 0 1.5px rgba(255,255,255,.9)}
-#rope.on{opacity:1}
-#rider{position:fixed;left:0;top:0;width:84px;z-index:71;pointer-events:none;opacity:0;
-  transition:opacity .4s ease;will-change:transform}
-#rider.on{opacity:1}
-#rider.anim{transition:opacity .4s ease,transform .58s cubic-bezier(.32,.9,.35,1.04)}
-#rider .rig{display:block;width:100%;height:auto;overflow:visible}
-#rider .cas circle,#rider .cas path{fill:none;stroke:#fff;stroke-width:100;
-  stroke-linecap:round;stroke-linejoin:round;opacity:.92}
-#rider .inkline circle,#rider .inkline path{fill:none;stroke:var(--ink);stroke-width:54;
-  stroke-linecap:round;stroke-linejoin:round}
-#rider .ra,#rider .la,#rider .legl,#rider .legr{transform-box:view-box}
-#rider .ra{transform-origin:423px 387px;transform:rotate(64deg);
-  transition:transform .45s cubic-bezier(.32,1.18,.45,1)}
-#rider .la{transform-origin:413px 398px;transition:transform .45s ease}
-#rider .legl,#rider .legr{transform-origin:405px 629px}
-#rider.riding .ra{transform:rotate(-155deg)}
-#rider.riding .la{transform:rotate(-168deg)}
-#rider.riding .rig{animation:climb 1.6s ease-in-out infinite}
-@keyframes climb{0%,100%{transform:translateY(0)}50%{transform:translateY(-4%)}}
-#rider .rig{transition:transform .32s ease;transform-origin:50% 82%}
-#rider.vault .rig{transform:rotate(var(--vr,16deg))}
-#rider.vault .ra{transform:rotate(-28deg)}
-#rider.vault .la{transform:rotate(-8deg)}
-#rider.riding .legl{animation:dangleL 1.6s ease-in-out infinite}
-#rider.riding .legr{animation:dangleR 1.6s ease-in-out infinite}
-@keyframes dangleL{0%,100%{transform:rotate(7deg)}50%{transform:rotate(-5deg)}}
-@keyframes dangleR{0%,100%{transform:rotate(-7deg)}50%{transform:rotate(5deg)}}
-#rider.moving .legl{transform:rotate(18deg)}
-#rider.moving .legr{transform:rotate(-18deg)}
-#rider.reach .ra{transform:rotate(var(--arm,-90deg))}
-#rider.tap .rig{animation:pressR .3s ease-out}
-@keyframes pressR{50%{transform:translateY(-3%)}}
-@media (prefers-reduced-motion:reduce){#rider,#rope{display:none}}
-#rider.scrub{transition:none}
-#rider.scrub .rig{animation:none;transition:transform .32s ease}
-#rope{transform-origin:top center;will-change:height,transform,opacity}
-@media (min-width:1001px){
-  [data-mode="play"] #ch2{height:560vh}
-  [data-mode="play"] #ch1{height:360vh}
-  [data-mode="play"] #chex{height:380vh}
-  [data-mode="play"] #ch3{height:320vh}
-  [data-mode="play"] #ch4{height:380vh}
-  [data-mode="play"] #save{height:320vh}
-  [data-mode="play"] #saved{height:320vh}
-  [data-mode="play"] #ch2 .pin,[data-mode="play"] #ch1 .pin,[data-mode="play"] #chex .pin,
-  [data-mode="play"] #ch3 .pin,[data-mode="play"] #ch4 .pin,[data-mode="play"] #save .pin,
-  [data-mode="play"] #saved .pin{
-    position:sticky;top:0;min-height:0;height:100svh;padding:0}
-}
+/* 화면 안에서 스크롤할 수 있다는 표시 — 한 번 굴리면 사라진다 */
+.scrollhint{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 14px;
+  border-radius:999px;border:1px solid var(--rule2);background:var(--paper2);
+  font-size:11.5px;font-weight:700;letter-spacing:-.01em;color:var(--ink3);
+  transition:opacity .45s ease}
+.scrollhint svg{width:12px;height:12px;fill:none;stroke:var(--accent);
+  stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.stage.used .scrollhint{opacity:0}
 
 .tapring{position:relative}
 .tapring::after{content:"";position:absolute;inset:3px;border:2px solid var(--accent);
@@ -611,28 +516,31 @@ html{scrollbar-color:#C7CBD1 transparent}
 @keyframes ringGo{0%{opacity:1;transform:scale(.85)}100%{opacity:0;transform:scale(1.22)}}
 
 /* ---- 탭 반응 ---- */
-#ch2 .story{opacity:0;pointer-events:none;transition:opacity .4s ease;z-index:3}
+#ch2 .story{opacity:0;pointer-events:none;transition:opacity .4s ease;z-index:6}
 #ch2 .device.open .story{opacity:1}
-#ch2 .sttop{padding-top:14px}
-.exmodal{position:absolute;inset:0;z-index:4;display:flex;align-items:center;justify-content:center;
-  background:rgba(6,8,12,.55);opacity:0;pointer-events:none;transition:opacity .35s ease}
+/* ---- 탐색 모달 = PostModal 재현 (backdrop만 다크, 카드는 앱 라이트) ---- */
+.exmodal{position:absolute;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;
+  background:rgba(16,14,18,.92);opacity:0;pointer-events:none;transition:opacity .35s ease}
 .device.picked .exmodal{opacity:1}
-.exmodal .mcard{width:78%;border-radius:16px;overflow:hidden;position:relative;background:var(--inset);
-  box-shadow:0 18px 40px rgba(0,0,0,.5)}
-.exmodal img{width:100%;height:300px;object-fit:cover}
-.exmodal .mscrim{position:absolute;inset:0;background:linear-gradient(rgba(20,18,22,.25),rgba(20,18,22,0) 45%,rgba(20,18,22,.8))}
-.exmodal .mmeta{position:absolute;left:14px;right:14px;bottom:12px}
-.exmodal .mnm{font-size:17px;font-weight:800;color:var(--onImage)}
-.exmodal .mrg{font-size:11.5px;color:var(--onDim);margin-top:3px}
-.exmodal .mcount{position:absolute;top:10px;right:10px;height:24px;padding:0 10px;border-radius:12px;
-  background:var(--control);font-size:11px;font-weight:700;color:var(--onImage);display:flex;align-items:center}
-.dhero .dalt{position:absolute;left:0;right:0;top:0;bottom:-56px;width:100%;height:calc(100% + 56px);
-  object-fit:cover;opacity:0;transition:opacity .5s ease}
-#ch3 .device.viewed .dalt{opacity:1}
+.mclose{position:absolute;top:56px;right:20px;width:40px;height:40px;border-radius:20px;z-index:2;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(30,33,39,.72);border:1px solid rgba(255,255,255,.16)}
+.mclose svg{width:20px;height:20px;fill:none;stroke:#F4F5F7;stroke-width:1.8;stroke-linecap:round}
+.mcard{width:335px;border-radius:18px;overflow:hidden;background:var(--inset);border:1px solid var(--line)}
+.mshot{width:100%;height:335px;object-fit:cover;background:var(--skeleton)}
+.mbody{padding:16px 16px 18px}
+.mtitle{font-size:18px;font-weight:800;letter-spacing:-.4px;color:var(--ink)}
+.mdesc{margin-top:6px;font-size:13px;line-height:19px;color:var(--sec)}
+.mmatches{display:flex;gap:8px;margin-top:14px}
+.mm{flex:1;min-width:0}
+.mm img{width:100%;height:82px;border-radius:8px;object-fit:cover;background:var(--skeleton)}
+.mm b{display:block;margin-top:6px;font-size:12.5px;font-weight:700;color:var(--ink);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mcredit{margin-top:14px;font-size:11.5px;line-height:17px;color:var(--ter)}
 .gthumb{position:relative;display:block;width:64px;height:64px;border-radius:8px;flex:none}
 .gthumb img{width:64px;height:64px;border-radius:8px;object-fit:cover}
 #save .device.savedon .vcard.scrap{background:var(--accentFill);border-color:rgba(255,59,83,.4);color:var(--accentText)}
-.stoast{position:absolute;left:50%;bottom:110px;transform:translate(-50%,8px);z-index:5;
+.stoast{position:absolute;left:50%;bottom:110px;transform:translate(-50%,8px);z-index:7;
   background:rgba(20,22,26,.92);color:#fff;font-size:12.5px;font-weight:600;padding:9px 16px;
   border-radius:10px;opacity:0;transition:.35s ease}
 #save .device.savedon .stoast{opacity:1;transform:translate(-50%,0)}
@@ -645,23 +553,7 @@ html{scrollbar-color:#C7CBD1 transparent}
 #saved .device.shown .scard:nth-child(6){transition-delay:.35s}
 #saved .device.shown .scard:first-child .sheart{animation:heartPop .5s ease .5s both}
 @keyframes heartPop{0%,100%{transform:scale(1)}50%{transform:scale(1.35)}}
-.glyph{transition:opacity .5s ease,transform .6s cubic-bezier(.5,0,.8,.4)}
-.glyph.depart{opacity:0;transform:translateX(46%)}
 
-
-/* ---- 탐색 모달 = PostModal 재현 ---- */
-.exmodal{background:rgba(16,14,18,.92);flex-direction:column;gap:12px}
-.mclose{position:absolute;top:26px;right:16px;width:40px;height:40px;border-radius:20px;z-index:2;
-  display:flex;align-items:center;justify-content:center;background:var(--glassFill);border:1px solid var(--glassBorder)}
-.mclose svg{width:20px;height:20px;fill:none;stroke:var(--onImage);stroke-width:1.8;stroke-linecap:round}
-.exmodal .pcard.mcarousel{width:84%;height:440px;margin:0;overflow:hidden;position:relative}
-.exmodal .pdots{margin-top:0}
-
-/* ---- 살펴보세요: 매치 카드 → 상세 전환 ---- */
-.matchlayer{position:absolute;inset:0;z-index:3;background:var(--bg);padding:14px 16px 20px;
-  transition:opacity .5s ease,transform .5s ease}
-.matchlayer .pcard.mfull{height:100%;margin:0;position:relative;overflow:hidden}
-#ch3 .device.viewed .matchlayer{opacity:0;transform:scale(.97);pointer-events:none}
 
 /* ---- 물어보세요: 어시스턴트 채팅 (travel.tsx 재현) ---- */
 .theader{flex:none;position:relative;display:flex;align-items:center;justify-content:center;
@@ -714,7 +606,7 @@ html{scrollbar-color:#C7CBD1 transparent}
 @keyframes blink{50%{opacity:0}}
 /* ---- 확인하세요: 프로필 → 앨범 ---- */
 .mylayer{position:absolute;inset:0;overflow:hidden}
-.albumlayer{position:absolute;inset:0;z-index:3;background:var(--bg);display:flex;flex-direction:column;
+.albumlayer{position:absolute;inset:47px 0 0;z-index:6;background:var(--bg);display:flex;flex-direction:column;
   opacity:0;transform:translateX(16%);transition:opacity .5s ease,transform .5s cubic-bezier(.2,.8,.3,1);
   pointer-events:none}
 #saved .device.shown .albumlayer{opacity:1;transform:none}
@@ -762,45 +654,6 @@ footer{border-top:1px solid var(--rule);padding:56px 0 76px;background:var(--pap
 .flinks{display:flex;gap:20px;flex-wrap:wrap;margin-top:32px;font-family:var(--mono);font-size:11.5px}
 .flinks a{color:var(--ink3);text-decoration:none;transition:color .3s}
 .flinks a:hover{color:var(--ink)}
-
-/* ================= 모드 전환 ================= */
-.modeswitch{display:inline-flex;align-items:center;gap:9px;margin-top:clamp(30px,4vw,44px);
-  height:46px;padding:0 22px;border-radius:999px;border:1px solid var(--rule);
-  background:var(--paper2);color:var(--ink);font-size:14px;font-weight:700;
-  letter-spacing:-.01em;text-decoration:none;cursor:pointer;
-  transition:border-color .25s,box-shadow .25s,transform .25s}
-.modeswitch:hover{border-color:var(--ink);box-shadow:0 8px 22px rgba(17,19,21,.10);transform:translateY(-1px)}
-.modeswitch:active{transform:translateY(0)}
-.modeswitch svg{width:17px;height:17px;fill:var(--accent);stroke:none;flex:none}
-.modeswitch .hint{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--ink3);font-weight:400}
-.modeswitch .narrow{display:none}
-@media (max-width:1000px){
-  .modeswitch .wide{display:none}
-  .modeswitch .narrow{display:inline}
-}
-.flinks .playonly{display:none}
-[data-mode="play"] .flinks .playonly{display:inline}
-.backstill{display:none;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;
-  letter-spacing:.08em;color:var(--ink3);text-decoration:none;transition:color .25s}
-.backstill:hover{color:var(--ink)}
-[data-mode="play"] .backstill{display:inline-flex}
-[data-mode="play"] .modeswitch{display:none}
-@media (max-width:900px){
-  [data-mode="play"] .backstill{display:none}
-}
-
-/* ---- still: 페이지가 멈춰 있다 ---- */
-html:not([data-mode="play"]) *{animation:none!important}
-html:not([data-mode="play"]) .cover .wordmark,
-html:not([data-mode="play"]) .cover .tagline,
-html:not([data-mode="play"]) .cover .rule,
-html:not([data-mode="play"]) .cover .entry,
-html:not([data-mode="play"]) .cover .modeswitch{opacity:1!important;transform:none!important}
-html:not([data-mode="play"]) .pair .pf.l,
-html:not([data-mode="play"]) .pair .pf.r{transform:none}
-html:not([data-mode="play"]) .approx{opacity:1}
-html:not([data-mode="play"]) #saved .scard{opacity:1;transform:none}
-html:not([data-mode="play"]) .glyph{transition:none}
 
 /* ================= responsive ================= */
 @media (max-width:1180px){:root{--k:.74}}
@@ -851,6 +704,8 @@ html:not([data-mode="play"]) .glyph{transition:none}
 <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.2 5 6v6c0 4.4 3 7.4 7 8.8 4-1.4 7-4.4 7-8.8V6z"/><path d="m9 12 2.2 2.2L15.3 10"/></symbol>
 <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.6 4.6 4.6L19 7.8"/></symbol>
 <symbol id="i-trend" viewBox="0 0 24 24"><path d="M3.5 16.5 9 11l4 4 7.5-7.5"/><path d="M15.5 7.5h5v5"/></symbol>
+<symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 3.2c3.2 3 4.8 5.4 4.8 7.6 0 1-.3 1.9-.9 2.6.9.6 1.4 1.6 1.4 2.9 0 2.6-2.4 4.5-5.3 4.5s-5.3-1.9-5.3-4.5c0-3.4 2.6-5 3.5-8.4.7.7 1.3 1.5 1.8 2.4.6-2 .6-4 0-7.1z"/></symbol>
+<symbol id="i-chevdown" viewBox="0 0 24 24"><path d="m5 9.5 7 7 7-7"/></symbol>
 </defs></svg>
 
 <header class="mast" id="mast">
@@ -865,13 +720,11 @@ html:not([data-mode="play"]) .glyph{transition:none}
       <a href="#save">저장</a>
       <a href="#saved">스크랩</a>
     </nav>
-    <a class="backstill" href="/about/">← 정지 버전</a>
   </div>
 </header>
 
 <!-- ============ opening ============ -->
-<section class="cover intro" id="cover">
-  <noscript><style>.cover.intro .wordmark,.cover.intro .tagline,.cover.intro .rule,.cover.intro .entry,.cover.intro .glyph::before{opacity:1!important;transform:none!important}</style></noscript>
+<section class="cover" id="cover">
   <span class="glyph"><svg class="fig" viewBox="0 0 1024 1024" role="img" aria-labelledby="figTitle">
     <title id="figTitle">PICTRIP 로고, 사진 한 장을 집어 드는 사람</title>
     <defs>
@@ -891,12 +744,6 @@ html:not([data-mode="play"]) .glyph{transition:none}
   <p class="tagline">사진으로 찾는 국내 여행지</p>
   <div class="rule"></div>
   <p class="entry">2026 한국관광공사 관광 데이터 활용 공모전</p>
-  <a class="modeswitch" href="/about/play/">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.4v13.2L19 12z"/></svg>
-    영상처럼 보기
-    <span class="hint wide">스크롤 연출</span>
-    <span class="hint narrow">넓은 화면에서 재생됩니다</span>
-  </a>
 </section>
 
 <!-- ============ thesis ============ -->
@@ -946,7 +793,8 @@ html:not([data-mode="play"]) .glyph{transition:none}
       <div class="col">
         <div class="kicker"><i></i>홈 · 채널 스토리</div>
         <div class="verb">열어보세요</div>
-        <p class="oneline">타일을 누르면 오늘의 <b>스토리</b>가 열립니다.</p>
+        <p class="oneline">홈 맨 위 타일은 오늘의 <b>채널</b>입니다.
+          누르면 스토리처럼 한 장씩 넘어갑니다.</p>
       </div>
 
       <div class="stage">
@@ -956,41 +804,31 @@ html:not([data-mode="play"]) .glyph{transition:none}
               <div class="sbar"><span class="clock">9:41</span>
                 <span class="sig"><i></i><i></i><i></i><i></i><span class="batt"></span></span></div>
 <div class="topbar"><b>PICTRIP</b></div>
-              <div class="vp">
-                <div class="tiles">
-                  <div class="tile around"><svg><use href="#i-pin"/></svg><b>내 주변</b></div>
-                  <div class="tile" id="t-open"><img src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/04/3527004_image1_1.jpg" alt="" loading="lazy" /><div class="scrim"></div><b>인기</b><div class="newdot"></div></div>
-                  <div class="tile"><img src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/94/3526894_image1_1.jpg" alt="" loading="lazy" /><div class="scrim"></div><b>숨은 명소</b><div class="newdot"></div></div>
-                  <div class="tile"><img src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/11/3078011_image1_1.jpg" alt="" loading="lazy" /><div class="scrim"></div><b>축제</b></div>
-                </div>
-                <div class="postblock"><div class="pcard">
-                  <div class="ptrack"><div class="pslide">
-                    <img src="https://img.pictrip.org/upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Salzburg_cathedral_frontview01.jpg/1280px-Salzburg_cathedral_frontview01.jpg" alt="" loading="lazy" />
-                    <div class="pscrim hero"></div>
-                    <div class="pmeta"><div class="hname">잘츠부르크 대성당</div>
-                      <div class="crow"><i></i><span>오스트리아</span></div></div>
-                  </div></div>
-                  <div class="pcount">1/4</div>
-                </div></div>
+              <div class="vp"><div data-home></div></div>
+              <div class="tabbar">
+                <div class="tabitem on"><svg><use href="#i-home"/></svg><span>홈</span></div>
+                <div class="tabitem"><svg><use href="#i-search"/></svg><span>탐색</span></div>
+                <div class="tabitem"><svg><use href="#i-chat"/></svg><span>여행</span></div>
+                <div class="tabitem"><svg><use href="#i-person"/></svg><span>마이</span></div>
+              </div>
                 <div class="story">
                   <div class="stcard">
-                    <img id="st-img" src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/04/3527004_image1_1.jpg" alt="" loading="lazy" />
+                    <img id="st-img" src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/94/3526894_image1_1.jpg" alt="" loading="lazy" />
                     <div class="sscrim"></div>
                   </div>
                   <div class="sttop">
                     <div class="segs" id="st-segs"><i class="now"><em></em></i><i><em></em></i><i><em></em></i></div>
                     <div class="strow">
-                      <span class="lbl">인기</span>
+                      <span class="lbl">SPOT</span>
                       <span class="x"><svg><use href="#i-close"/></svg></span>
                     </div>
                   </div>
                   <div class="stmeta">
                     <div class="stbadges">
                       <span class="strank" id="st-rk">1</span>
-                      <span class="sttag">인기</span>
                     </div>
-                    <div class="stname" id="st-nm">높은오름</div>
-                    <div class="streg" id="st-rg">제주특별자치도 제주시</div>
+                    <div class="stname" id="st-nm">개오름</div>
+                    <div class="streg" id="st-rg">제주특별자치도 서귀포시</div>
                     <div class="stline" id="st-ln" style="display:none"></div>
                     <div class="stacts">
                       <span class="stsave"><svg><use href="#i-bookmark"/></svg>저장</span>
@@ -998,7 +836,6 @@ html:not([data-mode="play"]) .glyph{transition:none}
                     </div>
                   </div>
                 </div>
-              </div>
             </div>
           </div>
         </div>
@@ -1006,14 +843,15 @@ html:not([data-mode="play"]) .glyph{transition:none}
     </div>
   </div>
 </section>
-<!-- ============ ch1 홈 피드 ============ -->
+<!-- ============ ch1 홈 ============ -->
 <section class="chapter b" id="ch1">
   <div class="pin">
     <div class="wrap duo">
       <div class="col">
-        <div class="kicker"><i></i>홈 · 피드</div>
-        <div class="verb">넘겨보세요</div>
-        <p class="oneline">옆으로 밀면 <b>닮은 관광지</b>가 나옵니다.</p>
+        <div class="kicker"><i></i>홈</div>
+        <div class="verb">훑어보세요</div>
+        <p class="oneline">지금 사람이 몰리는 <b>인기 장소</b>가 위에,
+          저장한 취향으로 고른 <b>AI 추천</b>이 아래에 옵니다.</p>
       </div>
 
       <div class="stage">
@@ -1023,16 +861,7 @@ html:not([data-mode="play"]) .glyph{transition:none}
               <div class="sbar"><span class="clock">9:41</span>
                 <span class="sig"><i></i><i></i><i></i><i></i><span class="batt"></span></span></div>
               <div class="topbar"><b>PICTRIP</b></div>
-              <div class="vp"><div class="vpin" data-scroll>
-                <div class="tiles">
-                  <div class="tile around"><svg><use href="#i-pin"/></svg><b>내 주변</b></div>
-                  <div class="tile"><img src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/04/3527004_image1_1.jpg" alt="" loading="lazy" /><div class="scrim"></div><b>인기</b><div class="newdot"></div></div>
-                  <div class="tile"><img src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/94/3526894_image1_1.jpg" alt="" loading="lazy" /><div class="scrim"></div><b>숨은 명소</b><div class="newdot"></div></div>
-                  <div class="tile seen"><img src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/11/3078011_image1_1.jpg" alt="" loading="lazy" /><div class="scrim"></div><b>축제</b></div>
-                  <div class="tile"><img src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/49/4054849_image1_1.jpg" alt="" loading="lazy" /><div class="scrim"></div><b>스냅</b><div class="newdot"></div></div>
-                </div>
-                <div id="feed"></div>
-              </div></div>
+              <div class="vp"><div data-home></div></div>
               <div class="tabbar">
                 <div class="tabitem on"><svg><use href="#i-home"/></svg><span>홈</span></div>
                 <div class="tabitem"><svg><use href="#i-search"/></svg><span>탐색</span></div>
@@ -1064,21 +893,25 @@ html:not([data-mode="play"]) .glyph{transition:none}
                 <span class="sig"><i></i><i></i><i></i><i></i><span class="batt"></span></span></div>
               <div class="vp">
                 <div class="exscrim"></div>
-                <div class="vpin" data-scroll><div class="exgrid" id="exgrid"></div></div>
-                <div class="exmodal">
-                  <span class="mclose"><svg><use href="#i-close"/></svg></span>
-                  <div class="pcard mcarousel">
-                    <div class="ptrack" id="exTrack"></div>
-                    <div class="pcount" id="exCount">1/4</div>
-                  </div>
-                  <div class="pdots" id="exDots"><i class="on"></i><i></i><i></i><i></i></div>
-                </div>
+                <div><div class="exgrid" id="exgrid"></div></div>
               </div>
               <div class="tabbar">
                 <div class="tabitem"><svg><use href="#i-home"/></svg><span>홈</span></div>
                 <div class="tabitem on"><svg><use href="#i-search"/></svg><span>탐색</span></div>
                 <div class="tabitem"><svg><use href="#i-chat"/></svg><span>여행</span></div>
                 <div class="tabitem"><svg><use href="#i-person"/></svg><span>마이</span></div>
+              </div>
+              <div class="exmodal">
+                <span class="mclose"><svg><use href="#i-close"/></svg></span>
+                <div class="mcard">
+                  <img class="mshot" id="exShot" src="" alt="" loading="lazy" />
+                  <div class="mbody">
+                    <div class="mtitle" id="exTitle"></div>
+                    <div class="mdesc">이 분위기와 닮은 국내 여행지 3곳을 찾았어요</div>
+                    <div class="mmatches" id="exMatches"></div>
+                    <div class="mcredit" id="exCredit"></div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1104,20 +937,7 @@ html:not([data-mode="play"]) .glyph{transition:none}
               <div class="sbar"><span class="clock">9:41</span>
                 <span class="sig"><i></i><i></i><i></i><i></i><span class="batt"></span></span></div>
               <div class="vp">
-                <div class="matchlayer">
-                  <div class="pcard mfull" id="t-look">
-                    <div class="pslide">
-                      <img src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/92/3388592_image1_1.JPG" alt="" loading="lazy" />
-                      <div class="pscrim match"></div>
-                      <div class="pmeta">
-                        <div class="mrow"><span class="mno">2</span><span class="mname">원동성당</span></div>
-                        <div><span class="mchip">강원특별자치도 원주시</span></div>
-                      </div>
-                    </div>
-                    <div class="pcount">3/4</div>
-                  </div>
-                </div>
-                <div class="vpin" data-scroll>
+                <div>
                 <div class="dhero">
                   <img src="https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/92/3388592_image1_1.JPG" alt="원동성당" loading="lazy" />
                   <div class="hscrim"></div>
@@ -1139,6 +959,19 @@ html:not([data-mode="play"]) .glyph{transition:none}
                   <div class="ttl">소개</div>
                   <p class="ov">원동성당은 1913년에 지어진 천주교 성당으로 6.25 전쟁 때 건물이 불에 타 전소하여 1954년 시멘트 벽돌로 재건하였다. 1950년 6월 25일 한국전쟁이 발발하고 원주 지역이 여러 차례 주인이 바뀌는 격전지가 되면서 성당 건물이 크게 훼손되었으며, 휴전 이후 신자들의 힘으로 다시 세워 오늘에 이른다.</p>
                   <div class="more">더보기</div>
+                </div>
+                <div class="dsect">
+                  <div class="ttl">위치</div>
+                  <div class="dmap"><span class="dot"></span></div>
+                  <div class="dlinks">
+                    <span class="dlink acc">네이버 지도</span>
+                    <span class="dlink">카카오 지도</span>
+                  </div>
+                  <div class="dinfo">
+                    <div class="drow"><svg><use href="#i-pin"/></svg><span class="val">강원특별자치도 원주시 원일로 27</span><span class="cp">복사</span></div>
+                    <div class="drow"><svg><use href="#i-clock"/></svg><span class="val">상시 개방</span></div>
+                    <div class="drow"><svg><use href="#i-phone"/></svg><span class="val" style="color:var(--accentText);text-decoration:underline">033-742-2225</span></div>
+                  </div>
                 </div>
                 <div style="height:40px"></div>
               </div></div>
@@ -1283,7 +1116,6 @@ html:not([data-mode="play"]) .glyph{transition:none}
                     <div class="drow"><svg><use href="#i-phone"/></svg><span class="val" style="color:var(--accentText);text-decoration:underline">033-742-2225</span></div>
                   </div>
                 </div>
-                <div class="stoast">스크랩했어요</div>
                 <div class="visit">
                   <div class="vh">원동성당에 방문 예정이신가요?</div>
                   <div class="vcards">
@@ -1299,6 +1131,7 @@ html:not([data-mode="play"]) .glyph{transition:none}
                 <div class="tabitem"><svg><use href="#i-chat"/></svg><span>여행</span></div>
                 <div class="tabitem"><svg><use href="#i-person"/></svg><span>마이</span></div>
               </div>
+              <div class="stoast">스크랩했어요</div>
             </div>
           </div>
         </div>
@@ -1359,7 +1192,14 @@ html:not([data-mode="play"]) .glyph{transition:none}
                 </div>
                 <div style="height:32px"></div>
                 </div></div>
-                <div class="albumlayer">
+              </div>
+              <div class="tabbar">
+                <div class="tabitem"><svg><use href="#i-home"/></svg><span>홈</span></div>
+                <div class="tabitem"><svg><use href="#i-search"/></svg><span>탐색</span></div>
+                <div class="tabitem"><svg><use href="#i-chat"/></svg><span>여행</span></div>
+                <div class="tabitem on"><svg><use href="#i-person"/></svg><span>마이</span></div>
+              </div>
+              <div class="albumlayer">
                   <div class="snav">
                     <span class="bk"><svg><use href="#i-back"/></svg></span>
                     <span class="st">스크랩 12</span>
@@ -1397,13 +1237,6 @@ html:not([data-mode="play"]) .glyph{transition:none}
                   </div>
                   </div>
                 </div>
-              </div>
-              <div class="tabbar">
-                <div class="tabitem"><svg><use href="#i-home"/></svg><span>홈</span></div>
-                <div class="tabitem"><svg><use href="#i-search"/></svg><span>탐색</span></div>
-                <div class="tabitem"><svg><use href="#i-chat"/></svg><span>여행</span></div>
-                <div class="tabitem on"><svg><use href="#i-person"/></svg><span>마이</span></div>
-              </div>
             </div>
           </div>
         </div>
@@ -1464,22 +1297,9 @@ html:not([data-mode="play"]) .glyph{transition:none}
       <a href="https://pictrip.org/legal/terms">이용약관</a>
       <a href="https://pictrip.org/legal/privacy">개인정보처리방침</a>
       <a href="https://pictrip.org/legal/data-sources">데이터 출처 고지</a>
-      <a class="playonly" href="/about/">정지 버전으로</a>
     </div>
   </div>
 </footer>
-
-<div id="rope" aria-hidden="true"></div>
-<div id="rider" aria-hidden="true">
-  <svg class="rig" viewBox="0 0 1024 1024">
-    <g class="cas"><circle cx="405" cy="216" r="80"/><path d="M405 314V629"/>
-      <path class="la" d="M413 398 304 530"/><path class="legl" d="M405 629 293 888"/>
-      <path class="legr" d="M405 629 517 888"/><path class="ra" d="M423 387 554 326"/></g>
-    <g class="inkline"><circle cx="405" cy="216" r="80"/><path d="M405 314V629"/>
-      <path class="la" d="M413 398 304 530"/><path class="legl" d="M405 629 293 888"/>
-      <path class="legr" d="M405 629 517 888"/><path class="ra" d="M423 387 554 326"/></g>
-  </svg>
-</div>
 
 <script>
 const PAIRS = [
@@ -1521,69 +1341,66 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({'&':'&amp;
 const $ = id => document.getElementById(id);
 const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const PLAY = document.documentElement.dataset.mode === 'play';
 const ASK_ANSWER = '강원특별자치도 강릉시 조건으로 20곳이에요. 이 중 7곳은 사람이 적은 편이에요.';
 
-/* ---------- feed (ch1) ---------- */
-function slidesHTML(p){
-  const hero =
-    '<div class="pslide"><img src="'+esc(p.img)+'" alt="'+esc(p.name)+'" loading="lazy" />' +
-    '<div class="pscrim hero"></div><div class="pmeta">' +
-    '<div class="hname">'+esc(p.name)+'</div>' +
-    '<div class="crow"><i></i><span>'+esc(p.country)+'</span></div>' +
-    '<div class="hdesc">'+esc(p.desc)+'</div></div></div>';
-  const ms = p.matches.map((m,i) =>
-    '<div class="pslide"><img src="'+esc(m.img)+'" alt="'+esc(m.t)+'" loading="lazy" />' +
-    '<div class="pscrim match"></div><div class="pmeta">' +
-    '<div class="mrow"><span class="mno">'+(i+1)+'</span><span class="mname">'+esc(m.t)+'</span></div>' +
-    '<div><span class="mchip">'+esc(m.r)+'</span></div>' +
-    (m.o ? '<div class="mov">'+esc(m.o)+'</div>' : '') +
-    '</div></div>').join('');
-  return hero + ms;
-}
+/* ---------- 홈 화면 (mobile/src/app/(tabs)/index.tsx) ---------- */
+const KTO_IMG = 'https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/';
+const CHANNELS = [
+  {label:'SPOT', img: KTO_IMG+'04/3527004_image1_1.jpg', dot:true},
+  {label:'CAFE', img: KTO_IMG+'11/3089911_image1_1.JPG', dot:true},
+  {label:'FOOD', img: KTO_IMG+'49/4054849_image1_1.jpg', dot:false, seen:true},
+  {label:'FESTA', img: KTO_IMG+'11/3078011_image1_1.jpg', dot:true},
+  {label:'HIDDEN', img: KTO_IMG+'94/3526894_image1_1.jpg', dot:true},
+];
+const RANKED = [
+  {t:'높은오름', r:'제주특별자치도 제주시', tag:'제주시', img: KTO_IMG+'04/3527004_image1_1.jpg'},
+  {t:'원동성당', r:'강원특별자치도 원주시', tag:'문화시설', img: KTO_IMG+'92/3388592_image1_1.JPG'},
+  {t:'가톨릭 목포 성지', r:'전라남도 목포시', tag:'목포시', img: KTO_IMG+'49/4054849_image1_1.jpg'},
+  {t:'첨백당', r:'대구광역시 동구', tag:'문화시설', img: KTO_IMG+'11/3089911_image1_1.JPG'},
+];
+const PICKED = [
+  {t:'궷물오름', s:'관광지 · 제주특별자치도 제주시', img: KTO_IMG+'15/3531515_image1_1.jpg'},
+  {t:'성내동 성당', s:'문화시설 · 강원특별자치도 삼척시', img: KTO_IMG+'82/3387182_image1_1.JPG'},
+  {t:'개오름', s:'관광지 · 제주특별자치도 서귀포시', img: KTO_IMG+'94/3526894_image1_1.jpg'},
+  {t:'해풍부원군윤택영댁재실', s:'문화시설 · 서울특별시 중구', img: KTO_IMG+'48/3083948_image1_1.JPG'},
+];
 
-$('feed').innerHTML = PAIRS.map((p,n) =>
-  '<div class="postblock"><div class="pcard" data-post="'+n+'">' +
-    '<div class="ptrack">'+slidesHTML(p)+'</div>' +
-    '<div class="pbtn" data-pbtn><svg><use href="#i-info"/></svg></div>' +
-    '<div class="pcount">1/4</div>' +
-    '<div class="pcredit">'+esc(p.author)+' · <a href="'+esc(p.licenseUrl)+'" rel="noopener noreferrer">'+esc(p.license)+'</a>' +
-    ' · <a href="'+esc(p.sourceUrl)+'" rel="noopener noreferrer">원본</a></div>' +
-  '</div><div class="pdots"><i class="on"></i><i></i><i></i><i></i></div></div>'
-).join('');
+const gridCard = (it, rank) =>
+  '<div class="hcard"><div class="hshot">' +
+    '<img src="'+esc(it.img)+'" alt="" loading="lazy" /><div class="sc"></div>' +
+    (rank ? '<span class="hrank">'+rank+'</span><span class="htag">#'+esc(it.tag)+'</span>' : '') +
+  '</div><div class="hfoot"><span class="tx">' +
+    '<span class="nm">'+esc(it.t)+'</span><span class="sb">'+esc(it.s || it.r)+'</span>' +
+  '</span><svg><use href="#i-bookmark"/></svg></div></div>';
 
-const posts = [...document.querySelectorAll('#feed .pcard')].map(card => ({
-  card,
-  track: card.querySelector('.ptrack'),
-  btn: card.querySelector('[data-pbtn]'),
-  count: card.querySelector('.pcount'),
-  credit: card.querySelector('.pcredit'),
-  dots: [...card.parentElement.querySelectorAll('.pdots i')],
-  idx: 0
-}));
+const homeHTML = () =>
+  '<div class="tiles">' + CHANNELS.map((c,i) =>
+    '<div class="tile' + (c.seen ? ' seen' : '') + (i === 0 ? ' t-open' : '') + '">' +
+    '<img src="'+esc(c.img)+'" alt="" loading="lazy" /><div class="scrim"></div>' +
+    '<b>'+esc(c.label)+'</b>' + (c.dot ? '<div class="newdot"></div>' : '') + '</div>').join('') +
+  '</div>' +
+  '<div class="scopetabs">' +
+    '<span class="scopetab"><svg><use href="#i-pin"/></svg>내 주변</span>' +
+    '<span class="scopetab on"><svg><use href="#i-flame"/></svg>전국 인기</span>' +
+  '</div>' +
+  '<div class="chips">' +
+    '<span class="chip on">전체</span><span class="chip">관광지</span>' +
+    '<span class="chip">카페</span><span class="chip">식당</span>' +
+  '</div>' +
+  '<div class="shead"><span class="st">전국 인기 장소</span><span class="sn">8월 17일 기준</span></div>' +
+  '<div class="hgrid">' + RANKED.map((it,i) => gridCard(it, i + 1)).join('') + '</div>' +
+  '<div class="hmore">5~10위 더보기<svg><use href="#i-chevdown"/></svg></div>' +
+  '<div class="shead"><span class="st"><em>여행자</em>님을 위한 AI 추천 장소</span></div>' +
+  '<div class="hgrid">' + PICKED.map(it => gridCard(it, 0)).join('') + '</div>' +
+  '<div style="height:32px"></div>';
 
-function stepPost(p){
-  p.idx = (p.idx + 1) % 4;
-  p.track.style.transform = 'translateX(' + (-100 * p.idx) + '%)';
-  p.count.textContent = (p.idx + 1) + '/4';
-  p.dots.forEach((d,i) => d.classList.toggle('on', i === p.idx));
-  const hero = p.idx === 0;
-  p.credit.style.display = hero ? 'block' : 'none';
-  p.btn.innerHTML = hero ? '<svg><use href="#i-info"/></svg>' : '<svg><use href="#i-bookmark"/></svg>';
-}
-
-/* ---------- cover: 한 번 뛰어 사진을 집는다 ---------- */
-(function coverIntro(){
-  const cover = $('cover');
-  if (!PLAY || reduce){ cover.classList.remove('intro'); return; }
-  setTimeout(() => cover.classList.remove('intro'), 1550);
-})();
+document.querySelectorAll('[data-home]').forEach(el => { el.innerHTML = homeHTML(); });
 
 /* ---------- thesis pair ---------- */
 (function pairMeet(){
   const el = $('pair');
   if (!el) return;
-  if (!PLAY || reduce){ el.classList.add('met'); return; }
+  if (reduce){ el.classList.add('met'); return; }
   new IntersectionObserver((es, ob) => es.forEach(e => {
     if (!e.isIntersecting) return;
     el.classList.add('met');
@@ -1597,504 +1414,104 @@ $('exgrid').innerHTML = EXPLORE.map((it,i) =>
   '<img src="'+esc(it.img)+'" alt="'+esc(it.n)+', '+esc(it.c)+'" loading="lazy" /></div>'
 ).join('');
 
-/* ---------- 장면: 로고가 폰에 들어가 기능을 시연한다 ---------- */
-function resetPost(p){
-  p.idx = 0;
-  p.track.style.transform = 'translateX(0)';
-  p.count.textContent = '1/4';
-  p.dots.forEach((d,i) => d.classList.toggle('on', i === 0));
-  p.credit.style.display = 'block';
-  p.btn.innerHTML = '<svg><use href="#i-info"/></svg>';
-}
-
-const KTO = 'https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/';
-const CH2_STORY = [
-  {img: KTO+'04/3527004_image1_1.jpg', nm:'높은오름', rg:'제주특별자치도 제주시', ln:''},
-  {img: KTO+'15/3531515_image1_1.jpg', nm:'궷물오름', rg:'제주특별자치도 제주시',
-   ln:'산이 높지 않고 둘러보는 게 오랜 시간이 걸리지도 않아 가벼운 마음으로 걸을 수 있는 오름이다.'},
-  {img: KTO+'94/3526894_image1_1.jpg', nm:'개오름', rg:'제주특별자치도 서귀포시', ln:''},
-];
-function storyGo(i){
-  const c = CH2_STORY[i];
-  $('st-img').src = c.img;
-  $('st-nm').textContent = c.nm;
-  $('st-rg').textContent = c.rg;
-  $('st-rk').textContent = i + 1;
-  const ln = $('st-ln');
-  ln.textContent = c.ln;
-  ln.style.display = c.ln ? 'block' : 'none';
-  [...$('st-segs').children].forEach((b,k) => {
-    b.className = k < i ? 'past' : k === i ? 'now' : '';
-  });
-}
-
-const exBig = $('exgrid') && $('exgrid').querySelector('.t.big');
+/* ---------- 탐색: 그리드에서 고른 사진 = PostModal ---------- */
+const EX_PICK = PAIRS[2];
+const exBig = $('exgrid').querySelector('.t.big');
 if (exBig){
   exBig.id = 't-find';
   const im = exBig.querySelector('img');
-  im.src = PAIRS[2].img; im.alt = PAIRS[2].name;
+  im.src = EX_PICK.img; im.alt = EX_PICK.name;
 }
-$('exTrack').innerHTML = slidesHTML(PAIRS[2]);
-function exGo(i){
-  $('exTrack').style.transform = 'translateX(' + (-100 * i) + '%)';
-  $('exCount').textContent = (i + 1) + '/4';
-  [...$('exDots').children].forEach((d,k) => d.classList.toggle('on', k === i));
-}
+$('exShot').src = EX_PICK.img;
+$('exShot').alt = EX_PICK.name;
+$('exTitle').textContent = EX_PICK.name + ', ' + EX_PICK.country;
+$('exMatches').innerHTML = EX_PICK.matches.map(m =>
+  '<span class="mm"><img src="'+esc(m.img)+'" alt="'+esc(m.t)+'" loading="lazy" />' +
+  '<b>'+esc(m.t)+'</b></span>').join('');
+$('exCredit').textContent = '사진 · Wikimedia Commons / ' + EX_PICK.license;
 
-function typeText(el, text, dev, step){
-  let k = 0;
-  dev.classList.add('typing');
-  const iv = setInterval(() => {
-    k += 1;
-    el.textContent = text.slice(0, k);
-    if (k >= text.length) clearInterval(iv);
-  }, step);
-  return iv;
-}
-
-const rider = document.getElementById('rider');
-const rope = document.getElementById('rope');
-const deskOK = matchMedia('(min-width:1001px)').matches;
-const ez = t => t < 0 ? 0 : t > 1 ? 1 : t * t * (3 - 2 * t);
-const bez = (a, b, c, t) => (1 - t) * (1 - t) * a + 2 * (1 - t) * t * b + t * t * c;
-const RID_W = 84;
-let ropeImp = 0, ropeImpAt = 0, jPrev = 0;
-let rCx = innerWidth / 2, rCy = innerHeight * .3;
-let lx = innerWidth / 2, ly = 0, hand = {x: innerWidth / 2, y: 0};
-
-function setR(x, y, rot, sc, W){
-  lx = x; ly = y;
-  rider.style.width = W + 'px';
-  rider.style.transform = 'translate(' + x + 'px,' + y + 'px) rotate(' + (rot || 0) + 'deg) scale(' + (sc || 1) + ')';
-}
 function ring(sec, sel){
-  const t = sel && sec.querySelector(sel);
-  if (t){ t.classList.add('tapring'); setTimeout(() => t.classList.remove('tapring'), 650); }
+  const t = sec.querySelector(sel);
+  if (t && !t.classList.contains('tapring')){
+    t.classList.add('tapring');
+    setTimeout(() => t.classList.remove('tapring'), 650);
+  }
 }
-function tapFx(){ rider.classList.add('tap'); setTimeout(() => rider.classList.remove('tap'), 300); }
-function setPostIdx(i){
-  const p = posts[0]; if (!p) return;
-  p.idx = i;
-  p.track.style.transform = 'translateX(' + (-100 * i) + '%)';
-  p.count.textContent = (i + 1) + '/4';
-  p.dots.forEach((d, k) => d.classList.toggle('on', k === i));
-  p.credit.style.display = i === 0 ? 'block' : 'none';
-  p.btn.innerHTML = i === 0 ? '<svg><use href="#i-info"/></svg>' : '<svg><use href="#i-bookmark"/></svg>';
-}
-function inPoint(rect, W, axPct, lyPct){
-  return {
-    x: rect.left + rect.width / 2 - W / 2 + parseFloat(axPct) / 100 * W,
-    y: rect.top + rect.height * .95 - W + parseFloat(lyPct) / 100 * W,
-  };
+const fired = {};
+function once(id, sec, sel){
+  if (fired[id]) return;
+  fired[id] = 1;
+  ring(sec, sel);
 }
 
+/* 챕터마다 앱 화면 하나. 페이지 스크롤은 건드리지 않는다 —
+   화면 속 스크롤(scroll)이 흐름을 끌고, 스크롤이 없는 화면은 들어올 때(view) 상태를 보여준다 */
 const ZONES = [
-  {id:'ch2', stages:3, still:1, swipe:false,
-   poses:[['0%','-46%','-116deg'],['0%','-46%','-116deg'],['26%','-26%','-60deg'],['26%','-26%','-60deg']],
-   rings:{1:'#t-open'},
-   apply(sec, dev, st){ dev.classList.toggle('open', st >= 1); storyGo(Math.min(2, Math.max(0, st - 1))); }},
-  {id:'ch1', stages:3, still:1, swipe:true,
-   poses:[['0%','-14%','-58deg'],['0%','-14%','-58deg'],['0%','-14%','-58deg'],['0%','-14%','-58deg']],
-   rings:{},
-   apply(sec, dev, st){ setPostIdx(st); }},
-  {id:'chex', stages:4, still:2, swipe:true,
-   poses:[['0%','-30%','-106deg'],['0%','-8%','-58deg'],['0%','-8%','-58deg'],['0%','-8%','-58deg'],['0%','-8%','-58deg']],
-   rings:{1:'#t-find'},
-   apply(sec, dev, st){ dev.classList.toggle('picked', st >= 1); exGo(Math.max(0, st - 1)); }},
-  {id:'ch3', stages:1, swipe:false,
-   poses:[['0%','-18%','-70deg'],['0%','-4%','-70deg']],
-   rings:{1:'#t-look'},
-   apply(sec, dev, st){ dev.classList.toggle('viewed', st >= 1); }},
-  {id:'ch4', custom:'ask', poses:[['-14%','3%','-30deg']]},
-  {id:'save', custom:'save', poses:[['0%','2%','-38deg']]},
-  {id:'saved', stages:1, swipe:false,
-   poses:[['0%','-40%','-96deg'],['0%','-10%','-96deg']],
-   rings:{1:'#t-check'},
-   apply(sec, dev, st){ dev.classList.toggle('shown', st >= 1); }},
+  {id:'ch2',
+   view(sec, dev){
+     dev.classList.add('open');
+     ring(sec, '.t-open');
+     sec.querySelector('.vp').style.overflow = 'hidden';
+   }},
+  {id:'ch1'},
+  {id:'chex',
+   scroll(sec, dev, p){
+     const open = p >= .94;
+     dev.classList.toggle('picked', open);
+     if (open) once('chex', sec, '#t-find');
+   }},
+  {id:'ch3'},
+  {id:'ch4',
+   view(sec, dev){
+     $('askText').textContent = '';
+     $('ansText').textContent = ASK_ANSWER;
+     dev.classList.add('sent','st1','st2','cards','mapon');
+     ring(sec, '#t-ask');
+   }},
+  {id:'save',
+   scroll(sec, dev, p){
+     const saved = p >= .94;
+     dev.classList.toggle('savedon', saved);
+     if (saved) once('save', sec, '#t-save');
+   }},
+  {id:'saved',
+   view(sec, dev){ dev.classList.add('shown'); ring(sec, '#t-check'); }},
 ];
-const zSt = {}, zAbove = {};
 
-function setZoneLayout(sec, r){
-  const col = sec.querySelector('.col');
-  const stage = sec.querySelector('.stage');
+const HINT = '<span class="scrollhint"><svg><use href="#i-chevdown"/></svg>화면 안에서 스크롤</span>';
+
+for (const z of ZONES){
+  const sec = $(z.id); if (!sec) continue;
   const dev = sec.querySelector('.device');
-  if (!col || !stage || !dev) return;
-  const cur = parseFloat(stage.dataset.shift || '0');
-  const rect = dev.getBoundingClientRect();
-  const baseCx = (rect.left - cur) + rect.width / 2;
-  const off = innerWidth / 2 - baseCx;
-  const shift = off * (1 - Math.min(1, r / .62));
-  stage.dataset.shift = shift;
-  stage.style.transform = 'translateX(' + shift + 'px)';
-  col.style.visibility = r <= 0 ? 'hidden' : 'visible';
-  const cRect = col.getBoundingClientRect();
-  const dir = (cRect.left + cRect.width / 2) < innerWidth / 2 ? 1 : -1;
-  const seg = (a, b) => ez((r - a) / (b - a));
-  const items = [
-    [sec.querySelector('.kicker'), seg(.42, .70)],
-    [sec.querySelector('.verb'), seg(.50, .86)],
-    [sec.querySelector('.oneline'), seg(.62, 1)],
-  ];
-  for (const [el, q] of items){
-    if (!el) continue;
-    el.style.opacity = q;
-    el.style.transform = 'translateX(' + (dir * 90 * (1 - q)) + 'px)';
-  }
-}
-function resetZoneLayout(sec){
-  const col = sec.querySelector('.col');
+  const vp = sec.querySelector('.vp');
   const stage = sec.querySelector('.stage');
-  if (stage){ stage.style.transform = ''; stage.dataset.shift = '0'; }
-  if (col) col.style.visibility = '';
-  ['.kicker','.verb','.oneline'].forEach(s => {
-    const el = sec.querySelector(s);
-    if (el){ el.style.opacity = ''; el.style.transform = ''; }
-  });
-}
 
-function zoneReset(z){
-  const sec = $(z.id), dev = sec.querySelector('.device');
-  if (z.custom === 'ask'){
-    dev.classList.remove('typing','sent','st1','st2','cards','mapon');
-    $('askText').textContent = ''; $('ansText').textContent = '';
-  } else if (z.custom === 'save'){
-    dev.classList.remove('savedon');
-    const vp = sec.querySelector('.vp'); if (vp) vp.scrollTop = 0;
-  } else {
-    z.apply(sec, dev, 0);
-  }
-  zSt[z.id] = 0;
-}
-
-function demoPose(z, dev, rect, W, st, frac){
-  const a = z.poses[Math.max(0, st - 1)] || z.poses[0];
-  const b = z.poses[st] || a;
-  const q = ez(Math.min(1, frac / .4));
-  const pa = inPoint(rect, W, a[0], a[1]);
-  const pb = inPoint(rect, W, b[0], b[1]);
-  rider.style.setProperty('--arm', b[2] || a[2]);
-  let x = pa.x + (pb.x - pa.x) * q;
-  const y = pa.y + (pb.y - pa.y) * q;
-  if (z.swipe && st >= 1) x += -W * .2 * Math.sin(Math.PI * Math.min(1, frac / .5));
-  return {x, y};
-}
-
-function applyClip(scrRect){
-  if (!scrRect){ rider.style.clipPath = ''; return; }
-  const r = rider.getBoundingClientRect();
-  const ct = Math.max(0, scrRect.top - r.top), cl = Math.max(0, scrRect.left - r.left);
-  const cr = Math.max(0, r.right - scrRect.right), cb = Math.max(0, r.bottom - scrRect.bottom);
-  rider.style.clipPath = 'inset(' + ct + 'px ' + cr + 'px ' + cb + 'px ' + cl + 'px round 28px)';
-}
-
-function crossStages(z, sec, st){
-  const prev = zSt[z.id] || 0;
-  if (st !== prev){
-    if (st > prev){ tapFx(); ring(sec, z.rings && z.rings[st]); }
-    zSt[z.id] = st;
-  }
-}
-
-function runDemo(z, sec, dev, rect, W, pp){
-  if (z.custom === 'ask'){ askZone(z, sec, dev, rect, W, pp); return; }
-  if (z.custom === 'save'){ saveZone(z, sec, dev, rect, W, pp); return; }
-  const segs = z.stages + 1;
-  const st = Math.min(z.stages, Math.floor(pp * segs));
-  const frac = pp * segs - st;
-  crossStages(z, sec, st);
-  z.apply(sec, dev, st);
-  rider.classList.add('reach');
-  const pt = demoPose(z, dev, rect, W, st, frac);
-  setR(pt.x, pt.y, 0, 1, W);
-}
-
-function renderZone(z, sec, dev, p, vh, vw){
-  /* 공통 라이프사이클: APPROACH → ENTRY → DEMO → PAUSE → REVEAL → FINAL
-     ch2 만 APPROACH 자리에 커버 연결 인트로(밧줄 성장·탑승·하강·이탈)가 들어간다 */
-  const first = z.id === 'ch2';
-  const E0 = first ? .38 : .10, E1 = first ? .50 : .20;
-  const D1 = first ? .78 : .70;
-  const R0 = first ? .81 : .72, R1 = first ? .97 : .96;
-
-  const r = p < R0 ? 0 : ez((p - R0) / (R1 - R0));
-  setZoneLayout(sec, r);
-
-  const rect = dev.getBoundingClientRect();
-  const scr = dev.querySelector('.viewport').getBoundingClientRect();
-  const W = rect.width * .37;
-  const cx = Math.round(vw / 2);
-  const now = performance.now();
-
-  rider.classList.add('scrub');
-  rider.classList.remove('anim');
-
-  const pose0 = z.poses ? z.poses[0] : ['0%', '0%'];
-  const dismX = (cx - 42) + (rect.left - W * .2 - (cx - 42)) * .4;
-
-  if (first){
-    if (jPrev < .355 && p >= .355){ ropeImp = 1.6; ropeImpAt = now; }
-    jPrev = p;
-    const ropeMax = vh * .60;
-    let ropeH = ropeMax, ropeOp = 1;
-    if (p < .08) ropeH = ez(p / .08) * ropeMax;
-    if (p > .36) ropeOp = 1 - ez((p - .36) / .08);
-    const dI = now - ropeImpAt;
-    const ropeRot = Math.sin(now / 900) * .35 +
-      (dI < 900 ? ropeImp * Math.sin(dI / 70) * Math.exp(-dI / 420) : 0);
-    rope.classList.add('on');
-    rope.style.left = (cx - 1.5) + 'px';
-    rope.style.height = ropeH + 'px';
-    rope.style.opacity = ropeOp;
-    rope.style.transform = 'rotate(' + ropeRot + 'deg)';
-
-    if (p < .08){
-      rider.classList.remove('on');
-      applyClip(null);
-      zoneReset(z);
-      return;
-    }
-    rider.classList.add('on');
-    if (p < .38){
-      let x = cx - 42, y = vh * .18, rot = 0;
-      if (p < .15){
-        rider.classList.add('riding');
-        const q = ez((p - .08) / .07);
-        y = vh * (.05 + .13 * q); x = cx - 42 + Math.sin(q * Math.PI) * 10; rot = (1 - q) * 6;
-        zoneReset(z);
-      } else if (p < .32){
-        rider.classList.add('riding');
-        const q = (p - .15) / .17;
-        y = vh * (.18 + .38 * ez(q)); rot = 2 * Math.sin(p * 46);
-      } else if (p < .355){
-        rider.classList.add('riding');
-        const q = ez((p - .32) / .035);
-        y = vh * .56; x = cx - 42 + q * 10; rot = q * 4;
-      } else {
-        rider.classList.remove('riding');
-        const q = ez((p - .355) / .025);
-        y = vh * .56 + q * vh * .02; x = (cx - 42) + (dismX - (cx - 42)) * q; rot = 4 - q * 4;
-      }
-      setR(x, y, rot, 1, RID_W);
-      applyClip(null);
-      return;
-    }
-  } else {
-    if (p < E0){
-      const q = ez(p / E0);
-      rider.classList.add('on', 'riding');
-      rider.classList.remove('reach');
-      const hy = rect.top - vh * .13;
-      const ty = vh * .04 + (hy - vh * .04) * q;
-      const tx = cx - RID_W / 2 + Math.sin(p * 40) * 4;
-      const b = Math.min(1, q / .3);
-      const x = hand.x + (tx - hand.x) * b;
-      const y = hand.y + (ty - hand.y) * b;
-      setR(x, y, (1 - q) * 3, 1, RID_W);
-      rope.classList.add('on');
-      rope.style.left = (cx - 1.5) + 'px';
-      rope.style.height = (y + RID_W * .28) + 'px';
-      rope.style.opacity = '1';
-      rope.style.transform = '';
-      applyClip(null);
-      zoneReset(z);
-      return;
-    }
-    rope.style.opacity = p < E1 ? String(1 - ez((p - E0) / (E1 - E0))) : '0';
+  if (z.view){
+    new IntersectionObserver((es, ob) => es.forEach(e => {
+      if (!e.isIntersecting) return;
+      z.view(sec, dev);
+      ob.disconnect();
+    }), {threshold:.35}).observe(sec);
+    continue;
   }
 
-  rider.classList.add('on');
-  if (p < E1){
-    const q = ez((p - E0) / (E1 - E0));
-    rider.classList.remove('riding');
-    if (pose0[2]) rider.style.setProperty('--arm', pose0[2]);
-    const L = inPoint(rect, W, pose0[0], pose0[1]);
-    const P0 = first
-      ? {x: dismX, y: vh * .58}
-      : {x: cx - RID_W / 2, y: rect.top - vh * .13};
-    const P1 = {x: rect.left + W * .05, y: rect.top - W * .75};
-    const rot = q < .4 ? -8 * ez(q / .4) : q < .75 ? -8 + 13 * ez((q - .4) / .35) : 5 - 5 * ez((q - .75) / .25);
-    const sc = q < .4 ? 1 + .06 * ez(q / .4) : q < .75 ? 1.06 - .16 * ez((q - .4) / .35) : .9 + .1 * ez((q - .75) / .25);
-    setR(bez(P0.x, P1.x, L.x, q), bez(P0.y, P1.y, L.y, q), rot, sc, RID_W + (W - RID_W) * q);
-    applyClip(q > .75 ? scr : null);
-    zoneReset(z);
-    return;
-  }
-
-  rider.classList.remove('riding');
-  const pp = p < D1 ? Math.min(1, (p - E1) / (D1 - E1)) : 1;
-  runDemo(z, sec, dev, rect, W, pp);
-  applyClip(scr);
-}
-
-function askZone(z, sec, dev, rect, W, pp){
-  const TXT = '강릉 관광지';
-  const ANS = ASK_ANSWER;
-  rider.classList.add('reach');
-  let ax = '-14%', ly = '3%', arm = '-30deg';
-  if (pp >= .30 && pp < .46){ ax = '14%'; arm = '-34deg'; }
-  else if (pp >= .46){ ax = '30%'; ly = '-8%'; arm = '-66deg'; }
-  rider.style.setProperty('--arm', arm);
-  const pt = inPoint(rect, W, ax, ly);
-  setR(pt.x, pt.y, 0, 1, W);
-
-  const sent = pp >= .34;
-  const chars = pp < .06 ? 0 : Math.round(TXT.length * ez((pp - .06) / .22));
-  $('askText').textContent = sent ? '' : TXT.slice(0, Math.min(TXT.length, chars));
-  dev.classList.toggle('typing', pp >= .05 && !sent);
-  dev.classList.toggle('sent', sent);
-  dev.classList.toggle('st1', pp >= .40);
-  dev.classList.toggle('st2', pp >= .48);
-  const an = pp < .54 ? 0 : Math.round(ANS.length * ez((pp - .54) / .18));
-  $('ansText').textContent = ANS.slice(0, an);
-  dev.classList.toggle('cards', pp >= .76);
-  dev.classList.toggle('mapon', pp >= .88);
-
-  const st = pp >= .34 ? 2 : pp >= .05 ? 1 : 0;
-  const prev = zSt[z.id] || 0;
-  if (st > prev){ tapFx(); ring(sec, st === 1 ? '#t-field' : '#t-ask'); }
-  zSt[z.id] = st;
-}
-
-function saveZone(z, sec, dev, rect, W, pp){
-  const vp = sec.querySelector('.vp');
-  const pt = inPoint(rect, W, '0%', '2%');
-  rider.classList.add('reach');
-  rider.style.setProperty('--arm', '-38deg');
-  setR(pt.x, pt.y, 0, 1, W);
-  if (vp){
+  if (!vp) continue;
+  const progress = () => {
     const max = vp.scrollHeight - vp.clientHeight;
-    vp.scrollTop = max * ez(Math.min(1, pp / .52));
-  }
-  const st = pp >= .68 ? 1 : 0;
-  const prev = zSt[z.id] || 0;
-  if (st === 1 && prev === 0){ tapFx(); ring(sec, '#t-save'); }
-  zSt[z.id] = st;
-  dev.classList.toggle('savedon', pp >= .68);
-}
-
-
-function applyFinal(z){
-  if (!z) return;
-  const sec = $(z.id); if (!sec) return;
-  const dev = sec.querySelector('.device'); if (!dev) return;
-  if (z.custom === 'ask'){
-    dev.classList.add('sent','st1','st2','cards','mapon');
-    $('ansText').textContent = ASK_ANSWER;
-  } else if (z.custom === 'save'){
-    dev.classList.add('savedon');
-    const vp = sec.querySelector('.vp');
-    if (vp) vp.scrollTop = vp.scrollHeight;
-  } else {
-    z.apply(sec, dev, PLAY || z.still == null ? z.stages : z.still);
-  }
-}
-
-if (!PLAY || reduce || !deskOK){
-  rider.style.display = 'none';
-  rope.style.display = 'none';
-  if (!PLAY){
-    const settle = () => ZONES.forEach(applyFinal);
-    settle();
-    addEventListener('load', settle);
-    if (document.fonts && document.fonts.ready) document.fonts.ready.then(settle);
-  } else {
-    const io = new IntersectionObserver(es => es.forEach(e => {
-      if (e.isIntersecting) applyFinal(ZONES.find(x => x.id === e.target.id));
-    }), {threshold:.35});
-    ZONES.forEach(z => { const el = $(z.id); if (el) io.observe(el); });
-  }
-} else {
-  const glyph = document.querySelector('.cover .glyph');
-  const footer = document.querySelector('footer');
-  rider.classList.add('riding');
-  let lastActive = null;
-
-  function frame(){
-    const vh = innerHeight, vw = innerWidth;
-    if (glyph) glyph.classList.toggle('depart', scrollY > vh * .22);
-
-    let active = null, ap = 0;
-    for (const z of ZONES){
-      const sec = $(z.id);
-      const r = sec.getBoundingClientRect();
-      const top = r.top + scrollY;
-      const lead = z.id === 'ch2' ? vh * .40 : 0;
-      const start = top - lead, end = top + sec.offsetHeight - vh;
-      if (scrollY >= start && scrollY <= end){
-        active = z; ap = (scrollY - start) / (end - start); break;
-      }
-      if (scrollY < start - vh * .3 && !zAbove[z.id]){ zoneReset(z); resetZoneLayout($(z.id)); zAbove[z.id] = true; }
-      if (scrollY >= start) zAbove[z.id] = false;
-    }
-
-    if (lastActive !== active){
-      rider.classList.remove('reach');
-      hand = {x: lx, y: ly};
-      applyClip(null);
-    }
-    lastActive = active;
-
-    if (active){
-      const sec = $(active.id), dev = sec.querySelector('.device');
-      renderZone(active, sec, dev, ap, vh, vw);
-      requestAnimationFrame(frame);
-      return;
-    }
-
-    const specEl = $('spec');
-    const started = $('ch2').getBoundingClientRect().top < vh * .9;
-    const ended = specEl ? specEl.getBoundingClientRect().top < vh * .7 : false;
-    const past = scrollY > vh * .55 && started;
-    const nearEnd = ended || footer.getBoundingClientRect().top < vh * .45;
-    const visible = past && !nearEnd;
-    rider.classList.toggle('on', visible);
-    rider.classList.add('riding','scrub');
-    rider.classList.remove('reach');
-    rider.style.clipPath = '';
-    rope.classList.toggle('on', visible);
-    rope.style.opacity = '';
-    rope.style.transform = '';
-
-    let tx = vw / 2, best = Infinity;
-    for (const z of ZONES){
-      const d = $(z.id).querySelector('.device');
-      const r = d.getBoundingClientRect();
-      const dist = Math.abs(r.top + r.height / 2 - vh / 2);
-      if (dist < best){ best = dist; tx = r.left + r.width / 2; }
-    }
-    rCx += (tx - rCx) * .1;
-    rCy += (vh * .3 - rCy) * .1;
-    setR(rCx - RID_W / 2, rCy, 0, 1, RID_W);
-    rope.style.left = (rCx - 1.5) + 'px';
-    rope.style.height = (rCy + RID_W * .28) + 'px';
-    requestAnimationFrame(frame);
-  }
-  requestAnimationFrame(frame);
-}
-
-/* ---------- 폰 안 스크롤 ---------- */
-const screens = [...document.querySelectorAll('.chapter')].map(sec => {
-  const vp = sec.querySelector('.vp');
-  if (!vp) return null;
-  return {
-    vp,
-    rail: sec.querySelector('[data-rail]'),
+    return max > 4 ? clamp(vp.scrollTop / max, 0, 1) : 0;
   };
-}).filter(Boolean);
+  vp.addEventListener('scroll', () => {
+    stage.classList.add('used');
+    if (z.scroll) z.scroll(sec, dev, progress());
+  }, {passive:true});
 
-function progressOf(c){
-  const range = c.vp.scrollHeight - c.vp.clientHeight;
-  return range > 4 ? clamp(c.vp.scrollTop / range, 0, 1) : 0;
-}
-
-function syncScreen(c){
-  const p = progressOf(c);
-  if (c.rail) c.rail.style.transform = 'translateY(' + (p * 354) + '%)';
-}
-
-for (const c of screens){
-  c.vp.addEventListener('scroll', () => syncScreen(c), {passive:true});
-  syncScreen(c);
+  const showHint = () => {
+    if (stage.querySelector('.scrollhint')) return;
+    if (vp.scrollHeight - vp.clientHeight > 40) stage.insertAdjacentHTML('beforeend', HINT);
+  };
+  showHint();
+  addEventListener('load', showHint);
+  addEventListener('resize', showHint);
 }
 
 function onScroll(){
@@ -2116,20 +1533,8 @@ $('credits').innerHTML =
   '<b style="margin-top:14px">국내 관광지 사진 - 한국관광공사</b>' +
   '「국문 관광정보 서비스(TourAPI)」, 공공누리 제1유형·제3유형.';
 
-const relayout = () => { screens.forEach(syncScreen); onScroll(); };
 addEventListener('scroll', onScroll, {passive:true});
-addEventListener('resize', relayout);
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(relayout);
-relayout();
-
-if (!reduce){
-  const io = new IntersectionObserver(es => {
-    es.forEach(e => { if (e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
-  }, {threshold:.2});
-  document.querySelectorAll('.rv').forEach(el => io.observe(el));
-} else {
-  document.querySelectorAll('.rv').forEach(el => el.classList.add('in'));
-}
+onScroll();
 
 /* ---------- 챕터 표시등 ---------- */
 (function chapterSpy(){
