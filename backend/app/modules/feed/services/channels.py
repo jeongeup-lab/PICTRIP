@@ -127,13 +127,14 @@ async def load_channel_metas(
     from app.modules.feed.services.kto_channels import load_kto_channel_cached
     from app.modules.feed.services.signal_channels import load_signal_channel_cached
 
-    spot, cafe, food, festa, hidden = await asyncio.gather(
-        load_signal_channel_cached(session, redis, "spot"),
-        load_signal_channel_cached(session, redis, "cafe"),
-        load_signal_channel_cached(session, redis, "food"),
-        _safe(asyncio.wait_for(load_kto_channel_cached(redis, kto, "festa"), _META_TIMEOUT)),
-        load_signal_channel_cached(session, redis, "hidden"),
+    festa_task = asyncio.ensure_future(
+        _safe(asyncio.wait_for(load_kto_channel_cached(redis, kto, "festa"), _META_TIMEOUT))
     )
+    spot = await load_signal_channel_cached(session, redis, "spot")
+    cafe = await load_signal_channel_cached(session, redis, "cafe")
+    food = await load_signal_channel_cached(session, redis, "food")
+    hidden = await load_signal_channel_cached(session, redis, "hidden")
+    festa = await festa_task
     metas = [
         _meta_or_unavailable("spot", spot or None),
         _meta_or_unavailable("cafe", cafe or None),
