@@ -132,9 +132,10 @@ async def home_nearby(
 async def home_trending(
     session: DbSession,
     redis: RedisDep,
+    kto: KtoDep,
     limit: int = Query(home.CARD_COUNT, ge=1, le=20),
 ) -> dict[str, Any]:
-    ranking = await home.load_trending(session, redis, limit=limit)
+    ranking = await home.load_trending(session, redis, kto, limit=limit)
     return ok(_home_cards(ranking))
 
 

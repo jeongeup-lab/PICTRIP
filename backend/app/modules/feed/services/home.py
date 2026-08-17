@@ -1,17 +1,25 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import math
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from datetime import date
+from typing import Any
 
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
+from app.kto.client import KtoClient
 from app.kto.display import t1_display_url
 from app.modules.feed import repositories as repo
+from app.modules.feed.services.interleave import (
+    NEARBY_PATTERN,
+    TRENDING_PATTERN,
+    interleave,
+)
 from app.modules.spots import services as spots_services
 
 logger = get_logger(__name__)
@@ -27,7 +35,7 @@ _TRENDING_TTL = 3600
 _TASTE_PICKS_TTL = 21_600
 _SEED_LIMIT = 30
 _NEIGHBOR_OVERFETCH = 3
-_CACHE_VERSION = "v2"
+_CACHE_VERSION = "v3"
 
 
 @dataclass(frozen=True)
@@ -67,17 +75,22 @@ async def load_nearby_ranked(
 
     dlat = _NEARBY_RADIUS_M / 111_320.0
     dlng = _NEARBY_RADIUS_M / (111_320.0 * max(math.cos(math.radians(lat)), 0.01))
-    rows = await repo.fetch_nearby_ranked(
-        session,
-        lat=lat,
-        lng=lng,
-        min_lat=lat - dlat,
-        max_lat=lat + dlat,
-        min_lng=lng - dlng,
-        max_lng=lng + dlng,
-        radius=_NEARBY_RADIUS_M,
-        limit=limit,
-    )
+    pools = {
+        category: await repo.fetch_nearby_by_category(
+            session,
+            category=category,
+            lat=lat,
+            lng=lng,
+            min_lat=lat - dlat,
+            max_lat=lat + dlat,
+            min_lng=lng - dlng,
+            max_lng=lng + dlng,
+            radius=float(_NEARBY_RADIUS_M),
+            limit=limit,
+        )
+        for category in ("spot", "cafe", "food")
+    }
+    rows = interleave(pools, NEARBY_PATTERN, limit=limit, key_of=lambda r: r.content_id)
     ranking = HomeRanking(
         cards=[_card(row, rank=idx) for idx, row in enumerate(rows, start=1)],
         base_date=_shared_base_date(row.base_ymd for row in rows),
@@ -87,28 +100,45 @@ async def load_nearby_ranked(
 
 
 async def load_trending(
-    session: AsyncSession, redis: Redis, *, limit: int = CARD_COUNT
+    session: AsyncSession,
+    redis: Redis,
+    kto: KtoClient | None = None,
+    *,
+    limit: int = CARD_COUNT,
 ) -> HomeRanking:
     key = f"home:trending:{_CACHE_VERSION}:{limit}"
     cached = await _cache_get(redis, key)
     if cached is not None:
         return cached
 
-    rows = await spots_services.load_hot_spots(session, limit=limit)
-    usable = [row for row in rows if row.content_id]
+    from app.modules.feed.services.kto_channels import load_kto_channel_cached
+    from app.modules.feed.services.signal_channels import load_signal_channel_cached
+
+    pools: dict[str, list[Any]] = {}
+    for channel in ("spot", "cafe", "food"):
+        pools[channel] = list(await load_signal_channel_cached(session, redis, channel))
+    festa: list[Any] = []
+    if kto is not None:
+        try:
+            festa = list(await asyncio.wait_for(load_kto_channel_cached(redis, kto, "festa"), 4.0))
+        except Exception:
+            festa = []
+    pools["festa"] = [c for c in festa if c.content_id]
+
+    rows = interleave(pools, TRENDING_PATTERN, limit=limit, key_of=lambda r: r.content_id)
     ranking = HomeRanking(
         cards=[
             HomeCardRow(
                 content_id=row.content_id,
                 title=row.title,
                 region_label=row.region_label,
-                image_url=t1_display_url(row.first_image_url, row.cpyrht_div_cd),
+                image_url=t1_display_url(row.image_url, row.cpyrht_div_cd),
                 rank=idx,
-                tag=_last_token(row.region_label),
+                tag=row.tag or (row.dday and "축제") or _last_token(row.region_label),
             )
-            for idx, row in enumerate(usable, start=1)
+            for idx, row in enumerate(rows, start=1)
         ],
-        base_date=_shared_base_date(row.base_ymd for row in usable),
+        base_date=None,
     )
     await _cache_set(redis, key, ranking, _TRENDING_TTL if ranking.cards else _EMPTY_TTL)
     return ranking
