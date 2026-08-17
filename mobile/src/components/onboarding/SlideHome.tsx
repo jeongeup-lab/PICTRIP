@@ -55,7 +55,6 @@ export function SlideHome() {
           </View>
         ))}
       </View>
-      <Text style={styles.credit}>사진 · 한국관광공사</Text>
     </View>
   );
 }
@@ -120,5 +119,4 @@ const styles = StyleSheet.create({
   rankFooter: { paddingTop: 8, paddingHorizontal: 10, paddingBottom: 10 },
   rankTitle: { fontSize: 12.5, fontWeight: "800", letterSpacing: -0.3, color: colors.ink },
   rankMeta: { fontSize: 11, fontWeight: "600", color: colors.sec, marginTop: 3 },
-  credit: { fontSize: 10, fontWeight: "600", color: colors.ter, marginTop: 12 },
 });

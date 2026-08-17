@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -7,8 +7,7 @@ import { Skeleton } from "@/components/Skeleton";
 import { Toast, TOAST_UNDO_MS } from "@/components/Toast";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SavedCard } from "@/features/saved/components/SavedCard";
-import { useSavedList, useSaveMutation, useUnsaveMutation } from "@/features/saved/queries";
-import { unsaveMessage } from "@/features/saved/lib/undo-message";
+import { useSavedList, useUnsaveMutation } from "@/features/saved/queries";
 import { prefetchSpot } from "@/features/spots/queries";
 import type { SpotCard } from "@/lib/api-types";
 import { colors, spacing, radii } from "@/constants/theme";
@@ -17,20 +16,15 @@ export const EMPTY_HEADLINE = "아직 스크랩한 곳이 없어요";
 
 export const UNSAVE_FAILED = "스크랩 해제를 못 했어요. 잠시 뒤 다시 시도해 주세요";
 
-export const RESAVE_FAILED = "되돌리지 못했어요. 다시 스크랩해 주세요";
-
 interface Notice {
   message: string;
-  undoContentId: string | null;
 }
 
 export default function SavedScreen() {
   const insets = useSafeAreaInsets();
   const { data, isLoading } = useSavedList();
   const unsave = useUnsaveMutation();
-  const resave = useSaveMutation();
   const [notice, setNotice] = useState<Notice | null>(null);
-  const unsaving = useRef<Promise<boolean> | null>(null);
 
   const list = data ?? [];
 
@@ -40,33 +34,8 @@ export default function SavedScreen() {
   };
 
   const remove = (spot: SpotCard) => {
-    setNotice({ message: unsaveMessage(spot.title), undoContentId: spot.contentId });
-    unsaving.current = unsave.mutateAsync(spot.contentId).then(
-      () => true,
-      () => {
-        setNotice((current) =>
-          current === null || current.undoContentId === spot.contentId
-            ? { message: UNSAVE_FAILED, undoContentId: null }
-            : current,
-        );
-        return false;
-      },
-    );
-  };
-
-  const undo = () => {
-    const contentId = notice?.undoContentId;
-    if (!contentId) return;
-    const settled = unsaving.current ?? Promise.resolve(true);
-    setNotice(null);
-    void settled.then((removed) => {
-      if (!removed) return;
-      resave.mutate(contentId, {
-        onError: () =>
-          setNotice((current) =>
-            current === null ? { message: RESAVE_FAILED, undoContentId: null } : current,
-          ),
-      });
+    unsave.mutate(spot.contentId, {
+      onError: () => setNotice({ message: UNSAVE_FAILED }),
     });
   };
 
@@ -108,7 +77,6 @@ export default function SavedScreen() {
         message={notice?.message ?? null}
         bottom={insets.bottom + spacing.lg}
         onHide={() => setNotice(null)}
-        action={notice?.undoContentId ? { label: "되돌리기", onPress: undo } : null}
         durationMs={TOAST_UNDO_MS}
         testID="unsave-toast"
       />

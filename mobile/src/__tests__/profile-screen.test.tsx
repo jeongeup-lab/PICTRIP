@@ -97,7 +97,7 @@ describe("ProfileTab", () => {
     });
   });
 
-  it("keeps the settings button reachable at the right edge without a screen title", async () => {
+  it("keeps the theme toggle reachable at the right edge without a screen title", async () => {
     const tree = await mount();
 
     expect(tree.root.findAllByProps({ children: "마이" })).toHaveLength(0);
@@ -105,13 +105,8 @@ describe("ProfileTab", () => {
     const nav = tree.root.findByProps({ testID: "profile-nav" });
     expect(StyleSheet.flatten(nav.props.style).justifyContent).toBe("flex-end");
 
-    const button = tree.root.findByProps({ testID: "open-settings" });
-    expect(button.props.accessibilityLabel).toBe("마이 설정");
-
-    await act(async () => {
-      button.props.onPress();
-    });
-    expect(router.push).toHaveBeenCalledWith("/settings");
+    const button = tree.root.findByProps({ testID: "theme-toggle" });
+    expect(String(button.props.accessibilityLabel)).toContain("모드로 전환");
   });
 
   it("keeps a way into the consent history when logged in", async () => {

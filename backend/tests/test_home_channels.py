@@ -104,21 +104,22 @@ async def test_hidden_returns_cards_ranked_from_the_quietest(
     assert all(c["tag"] is None for c in cards)
 
 
-async def test_kto_channel_returns_kto_cards(db_session, client) -> None:
+def _festa_item(cid: str) -> dict[str, str]:
+    return {
+        "contentid": cid,
+        "title": f"축제-{cid}",
+        "addr1": "전북 무주군 무주읍",
+        "firstimage": "http://tong.visitkorea.or.kr/f1.jpg",
+        "eventstartdate": "20260101",
+        "eventenddate": "20991231",
+    }
+
+
+async def _get_festa_cards(db_session, client, items: list[dict[str, str]]):
     from unittest.mock import AsyncMock
 
-    festa_items = [
-        {
-            "contentid": "F1",
-            "title": "무주 반딧불 축제",
-            "addr1": "전북 무주군 무주읍",
-            "firstimage": "http://tong.visitkorea.or.kr/f1.jpg",
-            "eventstartdate": "20260101",
-            "eventenddate": "20991231",
-        }
-    ]
     kto = AsyncMock()
-    kto.call = AsyncMock(return_value=festa_items)
+    kto.call = AsyncMock(return_value=items)
     app.dependency_overrides[get_db] = lambda: db_session
     app.dependency_overrides[get_redis] = lambda: FakeRedis(decode_responses=True)
     app.dependency_overrides[get_kto] = lambda: kto
@@ -127,10 +128,35 @@ async def test_kto_channel_returns_kto_cards(db_session, client) -> None:
     finally:
         app.dependency_overrides.clear()
     assert res.status_code == 200
-    body = res.json()["data"]
+    return res.json()["data"]
+
+
+async def test_kto_channel_returns_kto_cards(db_session, client) -> None:
+    await db_session.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, first_image_url, "
+            "show_flag, lcls_systm1) VALUES ('F1', 15, '축제-F1', 'http://kto/f1.jpg', 1, 'EV')"
+        )
+    )
+    body = await _get_festa_cards(db_session, client, [_festa_item("F1")])
     assert body["label"] == "Festa"
     assert len(body["cards"]) == 1
     assert body["cards"][0]["contentId"] == "F1"
+    assert body["cards"][0]["saveable"] is True
+
+
+async def test_kto_channel_keeps_card_but_drops_unresolvable_detail(db_session, client) -> None:
+    await db_session.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, first_image_url, "
+            "show_flag, lcls_systm1) VALUES ('F2', 15, '축제-F2', 'http://kto/f2.jpg', 0, 'EV')"
+        )
+    )
+    body = await _get_festa_cards(db_session, client, [_festa_item("F2"), _festa_item("F3")])
+    assert len(body["cards"]) == 2
+    for card in body["cards"]:
+        assert card["contentId"] is None
+        assert card["saveable"] is False
 
 
 async def test_unknown_channel_404(db_session, client) -> None:
