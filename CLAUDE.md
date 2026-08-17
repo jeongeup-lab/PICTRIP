@@ -165,9 +165,6 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
   규정을 혼동한 것 — 2026 설명회·OT자료 원문 재분석으로 확인). 경계는 공공누리
   라이선스: `cpyrhtDivCd=Type1`(출처표시)은 리사이즈·포맷 변환 가능, `Type3`
   (변경금지)는 **원본 무변형 pass-through만**. 출처(한국관광공사) 표기 유지.
-- **데이터 소스는 OpenAPI 호출이어야 한다** — 콘텐츠랩 파일데이터·맞춤형 데이터
-  다운로드를 데이터 소스로 쓰면 공모전에서 OpenAPI 활용으로 **인정되지 않는다**
-  (2026 OT자료 1차 심사 유의사항·설명회 슬라이드 3).
 - **DO NOT persist user-uploaded images** — CLIP runs in memory, bytes discarded.
 - **Wikimedia Commons images: URL only + 표기 의무** — 저작자·라이선스명에 더해
   라이선스 전문 URL·원본 파일 페이지 URL을 저장·노출한다.
