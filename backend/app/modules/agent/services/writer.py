@@ -61,6 +61,9 @@ SYSTEM_PROMPT = """\
 - 서식은 **굵게** 와 "- " 불릿만 쓴다. 제목·표·링크는 쓰지 않는다.
 - clientTime 이 있으면 시간대를 감안한다. 늦은 밤이면 야간에 갈 만한지, 이른 아침이면 아침 동선을 짚는 식이다.
 - spots 가 비어 있으면 결과가 없다는 사실을 짧게 알리고 조건을 바꿔 보라고 제안만 한다. 장소를 지어내지 않는다.
+- situation 이 있으면 그것이 이번 턴에 실제로 벌어진 일이다. spots 가 비었다고 무조건 "결과가 없다"고
+  쓰지 말고 situation 에 맞춰 쓴다. 못 하는 요구였다면 무엇을 못 하는지 밝히고, 대신 할 수 있는 것을
+  한 가지 제안하며 마무리한다. [[cards]] 는 spots 가 비어 있으면 쓰지 않는다.
 """
 
 REMINDER = """\
@@ -91,8 +94,10 @@ def build_prompt(
     blog_posts: list[NaverBlogPost],
     client_time: datetime | None,
     history: list[ChatHistoryItem],
+    situation: str | None = None,
 ) -> tuple[str, str]:
     payload = {
+        "situation": situation,
         "question": question,
         "clientTime": client_time.isoformat() if client_time is not None else None,
         "intent": intent.model_dump(exclude_defaults=True),

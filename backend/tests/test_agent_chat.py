@@ -438,3 +438,59 @@ def test_region_alone_does_not_keep_an_off_topic_post() -> None:
 
     assert chat_service._post_matches(off_topic, ("정읍", "맛집")) is False
     assert chat_service._post_matches(off_topic, ("정읍", "일자리")) is True
+
+
+def _talk(task: str, sentence: str) -> AskResponse:
+    return AskResponse(
+        steps=[],
+        answer=[AnswerSegment(text=sentence)],
+        spots=[],
+        totalCount=0,
+        intent=QueryIntent(task=task),  # type: ignore[arg-type]
+        refinements=[],
+    )
+
+
+async def test_a_greeting_is_answered_as_prepared_instead_of_being_rewritten_as_zero_results(
+    monkeypatch,
+) -> None:
+    gemini = _FakeGemini(["찾으시는 조건에 맞는 곳이 없네요."])
+    _wire(monkeypatch, gemini=gemini, result=_talk("smalltalk", "별말씀을요."))
+
+    events = await _collect(ChatRequest(message="고마워"))
+
+    assert gemini.calls == []
+    assert [event.text for name, event in events if name == "delta"] == ["별말씀을요."]
+
+
+async def test_a_greeting_costs_no_blog_calls_because_nothing_needs_grounding(
+    monkeypatch,
+) -> None:
+    probes: list[str] = []
+
+    async def counting_blog(client, query, *, display=5):
+        probes.append(query)
+        return []
+
+    _wire(monkeypatch, gemini=_FakeGemini([]), result=_talk("smalltalk", "별말씀을요."))
+    monkeypatch.setattr(naver, "search_blog", counting_blog)
+
+    await _collect(ChatRequest(message="고마워"))
+
+    assert probes == []
+
+
+async def test_an_unsupported_request_still_reaches_the_writer_so_it_can_offer_a_bridge(
+    monkeypatch,
+) -> None:
+    gemini = _FakeGemini(["날씨는 못 보지만 실내 여행지는 찾아드릴 수 있어요."])
+    _wire(monkeypatch, gemini=gemini, result=_talk("unsupported", "그건 아직 못 해요."))
+
+    events = await _collect(ChatRequest(message="다음주 날씨 어때?"))
+
+    assert len(gemini.calls) == 1
+    assert "할 수 없는 요구" in gemini.calls[0]["user_text"]
+    assert (
+        "".join(event.text for name, event in events if name == "delta")
+        == "날씨는 못 보지만 실내 여행지는 찾아드릴 수 있어요."
+    )
