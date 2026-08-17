@@ -115,14 +115,18 @@ async def load_trending(
 
 
 async def load_taste_picks(
-    session: AsyncSession, redis: Redis, *, limit: int = TASTE_PICK_COUNT
+    session: AsyncSession,
+    redis: Redis,
+    *,
+    limit: int = TASTE_PICK_COUNT,
+    category: str | None = None,
 ) -> list[HomeCardRow]:
-    key = f"home:taste-picks:{_CACHE_VERSION}:{limit}"
+    key = f"home:taste-picks:{_CACHE_VERSION}:{category or 'all'}:{limit}"
     cached = await _cache_get(redis, key)
     if cached is not None:
         return cached.cards
 
-    rows = await repo.fetch_taste_picks(session, limit=limit)
+    rows = await repo.fetch_taste_picks(session, limit=limit, category=category)
     ranking = HomeRanking(cards=[_card(row) for row in rows], base_date=None)
     await _cache_set(redis, key, ranking, _TASTE_PICKS_TTL if ranking.cards else _EMPTY_TTL)
     return ranking.cards

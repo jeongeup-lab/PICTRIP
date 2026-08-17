@@ -6,14 +6,10 @@ import type { OverseasPost } from "@/features/feed/posts-api";
 
 jest.mock("@/features/explore/queries", () => ({ useExploreFeed: jest.fn() }));
 jest.mock("expo-router", () => ({ useScrollToTop: jest.fn() }));
-jest.mock("@/features/feed/components/PostCarousel", () => {
-  const React = require("react");
-  const { Text } = require("react-native");
-  return {
-    PostCarousel: ({ post }: { post: { nameKo: string } }) =>
-      React.createElement(Text, { testID: "carousel" }, post.nameKo),
-  };
-});
+jest.mock("@/features/feed/posts-queries", () => ({
+  useMatches: jest.fn(() => ({ data: { matches: [] }, isLoading: false })),
+}));
+jest.mock("@/features/feed/components/CreditSheet", () => ({ CreditSheet: () => null }));
 
 function posts(n: number): OverseasPost[] {
   return Array.from({ length: n }, (_, i) => ({
@@ -76,18 +72,19 @@ describe("ExploreGrid", () => {
     setFeed();
     const r = await mount();
     expect(hosts(r, "explore-tile").length).toBe(9);
-    expect(hosts(r, "carousel").length).toBe(0);
+    expect(hosts(r, "post-modal-card").length).toBe(0);
   });
 
-  it("opens the post modal with a carousel when a tile is tapped", async () => {
+  it("opens the post modal when a tile is tapped", async () => {
     setFeed();
     const r = await mount();
     await act(async () => {
       r.root.findAllByProps({ testID: "explore-tile" })[0].props.onPress();
     });
-    const carousel = hosts(r, "carousel");
-    expect(carousel.length).toBe(1);
-    expect(carousel[0].props.children).toBe("장소 1");
+    expect(hosts(r, "post-modal-card").length).toBe(1);
+    const { Text } = jest.requireActual("react-native");
+    const texts = r.root.findAllByType(Text).map((n) => String(n.props.children));
+    expect(texts.join("\n")).toContain("장소 1");
   });
 
   it("closes the modal via the close button", async () => {
@@ -99,7 +96,7 @@ describe("ExploreGrid", () => {
     await act(async () => {
       r.root.findByProps({ testID: "post-modal-close" }).props.onPress();
     });
-    expect(hosts(r, "carousel").length).toBe(0);
+    expect(hosts(r, "post-modal-card").length).toBe(0);
   });
 
   it("closes the modal when the empty space around the post is tapped", async () => {
@@ -111,7 +108,7 @@ describe("ExploreGrid", () => {
     await act(async () => {
       r.root.findByProps({ testID: "post-modal-backdrop" }).props.onPress();
     });
-    expect(hosts(r, "carousel").length).toBe(0);
+    expect(hosts(r, "post-modal-card").length).toBe(0);
   });
 
   it("keeps the post outside the backdrop so tapping it cannot close the modal", async () => {
@@ -121,8 +118,8 @@ describe("ExploreGrid", () => {
       r.root.findAllByProps({ testID: "explore-tile" })[0].props.onPress();
     });
     const backdrop = r.root.findAllByProps({ testID: "post-modal-backdrop" })[0];
-    expect(backdrop.findAllByProps({ testID: "carousel" })).toHaveLength(0);
-    expect(hosts(r, "carousel").length).toBe(1);
+    expect(backdrop.findAllByProps({ testID: "post-modal-card" })).toHaveLength(0);
+    expect(hosts(r, "post-modal-card").length).toBe(1);
   });
 
   it("wires the grid list into the tab re-tap scroll-to-top hook", async () => {

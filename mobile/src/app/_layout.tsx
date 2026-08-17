@@ -7,7 +7,7 @@ import { queryClient } from "@/lib/query-client";
 import { warmConnection } from "@/lib/warm-connection";
 import { applyPendingUpdate } from "@/lib/ota";
 import { AuthPromptSheet } from "@/features/auth/components/AuthPromptSheet";
-import { colors } from "@/constants/theme";
+import { colors, themeName } from "@/constants/theme";
 
 export default function RootLayout() {
   useEffect(() => {
@@ -24,7 +24,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-        <StatusBar barStyle="light-content" />
+        <StatusBar barStyle={themeName === "dark" ? "light-content" : "dark-content"} />
         <Stack
           screenOptions={{
             headerShown: false,
