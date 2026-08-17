@@ -14,8 +14,10 @@ from app.core.db import AsyncSession
 from app.core.logging import get_logger, get_trace_id
 from app.kto.client import KtoClient
 from app.modules.agent import llm, naver
+from app.modules.agent import outcome as outcome_service
 from app.modules.agent.errors import AgentWriterUnavailable
 from app.modules.agent.schemas import (
+    AgentSpotCard,
     AskResponse,
     ChatCardsEvent,
     ChatDeltaEvent,
@@ -29,7 +31,7 @@ from app.modules.agent.schemas import (
 )
 from app.modules.agent.services import ask as ask_service
 from app.modules.agent.services import writer
-from app.web.errors import AppError, ValidationFailed
+from app.web.errors import AppError
 
 logger = get_logger(__name__)
 
@@ -94,20 +96,13 @@ async def events(
         )
     except AppError as exc:
         logger.info("agent.chat.ask_failed", code=exc.code)
-        guidance = ask_service.BLANK_ANSWER if isinstance(exc, ValidationFailed) else exc.message
-        yield "delta", ChatDeltaEvent(text=guidance)
-        yield (
-            "done",
-            ChatDoneEvent(
-                answerText=guidance,
-                spots=[],
-                sources=[],
-                intent=QueryIntent(),
-                totalCount=0,
-                traceId=get_trace_id(),
-            ),
-        )
+        refusal = outcome_service.classify_error(exc, blank_answer=ask_service.BLANK_ANSWER)
+        async for event in _canned(refusal.message, intent=QueryIntent(), spots=[]):
+            yield event
         return
+
+    outcome = outcome_service.classify(result)
+    logger.info("agent.chat.outcome", kind=type(outcome).__name__, results=len(result.spots))
 
     for index, step in enumerate(result.steps):
         yield "step", ChatStepEvent(index=index, label=step.label, status="run")
@@ -115,6 +110,15 @@ async def events(
 
     if result.spots:
         yield "cards", ChatCardsEvent(spots=result.spots, tagBasis=result.tagBasis)
+
+    if isinstance(outcome, (outcome_service.Smalltalk, outcome_service.OutOfScope)):
+        async for event in _canned(
+            _deterministic_answer(result) or ask_service.BLANK_ANSWER,
+            intent=result.intent,
+            spots=[],
+        ):
+            yield event
+        return
 
     posts = await _ground_with_blogs(result, message=payload.message)
     sources = _sources(posts)
@@ -144,6 +148,7 @@ async def events(
         blog_posts=posts,
         client_time=payload.clientTime,
         history=payload.history[-HISTORY_TAIL:],
+        situation=outcome_service.situation_of(outcome),
     )
     chunks = llm.get_writer_client().stream_text(system=system, user_text=user_text)
     guarded = _watchdog(chunks)
@@ -151,10 +156,10 @@ async def events(
     parts: list[str] = []
     try:
         try:
-            async for event in parsed:
-                if isinstance(event, writer.WriterDelta):
-                    parts.append(event.text)
-                    yield "delta", ChatDeltaEvent(text=event.text)
+            async for written in parsed:
+                if isinstance(written, writer.WriterDelta):
+                    parts.append(written.text)
+                    yield "delta", ChatDeltaEvent(text=written.text)
         except (httpx.HTTPError, llm.CodexStreamProtocolError, TimeoutError) as exc:
             logger.warning(
                 "agent.chat.writer_failed",
@@ -194,6 +199,23 @@ async def events(
             sources=sources,
             intent=result.intent,
             totalCount=result.totalCount,
+            traceId=get_trace_id(),
+        ),
+    )
+
+
+async def _canned(
+    text: str, *, intent: QueryIntent, spots: list[AgentSpotCard]
+) -> AsyncIterator[tuple[str, BaseModel]]:
+    yield "delta", ChatDeltaEvent(text=text)
+    yield (
+        "done",
+        ChatDoneEvent(
+            answerText=text,
+            spots=spots,
+            sources=[],
+            intent=intent,
+            totalCount=len(spots),
             traceId=get_trace_id(),
         ),
     )
