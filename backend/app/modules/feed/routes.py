@@ -123,8 +123,11 @@ async def home_nearby(
     lat: float = Query(..., ge=-90, le=90),
     lng: float = Query(..., ge=-180, le=180),
     limit: int = Query(home.CARD_COUNT, ge=1, le=20),
+    category: str | None = Query(None, pattern="^(SPOT|CAFE|FOOD)$"),
 ) -> dict[str, Any]:
-    ranking = await home.load_nearby_ranked(session, redis, lat=lat, lng=lng, limit=limit)
+    ranking = await home.load_nearby_ranked(
+        session, redis, lat=lat, lng=lng, limit=limit, category=category
+    )
     return ok(_home_cards(ranking))
 
 
@@ -134,8 +137,9 @@ async def home_trending(
     redis: RedisDep,
     kto: KtoDep,
     limit: int = Query(home.CARD_COUNT, ge=1, le=20),
+    category: str | None = Query(None, pattern="^(SPOT|CAFE|FOOD)$"),
 ) -> dict[str, Any]:
-    ranking = await home.load_trending(session, redis, kto, limit=limit)
+    ranking = await home.load_trending(session, redis, kto, limit=limit, category=category)
     return ok(_home_cards(ranking))
 
 

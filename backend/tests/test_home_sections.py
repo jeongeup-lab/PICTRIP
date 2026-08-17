@@ -370,3 +370,59 @@ async def test_around_and_hot_channels_are_gone(client: AsyncClient, seeded: Asy
         res = await client.get(f"/v1/home/channels/{key}", params={"lat": LAT, "lng": LNG})
         assert res.status_code == 404
         assert res.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
+
+
+async def test_nearby_category_filter_returns_only_that_pool(
+    client: AsyncClient, seeded: AsyncSession
+) -> None:
+    await _seed_region(seeded)
+    await _seed_spot(seeded, "flt-spot")
+    await _seed_spot(seeded, "flt-cafe")
+    await seeded.execute(
+        text(
+            "UPDATE spots SET lcls_systm1 = 'FD', lcls_systm2 = 'FD05', lcls_systm3 = NULL "
+            "WHERE content_id = 'flt-cafe'"
+        )
+    )
+    await seeded.commit()
+
+    res = await client.get(
+        "/v1/home/nearby", params={"lat": LAT, "lng": LNG, "category": "CAFE"}
+    )
+    assert res.status_code == 200
+    ids = [i["contentId"] for i in res.json()["data"]["items"]]
+    assert ids == ["flt-cafe"]
+
+    res = await client.get(
+        "/v1/home/nearby", params={"lat": LAT, "lng": LNG, "category": "SPOT"}
+    )
+    ids = [i["contentId"] for i in res.json()["data"]["items"]]
+    assert ids == ["flt-spot"]
+
+
+async def test_trending_category_filter_serves_the_signal_pool(
+    client: AsyncClient, seeded: AsyncSession
+) -> None:
+    await _seed_region(seeded)
+    await _seed_spot(seeded, "flt-hi")
+    await _seed_visual(seeded, "flt-hi", score=0.2)
+    await _seed_buzz(seeded, "flt-hi", blog_total=9000)
+    await seeded.commit()
+
+    res = await client.get("/v1/home/trending", params={"category": "SPOT"})
+    assert res.status_code == 200
+    items = res.json()["data"]["items"]
+    assert [i["contentId"] for i in items] == ["flt-hi"]
+    assert items[0]["tag"] == "요즘뜨는"
+
+    res = await client.get("/v1/home/trending", params={"category": "CAFE"})
+    assert res.json()["data"]["items"] == []
+
+
+async def test_rank_category_rejects_unknown_values(
+    client: AsyncClient, seeded: AsyncSession
+) -> None:
+    res = await client.get(
+        "/v1/home/nearby", params={"lat": LAT, "lng": LNG, "category": "PETS"}
+    )
+    assert res.status_code == 422

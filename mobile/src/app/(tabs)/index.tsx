@@ -5,6 +5,7 @@ import { router, useScrollToTop } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { ChannelTiles } from "@/features/channels/components/ChannelTiles";
 import { AiSection } from "@/features/home/components/AiSection";
+import { CategoryChips } from "@/features/home/components/CategoryChips";
 import { RankSection } from "@/features/home/components/RankSection";
 import { ScopeTabs, type HomeScope } from "@/features/home/components/ScopeTabs";
 import { useHomeLocation } from "@/features/home/hooks/use-home-location";
@@ -15,6 +16,7 @@ import {
   useRegionLabel,
   useTrending,
 } from "@/features/home/queries";
+import type { RankCategory } from "@/features/home/api";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { queryClient } from "@/lib/query-client";
 import { colors, spacing } from "@/constants/theme";
@@ -24,12 +26,13 @@ export default function HomeScreen() {
   useScrollToTop(listRef);
 
   const [scope, setScope] = useState<HomeScope>("nearby");
+  const [category, setCategory] = useState<RankCategory | null>(null);
   const { coords, status, request } = useHomeLocation();
   const displayName = useAuthStore((s) => s.user?.displayName ?? null);
 
   const region = useRegionLabel(coords);
-  const nearby = useNearby(coords);
-  const national = useTrending();
+  const nearby = useNearby(coords, category ?? undefined);
+  const national = useTrending(category ?? undefined);
   const recommendations = useRecommendations(coords);
 
   const locationDenied = status === "denied" || status === "undetermined";
@@ -80,6 +83,8 @@ export default function HomeScreen() {
             if (next === "nearby" && !coords) void request();
           }}
         />
+
+        <CategoryChips selected={category} onChange={setCategory} />
 
         {locationDenied && scope === "nearby" ? (
           <Pressable
