@@ -93,7 +93,7 @@ class Settings(BaseSettings):
     CODEX_MODEL: Literal["gpt-5.4-mini"] = "gpt-5.4-mini"
     DEEPSEEK_API_KEY: str = ""
     DEEPSEEK_BASE_URL: str = "https://api.deepseek.com/v1"
-    DEEPSEEK_MODEL: str = "deepseek-v4-flash"
+    DEEPSEEK_MODEL: str = "deepseek-chat"
     NAVER_CLIENT_ID: str = ""
     NAVER_CLIENT_SECRET: str = ""
     YOUTUBE_API_KEY: str = ""
