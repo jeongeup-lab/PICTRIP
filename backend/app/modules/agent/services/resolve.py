@@ -12,7 +12,6 @@ from app.core.db import AsyncSession
 from app.core.logging import get_logger
 from app.kto.client import KtoClient, KtoService
 from app.kto.display import t1_display_url
-from app.modules.agent import naver
 from app.modules.agent.schemas import (
     MAX_HINT_TOKENS,
     ExtractedPlace,
@@ -26,6 +25,7 @@ from app.modules.spots.services import (
     map_region_tokens_to_sido,
     search_spots_by_title,
 )
+from app.naver import client as naver
 from app.web.errors import KtoApiUnavailable
 
 logger = get_logger(__name__)

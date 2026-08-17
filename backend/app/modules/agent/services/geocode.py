@@ -8,14 +8,14 @@ import httpx
 
 from app.core.db import AsyncSession
 from app.core.logging import get_logger
-from app.modules.agent import naver
-from app.modules.agent.naver import search_local as naver_search
 from app.modules.agent.services.landmarks import is_landmark
 from app.modules.spots.services import (
     SpotSearchRow,
     canonical_region_token,
     search_spots_by_title,
 )
+from app.naver import client as naver
+from app.naver.client import search_local as naver_search
 
 logger = get_logger(__name__)
 

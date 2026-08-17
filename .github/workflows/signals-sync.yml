@@ -1,0 +1,32 @@
+name: signals-sync
+# 홈 채널 신호 주간 동기화 — spot_buzz(네이버 블로그 그리드) + spot_visual(CLIP 텍스트 앵커).
+# scripts/sync_buzz.py · scripts/compute_visual.py 를 CT112의 라이브 api 컨테이너 안에서
+# 실행한다. schedule 은 default 브랜치 기준으로 동작하므로 dev 머지 후부터 유효.
+on:
+  schedule:
+    - cron: "0 20 * * 0" # 매주 월요일 05:00 KST (UTC+9)
+  workflow_dispatch:
+    inputs:
+      buzz_only:
+        description: "버즈만 갱신 (CLIP 스킵)"
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: signals-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: [self-hosted, ct112]
+    timeout-minutes: 90
+    steps:
+      - run: |
+          cid="$(docker ps -q --filter "publish=8000" | head -n1)"
+          if [ -z "$cid" ]; then echo "api container not found on :8000"; exit 1; fi
+          docker exec "$cid" python -m scripts.sync_buzz
+          if [ "${{ inputs.buzz_only }}" != "true" ]; then
+            docker exec "$cid" python -m scripts.compute_visual
+          fi

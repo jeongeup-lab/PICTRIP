@@ -224,6 +224,33 @@ class SpotConcentration(Base):
     )
 
 
+class SpotBuzz(Base):
+    __tablename__ = "spot_buzz"
+    __table_args__ = (Index("idx_spot_buzz_scope", "scope", "mentions"),)
+
+    content_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    scope: Mapped[str] = mapped_column(String(48), primary_key=True)
+    mentions: Mapped[int] = mapped_column(nullable=False, server_default="0")
+    distinct_blogs: Mapped[int] = mapped_column(nullable=False, server_default="0")
+    recent_ratio: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
+    blog_total: Mapped[int | None] = mapped_column(nullable=True)
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class SpotVisual(Base):
+    __tablename__ = "spot_visual"
+    __table_args__ = (Index("idx_spot_visual_score", "photo_type", "aesthetic_score"),)
+
+    content_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    photo_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    aesthetic_score: Mapped[float] = mapped_column(Float, nullable=False)
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class UserSavedSpot(Base):
     __tablename__ = "user_saved_spots"
     __table_args__ = (Index("idx_user_saved_spots_user", "user_id", text("saved_at DESC")),)
