@@ -89,9 +89,28 @@ async def test_around_and_hot_moved_out_of_the_channel_rail(db_session, client) 
     assert hot.status_code == 404
 
 
-async def test_hidden_returns_cards_ranked_from_the_quietest(
-    db_session, client, seeded_concentration
-) -> None:
+async def test_hidden_serves_recently_talked_but_uncrowded_spots(db_session, client) -> None:
+    await _seed_region(db_session)
+    await db_session.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, first_image_url, "
+            "show_flag, ldong_regn_cd, lcls_systm1) "
+            "VALUES ('h1', 12, '숨은 계곡', 'http://kto/h1.jpg', 1, '26', 'NA')"
+        )
+    )
+    await db_session.execute(
+        text(
+            "INSERT INTO spot_visual (content_id, photo_type, aesthetic_score) "
+            "VALUES ('h1', 'view', 0.1)"
+        )
+    )
+    await db_session.execute(
+        text(
+            "INSERT INTO spot_buzz "
+            "(content_id, scope, mentions, distinct_blogs, recent_ratio, blog_total) "
+            "VALUES ('h1', 'base', 0, 0, 0.9, 3000)"
+        )
+    )
     _override(db_session)
     try:
         res = await client.get("/v1/home/channels/hidden")
@@ -99,9 +118,9 @@ async def test_hidden_returns_cards_ranked_from_the_quietest(
         app.dependency_overrides.clear()
     assert res.status_code == 200
     cards = res.json()["data"]["cards"]
-    assert len(cards) >= 1
-    assert [c["rank"] for c in cards] == list(range(1, len(cards) + 1))
-    assert all(c["tag"] is None for c in cards)
+    assert [c["contentId"] for c in cards] == ["h1"]
+    assert cards[0]["rank"] == 1
+    assert cards[0]["tag"] == "숨은명소"
 
 
 def _festa_item(cid: str) -> dict[str, str]:
@@ -139,7 +158,7 @@ async def test_kto_channel_returns_kto_cards(db_session, client) -> None:
         )
     )
     body = await _get_festa_cards(db_session, client, [_festa_item("F1")])
-    assert body["label"] == "Festa"
+    assert body["label"] == "FESTA"
     assert len(body["cards"]) == 1
     assert body["cards"][0]["contentId"] == "F1"
     assert body["cards"][0]["saveable"] is True

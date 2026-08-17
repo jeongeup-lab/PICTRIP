@@ -38,6 +38,15 @@ async def main() -> None:
                 total = row.get("blog_total")
                 if not row.get("content_id") or total is None:
                     continue
+                bare = row.get("bare_total") or 0
+                study = row.get("study") or 0
+                plug = row.get("plug") or 0
+                if total > 700_000:
+                    continue
+                if bare > 200_000 and total > 300_000:
+                    continue
+                if study > total or plug > total:
+                    continue
                 recent = row.get("recent_90d") or 0
                 await session.execute(
                     text(_UPSERT_SQL),
