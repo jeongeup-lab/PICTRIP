@@ -83,3 +83,87 @@ def test_the_default_seed_is_todays_date_in_seoul() -> None:
 
     assert len(seed) == 10
     assert seed.count("-") == 2
+
+
+@pytest.fixture(autouse=True)
+def _fresh_rank_stats() -> None:
+    repositories.reset_rank_stats()
+
+
+async def _buzz(
+    session: AsyncSession,
+    cid: str,
+    *,
+    scope: str,
+    blogs: int = 0,
+    total: int | None = None,
+    recent: float = 0.0,
+) -> None:
+    await session.execute(
+        text(
+            "INSERT INTO spot_buzz (content_id, scope, mentions, distinct_blogs, "
+            "recent_ratio, blog_total) VALUES (:c, :s, :m, :d, :r, :t)"
+        ),
+        {"c": cid, "s": scope, "m": blogs, "d": blogs, "r": recent, "t": total},
+    )
+
+
+async def _visual(session: AsyncSession, cid: str, *, kind: str, score: float) -> None:
+    await session.execute(
+        text(
+            "INSERT INTO spot_visual (content_id, photo_type, aesthetic_score) VALUES (:c, :k, :s)"
+        ),
+        {"c": cid, "k": kind, "s": score},
+    )
+
+
+async def test_a_famous_spot_outranks_an_unknown_one_that_the_crowd_feed_tracks(
+    seeded: AsyncSession,
+) -> None:
+    await _buzz(seeded, "9000001", scope="base", total=500_000)
+    await _buzz(seeded, "9000002", scope="base", total=900)
+    await _buzz(seeded, "9000004", scope="base", total=1_200)
+    repositories.reset_rank_stats()
+
+    ids = await _ids(seeded, seed="2026-08-11")
+
+    assert ids[0] == "9000001"
+
+
+async def test_an_unscanned_spot_is_treated_as_typical_rather_than_as_never_mentioned(
+    seeded: AsyncSession,
+) -> None:
+    await _buzz(seeded, "9000002", scope="base", total=900)
+    await _buzz(seeded, "9000004", scope="base", total=1_200)
+    await _buzz(seeded, "9000006", scope="base", total=40)
+    repositories.reset_rank_stats()
+
+    ids = await _ids(seeded, seed="2026-08-11")
+
+    assert ids.index("9000001") < ids.index("9000006")
+
+
+async def test_buzz_for_the_asked_theme_counts_and_buzz_for_another_theme_does_not(
+    seeded: AsyncSession,
+) -> None:
+    await _buzz(seeded, "9000001", scope="부산:spot", blogs=5)
+    await _buzz(seeded, "9000002", scope="부산:cafe", blogs=5)
+
+    ids = await _ids(seeded, seed="2026-08-11")
+
+    assert ids.index("9000001") < ids.index("9000002")
+
+
+async def test_photo_quality_is_judged_inside_its_own_type_not_across_types(
+    seeded: AsyncSession,
+) -> None:
+    await _visual(seeded, "9000001", kind="view", score=0.05)
+    await _visual(seeded, "9000002", kind="view", score=0.19)
+    await _visual(seeded, "9000004", kind="food", score=0.08)
+    await _visual(seeded, "9000006", kind="food", score=-0.13)
+    repositories.reset_rank_stats()
+
+    ids = await _ids(seeded, seed="2026-08-11")
+
+    assert ids.index("9000002") < ids.index("9000001")
+    assert ids.index("9000004") < ids.index("9000006")

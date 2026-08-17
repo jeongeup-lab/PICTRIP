@@ -152,6 +152,59 @@ class CandidateRow:
 
 
 CandidateOrder = Literal["id", "rate_asc", "rate_desc", "distance"]
+BuzzTheme = Literal["spot", "cafe", "food"]
+
+FAME_P95_FALLBACK = 43478.0
+FAME_MEDIAN_FALLBACK = 1796.0
+THEMED_CAP = 5
+RECENT_FLOOR = 0.5
+
+
+@dataclass(frozen=True, slots=True)
+class RankStats:
+    fame_norm: float
+    fame_median: float
+    types: list[str]
+    means: list[float]
+    deviations: list[float]
+
+
+_RANK_STATS_SQL = """
+SELECT photo_type,
+       avg(aesthetic_score)::float8 AS mu,
+       COALESCE(NULLIF(stddev_samp(aesthetic_score), 0), 1)::float8 AS sd
+FROM spot_visual GROUP BY photo_type
+"""
+
+_FAME_SQL = """
+SELECT percentile_disc(0.95) WITHIN GROUP (ORDER BY blog_total)::float8 AS p95,
+       percentile_disc(0.50) WITHIN GROUP (ORDER BY blog_total)::float8 AS median
+FROM spot_buzz WHERE scope = 'base' AND blog_total IS NOT NULL
+"""
+
+_rank_stats: RankStats | None = None
+
+
+def reset_rank_stats() -> None:
+    global _rank_stats
+    _rank_stats = None
+
+
+async def load_rank_stats(session: AsyncSession) -> RankStats:
+    global _rank_stats
+    if _rank_stats is not None:
+        return _rank_stats
+    rows = (await session.execute(text(_RANK_STATS_SQL))).all()
+    fame = (await session.execute(text(_FAME_SQL))).one()
+    _rank_stats = RankStats(
+        fame_norm=math.log1p(float(fame.p95) if fame.p95 else FAME_P95_FALLBACK),
+        fame_median=float(fame.median) if fame.median else FAME_MEDIAN_FALLBACK,
+        types=[row.photo_type for row in rows],
+        means=[float(row.mu) for row in rows],
+        deviations=[float(row.sd) for row in rows],
+    )
+    return _rank_stats
+
 
 _CANDIDATE_SQL = """
 WITH scored AS (
@@ -171,11 +224,32 @@ WITH scored AS (
            sc.base_ymd,
            COALESCE(spots.lcls_systm2 = ANY(CAST(:indoor_l2 AS text[]))
                     OR spots.lcls_systm3 = ANY(CAST(:indoor_l3 AS text[])), FALSE) AS indoor,
-           {percentile} AS percentile
+           {percentile} AS percentile,
+           (
+               0.40 * ln(1 + COALESCE(bz.fame::float8, CAST(:fame_median AS float8)))
+                      / CAST(:fame_norm AS float8)
+             + 0.45 * least(COALESCE(bz.themed, 0), :themed_cap)
+                      / CAST(:themed_cap AS float8)
+                    * (CAST(:recent_floor AS float8)
+                       + (1 - CAST(:recent_floor AS float8)) * COALESCE(bz.recent, 0))
+             + 0.15 * COALESCE((v.aesthetic_score - vs.mu) / vs.sd, 0)
+             + 0.10 * (sc.concentration_rate IS NOT NULL)::int
+           ) AS rank_score
     FROM spots
     LEFT JOIN regions r ON r.ldong_regn_cd = spots.ldong_regn_cd
     LEFT JOIN sigungus g ON g.ldong_signgu_cd = spots.ldong_signgu_cd
     {concentration_join} spot_concentration sc ON sc.content_id = spots.content_id
+    LEFT JOIN LATERAL (
+        SELECT max(b.blog_total) AS fame,
+               max(b.distinct_blogs) FILTER (WHERE b.scope LIKE :theme_like) AS themed,
+               max(b.recent_ratio) FILTER (WHERE b.scope LIKE :theme_like) AS recent
+        FROM spot_buzz b
+        WHERE b.content_id = spots.content_id
+    ) bz ON TRUE
+    LEFT JOIN spot_visual v ON v.content_id = spots.content_id
+    LEFT JOIN unnest(CAST(:vt_types AS text[]), CAST(:vt_mu AS float8[]),
+                     CAST(:vt_sd AS float8[])) AS vs(photo_type, mu, sd)
+           ON vs.photo_type = v.photo_type
     WHERE spots.show_flag = 1
       AND spots.first_image_url IS NOT NULL
       AND spots.first_image_url <> ''
@@ -216,10 +290,10 @@ _DISTANCE_ORDER = (
     "power(lat - CAST(:lat AS numeric), 2) "
     "+ power((lng - CAST(:lng AS numeric)) * CAST(:lng_scale AS numeric), 2)"
 )
-_TRACKED_FIRST = "(concentration_rate IS NOT NULL) DESC"
 _ROTATION = "md5(content_id || :rank_seed)"
+_LEGACY_ID_ORDER = f"(concentration_rate IS NOT NULL) DESC, {_ROTATION}, content_id"
 _ORDER_BY: dict[CandidateOrder, str] = {
-    "id": f"{_TRACKED_FIRST}, {_ROTATION}, content_id",
+    "id": f"rank_score DESC, {_ROTATION}, content_id",
     "rate_asc": "concentration_rate ASC, content_id",
     "rate_desc": "concentration_rate DESC, content_id",
     "distance": f"{_DISTANCE_ORDER}, content_id",
@@ -247,8 +321,22 @@ async def find_candidates(
     pool_sql: str | None = None,
     title_terms: list[str] | None = None,
     rank_seed: str | None = None,
+    theme: BuzzTheme = "spot",
+    scored: bool = True,
 ) -> list[CandidateRow]:
-    params: dict[str, object] = {"lim": limit, "rank_seed": rank_seed or rank_seed_for_today()}
+    stats = await load_rank_stats(session)
+    params: dict[str, object] = {
+        "lim": limit,
+        "rank_seed": rank_seed or rank_seed_for_today(),
+        "theme_like": f"%:{theme}",
+        "fame_norm": stats.fame_norm,
+        "fame_median": stats.fame_median,
+        "themed_cap": THEMED_CAP,
+        "recent_floor": RECENT_FLOOR,
+        "vt_types": stats.types,
+        "vt_mu": stats.means,
+        "vt_sd": stats.deviations,
+    }
     percentile_clause = ""
     if rated_only and percentile_ceiling is not None:
         percentile_clause = _CEILING_CLAUSE
@@ -292,7 +380,7 @@ async def find_candidates(
         concentration_join="JOIN" if rated_only else "LEFT JOIN",
         percentile=_PERCENTILE_EXPR if rated_only else "NULL",
         percentile_clause=percentile_clause,
-        order=_ORDER_BY[order],
+        order=(_LEGACY_ID_ORDER if order == "id" and not scored else _ORDER_BY[order]),
     )
     result = await session.execute(text(sql), params)
     return [
