@@ -65,5 +65,21 @@ class ClipEmbedder:
         embedding: list[float] = features.squeeze(0).cpu().tolist()
         return embedding
 
+    def embed_texts(self, prompts: list[str]) -> list[list[float]]:
+        self._ensure_loaded()
+
+        inputs = self._processor(text=prompts, return_tensors="pt", padding=True)
+        if settings.CLIP_DEVICE != "cpu":
+            inputs = {k: v.to(settings.CLIP_DEVICE) for k, v in inputs.items()}
+
+        with self._torch.no_grad():
+            features = self._model.get_text_features(**inputs)
+            if not isinstance(features, self._torch.Tensor):
+                features = features.pooler_output
+            features = features / features.norm(dim=-1, keepdim=True)
+
+        vectors: list[list[float]] = features.cpu().tolist()
+        return vectors
+
 
 embedder = ClipEmbedder()
