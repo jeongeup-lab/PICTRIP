@@ -298,7 +298,7 @@ def test_deepseek_writer_uses_the_configured_endpoint_and_model(monkeypatch) -> 
 
     assert isinstance(client, llm.DeepSeekClient)
     assert str(client._client.base_url) == "https://api.deepseek.com/v1/"
-    assert client._model == "deepseek-v4-flash"
+    assert client._model == "deepseek-chat"
 
 
 def test_deepseek_writer_sends_the_api_key_because_it_is_a_metered_endpoint(monkeypatch) -> None:
