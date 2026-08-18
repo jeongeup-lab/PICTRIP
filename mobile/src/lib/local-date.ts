@@ -1,6 +1,6 @@
 const MS_PER_DAY = 86_400_000;
 
-export function localDayNumber(value: Date): number {
+function localDayNumber(value: Date): number {
   return Math.floor(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()) / MS_PER_DAY);
 }
 

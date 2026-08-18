@@ -5,9 +5,9 @@ import { Icon } from "@/components/Icon";
 import { RemoteImage, fullSizeSourceUri } from "@/components/RemoteImage";
 import { Image } from "expo-image";
 import { Skeleton } from "@/components/Skeleton";
-import { CreditSheet } from "@/features/feed/components/CreditSheet";
-import { useMatches } from "@/features/feed/posts-queries";
-import type { OverseasPost } from "@/features/feed/posts-api";
+import { CreditSheet } from "@/features/explore/components/CreditSheet";
+import { useMatches } from "@/features/explore/queries";
+import type { OverseasPost } from "@/features/explore/api";
 import { colors, darkColors } from "@/constants/theme";
 
 const CARD_WIDTH = 335;

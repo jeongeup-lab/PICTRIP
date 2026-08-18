@@ -1,33 +1,33 @@
-import { getPosts, getMatches } from "@/features/feed/posts-api";
+import { getExplore, getMatches } from "@/features/explore/api";
 import { api } from "@/lib/api-client";
 
 jest.mock("@/lib/api-client", () => ({ api: { get: jest.fn() } }));
 
-describe("posts api", () => {
+describe("explore api", () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it("getPosts hits /feed with seed/cursor/limit params", async () => {
+  it("getExplore hits /explore with seed/cursor/limit params", async () => {
     (api.get as jest.Mock).mockResolvedValue({
       seed: "s1",
       items: [],
       nextCursor: null,
       hasMore: false,
     });
-    await getPosts({ seed: "s1", cursor: "c1", limit: 6 });
-    expect(api.get).toHaveBeenCalledWith("/feed", {
-      params: { seed: "s1", cursor: "c1", limit: 6 },
+    await getExplore({ seed: "s1", cursor: "c1", limit: 30 });
+    expect(api.get).toHaveBeenCalledWith("/explore", {
+      params: { seed: "s1", cursor: "c1", limit: 30 },
     });
   });
 
-  it("getPosts omits absent params", async () => {
+  it("getExplore omits absent params", async () => {
     (api.get as jest.Mock).mockResolvedValue({
       seed: "s",
       items: [],
       nextCursor: null,
       hasMore: false,
     });
-    await getPosts({});
-    expect(api.get).toHaveBeenCalledWith("/feed", { params: {} });
+    await getExplore({});
+    expect(api.get).toHaveBeenCalledWith("/explore", { params: {} });
   });
 
   it("getMatches hits /overseas/{id}/matches", async () => {

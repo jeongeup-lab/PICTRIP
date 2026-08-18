@@ -4,7 +4,7 @@ import { getConsents, putConsents } from "@/features/consent/api";
 import { applyConsentPut } from "@/features/consent/lib/apply-consent-put";
 import type { ConsentPutBody, ConsentState } from "@/features/consent/types";
 
-export const consentKeys = { state: ["consents"] as const };
+const consentKeys = { state: ["consents"] as const };
 
 export function useConsents() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);

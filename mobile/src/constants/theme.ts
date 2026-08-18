@@ -59,11 +59,11 @@ const dark = {
 
 export type Palette = { [K in keyof typeof dark]: string };
 
-export const palettes: { light: Palette; dark: Palette } = { light, dark };
+const palettes: { light: Palette; dark: Palette } = { light, dark };
 
 export type ThemeName = keyof typeof palettes;
 
-export const THEME_OVERRIDE_KEY = "theme_override";
+const THEME_OVERRIDE_KEY = "theme_override";
 
 function resolveThemeName(): ThemeName {
   let stored: string | null = null;
@@ -86,15 +86,6 @@ export const colors: Palette = palettes[themeName];
 
 export const darkColors: Palette = palettes.dark;
 
-export const mapTones = {
-  land: "#23262C",
-  water: "#0B3042",
-  coast: "#155069",
-  road: "#32373F",
-  roadTop: "#4D545E",
-  label: "#7B838F",
-} as const;
-
 export const spacing = {
   xs: 6,
   sm: 10,
@@ -111,65 +102,3 @@ export const radii = {
   xl: 12,
   pill: 999,
 } as const;
-
-const lightShadows = {
-  card: {
-    shadowColor: "#171717",
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  fab: {
-    shadowColor: "#171717",
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-  },
-  sheet: {
-    shadowColor: "#171717",
-    shadowOpacity: 0.14,
-    shadowRadius: 48,
-    shadowOffset: { width: 0, height: -20 },
-    elevation: 12,
-  },
-} as const;
-
-const darkShadows = {
-  card: {
-    shadowColor: "#000000",
-    shadowOpacity: 0.55,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 4,
-  },
-  fab: {
-    shadowColor: "#000000",
-    shadowOpacity: 0.7,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
-  },
-  sheet: {
-    shadowColor: "#000000",
-    shadowOpacity: 0.85,
-    shadowRadius: 50,
-    shadowOffset: { width: 0, height: -18 },
-    elevation: 12,
-  },
-} as const;
-
-type ShadowStyle = {
-  shadowColor: string;
-  shadowOpacity: number;
-  shadowRadius: number;
-  shadowOffset: { width: number; height: number };
-  elevation: number;
-};
-
-export type Shadows = { card: ShadowStyle; fab: ShadowStyle; sheet: ShadowStyle };
-
-export const shadows: Shadows = themeName === "dark" ? darkShadows : lightShadows;
-
-export const darkOnlyShadows: Shadows = darkShadows;

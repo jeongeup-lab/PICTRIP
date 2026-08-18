@@ -17,7 +17,7 @@ export const PERM_LABEL: Record<PermStatus, string> = {
 
 const EMPTY: AppPermissions = { location: null, photos: null, camera: null };
 
-export function toStatus(result: { status: ImagePicker.PermissionStatus }): PermStatus {
+function toStatus(result: { status: ImagePicker.PermissionStatus }): PermStatus {
   if (result.status === ImagePicker.PermissionStatus.GRANTED) return "granted";
   return result.status === ImagePicker.PermissionStatus.DENIED ? "denied" : "undetermined";
 }

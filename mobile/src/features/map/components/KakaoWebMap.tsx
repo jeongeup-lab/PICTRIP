@@ -7,7 +7,7 @@ import type { Bounds, LatLng } from "@/features/map/lib/geo";
 import type { NearbySpot } from "@/lib/api-types";
 import { colors, spacing } from "@/constants/theme";
 
-export const KAKAO_WEB_ORIGIN = "https://localhost";
+const KAKAO_WEB_ORIGIN = "https://localhost";
 
 const ERROR_MESSAGES: Record<string, string> = {
   "missing-js-key": "지도 키가 설정되지 않았어요",

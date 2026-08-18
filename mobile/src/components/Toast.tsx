@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { Pressable, View, Text, StyleSheet } from "react-native";
 import { colors, radii, spacing } from "@/constants/theme";
 
-export const TOAST_VISIBLE_MS = 2600;
+const TOAST_VISIBLE_MS = 2600;
 
 export const TOAST_UNDO_MS = 5000;
 
