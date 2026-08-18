@@ -3,39 +3,48 @@ import { useQuery } from "@tanstack/react-query";
 import { create } from "zustand";
 import { Image } from "expo-image";
 import { fullSizeSourceUri } from "@/components/RemoteImage";
-import { getChannelCards, getChannels, type ChannelKey } from "@/features/channels/api";
+import {
+  getChannelCards,
+  getChannels,
+  type ChannelCoords,
+  type ChannelKey,
+} from "@/features/channels/api";
 import { loadSeen, saveSeen } from "@/features/channels/lib/seen-store";
 import { todayKst } from "@/features/channels/lib/kst";
 import { queryClient } from "@/lib/query-client";
 
-export function useChannels() {
+function coordsKey(coords: ChannelCoords | null | undefined): [number, number] | null {
+  return coords ? [Math.round(coords.lat * 1000), Math.round(coords.lng * 1000)] : null;
+}
+
+export function useChannels(coords?: ChannelCoords | null) {
   return useQuery({
-    queryKey: ["channels"],
-    queryFn: getChannels,
+    queryKey: ["channels", coordsKey(coords)],
+    queryFn: () => getChannels(coords ?? undefined),
     staleTime: 5 * 60 * 1000,
   });
 }
 
-export function channelCardsKey(key: ChannelKey) {
-  return ["channel-cards", key];
+export function channelCardsKey(key: ChannelKey, coords?: ChannelCoords | null) {
+  return ["channel-cards", key, coordsKey(coords)];
 }
 
-export function useChannelCards(key: ChannelKey) {
+export function useChannelCards(key: ChannelKey, coords?: ChannelCoords | null) {
   return useQuery({
-    queryKey: channelCardsKey(key),
-    queryFn: () => getChannelCards(key),
+    queryKey: channelCardsKey(key, coords),
+    queryFn: () => getChannelCards(key, coords ?? undefined),
   });
 }
 
-export function prefetchChannelCards(key: ChannelKey) {
+export function prefetchChannelCards(key: ChannelKey, coords?: ChannelCoords | null) {
   void queryClient
     .prefetchQuery({
-      queryKey: channelCardsKey(key),
-      queryFn: () => getChannelCards(key),
+      queryKey: channelCardsKey(key, coords),
+      queryFn: () => getChannelCards(key, coords ?? undefined),
     })
     .then(() => {
       const data = queryClient.getQueryData<Awaited<ReturnType<typeof getChannelCards>>>(
-        channelCardsKey(key),
+        channelCardsKey(key, coords),
       );
       const first = data?.cards[0]?.imageUrl;
       if (first) void Image.prefetch(fullSizeSourceUri(first), { cachePolicy: "memory-disk" });

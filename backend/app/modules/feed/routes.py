@@ -201,8 +201,10 @@ async def home_channels(
     session: DbSession,
     redis: RedisDep,
     kto: KtoDep,
+    lat: float | None = Query(None, ge=-90, le=90),
+    lng: float | None = Query(None, ge=-180, le=180),
 ) -> dict[str, Any]:
-    metas = await channels.load_channel_metas(session, redis, kto)
+    metas = await channels.load_channel_metas(session, redis, kto, lat=lat, lng=lng)
     return ok(
         ChannelsResponse(
             channels=[

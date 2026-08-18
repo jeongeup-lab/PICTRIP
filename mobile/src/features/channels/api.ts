@@ -22,14 +22,26 @@ export type ChannelCard = {
   saveable: boolean;
 };
 
-export async function getChannels(): Promise<{ channels: ChannelMeta[] }> {
-  return (await api.get("/home/channels")) as unknown as { channels: ChannelMeta[] };
+export type ChannelCoords = { lat: number; lng: number };
+
+function roundedParams(
+  coords?: ChannelCoords,
+): { lat: number; lng: number } | Record<string, never> {
+  if (!coords) return {};
+  return { lat: Math.round(coords.lat * 1000) / 1000, lng: Math.round(coords.lng * 1000) / 1000 };
+}
+
+export async function getChannels(coords?: ChannelCoords): Promise<{ channels: ChannelMeta[] }> {
+  return (await api.get("/home/channels", { params: roundedParams(coords) })) as unknown as {
+    channels: ChannelMeta[];
+  };
 }
 
 export async function getChannelCards(
   key: ChannelKey,
+  coords?: ChannelCoords,
 ): Promise<{ key: ChannelKey; label: string; cards: ChannelCard[] }> {
-  return (await api.get(`/home/channels/${key}`)) as unknown as {
+  return (await api.get(`/home/channels/${key}`, { params: roundedParams(coords) })) as unknown as {
     key: ChannelKey;
     label: string;
     cards: ChannelCard[];

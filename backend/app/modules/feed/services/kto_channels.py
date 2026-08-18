@@ -53,6 +53,14 @@ def _short_addr(addr: Any) -> str:
     return " ".join(str(addr).split()[:2])
 
 
+def _coord(value: Any) -> float | None:
+    try:
+        parsed = float(str(value))
+    except (TypeError, ValueError):
+        return None
+    return parsed or None
+
+
 def _https(url: Any) -> str | None:
     if not url:
         return None
@@ -129,6 +137,8 @@ def _festival_cards(items: list[dict[str, Any]], *, today: date) -> list[Channel
                 line=line,
                 saveable=True,
                 cpyrht_div_cd=str(it.get("cpyrhtDivCd") or "") or None,
+                mapx=_coord(it.get("mapx")),
+                mapy=_coord(it.get("mapy")),
             )
         )
     cards.sort(key=lambda c: int((c.dday or "D-999")[2:]))

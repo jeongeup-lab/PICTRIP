@@ -5,7 +5,6 @@ import { router, useScrollToTop } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { ChannelTiles } from "@/features/channels/components/ChannelTiles";
 import { AiSection } from "@/features/home/components/AiSection";
-import { CategoryChips } from "@/features/home/components/CategoryChips";
 import { RankSection } from "@/features/home/components/RankSection";
 import { ScopeTabs, type HomeScope } from "@/features/home/components/ScopeTabs";
 import { useHomeLocation } from "@/features/home/hooks/use-home-location";
@@ -16,30 +15,21 @@ import {
   useRegionLabel,
   useTrending,
 } from "@/features/home/queries";
-import type { RankCategory } from "@/features/home/api";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { queryClient } from "@/lib/query-client";
 import { colors, spacing } from "@/constants/theme";
-
-const CATEGORY_NOUNS: Record<RankCategory, string> = {
-  SPOT: "관광지",
-  CAFE: "카페",
-  FOOD: "식당",
-};
 
 export default function HomeScreen() {
   const listRef = useRef<ScrollView>(null);
   useScrollToTop(listRef);
 
   const [scope, setScope] = useState<HomeScope>("nearby");
-  const [category, setCategory] = useState<RankCategory | null>(null);
-  const categoryNoun = category === null ? "장소" : CATEGORY_NOUNS[category];
   const { coords, status, request } = useHomeLocation();
   const displayName = useAuthStore((s) => s.user?.displayName ?? null);
 
   const region = useRegionLabel(coords);
-  const nearby = useNearby(coords, category ?? undefined);
-  const national = useTrending(category ?? undefined);
+  const nearby = useNearby(coords);
+  const national = useTrending();
   const recommendations = useRecommendations(coords);
 
   const locationDenied = status === "denied" || status === "undetermined";
@@ -79,7 +69,7 @@ export default function HomeScreen() {
         }
       >
         <View style={styles.channels}>
-          <ChannelTiles onOpen={(key) => router.push(`/channels?start=${key}`)} />
+          <ChannelTiles coords={coords} onOpen={(key) => router.push(`/channels?start=${key}`)} />
         </View>
 
         <ScopeTabs
@@ -90,8 +80,6 @@ export default function HomeScreen() {
             if (next === "nearby" && !coords) void request();
           }}
         />
-
-        <CategoryChips selected={category} onChange={setCategory} />
 
         {locationDenied && scope === "nearby" ? (
           <Pressable
@@ -108,10 +96,10 @@ export default function HomeScreen() {
         <RankSection
           title={
             showNational
-              ? `전국 인기 ${categoryNoun}`
+              ? "전국 인기 장소"
               : regionLabel
-                ? `${regionLabel} 근처 인기 ${categoryNoun}`
-                : `지금 주변 인기 ${categoryNoun}`
+                ? `${regionLabel} 근처 인기 장소`
+                : "지금 주변 인기 장소"
           }
           note={cards.length > 0 ? formatBaseDate(active.data?.baseDate) : null}
           cards={cards}

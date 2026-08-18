@@ -47,6 +47,8 @@ class ChannelCardRow:
     tag: str | None = None
     saveable: bool = True
     cpyrht_div_cd: str | None = None
+    mapx: float | None = None
+    mapy: float | None = None
 
 
 async def load_channel_cards(
@@ -61,11 +63,16 @@ async def load_channel_cards(
     if key not in CHANNEL_LABELS:
         raise ResourceNotFound(f"unknown channel {key}")
     if key in SIGNAL_KEYS:
-        from app.modules.feed.services.signal_channels import load_signal_channel_cached
+        from app.modules.feed.services.signal_channels import (
+            load_signal_channel_cached,
+            resolve_region_cd,
+        )
 
-        return await load_signal_channel_cached(session, redis, key)
+        region_cd = await resolve_region_cd(session, lat, lng)
+        return await load_signal_channel_cached(session, redis, key, region_cd=region_cd)
     cards = await _load_kto_channel(redis, kto, key)
-    return await _drop_unresolvable_details(session, cards)
+    cards = await _drop_unresolvable_details(session, cards)
+    return _sort_festa_by_distance(cards, lat, lng) if key == "festa" else cards
 
 
 async def _load_kto_channel(redis: Redis, kto: KtoClient, key: str) -> list[ChannelCardRow]:
@@ -103,6 +110,20 @@ async def _safe(coro: Coroutine[Any, Any, _T]) -> _T | None:
         return None
 
 
+def _sort_festa_by_distance(
+    cards: list[ChannelCardRow], lat: float | None, lng: float | None
+) -> list[ChannelCardRow]:
+    if lat is None or lng is None:
+        return cards
+
+    def sort_key(card: ChannelCardRow) -> tuple[int, float, str]:
+        if card.mapy is None or card.mapx is None:
+            return (1, 0.0, card.dday or "D-999")
+        return (0, (card.mapy - lat) ** 2 + (card.mapx - lng) ** 2, card.dday or "D-999")
+
+    return sorted(cards, key=sort_key)
+
+
 def _first_image(rows: list[Any]) -> str | None:
     for r in rows:
         img: str | None = getattr(r, "image_url", None) or getattr(r, "first_image_url", None)
@@ -122,17 +143,26 @@ def _meta_or_unavailable(key: str, rows: list[Any] | None) -> ChannelMetaRow:
 
 
 async def load_channel_metas(
-    session: AsyncSession, redis: Redis, kto: KtoClient
+    session: AsyncSession,
+    redis: Redis,
+    kto: KtoClient,
+    *,
+    lat: float | None = None,
+    lng: float | None = None,
 ) -> list[ChannelMetaRow]:
     from app.modules.feed.services.kto_channels import load_kto_channel_cached
-    from app.modules.feed.services.signal_channels import load_signal_channel_cached
+    from app.modules.feed.services.signal_channels import (
+        load_signal_channel_cached,
+        resolve_region_cd,
+    )
 
     festa_task = asyncio.ensure_future(
         _safe(asyncio.wait_for(load_kto_channel_cached(redis, kto, "festa"), _META_TIMEOUT))
     )
-    spot = await load_signal_channel_cached(session, redis, "spot")
-    cafe = await load_signal_channel_cached(session, redis, "cafe")
-    food = await load_signal_channel_cached(session, redis, "food")
+    region_cd = await resolve_region_cd(session, lat, lng)
+    spot = await load_signal_channel_cached(session, redis, "spot", region_cd=region_cd)
+    cafe = await load_signal_channel_cached(session, redis, "cafe", region_cd=region_cd)
+    food = await load_signal_channel_cached(session, redis, "food", region_cd=region_cd)
     hidden = await load_signal_channel_cached(session, redis, "hidden")
     festa = await festa_task
     metas = [

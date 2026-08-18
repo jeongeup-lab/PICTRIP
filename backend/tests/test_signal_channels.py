@@ -138,6 +138,43 @@ async def test_hidden_channel_wants_recent_talk_without_crowds(db_session) -> No
     assert cards[0].tag == "숨은명소"
 
 
+async def test_scoped_channel_prefers_my_region_then_backfills_nationally(db_session) -> None:
+    await _seed_region(db_session, "26", "부산광역시")
+    await _seed_region(db_session, "50", "제주특별자치도")
+    await _seed_spot(db_session, "local1", title="부산 스팟", region="26", aesthetic=0.05)
+    await _seed_buzz(db_session, "local1", scope="base", recent=0.9, blog_total=700)
+    await _seed_spot(db_session, "far1", title="제주 스팟", region="50", aesthetic=0.3)
+    await _seed_buzz(db_session, "far1", scope="base", recent=1.0, blog_total=90000)
+
+    cards = await load_signal_channel_cached(db_session, FakeRedis(), "spot", region_cd="26")
+
+    assert [c.content_id for c in cards] == ["local1", "far1"]
+
+
+async def test_scoped_channel_spreads_within_the_region_by_sigungu(db_session) -> None:
+    await _seed_region(db_session, "26", "부산광역시")
+    for code, name in (("26380", "사하구"), ("26440", "강서구")):
+        await db_session.execute(
+            text(
+                "INSERT INTO sigungus (ldong_signgu_cd, ldong_regn_cd, ldong_signgu_nm) "
+                "VALUES (:c, '26', :n) ON CONFLICT DO NOTHING"
+            ),
+            {"c": code, "n": name},
+        )
+    for cid, sg, score in (("a1", "26380", 0.3), ("a2", "26380", 0.2), ("b1", "26440", 0.05)):
+        await _seed_spot(db_session, cid, title=f"스팟-{cid}", region="26", aesthetic=score)
+        await db_session.execute(
+            text("UPDATE spots SET ldong_signgu_cd = :sg WHERE content_id = :cid"),
+            {"sg": sg, "cid": cid},
+        )
+        await _seed_buzz(db_session, cid, scope="base", recent=1.0, blog_total=5000)
+
+    cards = await load_signal_channel_cached(db_session, FakeRedis(), "spot", region_cd="26")
+
+    assert {c.content_id for c in cards} >= {"a1", "b1"}
+    assert "a2" not in {c.content_id for c in cards[:2]}
+
+
 async def test_signal_channel_caches_in_redis(db_session) -> None:
     await _seed_region(db_session, "26", "부산광역시")
     await _seed_spot(db_session, "good", title="뜨는 곳", aesthetic=0.1)

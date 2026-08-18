@@ -25,7 +25,7 @@ function setSeen(keys: ChannelKey[]) {
 async function mount(onOpen: (key: ChannelKey) => void) {
   let r: renderer.ReactTestRenderer;
   await act(async () => {
-    r = renderer.create(<ChannelTiles onOpen={onOpen} />);
+    r = renderer.create(<ChannelTiles coords={null} onOpen={onOpen} />);
   });
   return r!;
 }
@@ -85,7 +85,7 @@ describe("ChannelTiles", () => {
     setSeen([]);
     const r = await mount(() => {});
     await act(async () => tiles(r)[1].props.onPressIn());
-    expect(mockPrefetch).toHaveBeenCalledWith("hidden");
+    expect(mockPrefetch).toHaveBeenCalledWith("hidden", null);
   });
 
   it("tapping a tile calls onOpen with its key", async () => {

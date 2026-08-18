@@ -30,9 +30,14 @@ const mockSaveSeen = saveSeen as jest.Mock;
 const mockLoadSeen = loadSeen as jest.Mock;
 
 describe("channelCardsKey", () => {
-  it("keys by channel alone now that no channel takes coordinates", () => {
-    expect(channelCardsKey("hidden")).toEqual(["channel-cards", "hidden"]);
+  it("keys by channel and rounded coordinates", () => {
+    expect(channelCardsKey("hidden")).toEqual(["channel-cards", "hidden", null]);
     expect(channelCardsKey("festa")).not.toEqual(channelCardsKey("hidden"));
+    expect(channelCardsKey("spot", { lat: 35.1234, lng: 129.0456 })).toEqual([
+      "channel-cards",
+      "spot",
+      [35123, 129046],
+    ]);
   });
 });
 

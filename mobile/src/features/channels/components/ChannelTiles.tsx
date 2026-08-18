@@ -2,15 +2,16 @@ import { ScrollView, Pressable, View, Text, StyleSheet } from "react-native";
 import Svg, { Defs, LinearGradient, Stop, Rect } from "react-native-svg";
 import { RemoteImage } from "@/components/RemoteImage";
 import { prefetchChannelCards, useChannels, useSeenChannels } from "@/features/channels/queries";
-import type { ChannelKey, ChannelMeta } from "@/features/channels/api";
+import type { ChannelCoords, ChannelKey, ChannelMeta } from "@/features/channels/api";
 import { colors } from "@/constants/theme";
 
 interface Props {
+  coords: ChannelCoords | null;
   onOpen: (key: ChannelKey) => void;
 }
 
-export function ChannelTiles({ onOpen }: Props) {
-  const { data } = useChannels();
+export function ChannelTiles({ coords, onOpen }: Props) {
+  const { data } = useChannels(coords);
   const { seen } = useSeenChannels();
   const channels = data?.channels ?? [];
   if (channels.length === 0) return null;
@@ -21,7 +22,13 @@ export function ChannelTiles({ onOpen }: Props) {
       contentContainerStyle={styles.row}
     >
       {channels.map((meta) => (
-        <ChannelTile key={meta.key} meta={meta} seen={seen.has(meta.key)} onOpen={onOpen} />
+        <ChannelTile
+          key={meta.key}
+          meta={meta}
+          coords={coords}
+          seen={seen.has(meta.key)}
+          onOpen={onOpen}
+        />
       ))}
     </ScrollView>
   );
@@ -29,10 +36,12 @@ export function ChannelTiles({ onOpen }: Props) {
 
 function ChannelTile({
   meta,
+  coords,
   seen,
   onOpen,
 }: {
   meta: ChannelMeta;
+  coords: ChannelCoords | null;
   seen: boolean;
   onOpen: (key: ChannelKey) => void;
 }) {
@@ -41,7 +50,7 @@ function ChannelTile({
   return (
     <Pressable
       testID="channel-tile"
-      onPressIn={() => prefetchChannelCards(meta.key)}
+      onPressIn={() => prefetchChannelCards(meta.key, coords)}
       onPress={() => onOpen(meta.key)}
       disabled={!meta.available}
       style={[styles.tile, dimmed && styles.dimmed]}
