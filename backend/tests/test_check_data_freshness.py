@@ -22,6 +22,11 @@ def test_thresholds_leave_room_for_the_job_cadence() -> None:
     assert by_name["overseas_spots.updated_at"] > 24 * 31
 
 
+def test_overseas_check_uses_the_oldest_row() -> None:
+    check = next(c for c in CHECKS if c.name == "overseas_spots.updated_at")
+    assert "min(updated_at)" in check.sql
+
+
 @pytest.mark.asyncio
 async def test_age_hours_is_none_when_table_is_empty(db_session) -> None:
     age = await _age_hours(db_session, "SELECT max(updated_at) FROM overseas_spots")

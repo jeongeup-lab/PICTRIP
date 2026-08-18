@@ -38,8 +38,8 @@ CHECKS: tuple[Check, ...] = (
     ),
     Check(
         "overseas_spots.updated_at",
-        "SELECT max(updated_at) FROM overseas_spots",
-        24 * 40,
+        "SELECT min(updated_at) FROM overseas_spots",
+        24 * 70,
         "월간 DAG 는 Kuma 하트비트 상한(24일)을 넘어 push 모니터를 못 붙인다",
     ),
 )
