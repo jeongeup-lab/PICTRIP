@@ -1,0 +1,37 @@
+name: heartbeat
+description: >-
+  CT113 Uptime-Kuma push 모니터에 DAG 결과를 보고한다. 잡 실패뿐 아니라
+  "아예 안 돌았음"(GitHub 장애·스케줄 비활성)까지 Kuma 쪽 타임아웃으로 잡힌다.
+  푸시 URL 시크릿이 없으면 조용히 건너뛴다 — 시크릿 배선 전에도 머지 가능하게.
+
+inputs:
+  url:
+    description: "Uptime-Kuma push URL (secrets.KUMA_PUSH_*)"
+    required: false
+    default: ""
+  status:
+    description: "up | down"
+    required: true
+  msg:
+    description: "Kuma 에 남길 한 줄"
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        KUMA_URL: ${{ inputs.url }}
+        KUMA_STATUS: ${{ inputs.status }}
+        KUMA_MSG: ${{ inputs.msg }}
+      run: |
+        set -euo pipefail
+        if [ -z "$KUMA_URL" ]; then
+          echo "::notice::KUMA push URL 미설정 — heartbeat 생략"
+          exit 0
+        fi
+        curl -fsS --max-time 10 --get "$KUMA_URL" \
+          --data-urlencode "status=$KUMA_STATUS" \
+          --data-urlencode "msg=$KUMA_MSG" >/dev/null
+        echo "heartbeat sent: $KUMA_STATUS"

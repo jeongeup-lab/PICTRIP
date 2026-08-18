@@ -8,7 +8,6 @@ dependencies = [
     "httpx",
     "psycopg[binary]",
     "pydantic-settings",
-    "streamlit",
     "tenacity",
 ]
 

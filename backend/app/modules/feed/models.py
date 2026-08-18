@@ -8,7 +8,6 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     Float,
-    ForeignKey,
     Identity,
     Index,
     Integer,
@@ -61,34 +60,3 @@ class OverseasSpot(Base):
         ),
         Index("idx_overseas_spots_visible", "is_hidden", text("fame_score DESC")),
     )
-
-
-class TravelShort(Base):
-    __tablename__ = "travel_shorts"
-
-    video_id: Mapped[str] = mapped_column(String(16), primary_key=True)
-    title: Mapped[str] = mapped_column(Text, nullable=False)
-    channel_title: Mapped[str] = mapped_column(Text, nullable=False)
-    thumbnail_url: Mapped[str] = mapped_column(Text, nullable=False)
-    view_count: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
-    duration_sec: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    anchor_label: Mapped[str] = mapped_column(String(80), nullable=False)
-    rank: Mapped[int] = mapped_column(Integer, nullable=False)
-    fetched_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-
-    __table_args__ = (Index("idx_travel_shorts_rank", "rank"),)
-
-
-class TravelShortSpot(Base):
-    __tablename__ = "travel_shorts_spots"
-
-    video_id: Mapped[str] = mapped_column(
-        String(16),
-        ForeignKey("travel_shorts.video_id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    content_id: Mapped[str] = mapped_column(String(32), primary_key=True)
-    rank: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
