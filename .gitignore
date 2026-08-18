@@ -38,3 +38,12 @@ deploy/api-host/.deploy.env
 # --- agent 작업 산출물 (핸드오프·프로토타입, 로컬 전용) ---
 docs/plans/
 .playwright-mcp/
+
+# --- 도구 작업 디렉터리 (로컬 전용) ---
+.omo/
+.worktrees/
+
+# --- 브라우저 자동화 캡처 (스토어 심사·소개 페이지 작업 흔적, 로컬 전용) ---
+/asc-*.png
+/about-*.png
+/tf-page.yml
