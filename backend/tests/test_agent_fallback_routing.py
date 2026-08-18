@@ -16,6 +16,7 @@ from app.modules.agent.schemas import (
     ResolvedPlace,
 )
 from app.modules.agent.services import ask as ask_service
+from app.modules.agent.services import food as food_service
 from app.modules.agent.services import geocode as geocode_service
 from app.modules.agent.services import intent as intent_service
 from app.modules.agent.services import resolve as resolve_service
@@ -242,7 +243,7 @@ async def test_a_station_anchors_the_food_search_instead_of_the_users_own_locati
     monkeypatch.setattr(resolve_service, "resolve_places", fake_resolve)
     monkeypatch.setattr(repositories, "load_candidates_by_ids", fake_load)
     monkeypatch.setattr(geocode_service, "locate", fake_locate)
-    monkeypatch.setattr(ask_service, "_ask_around", fake_around)
+    monkeypatch.setattr(food_service, "_ask_around", fake_around)
 
     await ask_service.ask(
         db_session,

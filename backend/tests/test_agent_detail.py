@@ -15,8 +15,11 @@ from app.modules.agent.schemas import (
     CrowdPreference,
     QueryIntent,
 )
+from app.modules.agent.services import anchor as anchor_service
+from app.modules.agent.services import answer as answer_service
 from app.modules.agent.services import ask as ask_service
 from app.modules.agent.services import detail as detail_service
+from app.modules.agent.services import food as food_service
 from app.modules.agent.services import intent as intent_service
 from app.modules.spots.services.rows import SpotDetailRow, SpotIntroRow
 
@@ -343,7 +346,7 @@ async def test_a_food_search_with_no_origin_at_all_says_how_to_get_one(monkeypat
     )
 
     assert answer.spots == []
-    assert _text(answer) == ask_service.FOOD_NEEDS_ORIGIN_ANSWER
+    assert _text(answer) == food_service.FOOD_NEEDS_ORIGIN_ANSWER
 
 
 async def test_a_question_that_wants_a_search_but_named_no_axis_asks_for_one(monkeypatch) -> None:
@@ -548,7 +551,7 @@ async def test_the_origin_is_named_the_way_the_user_said_it(monkeypatch) -> None
 
 
 def test_a_two_region_food_answer_names_both() -> None:
-    answer = ask_service.food_in_region(
+    answer = food_service.food_in_region(
         [], ["부산광역시", "제주특별자치도"], "food", steps=[], intent=QueryIntent()
     )
 
@@ -556,7 +559,7 @@ def test_a_two_region_food_answer_names_both() -> None:
 
 
 def test_a_two_region_food_step_names_both() -> None:
-    answer = ask_service.food_in_region(
+    answer = food_service.food_in_region(
         [], ["부산광역시", "제주특별자치도"], "food", steps=[], intent=QueryIntent()
     )
 
@@ -671,7 +674,7 @@ async def test_a_new_region_beats_a_card_left_over_from_earlier(monkeypatch) -> 
 def test_an_empty_surrounding_keeps_the_asked_conditions() -> None:
     intent = QueryIntent(categoryKeywords=["맛집"], regionHints=["보령"])
 
-    answer = ask_service.empty_anchor_response("대천역", "food", prior_steps=[], intent=intent)
+    answer = anchor_service.empty_anchor_response("대천역", "food", prior_steps=[], intent=intent)
 
     assert answer.intent.categoryKeywords == ["맛집"]
     assert answer.intent.regionHints == ["보령"]
@@ -790,7 +793,7 @@ async def test_a_region_food_query_carries_the_other_conditions(monkeypatch) -> 
     monkeypatch.setattr(retrieve, "search_food", fake_food)
     monkeypatch.setattr(repositories, "find_mood_ids", fake_moods)
 
-    answer = await ask_service._food_across_region(
+    answer = await food_service._food_across_region(
         None,  # type: ignore[arg-type]
         "food",
         ["부산광역시"],
@@ -831,7 +834,7 @@ async def test_a_region_food_answer_drops_conditions_it_could_not_apply(monkeypa
     monkeypatch.setattr(retrieve, "search_food", fake_food)
     monkeypatch.setattr(repositories, "find_mood_ids", fake_moods)
 
-    answer = await ask_service._food_across_region(
+    answer = await food_service._food_across_region(
         None,  # type: ignore[arg-type]
         "food",
         ["부산광역시"],
@@ -884,7 +887,7 @@ async def test_a_region_dish_constraint_survives_condition_relaxation(
     monkeypatch.setattr(retrieve, "search_food", fake_food)
     monkeypatch.setattr(repositories, "find_mood_ids", fake_moods)
 
-    answer = await ask_service._food_across_region(
+    answer = await food_service._food_across_region(
         db_session,
         "food",
         ["부산광역시"],
@@ -908,7 +911,7 @@ def test_an_empty_surrounding_drops_the_axes_it_never_applied() -> None:
         moodHints=["sea"],
     )
 
-    answer = ask_service.empty_anchor_response("대천역", "food", prior_steps=[], intent=intent)
+    answer = anchor_service.empty_anchor_response("대천역", "food", prior_steps=[], intent=intent)
 
     assert answer.intent.crowdPreference == "any"
     assert answer.intent.indoorOnly is False
@@ -948,11 +951,12 @@ async def test_an_origin_search_does_not_claim_conditions_it_never_applied(monke
     async def fake_images(session, limit):  # type: ignore[no-untyped-def]
         return []
 
-    monkeypatch.setattr(ask_service, "find_nearby_spots", fake_nearby)
+    monkeypatch.setattr(anchor_service, "find_nearby_spots", fake_nearby)
+    monkeypatch.setattr(food_service, "find_nearby_spots", fake_nearby)
     monkeypatch.setattr(repositories, "load_candidates_by_ids", fake_briefs)
     monkeypatch.setattr(repositories, "load_random_attraction_images", fake_images)
 
-    answer = await ask_service._ask_around(
+    answer = await food_service._ask_around(
         None,  # type: ignore[arg-type]
         "대천역",
         "food",
@@ -996,7 +1000,7 @@ async def test_a_named_food_origin_reuses_the_coords_already_resolved(monkeypatc
         )
     ]
 
-    origin = await ask_service._named_origin(None, intent, resolved)  # type: ignore[arg-type]
+    origin = await food_service._named_origin(None, intent, resolved)  # type: ignore[arg-type]
 
     assert origin is not None
     assert origin.title == "전주 한옥마을"
@@ -1019,7 +1023,7 @@ async def test_a_place_the_resolver_missed_still_falls_back_to_geocoding(monkeyp
     intent = QueryIntent(namedPlaces=[ExtractedPlace(name="대천역", regionHint="보령")])
     resolved = [ResolvedPlace(extracted=intent.namedPlaces[0])]
 
-    origin = await ask_service._named_origin(None, intent, resolved)  # type: ignore[arg-type]
+    origin = await food_service._named_origin(None, intent, resolved)  # type: ignore[arg-type]
 
     assert asked == {"name": "대천역", "hint": "보령"}
     assert origin is not None and origin.title == "대천역"
@@ -1044,7 +1048,7 @@ async def test_an_ambiguous_resolution_is_not_taken_as_an_origin(monkeypatch) ->
         )
     ]
 
-    origin = await ask_service._named_origin(None, intent, resolved)  # type: ignore[arg-type]
+    origin = await food_service._named_origin(None, intent, resolved)  # type: ignore[arg-type]
 
     assert origin is not None
     assert origin.title == "대천역"
@@ -1070,7 +1074,7 @@ async def test_a_naver_hit_whose_name_does_not_hold_is_not_an_origin(monkeypatch
         )
     ]
 
-    assert await ask_service._named_origin(None, intent, resolved) is None  # type: ignore[arg-type]
+    assert await food_service._named_origin(None, intent, resolved) is None  # type: ignore[arg-type]
 
 
 async def test_a_verified_naver_hit_is_still_reused_as_an_origin() -> None:
@@ -1092,7 +1096,7 @@ async def test_a_verified_naver_hit_is_still_reused_as_an_origin() -> None:
         )
     ]
 
-    origin = await ask_service._named_origin(None, intent, resolved)  # type: ignore[arg-type]
+    origin = await food_service._named_origin(None, intent, resolved)  # type: ignore[arg-type]
 
     assert origin is not None and origin.title == "전주 한옥마을"
 
@@ -1113,9 +1117,9 @@ def test_a_card_from_another_region_is_no_longer_an_origin() -> None:
         concentration_rate=None,
     )
 
-    assert ask_service._stands_in_region(seoul, ["부산광역시"]) is False
-    assert ask_service._stands_in_region(seoul, ["서울특별시"]) is True
-    assert ask_service._stands_in_region(seoul, []) is True
+    assert food_service._stands_in_region(seoul, ["부산광역시"]) is False
+    assert food_service._stands_in_region(seoul, ["서울특별시"]) is True
+    assert food_service._stands_in_region(seoul, []) is True
 
 
 async def test_a_carried_region_still_drops_the_card_left_over_from_before(monkeypatch) -> None:
@@ -1212,11 +1216,12 @@ async def test_the_origin_itself_is_not_offered_as_its_own_neighbour(monkeypatch
     async def fake_images(session, limit):  # type: ignore[no-untyped-def]
         return []
 
-    monkeypatch.setattr(ask_service, "find_nearby_spots", fake_nearby)
+    monkeypatch.setattr(anchor_service, "find_nearby_spots", fake_nearby)
+    monkeypatch.setattr(food_service, "find_nearby_spots", fake_nearby)
     monkeypatch.setattr(repositories, "load_candidates_by_ids", fake_briefs)
     monkeypatch.setattr(repositories, "load_random_attraction_images", fake_images)
 
-    answer = await ask_service._ask_around(
+    answer = await food_service._ask_around(
         None,  # type: ignore[arg-type]
         "스타벅스 강남점",
         "cafe",
@@ -1273,7 +1278,7 @@ async def test_a_region_food_query_measures_from_me_when_i_said_nearby(monkeypat
     monkeypatch.setattr(retrieve, "search_food", fake_food)
     monkeypatch.setattr(repositories, "find_mood_ids", fake_moods)
 
-    answer = await ask_service._food_across_region(
+    answer = await food_service._food_across_region(
         None,  # type: ignore[arg-type]
         "food",
         ["부산광역시"],
@@ -1287,7 +1292,7 @@ async def test_a_region_food_query_measures_from_me_when_i_said_nearby(monkeypat
     assert seen["lat"] == 35.15
     assert answer.intent.nearMe is True
     assert answer.tagBasis == "직선거리 기준"
-    assert ask_service._is_distance_tag(answer.spots[0].tag)
+    assert answer_service._is_distance_tag(answer.spots[0].tag)
 
 
 async def test_a_region_food_query_without_coords_stays_a_plain_listing(monkeypatch) -> None:
@@ -1320,7 +1325,7 @@ async def test_a_region_food_query_without_coords_stays_a_plain_listing(monkeypa
     monkeypatch.setattr(retrieve, "search_food", fake_food)
     monkeypatch.setattr(repositories, "find_mood_ids", fake_moods)
 
-    answer = await ask_service._food_across_region(
+    answer = await food_service._food_across_region(
         None,  # type: ignore[arg-type]
         "food",
         ["부산광역시"],
@@ -1406,5 +1411,5 @@ async def test_a_resolved_place_in_the_wrong_county_is_not_reused(monkeypatch) -
         )
     ]
 
-    assert await ask_service._named_origin(None, intent, resolved) is None  # type: ignore[arg-type]
+    assert await food_service._named_origin(None, intent, resolved) is None  # type: ignore[arg-type]
     assert asked["hint"] == "경상남도 통영"
