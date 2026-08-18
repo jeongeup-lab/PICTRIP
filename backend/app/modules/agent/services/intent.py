@@ -134,6 +134,17 @@ _RESPONSE_SCHEMA: dict[str, Any] = {
     ],
 }
 
+
+def _openai_schema() -> dict[str, Any]:
+    schema = QueryIntent.model_json_schema()
+    schema["additionalProperties"] = False
+    return schema
+
+
+def response_schema() -> dict[str, Any]:
+    return _RESPONSE_SCHEMA if llm.structured_depends_on_gemini() else _openai_schema()
+
+
 _MOOD_CODES: tuple[Mood, ...] = get_args(Mood)
 _TASKS: tuple[TaskKind, ...] = get_args(TaskKind)
 _DETAIL_FIELDS: tuple[DetailField, ...] = get_args(DetailField)
@@ -156,10 +167,10 @@ async def extract_intent(
 ) -> QueryIntent:
     block = _context_block(prior, prior_spots or [])
     asked = question.strip()[:MAX_QUESTION_CHARS]
-    data = await llm.get_client().generate_json(
+    data = await llm.get_structured_client().generate_json(
         system=_SYSTEM_PROMPT,
         user_text=f"{block}\n\n이번 질문: {asked}" if block else asked,
-        response_schema=_RESPONSE_SCHEMA,
+        response_schema=response_schema(),
     )
     if not isinstance(data, dict):
         raise AgentIntentUnavailable()
