@@ -12,7 +12,10 @@ from app.kto.client import get_kto
 from app.main import app
 from app.modules.agent.repositories import CandidateRow
 from app.modules.agent.schemas import QueryIntent
+from app.modules.agent.services import anchor as anchor_service
+from app.modules.agent.services import answer as answer_service
 from app.modules.agent.services import ask as ask_service
+from app.modules.agent.services import food as food_service
 from app.modules.spots.services import NearbyCategory, NearbySpotRow
 
 ANCHOR_LAT, ANCHOR_LNG = 33.5567, 126.7597
@@ -138,7 +141,7 @@ async def test_anchor_food_returns_nearby_restaurants_sorted_by_distance(
     assert [step["tool"] for step in data["steps"]] == ["nearby"]
     assert "김녕미로공원 주변 맛집" in data["steps"][0]["label"]
     assert [spot["contentId"] for spot in data["spots"]] == ["f1", "f2"]
-    assert all(ask_service._is_distance_tag(spot["tag"]) for spot in data["spots"])
+    assert all(answer_service._is_distance_tag(spot["tag"]) for spot in data["spots"])
     assert data["refinements"] == []
     assert data["suggestions"] == []
 
@@ -277,7 +280,7 @@ async def test_a_specific_dish_zero_at_my_coords_names_the_title_condition(
 async def test_a_specific_dish_zero_around_a_named_origin_names_the_title_condition(
     db_session, anchor_seeded
 ) -> None:
-    response = await ask_service._ask_around(
+    response = await food_service._ask_around(
         db_session,
         "김녕미로공원",
         "food",
@@ -297,7 +300,7 @@ async def test_a_specific_dish_zero_around_a_named_origin_names_the_title_condit
 async def test_a_specific_dish_zero_across_a_region_names_the_title_condition(
     db_session, anchor_seeded
 ) -> None:
-    response = await ask_service._food_across_region(
+    response = await food_service._food_across_region(
         db_session,
         "food",
         ["제주특별자치도"],
@@ -509,7 +512,7 @@ async def test_anchor_rejects_an_unknown_action(db_session, client) -> None:
 
 
 def test_anchor_card_carries_distance_tag_and_short_region() -> None:
-    card = ask_service._anchor_card(
+    card = anchor_service._anchor_card(
         NearbySpotRow(
             content_id="f1",
             title="해녀촌식당",
@@ -542,7 +545,7 @@ def test_anchor_crowd_response_emphasises_percentile_for_calm_spots() -> None:
         percentile=12,
     )
 
-    response = ask_service._anchor_crowd_response(row)
+    response = anchor_service._anchor_crowd_response(row)
 
     joined = "".join(part.text for part in response.answer)
     assert "한산" in joined
@@ -562,14 +565,14 @@ def test_anchor_card_reports_whether_crowd_data_exists() -> None:
         cpyrht_div_cd="Type1",
     )
 
-    assert ask_service._anchor_card(row, has_crowd=True).hasCrowd is True
-    assert ask_service._anchor_card(row, has_crowd=False).hasCrowd is False
+    assert anchor_service._anchor_card(row, has_crowd=True).hasCrowd is True
+    assert anchor_service._anchor_card(row, has_crowd=False).hasCrowd is False
 
 
 def test_the_travel_anchor_keeps_museums_that_the_map_predicate_drops() -> None:
     from app.modules.spots.services.nearby import _predicate_for, _predicate_sql
 
-    assert ask_service.ANCHOR_CATEGORIES["nearby"] is NearbyCategory.attraction
+    assert anchor_service.ANCHOR_CATEGORIES["nearby"] is NearbyCategory.attraction
     map_sql = _predicate_sql(_predicate_for(NearbyCategory.attraction, False))
     travel_sql = _predicate_sql(_predicate_for(NearbyCategory.attraction, True))
 
@@ -721,9 +724,8 @@ async def test_an_origin_the_context_never_carried_is_ignored(
 
 
 def test_an_anchor_with_nothing_nearby_is_an_answer_not_an_error() -> None:
-    from app.modules.agent.services import ask as ask_service
 
-    answer = ask_service.empty_anchor_response("그리스신화박물관", "food", prior_steps=[])
+    answer = anchor_service.empty_anchor_response("그리스신화박물관", "food", prior_steps=[])
 
     assert answer.spots == []
     assert answer.totalCount == 0
@@ -733,7 +735,6 @@ def test_an_anchor_with_nothing_nearby_is_an_answer_not_an_error() -> None:
 
 def test_a_focused_card_pivots_a_nearby_question_without_naming_it() -> None:
     from app.modules.agent.schemas import AskContext, AskContextSpot, QueryIntent
-    from app.modules.agent.services import ask as ask_service
 
     context = AskContext(
         spots=[AskContextSpot(contentId="126198", title="통영 세병관")],
@@ -750,7 +751,6 @@ def test_a_focused_card_pivots_a_nearby_question_without_naming_it() -> None:
 
 def test_a_nearby_question_without_a_focused_card_stays_a_search() -> None:
     from app.modules.agent.schemas import AskContext, AskContextSpot, QueryIntent
-    from app.modules.agent.services import ask as ask_service
 
     context = AskContext(spots=[AskContextSpot(contentId="126198", title="통영 세병관")])
 
@@ -759,7 +759,6 @@ def test_a_nearby_question_without_a_focused_card_stays_a_search() -> None:
 
 def test_a_focused_card_pivots_when_the_user_points_without_naming() -> None:
     from app.modules.agent.schemas import AskContext, AskContextSpot, QueryIntent
-    from app.modules.agent.services import ask as ask_service
 
     context = AskContext(
         spots=[AskContextSpot(contentId="126198", title="통영 세병관")],
@@ -776,7 +775,6 @@ def test_a_focused_card_pivots_when_the_user_points_without_naming() -> None:
 
 def test_pointing_without_a_focused_card_stays_a_search() -> None:
     from app.modules.agent.schemas import AskContext, AskContextSpot, QueryIntent
-    from app.modules.agent.services import ask as ask_service
 
     context = AskContext(spots=[AskContextSpot(contentId="126198", title="통영 세병관")])
 
@@ -785,7 +783,6 @@ def test_pointing_without_a_focused_card_stays_a_search() -> None:
 
 def test_naming_a_new_region_beats_a_stale_anchor() -> None:
     from app.modules.agent.schemas import AskContext, AskContextSpot, QueryIntent
-    from app.modules.agent.services import ask as ask_service
 
     context = AskContext(
         intent=QueryIntent(regionHints=["통영"]),
@@ -799,7 +796,6 @@ def test_naming_a_new_region_beats_a_stale_anchor() -> None:
 
 def test_a_region_carried_from_the_previous_turn_does_not_block_the_pivot() -> None:
     from app.modules.agent.schemas import AskContext, AskContextSpot, QueryIntent
-    from app.modules.agent.services import ask as ask_service
 
     context = AskContext(
         intent=QueryIntent(regionHints=["통영"]),
@@ -815,7 +811,6 @@ def test_a_region_carried_from_the_previous_turn_does_not_block_the_pivot() -> N
 
 def test_naming_the_origin_still_pivots_even_with_a_region() -> None:
     from app.modules.agent.schemas import AskContext, AskContextSpot, QueryIntent
-    from app.modules.agent.services import ask as ask_service
 
     context = AskContext(
         spots=[AskContextSpot(contentId="126198", title="통영 세병관")],
@@ -829,7 +824,7 @@ def test_naming_the_origin_still_pivots_even_with_a_region() -> None:
 
 
 def test_an_anchor_answer_leads_with_the_nearest_distance() -> None:
-    segments = ask_service._anchor_lead("성산일출봉", "food", nearest_m=420)
+    segments = anchor_service._anchor_lead("성산일출봉", "food", nearest_m=420)
 
     text = "".join(s.text for s in segments)
     assert text.startswith("가장 가까운 맛집이 420m 거리예요.")
@@ -837,25 +832,25 @@ def test_an_anchor_answer_leads_with_the_nearest_distance() -> None:
 
 
 def test_a_sub_kilometre_distance_reads_in_metres_not_zero_point_something() -> None:
-    assert ask_service._meters_label(38.0) == "40m"
-    assert ask_service._meters_label(874.0) == "870m"
-    assert ask_service._meters_label(4.0) == "10m"
+    assert answer_service._meters_label(38.0) == "40m"
+    assert answer_service._meters_label(874.0) == "870m"
+    assert answer_service._meters_label(4.0) == "10m"
 
 
 def test_a_kilometre_scale_distance_keeps_the_kilometre_form() -> None:
-    assert ask_service._meters_label(1000.0) == "1.0km"
-    assert ask_service._meters_label(3210.0) == "3.2km"
-    assert ask_service._meters_label(996.0) == "1.0km"
+    assert answer_service._meters_label(1000.0) == "1.0km"
+    assert answer_service._meters_label(3210.0) == "3.2km"
+    assert answer_service._meters_label(996.0) == "1.0km"
 
 
 def test_a_close_anchor_never_leads_with_a_zero_distance() -> None:
-    segments = ask_service._anchor_lead("성산일출봉", "cafe", nearest_m=32.0)
+    segments = anchor_service._anchor_lead("성산일출봉", "cafe", nearest_m=32.0)
 
     assert "".join(s.text for s in segments) == "가장 가까운 카페가 30m 거리예요."
 
 
 def test_an_anchor_answer_without_a_distance_states_the_scope() -> None:
-    segments = ask_service._anchor_lead("성산일출봉", "cafe", nearest_m=None)
+    segments = anchor_service._anchor_lead("성산일출봉", "cafe", nearest_m=None)
 
     assert "".join(s.text for s in segments) == "성산일출봉 주변 카페예요."
 
@@ -863,7 +858,7 @@ def test_an_anchor_answer_without_a_distance_states_the_scope() -> None:
 def test_an_anchor_answer_attaches_the_particle_each_noun_actually_takes() -> None:
     leads = {
         action: "".join(
-            part.text for part in ask_service._anchor_lead("성산일출봉", action, nearest_m=420)
+            part.text for part in anchor_service._anchor_lead("성산일출봉", action, nearest_m=420)
         )
         for action in ("food", "cafe", "nearby")
     }
@@ -877,7 +872,7 @@ def test_an_empty_anchor_line_attaches_the_particle_each_noun_takes() -> None:
     lines = {
         action: "".join(
             part.text
-            for part in ask_service.empty_anchor_response(
+            for part in anchor_service.empty_anchor_response(
                 "성산일출봉", action, prior_steps=[]
             ).answer
         )
@@ -893,7 +888,7 @@ def test_an_empty_region_line_attaches_the_particle_each_noun_takes() -> None:
     lines = {
         action: "".join(
             part.text
-            for part in ask_service.food_in_region(
+            for part in food_service.food_in_region(
                 [], ["부산광역시"], action, steps=[], intent=QueryIntent()
             ).answer
         )
@@ -908,7 +903,7 @@ def test_an_empty_region_line_attaches_the_particle_each_noun_takes() -> None:
 def test_an_anchor_scope_line_ends_with_the_copula_each_noun_takes() -> None:
     scopes = {
         action: "".join(
-            part.text for part in ask_service._anchor_lead("성산일출봉", action, nearest_m=None)
+            part.text for part in anchor_service._anchor_lead("성산일출봉", action, nearest_m=None)
         )
         for action in ("food", "cafe", "nearby")
     }

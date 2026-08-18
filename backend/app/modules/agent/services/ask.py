@@ -8,16 +8,15 @@ from redis.asyncio import Redis
 from app.core.db import AsyncSession
 from app.core.logging import get_logger
 from app.kto.client import KtoClient
-from app.kto.display import T1_TILE_WIDTH, t1_display_url
+from app.kto.display import t1_display_url
 from app.modules.agent import repositories
-from app.modules.agent.emitter import Emitter, Steps, begin_step, branch_of
+from app.modules.agent.emitter import Emitter, Steps, begin_step
 from app.modules.agent.errors import (
     AgentFestivalUnavailable,
     AgentNoResults,
     AgentOutOfScope,
 )
-from app.modules.agent.kakao_places import PlaceKind
-from app.modules.agent.repositories import CandidateRow, VectorMatchRow
+from app.modules.agent.repositories import CandidateRow
 from app.modules.agent.schemas import (
     MAX_HINT_TOKENS,
     MAX_KEYWORDS,
@@ -28,27 +27,42 @@ from app.modules.agent.schemas import (
     AskContext,
     AskResponse,
     AskStep,
-    DropAxis,
     QueryIntent,
     RefinePatch,
     ResolvedPlace,
 )
 from app.modules.agent.services import detail as detail_service
-from app.modules.agent.services import geocode as geocode_service
 from app.modules.agent.services import intent as intent_service
-from app.modules.agent.services import photo as photo_service
-from app.modules.agent.services import places as places_service
 from app.modules.agent.services import refine as refine_service
 from app.modules.agent.services import region as region_service
 from app.modules.agent.services import resolve as resolve_service
 from app.modules.agent.services import retrieve, routes
 from app.modules.agent.services import suggest as suggest_service
-from app.modules.agent.services.routes import count, widen_label
+from app.modules.agent.services.anchor import (
+    _ask_with_anchor,
+    _subject_particle,
+)
+from app.modules.agent.services.answer import (
+    _answer,
+    _card,
+    _fallback_sentence,
+    _keep,
+    _merge,
+    _tag_basis,
+    _talk_response,
+    _zero_response,
+    searched_intent,
+)
+from app.modules.agent.services.food import (
+    _ask_for_food,
+    _named_a_new_region,
+)
+from app.modules.agent.services.photo_ask import (
+    _ask_with_photo,
+)
+from app.modules.agent.services.routes import count
 from app.modules.feed import services as feed_services
 from app.modules.spots.services import (
-    NearbyCategory,
-    NearbySpotRow,
-    find_nearby_spots,
     load_active_spot_cards_by_ids,
 )
 from app.web.errors import AppError, ValidationFailed
@@ -57,33 +71,17 @@ logger = get_logger(__name__)
 
 BLANK_ANSWER = "어디로 갈지 한 줄만 알려주세요. 지역 · 분위기 · 사진 아무거나 좋아요."
 NO_AXIS_ANSWER = "어느 지역으로 찾아볼까요? 지역이나 분위기를 알려주시면 바로 찾아드릴게요."
-FOOD_NEEDS_ORIGIN_ANSWER = (
-    "맛집·카페는 장소를 하나 골라 주시면 그 주변으로 찾아드려요. "
-    "카드를 한 번 탭하거나 위치를 켜 주세요."
-)
 UNSUPPORTED_ANSWER = (
     "그건 아직 못 해요. 지역·분위기로 여행지를 찾거나, "
     "카드를 골라 이용시간·주차 같은 걸 물어봐 주세요."
 )
-PHOTO_BASIS = "사진 유사도 기준"
-RELATED_BASIS = "분위기 유사도 기준"
 CONTEXT_INTENT_LABEL = "앞 대화까지 보고 조건 추출"
 INTENT_FALLBACK_BADGE = "사전 매칭"
 INTENT_MODEL_BADGE = "AI 해석"
 GUESSED_REGION_LABEL = "현재 위치로 지역 추정"
-KAKAO_TOPUP_LABEL = "카카오맵에서 보충"
-PLACES_BASIS = "블로그 언급 기준"
-THIN_KTO_POOL = 10
 SUB_QUESTION_CARDS = 6
 NEAR_PROBE_LABEL = "근처 조건 없이 다시 재보기"
 FESTIVAL_FETCH_BUDGET_SECONDS = 4.0
-ANCHOR_RADIUS_M = 3000
-ANCHOR_CATEGORIES: dict[str, NearbyCategory] = {
-    "food": NearbyCategory.food,
-    "cafe": NearbyCategory.cafe,
-    "nearby": NearbyCategory.attraction,
-}
-ANCHOR_NOUNS: dict[str, str] = {"food": "맛집", "cafe": "카페", "nearby": "볼거리"}
 METERS_STEP = 10
 DISTANCE_TAG = re.compile(r"^\d+(\.\d+)?(km|m)$")
 ORIGIN_ACTION_WORDS: tuple[tuple[str, AnchorAction], ...] = (
@@ -94,7 +92,6 @@ ORIGIN_ACTION_WORDS: tuple[tuple[str, AnchorAction], ...] = (
     ("식당", "food"),
     ("먹을", "food"),
 )
-PHOTO_AXES: frozenset[DropAxis] = frozenset({"near", "region"})
 MIN_HINT_TOKEN_CHARS = 2
 SIDO_ALIASES: dict[str, tuple[str, ...]] = {
     "강원도": ("강원",),
@@ -167,450 +164,6 @@ async def ask(
         legacy_client=legacy_client,
         emitter=emitter,
     )
-
-
-async def _ask_with_photo(
-    session: AsyncSession,
-    *,
-    question: str,
-    image_bytes: bytes,
-    image_mime: str | None,
-    lat: float | None,
-    lng: float | None,
-    intent: QueryIntent | None,
-    patch: RefinePatch | None,
-    pre_ota_region_prefixes: list[str],
-    legacy_client: bool,
-    emitter: Emitter | None = None,
-) -> AskResponse:
-    steps = Steps(emitter=emitter)
-    intent_task = (
-        asyncio.create_task(intent_service.extract_intent(question))
-        if question and intent is None
-        else None
-    )
-    try:
-        vector = await photo_service.embed_photo(image_bytes=image_bytes, image_mime=image_mime)
-    except BaseException:
-        if intent_task is not None:
-            intent_task.cancel()
-        raise
-    if intent is not None:
-        intent = refine_service.apply_patch(intent, patch)
-    else:
-        intent = QueryIntent()
-        if intent_task is not None:
-            try:
-                intent = await intent_task
-                steps.append(
-                    AskStep(
-                        tool="intent", label="덧붙인 말에서 조건 추출", badge=INTENT_MODEL_BADGE
-                    )
-                )
-            except AppError as exc:
-                logger.warning("agent.photo.intent_fallback", code=exc.code)
-                intent = intent_service.fallback_intent(question or "")
-                steps.append(
-                    AskStep(
-                        tool="intent",
-                        label="덧붙인 말에서 조건 추출",
-                        badge=INTENT_FALLBACK_BADGE,
-                    )
-                )
-
-    scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
-    prefixes = scope.prefixes or pre_ota_region_prefixes
-    if not scope.prefixes and pre_ota_region_prefixes:
-        intent = intent.model_copy(update={"regionHints": list(pre_ota_region_prefixes)})
-    near = intent.nearMe and lat is not None and lng is not None
-
-    async def matched(within: list[str]) -> tuple[list[VectorMatchRow], list[CandidateRow]]:
-        try:
-            found = await photo_service.match_vector(session, vector, region_prefixes=within)
-        except AgentNoResults:
-            return [], []
-        briefs = await repositories.load_candidates_by_ids(
-            session, [row.content_id for row in found]
-        )
-        usable = [briefs[row.content_id] for row in found if row.content_id in briefs]
-        if near:
-            usable = [row for row in usable if row.lat is not None and row.lng is not None]
-        return found, usable
-
-    rows, ordered = await matched(prefixes)
-    steps.append(AskStep(tool="photo_match", label=_photo_label(prefixes), badge="pgvector"))
-    widened: retrieve.RegionScope | None = None
-    if not ordered and scope.widenable:
-        prefixes = scope.sido_prefixes
-        rows, ordered = await matched(prefixes)
-        widened = scope
-        intent = intent.model_copy(update={"regionHints": list(scope.sido_prefixes)})
-        steps.append(AskStep(tool="photo_match", label=widen_label(scope), badge="pgvector"))
-
-    similarity = {row.content_id: photo_service.similarity(row) for row in rows}
-    if near and lat is not None and lng is not None and rows:
-        ordered = sorted(
-            ordered, key=lambda row: retrieve.distance_km(row, lat=lat, lng=lng) or 0.0
-        )
-        steps.append(AskStep(tool="nearby", label="현재 위치에서 가까운 순", badge=count(ordered)))
-
-    if not ordered:
-        _rebadge_last(steps, "photo_match", f"{len(rows)}곳")
-        return _zero_response(
-            steps,
-            intent,
-            has_coords=lat is not None and lng is not None and bool(rows),
-            region_hints=list(prefixes),
-            keywords=list(intent.categoryKeywords),
-            axes=PHOTO_AXES,
-            legacy_client=legacy_client,
-        )
-
-    top = ordered[: retrieve.RESULT_LIMIT]
-    spots = [_photo_card(row, similarity=similarity, lat=lat, lng=lng, near=near) for row in top]
-    return AskResponse(
-        steps=steps,
-        answer=_photo_answer(top, spots, near=near, lat=lat, lng=lng, widened=widened),
-        spots=spots,
-        totalCount=len(spots),
-        intent=intent,
-        tagBasis=_tag_basis(top, spots, near=near),
-        refinements=suggest_service.derive(
-            intent,
-            has_coords=lat is not None and lng is not None,
-            result_count=len(spots),
-            axes=PHOTO_AXES,
-            indoor_available=any(row.indoor for row in ordered),
-        ),
-    )
-
-
-def _photo_answer(
-    top: list[CandidateRow],
-    spots: list[AgentSpotCard],
-    *,
-    near: bool,
-    lat: float | None,
-    lng: float | None,
-    widened: retrieve.RegionScope | None,
-) -> list[AnswerSegment]:
-    lead: list[AnswerSegment] = []
-    if near and lat is not None and lng is not None:
-        lead = _nearest_sentence(top, lat=lat, lng=lng)
-    if not lead:
-        lead = [
-            AnswerSegment(text=spots[0].title, emphasis=True),
-            AnswerSegment(text=f"{_subject_particle(spots[0].title)} 가장 비슷해요."),
-        ]
-    answer = [
-        *lead,
-        AnswerSegment(text=" 사진과 닮은 곳으로 "),
-        AnswerSegment(text=f"{len(top)}곳이에요."),
-    ]
-    if widened is not None:
-        answer.append(AnswerSegment(text=" "))
-        answer.extend(_widen_sentence(widened))
-    answer.append(AnswerSegment(text=" 원본 사진은 비교 후 바로 폐기했어요."))
-    return answer
-
-
-def _photo_label(prefixes: list[str]) -> str:
-    if prefixes:
-        return f"{prefixes[0]} 안에서 사진과 닮은 곳 비교"
-    return "사진을 CLIP으로 임베딩해 벡터 비교"
-
-
-def _photo_card(
-    row: CandidateRow,
-    *,
-    similarity: dict[str, float],
-    lat: float | None,
-    lng: float | None,
-    near: bool,
-) -> AgentSpotCard:
-    if near and lat is not None and lng is not None:
-        km = retrieve.distance_km(row, lat=lat, lng=lng)
-        if km is not None:
-            return retrieve.to_card(row, tag=_km_label(km))
-    return retrieve.to_card(row, tag=f"유사도 {round(similarity.get(row.content_id, 0.0) * 100)}%")
-
-
-async def _ask_with_anchor(
-    session: AsyncSession,
-    anchor: AskAnchor,
-    *,
-    lat: float | None,
-    lng: float | None,
-    prior_steps: list[AskStep] | None = None,
-    carried_intent: QueryIntent | None = None,
-    title_terms: list[str] | None = None,
-    emitter: Emitter | None = None,
-) -> AskResponse:
-    row: CandidateRow | None = None
-    if anchor.contentId is not None:
-        briefs = await repositories.load_candidates_by_ids(session, [anchor.contentId])
-        row = briefs.get(anchor.contentId)
-        if row is None:
-            raise AgentNoResults()
-    if anchor.action == "crowd":
-        if row is None:
-            raise ValidationFailed("crowd anchor requires contentId")
-        return _anchor_crowd_response(row)
-    if anchor.action == "related":
-        if row is None:
-            raise ValidationFailed("related anchor requires contentId")
-        return await _anchor_related_response(
-            session, row, prior_steps=prior_steps or [], carried_intent=carried_intent
-        )
-    center_lat = row.lat if row is not None else lat
-    center_lng = row.lng if row is not None else lng
-    if center_lat is None or center_lng is None:
-        if row is None:
-            raise ValidationFailed("anchor requires contentId or coords")
-        raise AgentNoResults()
-    origin = row.title if row is not None else "내 위치"
-    noun = ANCHOR_NOUNS[anchor.action]
-    found = await find_nearby_spots(
-        session,
-        lat=center_lat,
-        lng=center_lng,
-        radius=ANCHOR_RADIUS_M,
-        category=ANCHOR_CATEGORIES[anchor.action],
-        travel_only=anchor.action == "nearby",
-        title_terms=title_terms,
-    )
-    kept = [near for near in found if row is None or near.content_id != row.content_id]
-    kept = kept[: retrieve.RESULT_LIMIT]
-    if not kept:
-        return empty_anchor_response(
-            origin,
-            anchor.action,
-            prior_steps=prior_steps or [],
-            intent=carried_intent,
-            title_terms=title_terms,
-        )
-    rated = await repositories.load_candidates_by_ids(session, [n.content_id for n in kept])
-    spots = [_anchor_card(near, has_crowd=_has_crowd(rated.get(near.content_id))) for near in kept]
-    await _fill_missing_card_images(session, spots)
-    steps = branch_of(prior_steps or [], prior_steps or [])
-    if steps.emitter is None:
-        steps.emitter = emitter
-    steps.append(
-        AskStep(tool="nearby", label=f"{origin} 주변 {noun} 조회", badge=f"{len(spots)}곳")
-    )
-    answer = [
-        *_anchor_lead(origin, anchor.action, nearest_m=kept[0].dist),
-        AnswerSegment(text=f" {origin} 주변으로 "),
-        AnswerSegment(text=f"{len(spots)}곳이에요."),
-    ]
-    logger.info("agent.anchor.done", action=anchor.action, results=len(spots))
-    return AskResponse(
-        steps=steps,
-        answer=answer,
-        spots=spots,
-        totalCount=len(spots),
-        intent=_without_unapplied_axes(carried_intent or QueryIntent()),
-        tagBasis="직선거리 기준",
-        refinements=[],
-    )
-
-
-def empty_anchor_response(
-    origin: str,
-    action: AnchorAction,
-    *,
-    prior_steps: list[AskStep],
-    intent: QueryIntent | None = None,
-    title_terms: list[str] | None = None,
-) -> AskResponse:
-    noun = ANCHOR_NOUNS[action]
-    steps = [
-        *prior_steps,
-        AskStep(tool="nearby", label=f"{origin} 주변 {noun} 조회", badge="0곳"),
-    ]
-    logger.info("agent.anchor.empty", action=action)
-    answer = (
-        [
-            AnswerSegment(
-                text=(
-                    f"{origin} 주변 {ANCHOR_RADIUS_M // 1000}km 안에서 "
-                    f"{_dish_title_condition(title_terms)}을 찾지 못했어요. "
-                    "다른 곳을 골라 보세요."
-                )
-            )
-        ]
-        if title_terms
-        else [
-            AnswerSegment(text=f"{origin} 주변 "),
-            AnswerSegment(text=f"{ANCHOR_RADIUS_M // 1000}km", emphasis=True),
-            AnswerSegment(
-                text=f" 안에는 {noun}{_subject_particle(noun)} 없어요. 다른 곳을 골라 보세요."
-            ),
-        ]
-    )
-    return AskResponse(
-        steps=steps,
-        answer=answer,
-        spots=[],
-        totalCount=0,
-        intent=_without_unapplied_axes(intent or QueryIntent()),
-        refinements=[],
-    )
-
-
-def _subject_particle(word: str) -> str:
-    return "이" if detail_service.ends_with_consonant(word) else "가"
-
-
-def _copula(word: str) -> str:
-    return "이에요" if detail_service.ends_with_consonant(word) else "예요"
-
-
-def _anchor_lead(
-    origin: str, action: AnchorAction, *, nearest_m: float | None
-) -> list[AnswerSegment]:
-    noun = ANCHOR_NOUNS[action]
-    if nearest_m is None:
-        return [AnswerSegment(text=f"{origin} 주변 {noun}{_copula(noun)}.")]
-    return [
-        AnswerSegment(text=f"가장 가까운 {noun}{_subject_particle(noun)} "),
-        AnswerSegment(text=_meters_label(nearest_m), emphasis=True),
-        AnswerSegment(text=" 거리예요."),
-    ]
-
-
-async def _anchor_related_response(
-    session: AsyncSession,
-    row: CandidateRow,
-    *,
-    prior_steps: list[AskStep],
-    carried_intent: QueryIntent | None,
-) -> AskResponse:
-    vector = await repositories.load_spot_embedding(session, row.content_id)
-    if vector is None:
-        raise AgentNoResults()
-    matches = await repositories.match_spots_by_vector(
-        session, vector, limit=retrieve.RESULT_LIMIT + 1
-    )
-    kept = [match for match in matches if match.content_id != row.content_id]
-    kept = kept[: retrieve.RESULT_LIMIT]
-    briefs = await repositories.load_candidates_by_ids(
-        session, [match.content_id for match in kept]
-    )
-    spots = [
-        retrieve.to_card(
-            briefs[match.content_id],
-            tag=f"유사도 {round(photo_service.similarity(match) * 100)}%",
-        )
-        for match in kept
-        if match.content_id in briefs
-    ]
-    if not spots:
-        raise AgentNoResults()
-    steps = [
-        *prior_steps,
-        AskStep(tool="related", label=f"{row.title} 연관 관광지 조회", badge=f"{len(spots)}곳"),
-    ]
-    particle = "과" if detail_service.ends_with_consonant(row.title) else "와"
-    answer = [
-        AnswerSegment(text=f"「{row.title}」", emphasis=True),
-        AnswerSegment(text=f"{particle} 분위기가 비슷한 곳으로 "),
-        AnswerSegment(text=f"{len(spots)}곳 찾았어요."),
-    ]
-    logger.info("agent.anchor.done", action="related", results=len(spots))
-    return AskResponse(
-        steps=steps,
-        answer=answer,
-        spots=spots,
-        totalCount=len(spots),
-        intent=_without_unapplied_axes(carried_intent or QueryIntent()),
-        tagBasis=RELATED_BASIS,
-        refinements=[],
-    )
-
-
-def _anchor_crowd_response(row: CandidateRow) -> AskResponse:
-    steps = [AskStep(tool="concentration", label=f"{row.title} 혼잡도 조회", badge="혼잡도")]
-    label = retrieve.crowd_label(row)
-    if label is None:
-        answer = [AnswerSegment(text=f"{row.title}의 혼잡도 정보가 아직 없어요.")]
-    else:
-        answer = [
-            AnswerSegment(text=f"{row.title} 오늘 혼잡도 예측은 "),
-            AnswerSegment(text=label, emphasis=True),
-            AnswerSegment(text=" 수준이에요."),
-        ]
-        if label == "한산" and row.percentile is not None:
-            answer.append(AnswerSegment(text=" 전국 관광지 중 "))
-            answer.append(AnswerSegment(text=f"하위 {row.percentile}%", emphasis=True))
-            answer.append(AnswerSegment(text=" 안쪽이에요."))
-        elif label == "붐빔" and row.percentile is not None:
-            answer.append(AnswerSegment(text=" 전국 관광지 중 "))
-            answer.append(AnswerSegment(text=f"상위 {100 - row.percentile}%", emphasis=True))
-            answer.append(AnswerSegment(text=" 안쪽이에요."))
-    logger.info("agent.anchor.done", action="crowd", results=0)
-    return AskResponse(
-        steps=steps,
-        answer=answer,
-        spots=[],
-        totalCount=0,
-        intent=QueryIntent(),
-        refinements=[],
-    )
-
-
-def _has_crowd(row: CandidateRow | None) -> bool:
-    return row is not None and row.concentration_rate is not None
-
-
-async def _fill_missing_card_images(session: AsyncSession, spots: list[AgentSpotCard]) -> None:
-    missing = [card for card in spots if not card.imageUrl]
-    if not missing:
-        return
-    pool = await repositories.load_random_attraction_images(session, len(missing))
-    urls = [
-        url
-        for url in (t1_display_url(r.image_url, r.cpyrht_div_cd, width=T1_TILE_WIDTH) for r in pool)
-        if url
-    ]
-    for card, url in zip(missing, urls, strict=False):
-        card.imageUrl = None
-        card.fallbackImageUrl = url
-
-
-def _anchor_card(row: NearbySpotRow, *, has_crowd: bool) -> AgentSpotCard:
-    return AgentSpotCard(
-        contentId=row.content_id,
-        title=row.title,
-        regionLabel=_addr_label(row.addr1),
-        imageUrl=t1_display_url(row.first_image_url, row.cpyrht_div_cd),
-        tag=_meters_label(row.dist) if row.dist is not None else None,
-        lat=row.mapy,
-        lng=row.mapx,
-        categoryGroup=row.category_group,
-        hasCrowd=has_crowd,
-    )
-
-
-def _addr_label(addr1: str | None) -> str:
-    if not addr1:
-        return ""
-    return " ".join(addr1.split()[:2])
-
-
-def _meters_label(meters: float) -> str:
-    rounded = max(METERS_STEP, round(meters / METERS_STEP) * METERS_STEP)
-    if rounded < 1000:
-        return f"{rounded}m"
-    return f"{meters / 1000:.1f}km"
-
-
-def _km_label(km: float) -> str:
-    return _meters_label(km * 1000)
-
-
-def _is_distance_tag(tag: str | None) -> bool:
-    return tag is not None and DISTANCE_TAG.match(tag) is not None
 
 
 _TALK_ANSWERS: dict[str, str] = {
@@ -902,204 +455,6 @@ async def _ask_with_question(
     )
 
 
-async def _locatable_focus(
-    session: AsyncSession, context: AskContext | None
-) -> CandidateRow | None:
-    if context is None or context.focusContentId is None:
-        return None
-    briefs = await repositories.load_candidates_by_ids(session, [context.focusContentId])
-    row = briefs.get(context.focusContentId)
-    if row is None or row.lat is None or row.lng is None:
-        return None
-    return row
-
-
-VERIFIED_ORIGIN_STATUSES = ("matched", "naver_only")
-
-
-def _verified_origin(place: ResolvedPlace) -> geocode_service.Located | None:
-    spot = place.spot
-    if spot is None or spot.lat is None or spot.lng is None:
-        return None
-    if place.status not in VERIFIED_ORIGIN_STATUSES:
-        return None
-    asked = [name for name in (place.extracted.nameKo, place.extracted.name) if name]
-    if not any(geocode_service.names_match(name, spot.title) for name in asked):
-        return None
-    terms = geocode_service.region_terms(place.extracted.regionHint)
-    if not geocode_service.address_is_within(spot.address, terms):
-        return None
-    return geocode_service.Located(
-        title=spot.title,
-        lat=spot.lat,
-        lng=spot.lng,
-        source=spot.source,
-        content_id=spot.contentId,
-    )
-
-
-def _stands_in_region(row: CandidateRow, prefixes: list[str]) -> bool:
-    if not prefixes:
-        return True
-    return row.addr1 is not None and row.addr1.startswith(tuple(prefixes))
-
-
-async def _named_origin(
-    session: AsyncSession, intent: QueryIntent, resolved: list[ResolvedPlace]
-) -> geocode_service.Located | None:
-    for index, place in enumerate(intent.namedPlaces):
-        reused = _verified_origin(resolved[index]) if index < len(resolved) else None
-        if reused is not None:
-            return reused
-        found = await geocode_service.locate(session, place.name, region_hint=place.regionHint)
-        if found is not None:
-            return found
-    return None
-
-
-async def _ask_for_food(
-    session: AsyncSession,
-    *,
-    action: AnchorAction,
-    intent: QueryIntent,
-    steps: list[AskStep],
-    lat: float | None,
-    lng: float | None,
-    context: AskContext | None,
-    resolved: list[ResolvedPlace],
-    legacy_client: bool,
-    title_terms: list[str],
-) -> AskResponse:
-    scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
-    stale = context is not None and _named_a_new_region(intent, context)
-    focus = None if stale else await _locatable_focus(session, context)
-    if focus is not None and _stands_in_region(focus, scope.prefixes):
-        return await _ask_with_anchor(
-            session,
-            AskAnchor(contentId=focus.content_id, action=action),
-            lat=lat,
-            lng=lng,
-            prior_steps=steps,
-            carried_intent=intent,
-            title_terms=title_terms,
-        )
-    origin = await _named_origin(session, intent, resolved)
-    if origin is not None:
-        located = [
-            *steps,
-            AskStep(tool="resolve_place", label=f"{origin.title} 위치 확인", badge="1곳"),
-        ]
-        return await _ask_around(
-            session,
-            origin.title,
-            action,
-            lat=origin.lat,
-            lng=origin.lng,
-            steps=located,
-            intent=intent,
-            exclude=origin.content_id,
-            title_terms=title_terms,
-        )
-    if scope.prefixes:
-        return await _food_across_region(
-            session,
-            action,
-            scope.prefixes,
-            steps=steps,
-            intent=intent,
-            lat=lat,
-            lng=lng,
-            title_terms=title_terms,
-        )
-    if lat is not None and lng is not None:
-        return await _ask_with_anchor(
-            session,
-            AskAnchor(action=action),
-            lat=lat,
-            lng=lng,
-            prior_steps=steps,
-            carried_intent=intent,
-            title_terms=title_terms,
-        )
-    return _talk_response(steps, intent, FOOD_NEEDS_ORIGIN_ANSWER, legacy_client=legacy_client)
-
-
-async def _food_across_region(
-    session: AsyncSession,
-    action: AnchorAction,
-    prefixes: list[str],
-    *,
-    steps: list[AskStep],
-    intent: QueryIntent,
-    lat: float | None,
-    lng: float | None,
-    title_terms: list[str] | None = None,
-) -> AskResponse:
-    near = intent.nearMe and lat is not None and lng is not None
-    spoken = intent if near or not intent.nearMe else intent.model_copy(update={"nearMe": False})
-    mood_ids = await repositories.find_mood_ids(session, list(intent.moodHints))
-    narrowed = bool(mood_ids) or intent.indoorOnly or intent.crowdPreference != "any"
-    rows = await retrieve.search_food(
-        session,
-        action=action,
-        region_prefixes=prefixes,
-        preference=intent.crowdPreference,
-        indoor_only=intent.indoorOnly,
-        mood_ids=mood_ids,
-        lat=lat,
-        lng=lng,
-        near=near,
-        title_terms=title_terms,
-    )
-    if len(rows) < THIN_KTO_POOL:
-        topped = await _top_up_with_kakao(
-            session,
-            action,
-            prefixes,
-            rows=rows,
-            steps=steps,
-            intent=spoken,
-            lat=lat,
-            lng=lng,
-            near=near,
-            title_terms=title_terms,
-        )
-        if topped is not None:
-            return topped
-    if rows or not narrowed:
-        return food_in_region(
-            rows,
-            prefixes,
-            action,
-            steps=steps,
-            intent=spoken,
-            lat=lat,
-            lng=lng,
-            near=near,
-            title_terms=title_terms,
-        )
-    unfiltered = await retrieve.search_food(
-        session,
-        action=action,
-        region_prefixes=prefixes,
-        lat=lat,
-        lng=lng,
-        near=near,
-        title_terms=title_terms,
-    )
-    return food_in_region(
-        unfiltered,
-        prefixes,
-        action,
-        steps=steps,
-        intent=_without_unapplied_axes(spoken),
-        lat=lat,
-        lng=lng,
-        near=near,
-        title_terms=title_terms,
-    )
-
-
 async def _ask_each(
     session: AsyncSession,
     redis: Redis,
@@ -1157,192 +512,6 @@ async def _ask_each(
         refinements=[],
         tagBasis=answered[0].tagBasis,
     )
-
-
-async def _top_up_with_kakao(
-    session: AsyncSession,
-    action: AnchorAction,
-    prefixes: list[str],
-    *,
-    rows: list[CandidateRow],
-    steps: list[AskStep],
-    intent: QueryIntent,
-    lat: float | None,
-    lng: float | None,
-    near: bool,
-    title_terms: list[str] | None,
-) -> AskResponse | None:
-    """생활권에서는 KTO 음식·카페가 사실상 비어 있다 (광진구 카페 1곳).
-
-    관광지형은 두꺼우므로 카테고리가 아니라 후보 수로 갈린다.
-    """
-    kind: PlaceKind = "cafe" if action == "cafe" else "restaurant"
-    coords = (lat, lng) if near and lat is not None and lng is not None else None
-    begin_step(steps, "nearby", KAKAO_TOPUP_LABEL)
-    cards = await places_service.search(
-        session,
-        kind=kind,
-        region=prefixes[0] if prefixes else None,
-        landmark_coords=coords,
-        dish=title_terms[0] if title_terms else None,
-        attribute=None,
-    )
-    if not cards:
-        return None
-    steps.append(AskStep(tool="nearby", label=KAKAO_TOPUP_LABEL, badge=f"{len(cards)}곳"))
-    kept = [_card(row, intent=intent, lat=lat, lng=lng, near=near) for row in rows]
-    known = {card.contentId for card in kept}
-    merged = kept + [card for card in cards if card.contentId not in known]
-    return AskResponse(
-        steps=steps,
-        answer=_places_answer(merged),
-        spots=merged,
-        totalCount=len(merged),
-        intent=intent,
-        refinements=[],
-        tagBasis=PLACES_BASIS,
-    )
-
-
-def _places_answer(cards: list[AgentSpotCard]) -> list[AnswerSegment]:
-    reduced = sum(1 for card in cards if not card.saveable)
-    lead = f"{len(cards)}곳이에요."
-    if not reduced:
-        return [AnswerSegment(text=lead)]
-    return [
-        AnswerSegment(text=f"{lead} 블로그에 반복해서 나온 순으로 놨어요."),
-        AnswerSegment(
-            text=f" 이 중 {reduced}곳은 저희 여행지 정보에 없어 저장·상세보기가 안 돼요."
-        ),
-    ]
-
-
-def _without_unapplied_axes(intent: QueryIntent) -> QueryIntent:
-    return intent.model_copy(
-        update={"crowdPreference": "any", "indoorOnly": False, "moodHints": []}
-    )
-
-
-async def _ask_around(
-    session: AsyncSession,
-    origin: str,
-    action: AnchorAction,
-    *,
-    lat: float,
-    lng: float,
-    steps: list[AskStep],
-    intent: QueryIntent,
-    exclude: str | None = None,
-    title_terms: list[str] | None = None,
-) -> AskResponse:
-    noun = ANCHOR_NOUNS[action]
-    found = await find_nearby_spots(
-        session,
-        lat=lat,
-        lng=lng,
-        radius=ANCHOR_RADIUS_M,
-        category=ANCHOR_CATEGORIES[action],
-        title_terms=title_terms,
-    )
-    kept = [near for near in found if near.content_id != exclude][: retrieve.RESULT_LIMIT]
-    if not kept:
-        return empty_anchor_response(
-            origin,
-            action,
-            prior_steps=steps,
-            intent=intent,
-            title_terms=title_terms,
-        )
-    rated = await repositories.load_candidates_by_ids(session, [n.content_id for n in kept])
-    spots = [_anchor_card(near, has_crowd=_has_crowd(rated.get(near.content_id))) for near in kept]
-    await _fill_missing_card_images(session, spots)
-    walked = [
-        *steps,
-        AskStep(tool="nearby", label=f"{origin} 주변 {noun} 조회", badge=f"{len(kept)}곳"),
-    ]
-    answer = [
-        *_anchor_lead(origin, action, nearest_m=kept[0].dist),
-        AnswerSegment(text=f" {origin} 주변으로 "),
-        AnswerSegment(text=f"{len(spots)}곳이에요."),
-    ]
-    logger.info("agent.food.around", action=action, results=len(spots))
-    return AskResponse(
-        steps=walked,
-        answer=answer,
-        spots=spots,
-        totalCount=len(spots),
-        intent=_without_unapplied_axes(intent),
-        tagBasis="직선거리 기준",
-        refinements=[],
-    )
-
-
-def food_in_region(
-    rows: list[CandidateRow],
-    regions: list[str],
-    action: AnchorAction,
-    *,
-    steps: list[AskStep],
-    intent: QueryIntent,
-    lat: float | None = None,
-    lng: float | None = None,
-    near: bool = False,
-    title_terms: list[str] | None = None,
-) -> AskResponse:
-    noun = ANCHOR_NOUNS[action]
-    where = " · ".join(regions)
-    top = rows[: retrieve.RESULT_LIMIT]
-    scanned = [
-        *steps,
-        AskStep(tool="category_search", label=f"{where} {noun} 조회", badge=count(rows)),
-    ]
-    if not top:
-        answer = (
-            [
-                AnswerSegment(
-                    text=f"{where}에서 {_dish_title_condition(title_terms)}을 찾지 못했어요."
-                )
-            ]
-            if title_terms
-            else [AnswerSegment(text=f"{where}에는 등록된 {noun}{_subject_particle(noun)} 없어요.")]
-        )
-        return AskResponse(
-            steps=scanned,
-            answer=answer,
-            spots=[],
-            totalCount=0,
-            intent=intent,
-            refinements=[],
-        )
-    spots = [_region_food_card(row, lat=lat, lng=lng, near=near) for row in top]
-    logger.info("agent.food.region", action=action, results=len(spots))
-    return AskResponse(
-        steps=scanned,
-        answer=[
-            AnswerSegment(text=where, emphasis=True),
-            AnswerSegment(text=f" {noun} "),
-            AnswerSegment(text=f"{len(spots)}곳이에요."),
-        ],
-        spots=spots,
-        totalCount=len(spots),
-        intent=intent,
-        tagBasis="직선거리 기준" if near else None,
-        refinements=[],
-    )
-
-
-def _dish_title_condition(title_terms: list[str]) -> str:
-    return f"상호에 요청한 음식명({' · '.join(title_terms)})이 모두 들어간 곳"
-
-
-def _region_food_card(
-    row: CandidateRow, *, lat: float | None, lng: float | None, near: bool
-) -> AgentSpotCard:
-    if near and lat is not None and lng is not None:
-        km = retrieve.distance_km(row, lat=lat, lng=lng)
-        if km is not None:
-            return retrieve.to_card(row, tag=_km_label(km))
-    return retrieve.to_card(row, tag=None)
 
 
 async def _ask_festivals(
@@ -1428,18 +597,6 @@ async def _openable_ids(
     return set(await load_active_spot_cards_by_ids(session, content_ids))
 
 
-def _keep(
-    cards: list[feed_services.ChannelCardRow], openable: set[str]
-) -> list[feed_services.ChannelCardRow]:
-    return [card for card in cards if card.content_id in openable]
-
-
-def _fallback_sentence(hint: str, *, region_has_festivals: bool) -> str:
-    if region_has_festivals:
-        return f" {hint} 축제는 아직 상세 정보가 없어 전국에서 골랐어요."
-    return f" {hint}에는 오늘 열리는 축제가 없어 전국에서 골랐어요."
-
-
 def _match_region(
     cards: list[feed_services.ChannelCardRow], hints: list[str]
 ) -> list[feed_services.ChannelCardRow]:
@@ -1467,187 +624,6 @@ def _token_hits(token: str, address: list[str]) -> bool:
 
 def _keywords(intent: QueryIntent) -> list[str]:
     return list(intent.categoryKeywords)
-
-
-def _widen_sentence(scope: retrieve.RegionScope) -> list[AnswerSegment]:
-    return [
-        AnswerSegment(text=f"{scope.narrowed_label} 안에서는 찾지 못해 "),
-        AnswerSegment(text=scope.widened_label, emphasis=True),
-        AnswerSegment(text=" 전체에서 골랐어요."),
-    ]
-
-
-def _merge(pinned: list[CandidateRow], pool: list[CandidateRow]) -> list[CandidateRow]:
-    seen = {row.content_id for row in pinned}
-    return pinned + [row for row in pool if row.content_id not in seen]
-
-
-def _card(
-    row: CandidateRow,
-    *,
-    intent: QueryIntent,
-    lat: float | None,
-    lng: float | None,
-    near: bool,
-) -> AgentSpotCard:
-    if near and lat is not None and lng is not None:
-        km = retrieve.distance_km(row, lat=lat, lng=lng)
-        if km is not None:
-            return retrieve.to_card(row, tag=_km_label(km))
-    if intent.crowdPreference == "quiet" and row.percentile is not None:
-        return retrieve.to_card(row, tag=f"하위 {row.percentile}%")
-    return retrieve.to_card(row, tag=retrieve.crowd_label(row))
-
-
-def _answer_opening(intent: QueryIntent) -> str:
-    conditions = _applied_conditions(intent, axes=suggest_service.ALL_AXES)
-    if not conditions:
-        return "조건에 맞는 곳으로 "
-    return f"{' + '.join(conditions)} 조건으로 "
-
-
-def _scope_sentence(top: list[CandidateRow], *, intent: QueryIntent) -> list[AnswerSegment]:
-    return [
-        AnswerSegment(text=_answer_opening(intent)),
-        AnswerSegment(text=f"{len(top)}곳이에요."),
-    ]
-
-
-def _lead_sentence(
-    top: list[CandidateRow],
-    *,
-    intent: QueryIntent,
-    near: bool,
-    lat: float | None,
-    lng: float | None,
-    region_widened: retrieve.RegionScope | None,
-) -> list[AnswerSegment]:
-    if region_widened is not None:
-        return _widen_sentence(region_widened)
-    if intent.crowdPreference == "quiet":
-        pcts = [row.percentile for row in top if row.percentile is not None]
-        if pcts:
-            return [
-                AnswerSegment(text="혼잡도 "),
-                AnswerSegment(text=f"하위 {max(pcts)}%", emphasis=True),
-                AnswerSegment(text=" 안쪽으로만 골랐어요."),
-            ]
-    if near and lat is not None and lng is not None:
-        return _nearest_sentence(top, lat=lat, lng=lng)
-    return []
-
-
-def _nearest_sentence(top: list[CandidateRow], *, lat: float, lng: float) -> list[AnswerSegment]:
-    kms = [km for row in top if (km := retrieve.distance_km(row, lat=lat, lng=lng)) is not None]
-    if not kms:
-        return []
-    return [
-        AnswerSegment(text="가장 가까운 곳이 "),
-        AnswerSegment(text=_km_label(min(kms)), emphasis=True),
-        AnswerSegment(text="예요."),
-    ]
-
-
-CALM_MIX_ALL = " 모두 사람이 적은 편이에요."
-NARROW_HINT = " 마음에 드는 게 없으면 조건을 좁혀 말해주세요."
-
-
-def _calm_mix_sentence(top: list[CandidateRow]) -> list[AnswerSegment]:
-    labelled = [row for row in top if retrieve.crowd_label(row) is not None]
-    if not labelled:
-        return []
-    calm = [row for row in labelled if retrieve.crowd_label(row) == "한산"]
-    if not calm:
-        return []
-    if len(calm) == len(top):
-        return [AnswerSegment(text=CALM_MIX_ALL)]
-    return [
-        AnswerSegment(text=" 이 중 "),
-        AnswerSegment(text=f"{len(calm)}곳", emphasis=True),
-        AnswerSegment(text="은 사람이 적은 편이에요."),
-    ]
-
-
-def _answer(
-    top: list[CandidateRow],
-    *,
-    intent: QueryIntent,
-    near: bool,
-    lat: float | None,
-    lng: float | None,
-    region_widened: retrieve.RegionScope | None = None,
-) -> list[AnswerSegment]:
-    lead = _lead_sentence(
-        top, intent=intent, near=near, lat=lat, lng=lng, region_widened=region_widened
-    )
-    scope = _scope_sentence(top, intent=intent)
-    if not lead:
-        mix = _calm_mix_sentence(top)
-        if mix:
-            return [*scope, *mix]
-        return [*scope, AnswerSegment(text=NARROW_HINT)]
-    return [*lead, AnswerSegment(text=" "), *scope]
-
-
-def _rebadge_last(steps: list[AskStep], tool: str, badge: str) -> None:
-    for index in reversed(range(len(steps))):
-        if steps[index].tool == tool:
-            steps[index] = steps[index].model_copy(update={"badge": badge})
-            return
-
-
-def searched_intent(
-    intent: QueryIntent,
-    *,
-    has_coords: bool,
-    region_hints: list[str],
-    keywords: list[str],
-) -> QueryIntent:
-    update: dict[str, object] = {}
-    if list(intent.regionHints) != region_hints:
-        update["regionHints"] = list(region_hints)
-    if list(intent.categoryKeywords) != keywords:
-        update["categoryKeywords"] = list(keywords)
-    if not has_coords and intent.nearMe:
-        update["nearMe"] = False
-    return intent.model_copy(update=update) if update else intent
-
-
-def _applied_conditions(intent: QueryIntent, *, axes: frozenset[DropAxis]) -> list[str]:
-    labels: list[str] = []
-    if "region" in axes and intent.regionHints:
-        labels.append(intent.regionHints[0])
-    if "category" in axes and (intent.categoryKeywords or intent.moodHints):
-        labels.append(suggest_service.category_noun(intent))
-    if "indoor" in axes and intent.indoorOnly:
-        labels.append("실내")
-    if "crowd" in axes:
-        if intent.crowdPreference == "quiet":
-            labels.append("한적")
-        elif intent.crowdPreference == "popular":
-            labels.append("유명한 곳")
-    if "near" in axes and intent.nearMe:
-        labels.append("내 근처")
-    return labels
-
-
-def _zero_answer(intent: QueryIntent, *, axes: frozenset[DropAxis]) -> list[AnswerSegment]:
-    conditions = _applied_conditions(intent, axes=axes)
-    way_out = (
-        " 지역을 넓히면 나올 수 있어요."
-        if intent.regionHints
-        else " 조건을 조금 바꿔서 다시 물어봐 주세요."
-    )
-    if not conditions:
-        return [
-            AnswerSegment(text="이 조건으로는 없어요."),
-            AnswerSegment(text=way_out),
-        ]
-    return [
-        AnswerSegment(text=" + ".join(conditions), emphasis=True),
-        AnswerSegment(text=" 조건으로는 없어요."),
-        AnswerSegment(text=way_out),
-    ]
 
 
 def _asks_for_nothing(intent: QueryIntent, *, prefixes: list[str]) -> bool:
@@ -1682,79 +658,6 @@ def detail_target(intent: QueryIntent, context: AskContext | None) -> str | None
     return overlapping[0].contentId if len(overlapping) == 1 else None
 
 
-def _talk_response(
-    steps: list[AskStep], intent: QueryIntent, sentence: str, *, legacy_client: bool
-) -> AskResponse:
-    if legacy_client:
-        raise AgentNoResults()
-    logger.info("agent.ask.talk", task=intent.task)
-    return AskResponse(
-        steps=steps,
-        answer=[AnswerSegment(text=sentence)],
-        spots=[],
-        totalCount=0,
-        intent=intent,
-        refinements=[],
-    )
-
-
-def _zero_response(
-    steps: list[AskStep],
-    intent: QueryIntent,
-    *,
-    has_coords: bool,
-    region_hints: list[str],
-    keywords: list[str],
-    axes: frozenset[DropAxis],
-    legacy_client: bool,
-) -> AskResponse:
-    searched = searched_intent(
-        intent, has_coords=has_coords, region_hints=region_hints, keywords=keywords
-    )
-    refinements = suggest_service.derive_for_zero(searched, has_coords=has_coords, axes=axes)
-    conditions = _applied_conditions(searched, axes=axes)
-    if not conditions or legacy_client:
-        raise AgentNoResults()
-    logger.info("agent.ask.zero", conditions=len(conditions), releasable=len(refinements))
-    return AskResponse(
-        steps=steps,
-        answer=_zero_answer(searched, axes=axes),
-        spots=[],
-        totalCount=0,
-        intent=searched,
-        refinements=refinements,
-    )
-
-
-def _crowd_basis(rows: list[CandidateRow]) -> str | None:
-    days = {row.base_ymd for row in rows if row.base_ymd is not None}
-    if not days:
-        return None
-    if len(days) > 1:
-        return "혼잡도 예측 기준"
-    day = days.pop()
-    return f"혼잡도 {day.month}/{day.day} 예측 기준"
-
-
-CROWD_LABELS = frozenset({"한산", "보통", "붐빔"})
-
-
-def _is_crowd_tag(tag: str | None) -> bool:
-    if tag is None:
-        return False
-    return tag in CROWD_LABELS or tag.startswith("하위 ")
-
-
-def _tag_basis(rows: list[CandidateRow], spots: list[AgentSpotCard], *, near: bool) -> str | None:
-    if near and spots and all(_is_distance_tag(spot.tag) for spot in spots):
-        return "직선거리 기준"
-    if any((spot.tag or "").startswith("유사도 ") for spot in spots):
-        return PHOTO_BASIS
-    if any(_is_crowd_tag(spot.tag) for spot in spots):
-        return _crowd_basis(rows)
-    return None
-
-
 def _prior(context: AskContext | None) -> tuple[QueryIntent | None, list[str]]:
     if context is None:
         return None, []
@@ -1776,11 +679,6 @@ def _origin_anchor(
     if context.focusContentId is not None and (intent.aroundOrigin or intent.nearMe):
         return AskAnchor(contentId=context.focusContentId, action=_origin_action(intent))
     return None
-
-
-def _named_a_new_region(intent: QueryIntent, context: AskContext) -> bool:
-    carried = list(context.intent.regionHints) if context.intent else []
-    return bool(intent.regionHints) and list(intent.regionHints) != carried
 
 
 def _origin_action(intent: QueryIntent) -> AnchorAction:
