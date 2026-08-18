@@ -480,8 +480,9 @@ CASES: list[Case] = [
     guard("G3", "영어", ask("beaches near Busan"), expect_spots="any"),
     guard("G4", "일본어", ask("釜山の観光地"), expect_spots="any"),
     guard("G5", "중국어", ask("济州岛好玩的地方"), expect_spots="any"),
-    guard("G6", "초장문", ask("바다 " * 200), expect_spots="any"),
+    guard("G6", "한도 초과는 막는다", ask("바다 " * 200), expect_error="VALIDATION_FAILED"),
     guard("G7", "긴 한 단어", ask("가" * 480), expect_spots="any"),
+    guard("G22", "한도 경계는 받는다", ask("가" * 500), expect_spots="any"),
     guard(
         "G8",
         "프롬프트 인젝션",
