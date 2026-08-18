@@ -2,14 +2,14 @@ import renderer, { act } from "react-test-renderer";
 import { FlatList } from "react-native";
 import { ExploreGrid } from "@/features/explore/components/ExploreGrid";
 import { useExploreFeed } from "@/features/explore/queries";
-import type { OverseasPost } from "@/features/feed/posts-api";
+import type { OverseasPost } from "@/features/explore/api";
 
-jest.mock("@/features/explore/queries", () => ({ useExploreFeed: jest.fn() }));
-jest.mock("expo-router", () => ({ useScrollToTop: jest.fn() }));
-jest.mock("@/features/feed/posts-queries", () => ({
+jest.mock("@/features/explore/queries", () => ({
+  useExploreFeed: jest.fn(),
   useMatches: jest.fn(() => ({ data: { matches: [] }, isLoading: false })),
 }));
-jest.mock("@/features/feed/components/CreditSheet", () => ({ CreditSheet: () => null }));
+jest.mock("expo-router", () => ({ useScrollToTop: jest.fn() }));
+jest.mock("@/features/explore/components/CreditSheet", () => ({ CreditSheet: () => null }));
 
 function posts(n: number): OverseasPost[] {
   return Array.from({ length: n }, (_, i) => ({

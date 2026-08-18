@@ -12,7 +12,7 @@ export const KIND_ICONS: Record<SourceKind, IconName> = {
   kakao: "map-pin",
 };
 
-export function formatSourceDate(date: string | null | undefined): string | null {
+function formatSourceDate(date: string | null | undefined): string | null {
   if (!date) return null;
   const compact = /^(\d{4})(\d{2})(\d{2})$/.exec(date);
   if (compact) return `${compact[1]}.${compact[2]}.${compact[3]}`;

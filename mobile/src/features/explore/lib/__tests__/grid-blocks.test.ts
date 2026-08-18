@@ -1,5 +1,5 @@
 import { toGridBlocks } from "@/features/explore/lib/grid-blocks";
-import type { OverseasPost } from "@/features/feed/posts-api";
+import type { OverseasPost } from "@/features/explore/api";
 
 function posts(n: number): OverseasPost[] {
   return Array.from({ length: n }, (_, i) => ({

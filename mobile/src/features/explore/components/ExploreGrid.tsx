@@ -14,7 +14,7 @@ import { RemoteImage } from "@/components/RemoteImage";
 import { useExploreFeed } from "@/features/explore/queries";
 import { toGridBlocks, type GridBlock } from "@/features/explore/lib/grid-blocks";
 import { PostModal } from "@/features/explore/components/PostModal";
-import type { OverseasPost } from "@/features/feed/posts-api";
+import type { OverseasPost } from "@/features/explore/api";
 import { makeSeed } from "@/lib/seed";
 import { commonsWidthFor } from "@/lib/commons-width";
 import { colors } from "@/constants/theme";

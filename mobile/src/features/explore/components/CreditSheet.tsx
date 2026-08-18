@@ -1,6 +1,6 @@
 import { Modal, Pressable, View, Text, Linking, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { OverseasPost } from "@/features/feed/posts-api";
+import type { OverseasPost } from "@/features/explore/api";
 import { colors, spacing, radii } from "@/constants/theme";
 
 interface Props {

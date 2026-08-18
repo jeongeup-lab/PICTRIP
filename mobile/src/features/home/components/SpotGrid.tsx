@@ -11,7 +11,7 @@ interface Props {
 }
 
 const GUTTER = 10;
-export const GRID_PADDING = spacing.lg;
+const GRID_PADDING = spacing.lg;
 
 export function SpotGrid({ cards, subtitleOf }: Props) {
   const { width } = useWindowDimensions();

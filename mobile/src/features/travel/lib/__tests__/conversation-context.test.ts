@@ -1,5 +1,6 @@
 import { contextFrom, MAX_CONTEXT_SPOTS } from "@/features/travel/lib/conversation-context";
-import type { AgentAnswer, TravelSpot } from "@/features/travel/api";
+import type { ContextSource } from "@/features/travel/lib/conversation-context";
+import type { TravelSpot } from "@/features/travel/api";
 
 const spot = (id: string): TravelSpot => ({
   contentId: id,
@@ -11,13 +12,9 @@ const spot = (id: string): TravelSpot => ({
   lng: null,
 });
 
-const answer = (over: Partial<AgentAnswer> = {}): AgentAnswer => ({
-  steps: [],
-  answer: [],
+const answer = (over: Partial<ContextSource> = {}): ContextSource => ({
   spots: [spot("a"), spot("b")],
-  totalCount: 2,
   intent: { categoryKeywords: ["해수욕장"], regionHints: ["제주"] },
-  refinements: [],
   ...over,
 });
 

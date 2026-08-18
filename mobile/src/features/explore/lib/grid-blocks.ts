@@ -1,4 +1,4 @@
-import type { OverseasPost } from "@/features/feed/posts-api";
+import type { OverseasPost } from "@/features/explore/api";
 
 export type GridBlock =
   | { type: "row3"; items: [OverseasPost, OverseasPost, OverseasPost] }

@@ -4,7 +4,7 @@ import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { listSaved, saveSpot, unsaveSpot } from "@/features/saved/api";
 import { containsId, removeById } from "@/features/saved/lib/optimistic";
 
-export const savedKeys = { list: ["saved"] as const };
+const savedKeys = { list: ["saved"] as const };
 
 const RECOMMENDATIONS_ROOT = ["home-recommendations"] as const;
 

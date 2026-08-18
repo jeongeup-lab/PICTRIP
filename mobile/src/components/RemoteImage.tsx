@@ -51,7 +51,7 @@ const isKtoUrl = (u: string): boolean => {
 const ktoFallback = (u: string): string | null =>
   isKtoUrl(u) && u.includes(KTO_HIRES) ? u.replace(KTO_HIRES, KTO_MID) : null;
 
-export const ktoMidSizeUrl = (u: string): string => ktoFallback(u) ?? u;
+const ktoMidSizeUrl = (u: string): string => ktoFallback(u) ?? u;
 
 const COMMONS_HOSTS = new Set(["upload.wikimedia.org", "commons.wikimedia.org"]);
 const isCommonsUrl = (u: string): boolean => {

@@ -1,7 +1,7 @@
 import Constants from "expo-constants";
 import * as Updates from "expo-updates";
 
-export const APP_VERSION = Constants.expoConfig?.version ?? "0.0.0";
+const APP_VERSION = Constants.expoConfig?.version ?? "0.0.0";
 
 export const EMBEDDED_BUNDLE_LABEL = "내장";
 
