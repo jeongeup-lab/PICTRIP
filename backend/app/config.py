@@ -109,8 +109,8 @@ class Settings(BaseSettings):
 
     GITHUB_DISPATCH_TOKEN: str = ""
     GITHUB_REPO: str = "jeongeup-lab/PICTRIP"
-    COLLECTION_WORKFLOW: str = "pipeline-sync.yml"
-    COLLECTION_WORKFLOW_REF: str = "main"
+    COLLECTION_WORKFLOW: str = "pipeline-daily.yml"
+    COLLECTION_WORKFLOW_REF: str = "dev"
 
     SENTRY_DSN: str = ""
     SENTRY_TRACES_SAMPLE_RATE: float = 0.1

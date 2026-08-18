@@ -44,7 +44,7 @@ def admin_password() -> str:
 def token_set(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "GITHUB_DISPATCH_TOKEN", "ghp_test_token")
     monkeypatch.setattr(settings, "GITHUB_REPO", "jeongeup-lab/PICTRIP")
-    monkeypatch.setattr(settings, "COLLECTION_WORKFLOW", "pipeline-sync.yml")
+    monkeypatch.setattr(settings, "COLLECTION_WORKFLOW", "pipeline-daily.yml")
     monkeypatch.setattr(settings, "COLLECTION_WORKFLOW_REF", "main")
 
 

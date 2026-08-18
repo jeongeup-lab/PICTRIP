@@ -1,8 +1,15 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from pictrip_data.sync.audit import ensure_table
-from pictrip_data.sync.daily import sync_daily, sync_full, watermark_param
+from pictrip_data.sync.daily import (
+    PartialFullSync,
+    sync_daily,
+    sync_full,
+    watermark_param,
+)
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "sync_list_response.json").read_text())
 ITEMS = FIXTURE["response"]["body"]["items"]["item"]
@@ -79,3 +86,20 @@ def test_sync_full_empty_seen_skips_reconcile(seed_refs):
     assert cur.fetchone()[0] == 1
     cur.execute("SELECT soft_deleted FROM sync_runs ORDER BY id DESC LIMIT 1")
     assert cur.fetchone()[0] == 0
+
+
+def test_sync_full_refuses_soft_delete_on_partial_fetch(seed_refs):
+    conn = seed_refs
+    ensure_table(conn)
+    for n in range(10):
+        _seed_active_spot(conn, f"T_KEEP{n}")
+    client = FakeClient({1: (ITEMS, 2)})
+
+    with pytest.raises(PartialFullSync):
+        sync_full(client=client, conn=conn)
+
+    cur = conn.cursor()
+    cur.execute("SELECT count(*) FROM spots WHERE content_id LIKE 'T_KEEP%' AND show_flag = 1")
+    assert cur.fetchone()[0] == 10
+    cur.execute("SELECT status, soft_deleted FROM sync_runs ORDER BY id DESC LIMIT 1")
+    assert cur.fetchone() == ("error", 0)

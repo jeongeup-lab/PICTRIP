@@ -164,65 +164,6 @@ async def fetch_posts_page(
 
 
 @dataclass(frozen=True)
-class ShortRow:
-    video_id: str
-    title: str
-    channel_title: str
-    thumbnail_url: str
-    view_count: int
-    anchor_label: str
-    rank: int
-
-
-@dataclass(frozen=True)
-class ShortSpotRow:
-    video_id: str
-    content_id: str
-    title: str
-    first_image_url: str | None
-    cpyrht_div_cd: str | None
-
-
-_SHORTS_PAGE_SQL = """
-SELECT video_id, title, channel_title, thumbnail_url, view_count, anchor_label, rank
-FROM travel_shorts
-WHERE ((:cursor_rank)::int IS NULL) OR (rank > (:cursor_rank)::int)
-ORDER BY rank ASC
-LIMIT (:lim)::int
-"""
-
-_SHORTS_SPOTS_SQL = """
-SELECT ts.video_id, ts.content_id, spots.title, spots.first_image_url, spots.cpyrht_div_cd
-FROM travel_shorts_spots ts
-JOIN spots ON spots.content_id = ts.content_id AND spots.show_flag = 1
-WHERE ts.video_id = ANY(CAST(:video_ids AS text[]))
-ORDER BY ts.video_id, ts.rank ASC
-"""
-
-
-async def fetch_shorts_page(
-    session: AsyncSession, *, cursor_rank: int | None, limit: int
-) -> list[ShortRow]:
-    result = await session.execute(
-        text(_SHORTS_PAGE_SQL), {"cursor_rank": cursor_rank, "lim": limit}
-    )
-    return [ShortRow(**row._mapping) for row in result]
-
-
-async def fetch_shorts_spots(
-    session: AsyncSession, video_ids: list[str]
-) -> dict[str, list[ShortSpotRow]]:
-    if not video_ids:
-        return {}
-    result = await session.execute(text(_SHORTS_SPOTS_SQL), {"video_ids": video_ids})
-    grouped: dict[str, list[ShortSpotRow]] = {}
-    for row in result:
-        item = ShortSpotRow(**row._mapping)
-        grouped.setdefault(item.video_id, []).append(item)
-    return grouped
-
-
-@dataclass(frozen=True)
 class HomeSpotRow:
     content_id: str
     title: str

@@ -1,0 +1,105 @@
+name: pipeline-daily
+# 일일 수집 DAG — 크론을 잡별로 흩뿌리는 대신 의존성을 needs 로 명시한다.
+#
+#   sync-kto ─┬─ concentration ─┐
+#             ├─ embed ─────────┴─ warm ─┐
+#             └─ detail-prewarm ─────────┴─ heartbeat
+#
+# embed 가 sync-kto 에 연쇄하는 것이 핵심이다. 신규 스팟은 트리거(UPDATE OF
+# first_image_url)에 걸리지 않아 embedding_failures 에도 안 쌓인다 — 이 링크가
+# 없으면 새로 들어온 KTO 스팟이 이미지 검색·매칭에서 영영 누락된다.
+#
+# 04:00 이 아니라 04:07 인 이유: 스케줄 디스패치는 GitHub 이 큐잉하고, 정각은
+# 전 세계 크론이 몰려 지연된다. self-hosted 러너라도 트리거는 큐를 탄다.
+#
+# schedule 은 default 브랜치(dev) 기준으로만 동작한다.
+on:
+  schedule:
+    - cron: "7 19 * * *" # 04:07 KST (19:07 UTC + 9h)
+  workflow_dispatch:
+    inputs:
+      embed_limit:
+        description: "임베딩 상한 (첫 실행은 백로그가 크다)"
+        type: string
+        default: "1000"
+      prewarm_limit:
+        description: "detailCommon2 프리워밍 스팟 수 (KTO 쿼터 예산)"
+        type: string
+        default: "800"
+
+permissions: {}
+
+concurrency:
+  group: pipeline-daily
+  cancel-in-progress: false
+
+jobs:
+  # CT111 에 배포된 pictrip-data CLI. .env(DATABASE_URL·KTO_API_KEY)와 .venv 는
+  # pipeline-deploy 가 보존하므로 config 가 자동 로드된다.
+  sync-kto:
+    runs-on: [self-hosted, ct111]
+    timeout-minutes: 60
+    steps:
+      - run: |
+          set -euo pipefail
+          cd /opt/pictrip-pipeline/pipeline
+          /usr/local/bin/uv run pictrip-data sync-daily
+
+  concentration:
+    needs: sync-kto
+    runs-on: [self-hosted, ct112]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/api-exec
+        with:
+          module: scripts.sync_concentration
+
+  detail-prewarm:
+    needs: sync-kto
+    runs-on: [self-hosted, ct112]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/api-exec
+        with:
+          module: scripts.prewarm_details
+          args: --limit ${{ inputs.prewarm_limit || '800' }}
+
+  # 신규·이미지 교체 스팟을 CLIP 으로 채운다. --limit 로 묶는 이유는 백로그가
+  # 큰 첫 실행이 라이브 api 컨테이너의 CPU 를 하루치 잡아두지 않게 하려는 것.
+  embed:
+    needs: sync-kto
+    runs-on: [self-hosted, ct112]
+    timeout-minutes: 120
+    # 임베딩 잡은 admin:embed:running Redis 락을 공유한다 — 겹치면 뒤에 온 잡이
+    # RuntimeError 로 죽으므로 워크플로를 가로질러 직렬화한다.
+    concurrency:
+      group: embedding-job
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/api-exec
+        with:
+          module: scripts.backfill_embeddings
+          args: --limit ${{ inputs.embed_limit || '1000' }}
+
+  # 엣지 워밍은 국내망(ct111)에서 돌아야 KR 콜로가 데워진다 — img-cache-warm 참조.
+  warm:
+    needs: [concentration, embed]
+    uses: ./.github/workflows/img-cache-warm.yml
+    permissions:
+      contents: read
+
+  heartbeat:
+    needs: [warm, detail-prewarm]
+    if: always()
+    runs-on: [self-hosted, ct111]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/heartbeat
+        with:
+          url: ${{ secrets.KUMA_PUSH_PIPELINE_DAILY }}
+          # skipped(상류 실패로 안 돈 경우)도 down 이다 — success 만 up.
+          status: ${{ (needs.warm.result == 'success' && needs['detail-prewarm'].result == 'success') && 'up' || 'down' }}
+          msg: "daily warm=${{ needs.warm.result }} prewarm=${{ needs['detail-prewarm'].result }}"
