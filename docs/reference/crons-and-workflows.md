@@ -36,6 +36,9 @@ main = 릴리스 마커(web·CodeQL), `v*` 태그 = TestFlight(→
 - **`embed`가 `sync-kto`에 연쇄하는 것이 핵심.** 신규 스팟은 `UPDATE OF
   first_image_url` 트리거에 안 걸려 `embedding_failures` 에도 안 쌓인다 — 이 링크가
   없으면 새 KTO 스팟이 이미지 검색·매칭에서 영영 누락된다.
+- **증분은 워터마크 날짜부터 오늘까지 하루씩 훑는다.** KTO `modifiedtime` 은 하한이
+  아니라 그 날짜만 고르는 필터라, 하루치만 요청하면 워터마크가 그 날에 갇힌다
+  (2026-06-26 부터 54일간 실제로 그랬다 — `fetched=10 · skipped=10` 이 매일 success 로 기록).
 - **`sync-full`이 유일한 soft-delete 경로.** 일일 증분은 `modifiedtime` 필터라
   "사라진 스팟"을 못 본다. 응답이 현재 노출분의 절반 미만이면 `PartialFullSync` 로
   중단한다(부분 응답이 전체를 숨기는 사고 방지).
