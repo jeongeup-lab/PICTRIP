@@ -41,8 +41,8 @@ jobs:
             exit 1
           fi
           if ! docker exec "$cid" alembic history \
-            -r "0019_embedding_image_consistency:${current_revision}"; then
-            echo "0019_embedding_image_consistency is not applied at ${current_revision}"
+            -r "0020_spot_embeddings_gallery:${current_revision}"; then
+            echo "0020_spot_embeddings_gallery is not applied at ${current_revision}"
             exit 1
           fi
           echo "API_CONTAINER=$cid" >> "$GITHUB_ENV"
