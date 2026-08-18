@@ -3,7 +3,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 import sys
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlsplit
@@ -59,6 +61,7 @@ class Case:
     expect_placed: bool = False
     expect_unique: bool = True
     expect_within_km: float | None = None
+    chat: bool = False
     pending: bool = False
     note: str = ""
 
@@ -153,6 +156,29 @@ def landlocked(cid: str, label: str, question: str, **kw: Any) -> Case:
     kw.setdefault("pending", True)
     kw.setdefault("note", "내륙 지역 + 바다 → 가까운 지역으로 넓혀야")
     return case(cid, "K 지역 대체", label, ask(question), **kw)
+
+
+def chat_ask(message: str, **extra: Any) -> dict[str, Any]:
+    return {"message": message, **extra}
+
+
+PAYLOAD_KEYS = ("context", "lat", "lng", "history", "clientTime")
+
+
+def find_chat(cid: str, label: str, message: str, **kw: Any) -> Case:
+    """`/agent/chat` 으로 물어 산문까지 검증한다.
+
+    `/agent/ask` 는 결정적 세그먼트를 돌려주므로 writer 가 실제로 쓴 문장은
+    이 경로로만 볼 수 있다. 도구 단언은 못 쓴다 — chat 스텝 이벤트에 tool 이 없다.
+    """
+    extra = {key: kw.pop(key) for key in PAYLOAD_KEYS if key in kw}
+    kw.setdefault("expect_spots", "any")
+    return case(cid, "P 채팅", label, chat_ask(message, **extra), chat=True, **kw)
+
+
+def talk_chat(cid: str, label: str, message: str, **kw: Any) -> Case:
+    kw.setdefault("expect_spots", "none")
+    return find_chat(cid, label, message, **kw)
 
 
 CASES: list[Case] = [
@@ -345,7 +371,8 @@ CASES: list[Case] = [
         "F 데이터 경계",
         "없는 지역",
         ask("아틀란티스 관광지"),
-        expect_error="AGENT_OUT_OF_SCOPE",
+        expect_text=("아틀란티스",),
+        note="해외가 아니라 실재하지 않는 곳이다 — 못 찾은 지역을 이름으로 밝히는지 본다",
     ),
     edge("F5", "일상 표기 지역", "제주도 한적한곳", expect_spots="some", expect_text=("제주",)),
     edge("F6", "매우 좁은 조건", "독도 실내 박물관", expect_spots="any"),
@@ -641,6 +668,12 @@ CASES: list[Case] = [
         forbid_tools=SEARCH_TOOLS,
         expect_spots="none",
     ),
+    talk_chat("P1", "잡담", "안녕"),
+    find_chat("P2", "검색 산문", "제주 박물관", expect_spots="some"),
+    find_chat("P3", "분위기 검색", "여수 밤바다 보이는 카페"),
+    talk_chat("P4", "해외", "파리 가볼 만한 곳"),
+    talk_chat("P5", "못 하는 요구", "내일 날씨 어때"),
+    find_chat("P6", "후속 좁히기", "더 한적한 곳", context=TONGYEONG),
 ]
 
 
@@ -691,6 +724,172 @@ def judge(case_: Case, status: int, body: dict[str, Any]) -> Result:
             res.ok = False
             res.reasons.append(f"answer leaked {text!r}")
     _judge_spots(case_, data.get("spots", []), res)
+    return res
+
+
+FULLWIDTH_OPEN = "\uff3b"
+MARKER_LEAKS = ("cards", "[[", FULLWIDTH_OPEN * 2)
+PHONE = re.compile(r"\d{2,4}-\d{3,4}-\d{4}")
+BOLD = re.compile(r"\*\*(.+?)\*\*")
+CITATION = re.compile(r"\[(\d{1,3})\]")
+
+_FORMAL_TAIL = re.compile(r"(.)니다")
+_HANGUL_BASE = 0xAC00
+_HANGUL_LAST = 0xD7A3
+_JONGSEONG_COUNT = 28
+_JONGSEONG_BIEUP = 17
+
+
+def formal_endings(text: str) -> list[str]:
+    """합쇼체(-ㅂ니다 · -습니다)를 집는다.
+
+    앞 음절의 종성이 ㅂ 인 것만 센다 — '아니다' 는 종성이 없어 걸리지 않는다.
+    """
+    found: list[str] = []
+    for match in _FORMAL_TAIL.finditer(text):
+        head = match.group(1)
+        if not _HANGUL_BASE <= ord(head) <= _HANGUL_LAST:
+            continue
+        if (ord(head) - _HANGUL_BASE) % _JONGSEONG_COUNT != _JONGSEONG_BIEUP:
+            continue
+        found.append(match.group(0))
+    return found
+
+
+@dataclass
+class ChatTranscript:
+    """SSE 스트림을 접은 것. `/agent/chat` 은 몸통이 아니라 이벤트로 답한다."""
+
+    steps: list[dict[str, Any]] = field(default_factory=list)
+    deltas: list[str] = field(default_factory=list)
+    cards: list[dict[str, Any]] = field(default_factory=list)
+    sources: list[dict[str, Any]] = field(default_factory=list)
+    done: dict[str, Any] | None = None
+    error: dict[str, Any] | None = None
+
+    @property
+    def streamed(self) -> str:
+        return "".join(self.deltas)
+
+
+def sse_events(raw: str) -> Iterator[tuple[str, dict[str, Any]]]:
+    for block in raw.split("\n\n"):
+        name = ""
+        payload = ""
+        for line in block.splitlines():
+            if line.startswith("event:"):
+                name = line[len("event:") :].strip()
+            elif line.startswith("data:"):
+                payload += line[len("data:") :].strip()
+        if not name or not payload:
+            continue
+        try:
+            parsed = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            yield name, parsed
+
+
+def transcript_of(raw: str) -> ChatTranscript:
+    found = ChatTranscript()
+    for name, payload in sse_events(raw):
+        if name == "step":
+            found.steps.append(payload)
+        elif name == "delta":
+            found.deltas.append(str(payload.get("text", "")))
+        elif name == "cards":
+            found.cards = list(payload.get("spots") or [])
+        elif name == "sources":
+            found.sources = list(payload.get("items") or [])
+        elif name == "done":
+            found.done = payload
+        elif name == "error":
+            found.error = payload
+    return found
+
+
+def chat_body(found: ChatTranscript) -> dict[str, Any]:
+    """스트림을 `/agent/ask` 몸통 모양으로 접어 기존 단언을 그대로 재사용한다."""
+    if found.error is not None:
+        return {"data": None, "error": found.error}
+    done = found.done or {}
+    spots = list(done.get("spots") or [])
+    return {
+        "data": {
+            "steps": [],
+            "answer": [{"text": done.get("answerText", "")}],
+            "spots": spots,
+            "totalCount": done.get("totalCount", len(spots)),
+            "intent": done.get("intent", {}),
+        },
+        "error": None,
+    }
+
+
+def asked_text(case_: Case) -> str:
+    payload = case_.payload
+    return str(payload.get("message") or payload.get("question") or "")
+
+
+def grounded_in(name: str, spots: list[dict[str, Any]], question: str) -> bool:
+    wanted = name.replace(" ", "")
+    if not wanted:
+        return True
+    haystacks = [question.replace(" ", "")]
+    for found in spots:
+        haystacks.append(str(found.get("title", "")).replace(" ", ""))
+        haystacks.append(str(found.get("regionLabel", "")).replace(" ", ""))
+    return any(wanted in straw or (straw and straw in wanted) for straw in haystacks)
+
+
+def _judge_prose(case_: Case, found: ChatTranscript, res: Result) -> None:
+    """산문에만 있는 표면을 결정적으로 단언한다 — 심판 모델 없이.
+
+    `/agent/ask` 는 결정적 세그먼트를 돌려주므로 writer 가 실제로 쓴 문장은
+    이 경로에서만 볼 수 있다.
+    """
+    if found.done is None:
+        res.ok = False
+        res.reasons.append("stream ended without a done event")
+        return
+    answer = str(found.done.get("answerText", ""))
+    if not answer.strip():
+        res.ok = False
+        res.reasons.append("empty answer")
+        return
+    if found.streamed.strip() != answer.strip():
+        res.ok = False
+        res.reasons.append("stream text disagrees with done.answerText")
+    for leak in MARKER_LEAKS:
+        if leak in answer:
+            res.ok = False
+            res.reasons.append(f"marker leaked into prose: {leak!r}")
+    for ending in formal_endings(answer):
+        res.ok = False
+        res.reasons.append(f"합쇼체 {ending!r} — 해요체만 써야 한다")
+    if PHONE.search(answer):
+        res.ok = False
+        res.reasons.append("전화번호가 산문에 나왔다 — 도구 결과에 없는 사실이다")
+    spots = list(found.done.get("spots") or [])
+    question = asked_text(case_)
+    for number in CITATION.findall(answer):
+        if not 1 <= int(number) <= len(spots):
+            res.ok = False
+            res.reasons.append(f"카드에 없는 번호를 인용했다: [{number}]")
+    for bold in BOLD.findall(answer):
+        if not grounded_in(bold, spots, question):
+            res.ok = False
+            res.reasons.append(f"카드에 없는 이름을 굵게 썼다: {bold!r}")
+
+
+def judge_chat(case_: Case, status: int, found: ChatTranscript) -> Result:
+    res = judge(case_, status, chat_body(found))
+    if case_.expect_error or found.error is not None:
+        return res
+    if status != 200:
+        return res
+    _judge_prose(case_, found, res)
     return res
 
 
@@ -1136,6 +1335,29 @@ def selected(only: str | None) -> list[Case]:
     return [c for c in CASES if c.cid.startswith(only) or only in c.group]
 
 
+async def post_chat(
+    client: httpx.AsyncClient, payload: dict[str, Any]
+) -> tuple[int, ChatTranscript]:
+    async with client.stream("POST", "/v1/agent/chat", json=payload) as resp:
+        raw = "".join([chunk async for chunk in resp.aiter_text()])
+    if resp.status_code != 200:
+        failed = ChatTranscript()
+        try:
+            failed.error = json.loads(raw).get("error")
+        except (json.JSONDecodeError, AttributeError):
+            failed.error = None
+        return resp.status_code, failed
+    return resp.status_code, transcript_of(raw)
+
+
+async def run_one(client: httpx.AsyncClient, current: Case) -> Result:
+    if current.chat:
+        status, found = await post_chat(client, current.payload)
+        return judge_chat(current, status, found)
+    resp = await client.post("/v1/agent/ask", json=current.payload)
+    return judge(current, resp.status_code, resp.json())
+
+
 async def run(base_url: str, only: str | None) -> int:
     cases = selected(only)
     results: list[Result] = []
@@ -1144,9 +1366,7 @@ async def run(base_url: str, only: str | None) -> int:
             if index:
                 await asyncio.sleep(PACE_SECONDS)
             try:
-                resp = await client.post("/v1/agent/ask", json=current.payload)
-                body = resp.json()
-                status = resp.status_code
+                result = await run_one(client, current)
             except Exception as exc:
                 results.append(
                     Result(
@@ -1155,7 +1375,6 @@ async def run(base_url: str, only: str | None) -> int:
                 )
                 print(f"  {current.cid:<4} ERR  {current.label}", flush=True)
                 continue
-            result = judge(current, status, body)
             results.append(result)
             mark = "PASS" if result.ok else ("GAP " if current.pending else "FAIL")
             print(
