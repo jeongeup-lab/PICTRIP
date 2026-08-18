@@ -25,8 +25,19 @@ class FakeCommons:
         return {"Tokyo Tower.jpg": CREDIT}
 
 
+class FakeWikipedia:
+    def fetch_descriptions(self, qids):
+        return {}
+
+
 def test_sync_overseas_inserts_and_records_run(db_conn):
-    sync_overseas(wikidata=FakeWikidata(), commons=FakeCommons(), conn=db_conn, countries=[JP])
+    sync_overseas(
+        wikidata=FakeWikidata(),
+        commons=FakeCommons(),
+        wikipedia=FakeWikipedia(),
+        conn=db_conn,
+        countries=[JP],
+    )
     with db_conn.cursor() as cur:
         cur.execute(
             "SELECT name_ko, image_url, image_source_url, fame_score "
@@ -42,7 +53,13 @@ def test_sync_overseas_inserts_and_records_run(db_conn):
 
 
 def test_sync_overseas_upsert_preserves_hidden_and_resets_embedding_on_image_change(db_conn):
-    sync_overseas(wikidata=FakeWikidata(), commons=FakeCommons(), conn=db_conn, countries=[JP])
+    sync_overseas(
+        wikidata=FakeWikidata(),
+        commons=FakeCommons(),
+        wikipedia=FakeWikipedia(),
+        conn=db_conn,
+        countries=[JP],
+    )
     with db_conn.cursor() as cur:
         cur.execute(
             "UPDATE overseas_spots SET is_hidden = true, "
@@ -66,9 +83,41 @@ def test_sync_overseas_upsert_preserves_hidden_and_resets_embedding_on_image_cha
             )
             return {"New Tower.jpg": moved}
 
-    sync_overseas(wikidata=Changed(), commons=ChangedCommons(), conn=db_conn, countries=[JP])
+    sync_overseas(
+        wikidata=Changed(),
+        commons=ChangedCommons(),
+        wikipedia=FakeWikipedia(),
+        conn=db_conn,
+        countries=[JP],
+    )
     with db_conn.cursor() as cur:
         cur.execute(
             "SELECT is_hidden, embedding IS NULL FROM overseas_spots WHERE wikidata_id = 'QTEST1'"
         )
         assert cur.fetchone() == (True, True)
+
+
+def test_sync_overseas_fills_missing_descriptions(db_conn):
+    class NoDesc(FakeWikidata):
+        def fetch_country(self, country):
+            return [
+                RawSpot("QTEST9", "우에노", None, None, "Ueno.jpg", 40, 35.7, 139.7, JP)
+                if country.code == "JP"
+                else None
+            ][:1]
+
+    class Filled(FakeWikipedia):
+        def fetch_descriptions(self, qids):
+            return {"QTEST9": "우에노는 도쿄의 지역이다."}
+
+    sync_overseas(
+        wikidata=NoDesc(),
+        commons=FakeCommons(),
+        wikipedia=Filled(),
+        conn=db_conn,
+        countries=[JP],
+    )
+
+    with db_conn.cursor() as cur:
+        cur.execute("SELECT description_ko FROM overseas_spots WHERE wikidata_id = 'QTEST9'")
+        assert cur.fetchone()[0] == "우에노는 도쿄의 지역이다."

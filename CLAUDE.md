@@ -18,7 +18,7 @@ Monorepo with 5 deploy units + docs (`AGENTS.md` is a symlink to this file).
 | `backend/` | FastAPI modular monolith (+ `admin`) | CT112 |
 | `mobile/` | Expo SDK 56 RN app | EAS / stores |
 | `web/` | Cloudflare Pages — apex `pictrip.org` | Cloudflare |
-| `pipeline/` | KTO ETL CLI + Streamlit (`pictrip-data`) | CT111 |
+| `pipeline/` | KTO ETL CLI (`pictrip-data`) | CT111 |
 | `workers/img-proxy/` | 이미지 프록시 Worker — `img.pictrip.org` | Cloudflare |
 | `deploy/api-host/` · `deploy/monitoring/` | Ops/IaC | CT112 / CT113 |
 | `docs/` | Diátaxis 문서 (explanation · how-to · reference · adr) | — |
@@ -54,7 +54,7 @@ uv run ruff check . && uv run pytest
 - **Web**: Cloudflare Pages static (legal · `.well-known` deep-link files ·
   `/spots/…` fallback pages). Build root = `web/`.
 - **Pipeline**: Python CLI `pictrip-data` (KTO `areaBasedSyncList2` → `spots`
-  daily sync) + Streamlit dashboard. Owns the `sync_runs` table.
+  daily sync). Owns the `sync_runs` table. 수집 이력 조회는 어드민 콘솔.
 - **Infra**: Proxmox homeserver — FastAPI + Redis on CT112, Postgres on CT110,
   pipeline on CT111, monitoring on CT113. Public via Cloudflare tunnel
   `https://api.pictrip.org`. CI/CD: GitHub Actions (GHCR + self-hosted runner).
@@ -150,7 +150,7 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
 - `overseas_spots`는 **백엔드 Alembic 소유**, 행 적재는
   `pipeline/` Wikidata ETL. 매칭 캐시는 Redis `match:{revision}:{overseasId}`
   (TTL 6h, `matching:revision`으로 무효화).
-- `spot_concentration`은 일일 크론 적재(`concentration-sync.yml`, 04:30 KST) —
+- `spot_concentration`은 `pipeline-daily.yml` 의 `concentration` 잡이 적재 —
   Hot/Hidden 채널(`/home/channels`) 소스.
 - Auth = denylist-only: `denyjti:{jti}` in Redis, fail-open. No session/device
   tables, no refresh rotation. access=memory, refresh=expo-secure-store.

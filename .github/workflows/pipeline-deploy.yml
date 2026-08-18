@@ -1,8 +1,8 @@
 # CD for the pictrip-data pipeline. On push to dev touching pipeline/**, the
-# self-hosted runner on CT111 syncs the repo's pipeline/ into /opt/pictrip-pipeline,
-# re-resolves deps, and restarts the dashboard. The 04:00 KST sync timer
-# (pictrip-sync-v2, oneshot) picks up new code on its next fire. .env (secrets)
-# and .venv are preserved across deploys.
+# self-hosted runner on CT111 syncs the repo's pipeline/ into /opt/pictrip-pipeline
+# and re-resolves deps. 수집 스케줄은 CT111 systemd 타이머가 아니라
+# pipeline-daily/weekly/monthly 워크플로가 쥔다 — 다음 실행이 새 코드를 쓴다.
+# .env (secrets) 와 .venv 는 배포마다 보존된다.
 name: pipeline-deploy
 
 on:
@@ -23,7 +23,7 @@ jobs:
     runs-on: [self-hosted, ct111]
     steps:
       - uses: actions/checkout@v4
-      - name: Sync to /opt/pictrip-pipeline and restart services
+      - name: Sync to /opt/pictrip-pipeline
         run: |
           set -euo pipefail
           command -v rsync >/dev/null || { apt-get update -qq && apt-get install -y -qq rsync; }
@@ -33,5 +33,4 @@ jobs:
             "$GITHUB_WORKSPACE/pipeline/" "$APP/"
           cd "$APP"
           /usr/local/bin/uv sync --no-dev
-          systemctl restart pictrip-dashboard.service
-          echo "deployed $(git -C "$GITHUB_WORKSPACE" rev-parse --short HEAD); dashboard=$(systemctl is-active pictrip-dashboard.service)"
+          echo "deployed $(git -C "$GITHUB_WORKSPACE" rev-parse --short HEAD)"

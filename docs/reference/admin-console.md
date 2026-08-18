@@ -31,7 +31,9 @@ read-only 집계 + 해외 게시물 숨김 토글만 — 회원 관리·콘텐�
 
 ## 보류
 
-- 수집 즉시 실행 버튼(Phase 2/A7) — `pipeline-sync.yml` 미배선.
+- 수집 즉시 실행 버튼 — `pipeline-daily.yml` 을 `workflow_dispatch` 로 킥한다.
+  `GITHUB_DISPATCH_TOKEN`(actions:write)만 CT112 `.env` 에 있으면 동작한다;
+  없으면 "구성되지 않았습니다"로 거절.
   조건·근거는 [crons-and-workflows](crons-and-workflows.md) 참조.
 
 ---

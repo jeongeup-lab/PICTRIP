@@ -1,8 +1,10 @@
 from pictrip_data.db import connect
+from pictrip_data.overseas.backfill import fill_missing_descriptions
 from pictrip_data.overseas.commons import CommonsClient
 from pictrip_data.overseas.countries import COUNTRIES, Country
 from pictrip_data.overseas.upsert import upsert_overseas
 from pictrip_data.overseas.wikidata import WikidataClient
+from pictrip_data.overseas.wikipedia import WikipediaClient
 from pictrip_data.sync.audit import ensure_table, record_run
 
 
@@ -10,6 +12,7 @@ def sync_overseas(
     *,
     wikidata=None,
     commons=None,
+    wikipedia=None,
     conn=None,
     countries: list[Country] | None = None,
     limit: int | None = None,
@@ -17,15 +20,16 @@ def sync_overseas(
 ) -> None:
     wikidata = wikidata or WikidataClient()
     commons = commons or CommonsClient()
+    wikipedia = wikipedia or WikipediaClient()
     countries = countries if countries is not None else COUNTRIES
     if conn is not None:
-        _run(wikidata, commons, conn, countries, limit, dry_run)
+        _run(wikidata, commons, wikipedia, conn, countries, limit, dry_run)
         return
     with connect() as owned:
-        _run(wikidata, commons, owned, countries, limit, dry_run)
+        _run(wikidata, commons, wikipedia, owned, countries, limit, dry_run)
 
 
-def _process(wikidata, commons, conn, countries, counters, limit, dry_run) -> None:
+def _process(wikidata, commons, wikipedia, conn, countries, counters, limit, dry_run) -> None:
     total = 0
     for country in countries:
         spots = wikidata.fetch_country(country)
@@ -47,15 +51,20 @@ def _process(wikidata, commons, conn, countries, counters, limit, dry_run) -> No
         if limit is not None and total >= limit:
             break
 
+    descriptions = fill_missing_descriptions(wikipedia, conn)
+    counters["updated"] += descriptions["updated"]
+    if not dry_run:
+        conn.commit()
 
-def _run(wikidata, commons, conn, countries, limit, dry_run) -> None:
+
+def _run(wikidata, commons, wikipedia, conn, countries, limit, dry_run) -> None:
     ensure_table(conn)
     if dry_run:
         counters = {"api_calls": 0, "fetched": 0, "inserted": 0, "updated": 0}
         try:
-            _process(wikidata, commons, conn, countries, counters, limit, dry_run)
+            _process(wikidata, commons, wikipedia, conn, countries, counters, limit, dry_run)
         finally:
             conn.rollback()
         return
     with record_run(conn, mode="overseas") as counters:
-        _process(wikidata, commons, conn, countries, counters, limit, dry_run)
+        _process(wikidata, commons, wikipedia, conn, countries, counters, limit, dry_run)
