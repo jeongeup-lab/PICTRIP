@@ -40,8 +40,9 @@ from app.modules.agent.services import places as places_service
 from app.modules.agent.services import refine as refine_service
 from app.modules.agent.services import region as region_service
 from app.modules.agent.services import resolve as resolve_service
-from app.modules.agent.services import retrieve
+from app.modules.agent.services import retrieve, routes
 from app.modules.agent.services import suggest as suggest_service
+from app.modules.agent.services.routes import count, widen_label
 from app.modules.feed import services as feed_services
 from app.modules.spots.services import (
     NearbyCategory,
@@ -53,7 +54,6 @@ from app.web.errors import AppError, ValidationFailed
 
 logger = get_logger(__name__)
 
-INDOOR_RETRY_LABEL = "실내로만 다시 조회"
 BLANK_ANSWER = "어디로 갈지 한 줄만 알려주세요. 지역 · 분위기 · 사진 아무거나 좋아요."
 NO_AXIS_ANSWER = "어느 지역으로 찾아볼까요? 지역이나 분위기를 알려주시면 바로 찾아드릴게요."
 FOOD_NEEDS_ORIGIN_ANSWER = (
@@ -94,7 +94,6 @@ ORIGIN_ACTION_WORDS: tuple[tuple[str, AnchorAction], ...] = (
     ("먹을", "food"),
 )
 PHOTO_AXES: frozenset[DropAxis] = frozenset({"near", "region"})
-TITLE_AXES: frozenset[DropAxis] = frozenset({"category", "near", "region"})
 MIN_HINT_TOKEN_CHARS = 2
 SIDO_ALIASES: dict[str, tuple[str, ...]] = {
     "강원도": ("강원",),
@@ -241,14 +240,14 @@ async def _ask_with_photo(
         rows, ordered = await matched(prefixes)
         widened = scope
         intent = intent.model_copy(update={"regionHints": list(scope.sido_prefixes)})
-        steps.append(AskStep(tool="photo_match", label=_widen_label(scope), badge="pgvector"))
+        steps.append(AskStep(tool="photo_match", label=widen_label(scope), badge="pgvector"))
 
     similarity = {row.content_id: photo_service.similarity(row) for row in rows}
     if near and lat is not None and lng is not None and rows:
         ordered = sorted(
             ordered, key=lambda row: retrieve.distance_km(row, lat=lat, lng=lng) or 0.0
         )
-        steps.append(AskStep(tool="nearby", label="현재 위치에서 가까운 순", badge=_count(ordered)))
+        steps.append(AskStep(tool="nearby", label="현재 위치에서 가까운 순", badge=count(ordered)))
 
     if not ordered:
         _rebadge_last(steps, "photo_match", f"{len(rows)}곳")
@@ -606,6 +605,62 @@ def _is_distance_tag(tag: str | None) -> bool:
     return tag is not None and DISTANCE_TAG.match(tag) is not None
 
 
+_TALK_ANSWERS: dict[str, str] = {
+    "unsupported": UNSUPPORTED_ANSWER,
+    "smalltalk": BLANK_ANSWER,
+}
+
+
+async def _answer_without_searching(
+    session: AsyncSession,
+    redis: Redis,
+    kto: KtoClient | None,
+    *,
+    intent: QueryIntent,
+    context: AskContext | None,
+    steps: list[AskStep],
+    legacy_client: bool,
+) -> AskResponse | None:
+    if intent.task == "detail":
+        target = detail_target(intent, context=context)
+        if target is None:
+            return None
+        return await detail_service.answer_about_spot(
+            session, redis, kto, content_id=target, intent=intent, steps=steps
+        )
+    sentence = _TALK_ANSWERS.get(intent.task)
+    if sentence is None:
+        return None
+    return _talk_response(steps, intent, sentence, legacy_client=legacy_client)
+
+
+def _with_dish_terms(
+    intent: QueryIntent, *, question: str, context: AskContext | None
+) -> QueryIntent:
+    terms = retrieve.dish_search_terms(question)
+    if not terms:
+        return intent
+    carried = set(context.intent.categoryKeywords) if context and context.intent else set()
+    keywords = [keyword for keyword in intent.categoryKeywords if keyword not in carried]
+    keywords.extend(term for term in terms if term not in keywords)
+    return intent.model_copy(update={"categoryKeywords": keywords[:MAX_KEYWORDS]})
+
+
+async def _pin_named_places(
+    session: AsyncSession, kto: KtoClient | None, intent: QueryIntent
+) -> tuple[list[ResolvedPlace], list[CandidateRow]]:
+    if not intent.namedPlaces:
+        return [], []
+    resolved = await resolve_service.resolve_places(session, kto, intent.namedPlaces)
+    content_ids = [
+        place.spot.contentId
+        for place in resolved
+        if place.spot is not None and place.spot.contentId
+    ]
+    briefs = await repositories.load_candidates_by_ids(session, content_ids)
+    return resolved, [briefs[cid] for cid in content_ids if cid in briefs]
+
+
 async def _ask_with_question(
     session: AsyncSession,
     redis: Redis,
@@ -646,26 +701,18 @@ async def _ask_with_question(
         )
         if split is not None:
             return split
-    if intent.task == "unsupported":
-        return _talk_response(steps, intent, UNSUPPORTED_ANSWER, legacy_client=legacy_client)
-    if intent.task == "detail":
-        target = detail_target(intent, context=context)
-        if target is not None:
-            return await detail_service.answer_about_spot(
-                session, redis, kto, content_id=target, intent=intent, steps=steps
-            )
-    if intent.task == "smalltalk":
-        return _talk_response(steps, intent, BLANK_ANSWER, legacy_client=legacy_client)
-    raw_dish_terms = retrieve.dish_search_terms(question)
-    if raw_dish_terms:
-        carried_keywords = (
-            set(context.intent.categoryKeywords) if context and context.intent else set()
-        )
-        merged_keywords = [
-            keyword for keyword in intent.categoryKeywords if keyword not in carried_keywords
-        ]
-        merged_keywords.extend(term for term in raw_dish_terms if term not in merged_keywords)
-        intent = intent.model_copy(update={"categoryKeywords": merged_keywords[:MAX_KEYWORDS]})
+    answered = await _answer_without_searching(
+        session,
+        redis,
+        kto,
+        intent=intent,
+        context=context,
+        steps=steps,
+        legacy_client=legacy_client,
+    )
+    if answered is not None:
+        return answered
+    intent = _with_dish_terms(intent, question=question, context=context)
     title_terms = retrieve.dish_search_terms(" ".join(intent.categoryKeywords))
     region = await region_service.resolve(
         session, redis, intent=intent, context=context, lat=lat, lng=lng
@@ -697,17 +744,7 @@ async def _ask_with_question(
             session, redis, kto, intent=intent, steps=steps, lat=lat, lng=lng
         )
 
-    pinned: list[CandidateRow] = []
-    resolved: list[ResolvedPlace] = []
-    if intent.namedPlaces:
-        resolved = await resolve_service.resolve_places(session, kto, intent.namedPlaces)
-        content_ids = [
-            place.spot.contentId
-            for place in resolved
-            if place.spot is not None and place.spot.contentId
-        ]
-        briefs = await repositories.load_candidates_by_ids(session, content_ids)
-        pinned = [briefs[cid] for cid in content_ids if cid in briefs]
+    resolved, pinned = await _pin_named_places(session, kto, intent)
 
     near = intent.nearMe and lat is not None and lng is not None
     keywords = _keywords(intent)
@@ -749,116 +786,54 @@ async def _ask_with_question(
             )
         ]
     if intent.namedPlaces:
-        steps.append(AskStep(tool="resolve_place", label="질문 속 장소 확인", badge=_count(pinned)))
+        steps.append(AskStep(tool="resolve_place", label="질문 속 장소 확인", badge=count(pinned)))
 
-    axes = suggest_service.ALL_AXES
     near_is_a_cause = True
-    preference = intent.crowdPreference
-    wants_indoor = intent.indoorOnly
-
-    async def search(
-        within_codes: list[str], within_prefixes: list[str], *, with_near: bool = near
-    ) -> list[CandidateRow]:
-        return await retrieve.search_candidates(
-            session,
-            codes=within_codes,
-            region_prefixes=within_prefixes,
-            preference=preference,
-            lat=lat,
-            lng=lng,
-            near=with_near,
-            indoor_only=wants_indoor,
-            mood_ids=mood_ids,
-        )
-
-    if place_only:
-        if not pinned:
-            raise AgentNoResults()
-        candidates = []
-    elif title_only:
-        axes = TITLE_AXES
-        candidates = await retrieve.search_by_title(session, keywords, region_prefixes=prefixes)
-        steps.append(
-            AskStep(
-                tool="title_search",
-                label=f"{keywords[0]} 이름으로 조회",
-                badge=_count(candidates),
-            )
-        )
-        if not _locatable(candidates, near=near) and not pinned and scope.widenable:
-            prefixes = scope.sido_prefixes
-            candidates = await retrieve.search_by_title(session, keywords, region_prefixes=prefixes)
-            region_widened = scope
-            intent = intent.model_copy(update={"regionHints": list(scope.sido_prefixes)})
-            steps.append(
-                AskStep(
-                    tool="title_search",
-                    label=_widen_label(scope),
-                    badge=_count(candidates),
-                )
-            )
-    else:
-        indoor_only = intent.indoorOnly
-        searched_codes = codes
-
-        candidates = await search(searched_codes, prefixes)
-        steps.append(
-            AskStep(
-                tool="category_search",
-                label=_search_label(keywords, prefixes, indoor=indoor_only),
-                badge=_count(candidates),
-            )
-        )
-        if not _locatable(candidates, near=near) and not pinned and scope.widenable:
-            prefixes = scope.sido_prefixes
-            candidates = await search(codes, prefixes)
-            region_widened = scope
-            intent = intent.model_copy(update={"regionHints": list(scope.sido_prefixes)})
-            steps.append(
-                AskStep(
-                    tool="category_search",
-                    label=_widen_label(scope),
-                    badge=_count(candidates),
-                )
-            )
-        if not candidates and indoor_only and codes:
-            searched_codes = []
-            candidates = await search(searched_codes, prefixes)
-            intent = intent.model_copy(update={"categoryKeywords": []})
-            steps.append(
-                AskStep(
-                    tool="category_search",
-                    label=INDOOR_RETRY_LABEL,
-                    badge=_count(candidates),
-                )
-            )
-        if mood_ids and candidates:
-            steps.append(
-                AskStep(tool="mood_search", label="분위기로 추림", badge=_count(candidates))
-            )
+    ask = routes.Ask(
+        session=session,
+        steps=steps,
+        intent=intent,
+        scope=scope,
+        category=category,
+        prefixes=prefixes,
+        keywords=keywords,
+        mood_ids=mood_ids,
+        pinned=pinned,
+        lat=lat,
+        lng=lng,
+        near=near,
+        place_only=place_only,
+        title_only=title_only,
+    )
+    await routes.run_search(ask)
+    intent = ask.intent
+    prefixes = ask.prefixes
+    candidates = ask.candidates
+    axes = ask.axes
+    region_widened = ask.widened
 
     pool = candidates
     if intent.crowdPreference != "any" and retrieve.has_crowd_signal(pool):
         pool = retrieve.filter_by_crowd(pool, intent.crowdPreference)
-        steps.append(AskStep(tool="concentration", label="혼잡도로 추림", badge=_count(pool)))
+        steps.append(AskStep(tool="concentration", label="혼잡도로 추림", badge=count(pool)))
 
     if near and lat is not None and lng is not None and pool:
         pool = retrieve.sort_by_distance(pool, lat=lat, lng=lng)
-        steps.append(AskStep(tool="nearby", label="현재 위치에서 가까운 순", badge=_count(pool)))
+        steps.append(AskStep(tool="nearby", label="현재 위치에서 가까운 순", badge=count(pool)))
 
     merged = _merge(pinned, pool)
     if not merged:
         if near and title_only:
             near_is_a_cause = bool(candidates)
         elif near and not place_only and not candidates:
-            without_near = await search(searched_codes, prefixes, with_near=False)
+            without_near = await ask.search(ask.searched_codes, prefixes, with_near=False)
             near_is_a_cause = bool(without_near)
             if near_is_a_cause:
                 steps.append(
                     AskStep(
                         tool="nearby",
                         label=NEAR_PROBE_LABEL,
-                        badge=_count(without_near),
+                        badge=count(without_near),
                     )
                 )
         return _zero_response(
@@ -1307,7 +1282,7 @@ def food_in_region(
     top = rows[: retrieve.RESULT_LIMIT]
     scanned = [
         *steps,
-        AskStep(tool="category_search", label=f"{where} {noun} 조회", badge=_count(rows)),
+        AskStep(tool="category_search", label=f"{where} {noun} 조회", badge=count(rows)),
     ]
     if not top:
         answer = (
@@ -1481,34 +1456,12 @@ def _keywords(intent: QueryIntent) -> list[str]:
     return list(intent.categoryKeywords)
 
 
-def _locatable(rows: list[CandidateRow], *, near: bool) -> list[CandidateRow]:
-    if not near:
-        return rows
-    return [row for row in rows if row.lat is not None and row.lng is not None]
-
-
-def _widen_label(scope: retrieve.RegionScope) -> str:
-    return f"{scope.narrowed_label} 결과 없음 — {scope.widened_label}로 넓힘"
-
-
 def _widen_sentence(scope: retrieve.RegionScope) -> list[AnswerSegment]:
     return [
         AnswerSegment(text=f"{scope.narrowed_label} 안에서는 찾지 못해 "),
         AnswerSegment(text=scope.widened_label, emphasis=True),
         AnswerSegment(text=" 전체에서 골랐어요."),
     ]
-
-
-def _search_label(keywords: list[str], prefixes: list[str], *, indoor: bool) -> str:
-    if indoor:
-        head = "실내"
-    elif keywords:
-        head = " · ".join(keywords[:2])
-    elif prefixes:
-        head = prefixes[0]
-    else:
-        head = "전국"
-    return f"{head} 관광지 조회"
 
 
 def _merge(pinned: list[CandidateRow], pool: list[CandidateRow]) -> list[CandidateRow]:
@@ -1621,10 +1574,6 @@ def _answer(
             return [*scope, *mix]
         return [*scope, AnswerSegment(text=NARROW_HINT)]
     return [*lead, AnswerSegment(text=" "), *scope]
-
-
-def _count(rows: list[CandidateRow]) -> str:
-    return f"{len(rows)}곳"
 
 
 def _rebadge_last(steps: list[AskStep], tool: str, badge: str) -> None:
