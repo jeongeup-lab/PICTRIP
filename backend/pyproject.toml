@@ -94,12 +94,20 @@ select = [
     "SIM",  # flake8-simplify
     "RUF",  # ruff-specific
     "ASYNC",
+    "D",    # pydocstyle — 형식만. 필수화(D1xx)는 아래에서 전부 끈다
 ]
 ignore = [
     "E501",  # line length handled by formatter
     "B008",  # FastAPI uses Depends() in defaults
     "UP046", # PEP 695 generics — Pydantic v2 convention is still Generic[T]
     "UP047", # PEP 695 generic functions — codebase convention is TypeVar
+    # docstring 은 "왜"에만 단다(CLAUDE.md). 있으면 형식은 지키되, 없다고
+    # 지적하지는 않는다 — 이름을 되풀이하는 docstring 을 대량 생산하게 된다.
+    "D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107",
+    "D203",  # D211(클래스 앞 빈 줄 없음)과 상호배타
+    "D213",  # D212(요약을 첫 줄에)와 상호배타
+    "D401",  # 영문 명령형 강제 — 한글 본문에 무의미
+    "D415",  # 영문 종결부호 강제 — 한글 본문에 무의미
 ]
 
 [tool.ruff.lint.per-file-ignores]

@@ -6,10 +6,11 @@ Contest — 1차 deadline **2026-09-21 16:00 KST**.
 Monorepo with 5 deploy units + docs (`AGENTS.md` is a symlink to this file).
 화면 기준(디자인 SSOT)은 **구현된 앱**(`mobile/src`) — 신규 화면 디자인은
 일회성 핸드오프(html 프로토타입)로 만들고 구현 후 폐기한다(리포에 목업을
-쌓지 않는다). 문서는
-[Diátaxis](https://diataxis.fr) 4분류 — `docs/explanation/`(이해) ·
-`docs/how-to/`(작업) · `docs/reference/`(조회) · `docs/adr/`(결정, 불변) —
-인덱스·작성 규칙은 `docs/README.md`. 현행만 기록하고 히스토리는 ADR+git이 담당.
+쌓지 않는다). 문서는 다섯 개뿐이다 — `README.md`(제품·실행·배포) · 이 파일
+(규칙) · `docs/architecture.md`(구조·데이터·자동화) · `docs/api.md`(호출 계약·
+어드민·CLI) · `docs/decisions.md`(살아 있는 결정). **현행만 적고 히스토리는 git이
+담당한다** — 뒤집힌 결정은 지우고 근거만 새 항목에 흡수한다. 문서를 새로 만들지
+말고 이 다섯 중 하나에 넣는다.
 
 ## Repo layout
 
@@ -21,7 +22,7 @@ Monorepo with 5 deploy units + docs (`AGENTS.md` is a symlink to this file).
 | `pipeline/` | KTO ETL CLI (`pictrip-data`) | CT111 |
 | `workers/img-proxy/` | 이미지 프록시 Worker — `img.pictrip.org` | Cloudflare |
 | `deploy/api-host/` · `deploy/monitoring/` | Ops/IaC | CT112 / CT113 |
-| `docs/` | Diátaxis 문서 (explanation · how-to · reference · adr) | — |
+| `docs/` | architecture · api · decisions 세 문서 | — |
 
 ## Commands
 
@@ -46,9 +47,10 @@ uv run ruff check . && uv run pytest
 ## Stack
 
 - **Backend**: Python 3.12 · FastAPI modular monolith (`app/modules/`: users ·
-  spots · feed · images · map · system · admin · agent) · SQLAlchemy 2.0 async ·
-  PostgreSQL + pgvector · Redis · CLIP ViT-B/32 · Gemini Flash (agent 모듈 의도
-  추출 전용 — 검색은 결정적 SQL/pgvector 툴).
+  spots · feed · images · map · admin · agent) · SQLAlchemy 2.0 async ·
+  PostgreSQL + pgvector · Redis · CLIP ViT-B/32 · LLM(`LLM_PROVIDER`: gemini 기본 ·
+  deepseek · 로컬 codex) — agent 모듈에서 **의도 추출과 답변 작문** 둘 다 맡되
+  검색 자체는 결정적 SQL/pgvector 툴이다.
 - **Mobile**: Expo SDK 56 · RN 0.85 · React 19.2 · TypeScript strict · Expo
   Router (typed routes) · Zustand · TanStack Query · axios · expo-secure-store.
 - **Web**: Cloudflare Pages static (legal · `.well-known` deep-link files ·
@@ -63,15 +65,17 @@ uv run ruff check . && uv run pytest
 ## Architecture
 
 Backend shared packages (layered, import-linter enforced: `modules` >
-`security|kto|ml` > `web` > `core`):
+`security|kto|kakao|naver|ml` > `web` > `core`):
 
 ```
 app/
 ├── core/      infra plumbing only — db · redis · logging · version
 ├── web/       HTTP contract — envelope (ok/err) · errors (AppError+handlers) ·
 │              middleware · ratelimit
-├── security/  jwt (auth deps) · passwords
-├── kto/       client — KTO API client + image-URL helpers
+├── security/  jwt — auth deps
+├── kto/       KTO API client · image-URL helpers · 필드 텍스트 정리
+├── kakao/     Kakao Local API client
+├── naver/     Naver 검색 API client
 ├── ml/        embedding — CLIP
 └── modules/   domain modules (below)
 ```
@@ -82,7 +86,7 @@ Backend module layout (uniform per domain):
 app/modules/<code>/
 ├── routes.py    HTTP I/O only — no DB, no business logic
 ├── services.py  business logic + transaction boundaries
-├── repositories.py  (map · users · images · admin · feed) DB queries; spots keeps
+├── repositories.py  (users · images · admin · feed · agent) DB queries; spots keeps
 │                    its queries in services/ submodules instead
 ├── models.py    SQLAlchemy ORM — no business methods
 └── schemas.py   Pydantic DTOs — no ORM imports
@@ -93,11 +97,17 @@ app/modules/<code>/
 - `admin` is the exception: read-only cross-module aggregates via its own
   `repositories.py`, plus a scoped write to `overseas_spots.is_hidden` only.
 - Shared-package admission rule: only code imported by **2+ modules** goes into
-  `web`/`security`/`kto`/`ml`; `core` is infra plumbing only. Single-consumer
-  code lives inside its module (e.g. `users/oidc.py`, `map/kakao_local.py`).
+  `web`/`security`/`kto`/`kakao`/`naver`/`ml`; `core` is infra plumbing only.
+  Single-consumer code lives inside its module (e.g. `users/oidc.py`,
+  `admin/passwords.py`). 소비자가 둘이 되는 순간 승격한다 — 안 하면 계층 역전이
+  생긴다.
+- `spots` 는 `services` 패키지가 유일한 공개 seam 이다. 다른 모듈이
+  `spots.services.rows`·`.saved` 같은 서브모듈을 직접 import 하는 것은
+  import-linter 계약이 막는다.
 
 Mobile layers: `src/app` (thin Expo Router screens) · `src/features/<domain>`
-(api/queries/stores/usecases/components) · `src/lib` · `src/components` · `src/constants` · `src/hooks`.
+(api/queries/stores/usecases/components/lib/hooks) · `src/lib` · `src/components` ·
+`src/constants`.
 
 Both sets of boundary rules are CI-enforced: backend via import-linter
 (`uv run lint-imports`, contracts in `backend/pyproject.toml`), mobile via
@@ -140,13 +150,15 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
 - Embedding columns are `halfvec(512)` (`spot_embeddings.embedding`,
   `users.taste_vector`). Cast vector literals: `... <=> $1::halfvec(512)`.
 - 연관 관광지(agent `related` 앵커)는 KTO TarRlteTar 가 아니라 `spot_embeddings`
-  이웃 검색이다 (`agent/services/ask.py::_anchor_related_response`). 임베딩이 없는
-  스팟은 `AgentNoResults` 로 실패한다. 구 `rlte:{contentId}` Redis 캐시는 제거됨.
+  이웃 검색이다 (`agent/services/anchor.py`). 임베딩이 없는 스팟은
+  `AgentNoResults` 로 실패한다. 구 `rlte:{contentId}` Redis 캐시는 제거됨.
 - `hnsw.ef_search = 80` is an asyncpg `server_settings` in `app/core/db.py`.
-- Home feed is `GET /feed`: 해외 게시물 커서 페이지네이션 → 스와이프 시
-  `GET /overseas/{id}/matches`로 국내 매칭 3곳. 구 `/home/feed`(히어로+레일)·
-  `/curations/{slug}`·`/taste/photo-search`는 제거 — `curations`/`curation_spots`
-  테이블은 잔존(서빙 표면·ORM 모델 없음; autogenerate에서 `include_object`로 제외).
+- 해외 게시물 피드는 `GET /explore` 하나다(홈·탐색이 같은 문을 쓴다): 커서
+  페이지네이션 → 스와이프 시 `GET /overseas/{id}/matches`로 국내 매칭 3곳.
+  구 `/feed`·`/home/feed`·`/curations/{slug}`·`/taste/photo-search`는 제거됐고
+  `curations`/`curation_spots` 테이블도 리비전 `0026`에서 DROP 했다. 아직 남은
+  은퇴 테이블(`plans`·`travel_shorts`·`travel_shorts_spots`)은 ORM이 없으므로
+  `include_object` 제외가 유일한 보호막이다.
 - `overseas_spots`는 **백엔드 Alembic 소유**, 행 적재는
   `pipeline/` Wikidata ETL. 매칭 캐시는 Redis `match:{revision}:{overseasId}`
   (TTL 6h, `matching:revision`으로 무효화).
@@ -176,9 +188,13 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
 - 네이티브 모듈 추가는 허용한다 — Expo SDK 56 호환 여부를 먼저 확인하고,
   추가하면 OTA 로는 안 나가므로 `app.json` `version` 을 올려 `v*` 빌드로 낸다.
 - **DO NOT add `sync_runs` to backend Alembic** — pipeline owns it.
-- **DO NOT write code comments** — 코드에 주석을 달지 않는다. 의도는 이름·구조로
-  드러내고, 문맥은 커밋 메시지/PR에 남긴다. (shebang·라이선스 헤더 등 도구가 요구하는
-  줄은 예외.)
+- **`#` / `//` 주석 금지** — 의도는 이름·구조로 드러내고, 문맥은 커밋 메시지/PR에
+  남긴다. (shebang·라이선스 헤더, raw SQL 안의 `--`, 설정 파일은 예외.)
+- **docstring 은 "왜"에만 쓴다** — 모듈 최상단 한 줄(이 파일의 책임)과, 이름으로
+  드러나지 않는 결정·실측 근거만. `Args:`/`Returns:`/`Raises:` 섹션 금지 — 타입
+  힌트가 정본이고 mypy strict 가 보증한다. 판정 시험: *"이름을 더 좋게 고치면 이
+  docstring 이 필요 없어지나?"* → 예면 이름을 고치고 docstring 을 지운다.
+  형식은 ruff `D` 가 검사한다(필수화 규칙 D1xx 는 꺼 둔다 — 다는 게 기본이 아니다).
 
 ## Review guidelines
 
