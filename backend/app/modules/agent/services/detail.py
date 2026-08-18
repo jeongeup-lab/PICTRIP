@@ -6,6 +6,7 @@ from app.core.db import AsyncSession
 from app.core.logging import get_logger
 from app.kto.client import KtoClient
 from app.kto.display import t1_display_url
+from app.modules.agent.emitter import begin_step, branch_of
 from app.modules.agent.errors import AgentNoResults
 from app.modules.agent.schemas import (
     AgentSpotCard,
@@ -152,6 +153,7 @@ async def answer_about_spot(
     steps: list[AskStep],
 ) -> AskResponse:
     fields = _asked(intent)
+    begin_step(steps, "spot_detail", "상세 조회")
     try:
         row = await load_spot_detail(
             session,
@@ -173,7 +175,9 @@ async def answer_about_spot(
             if index:
                 answer.append(AnswerSegment(text=" "))
             answer.extend(_sentence(row, field))
-    steps = [*steps, AskStep(tool="spot_detail", label=f"{row.title} 상세 조회", badge="KTO")]
+    carried = branch_of(steps, steps)
+    carried.append(AskStep(tool="spot_detail", label=f"{row.title} 상세 조회", badge="KTO"))
+    steps = carried
     logger.info(
         "agent.detail.done",
         fields=len(fields),

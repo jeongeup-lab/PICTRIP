@@ -4,6 +4,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 from app.core.db import AsyncSession
+from app.modules.agent.emitter import Steps
 from app.modules.agent.errors import AgentNoResults
 from app.modules.agent.repositories import CandidateRow
 from app.modules.agent.schemas import AskStep, DropAxis, QueryIntent
@@ -48,7 +49,7 @@ class Ask:
     """
 
     session: AsyncSession
-    steps: list[AskStep]
+    steps: Steps
     intent: QueryIntent
     scope: retrieve.RegionScope
     category: retrieve.CategoryScope
@@ -123,6 +124,7 @@ async def _only_the_named_place(ask: Ask) -> None:
 
 async def _by_title(ask: Ask) -> None:
     ask.axes = TITLE_AXES
+    ask.steps.begin("title_search", f"{ask.keywords[0]} 이름으로 조회")
     ask.candidates = await retrieve.search_by_title(
         ask.session, ask.keywords, region_prefixes=ask.prefixes
     )
@@ -136,6 +138,7 @@ async def _by_title(ask: Ask) -> None:
     if not ask.needs_a_wider_region:
         return
     ask.widen()
+    ask.steps.begin("title_search", widen_label(ask.scope))
     ask.candidates = await retrieve.search_by_title(
         ask.session, ask.keywords, region_prefixes=ask.prefixes
     )
@@ -145,6 +148,10 @@ async def _by_title(ask: Ask) -> None:
 
 
 async def _by_category(ask: Ask) -> None:
+    ask.steps.begin(
+        "category_search",
+        search_label(ask.keywords, ask.prefixes, indoor=ask.intent.indoorOnly),
+    )
     ask.candidates = await ask.search(ask.searched_codes, ask.prefixes)
     ask.steps.append(
         AskStep(
@@ -156,6 +163,7 @@ async def _by_category(ask: Ask) -> None:
     if ask.needs_a_wider_region:
         widened_codes = ask.codes
         ask.widen()
+        ask.steps.begin("category_search", widen_label(ask.scope))
         ask.candidates = await ask.search(widened_codes, ask.prefixes)
         ask.steps.append(
             AskStep(
@@ -166,6 +174,7 @@ async def _by_category(ask: Ask) -> None:
         )
     if not ask.candidates and ask.intent.indoorOnly and ask.codes:
         ask.searched_codes = []
+        ask.steps.begin("category_search", INDOOR_RETRY_LABEL)
         ask.candidates = await ask.search(ask.searched_codes, ask.prefixes)
         ask.intent = ask.intent.model_copy(update={"categoryKeywords": []})
         ask.steps.append(

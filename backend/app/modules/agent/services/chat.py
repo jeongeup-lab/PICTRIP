@@ -15,6 +15,7 @@ from app.core.logging import get_logger, get_trace_id
 from app.kto.client import KtoClient
 from app.modules.agent import llm, naver
 from app.modules.agent import outcome as outcome_service
+from app.modules.agent.emitter import Emitter
 from app.modules.agent.errors import AgentWriterUnavailable
 from app.modules.agent.schemas import (
     AgentSpotCard,
@@ -82,18 +83,38 @@ async def events(
     image_bytes: bytes | None,
     image_mime: str | None,
 ) -> AsyncIterator[tuple[str, BaseModel]]:
-    try:
-        result = await ask_service.ask(
+    emitter = Emitter()
+    searching = asyncio.create_task(
+        _search(
             session,
             redis,
             kto,
-            question=payload.message,
-            lat=payload.lat,
-            lng=payload.lng,
+            payload=payload,
             image_bytes=image_bytes,
             image_mime=image_mime,
-            context=payload.context,
+            emitter=emitter,
         )
+    )
+    streamed = 0
+    try:
+        async for signal in emitter.drain():
+            if signal.status == "done":
+                streamed = max(streamed, signal.index + 1)
+            yield (
+                "step",
+                ChatStepEvent(
+                    index=signal.index,
+                    label=signal.label,
+                    badge=signal.badge,
+                    status=signal.status,
+                ),
+            )
+    except BaseException:
+        searching.cancel()
+        raise
+
+    try:
+        result = await searching
     except AppError as exc:
         logger.info("agent.chat.ask_failed", code=exc.code)
         refusal = outcome_service.classify_error(exc, blank_answer=ask_service.BLANK_ANSWER)
@@ -104,7 +125,8 @@ async def events(
     outcome = outcome_service.classify(result)
     logger.info("agent.chat.outcome", kind=type(outcome).__name__, results=len(result.spots))
 
-    for index, step in enumerate(result.steps):
+    for index in range(streamed, len(result.steps)):
+        step = result.steps[index]
         yield "step", ChatStepEvent(index=index, label=step.label, status="run")
         yield "step", ChatStepEvent(index=index, label=step.label, badge=step.badge, status="done")
 
@@ -332,3 +354,31 @@ def _sources(posts: list[naver.NaverBlogPost]) -> list[SourceItem]:
 
 def _llm_is_down(result: AskResponse) -> bool:
     return any(step.badge == ask_service.INTENT_FALLBACK_BADGE for step in result.steps)
+
+
+async def _search(
+    session: AsyncSession,
+    redis: Redis,
+    kto: KtoClient | None,
+    *,
+    payload: ChatRequest,
+    image_bytes: bytes | None,
+    image_mime: str | None,
+    emitter: Emitter,
+) -> AskResponse:
+    """검색을 돌리고, 어떻게 끝나든 스텝 스트림을 닫는다."""
+    try:
+        return await ask_service.ask(
+            session,
+            redis,
+            kto,
+            question=payload.message,
+            lat=payload.lat,
+            lng=payload.lng,
+            image_bytes=image_bytes,
+            image_mime=image_mime,
+            context=payload.context,
+            emitter=emitter,
+        )
+    finally:
+        emitter.close()
