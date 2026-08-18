@@ -10,6 +10,7 @@ from app.core.logging import get_logger
 from app.kto.client import KtoClient
 from app.kto.display import T1_TILE_WIDTH, t1_display_url
 from app.modules.agent import repositories
+from app.modules.agent.emitter import Emitter, Steps, begin_step, branch_of
 from app.modules.agent.errors import (
     AgentFestivalUnavailable,
     AgentNoResults,
@@ -129,12 +130,13 @@ async def ask(
     context: AskContext | None = None,
     pre_ota_region_prefixes: list[str] | None = None,
     legacy_client: bool = False,
+    emitter: Emitter | None = None,
 ) -> AskResponse:
     cleaned = (question or "").strip()
     if anchor is not None:
         if image_bytes is not None:
             raise ValidationFailed("anchor cannot be combined with photo")
-        return await _ask_with_anchor(session, anchor, lat=lat, lng=lng)
+        return await _ask_with_anchor(session, anchor, lat=lat, lng=lng, emitter=emitter)
     if image_bytes is not None:
         return await _ask_with_photo(
             session,
@@ -147,6 +149,7 @@ async def ask(
             patch=patch,
             pre_ota_region_prefixes=pre_ota_region_prefixes or [],
             legacy_client=legacy_client,
+            emitter=emitter,
         )
     if not cleaned and intent is None:
         raise ValidationFailed("question, photo or intent is required")
@@ -162,6 +165,7 @@ async def ask(
         context=context,
         pre_ota_region_prefixes=pre_ota_region_prefixes or [],
         legacy_client=legacy_client,
+        emitter=emitter,
     )
 
 
@@ -177,8 +181,9 @@ async def _ask_with_photo(
     patch: RefinePatch | None,
     pre_ota_region_prefixes: list[str],
     legacy_client: bool,
+    emitter: Emitter | None = None,
 ) -> AskResponse:
-    steps: list[AskStep] = []
+    steps = Steps(emitter=emitter)
     intent_task = (
         asyncio.create_task(intent_service.extract_intent(question))
         if question and intent is None
@@ -339,6 +344,7 @@ async def _ask_with_anchor(
     prior_steps: list[AskStep] | None = None,
     carried_intent: QueryIntent | None = None,
     title_terms: list[str] | None = None,
+    emitter: Emitter | None = None,
 ) -> AskResponse:
     row: CandidateRow | None = None
     if anchor.contentId is not None:
@@ -386,7 +392,9 @@ async def _ask_with_anchor(
     rated = await repositories.load_candidates_by_ids(session, [n.content_id for n in kept])
     spots = [_anchor_card(near, has_crowd=_has_crowd(rated.get(near.content_id))) for near in kept]
     await _fill_missing_card_images(session, spots)
-    steps = [*(prior_steps or [])]
+    steps = branch_of(prior_steps or [], prior_steps or [])
+    if steps.emitter is None:
+        steps.emitter = emitter
     steps.append(
         AskStep(tool="nearby", label=f"{origin} 주변 {noun} 조회", badge=f"{len(spots)}곳")
     )
@@ -674,12 +682,15 @@ async def _ask_with_question(
     context: AskContext | None,
     pre_ota_region_prefixes: list[str],
     legacy_client: bool,
+    emitter: Emitter | None = None,
 ) -> AskResponse:
-    steps: list[AskStep] = []
+    steps = Steps(emitter=emitter)
     if intent is not None:
         intent = refine_service.apply_patch(intent, patch)
     else:
         prior, prior_spots = _prior(context)
+        label = CONTEXT_INTENT_LABEL if prior or prior_spots else "질문에서 지역·조건 추출"
+        steps.begin("intent", label)
         outcome = await intent_service.resolve_intent(
             question, prior=prior, prior_spots=prior_spots
         )
@@ -689,7 +700,7 @@ async def _ask_with_question(
         steps.append(
             AskStep(
                 tool="intent",
-                label=CONTEXT_INTENT_LABEL if prior or prior_spots else "질문에서 지역·조건 추출",
+                label=label,
                 badge=INTENT_FALLBACK_BADGE if outcome.fallback else INTENT_MODEL_BADGE,
             )
         )
@@ -1167,6 +1178,7 @@ async def _top_up_with_kakao(
     """
     kind: PlaceKind = "cafe" if action == "cafe" else "restaurant"
     coords = (lat, lng) if near and lat is not None and lng is not None else None
+    begin_step(steps, "nearby", KAKAO_TOPUP_LABEL)
     cards = await places_service.search(
         session,
         kind=kind,
@@ -1345,6 +1357,7 @@ async def _ask_festivals(
 ) -> AskResponse:
     if kto is None:
         raise AgentNoResults()
+    begin_step(steps, "festival", "오늘 열리는 축제 조회")
     try:
         pool = await feed_services.load_festival_pool(
             redis, kto, fetch_timeout=FESTIVAL_FETCH_BUDGET_SECONDS
