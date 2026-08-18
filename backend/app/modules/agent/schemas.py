@@ -27,6 +27,7 @@ MAX_DETAIL_FIELDS = 6
 MAX_MESSAGE_CHARS = 500
 MAX_HISTORY_ITEMS = 8
 MAX_HISTORY_SPOT_IDS = 8
+MAX_CARD_CHIPS = 3
 MAX_SUB_QUESTIONS = 3
 
 IntentText = Annotated[str, StringConstraints(max_length=MAX_TEXT_CHARS)]
@@ -171,6 +172,8 @@ class ChatRequest(BaseModel):
     lng: float | None = Field(None, ge=-180.0, le=180.0)
     clientTime: datetime | None = None
     context: AskContext | None = None
+    intent: QueryIntent | None = None
+    patch: RefinePatch | None = None
     history: list[ChatHistoryItem] = Field(default_factory=list, max_length=MAX_HISTORY_ITEMS)
 
 
@@ -208,6 +211,7 @@ class AgentSpotCard(BaseModel):
     lat: float | None = None
     lng: float | None = None
     categoryGroup: str | None = None
+    chips: list[str] = Field(default_factory=list, max_length=MAX_CARD_CHIPS)
     hasCrowd: bool = False
     source: CardSource = "kto"
     externalUrl: str | None = None
@@ -247,6 +251,8 @@ class ChatDeltaEvent(BaseModel):
 class ChatCardsEvent(BaseModel):
     spots: list[AgentSpotCard]
     tagBasis: str | None = None
+    applied: list[str] = Field(default_factory=list)
+    refinements: list[Suggestion] = Field(default_factory=list)
 
 
 class ChatSourcesEvent(BaseModel):
@@ -259,6 +265,8 @@ class ChatDoneEvent(BaseModel):
     sources: list[SourceItem]
     intent: QueryIntent
     totalCount: int
+    applied: list[str] = Field(default_factory=list)
+    refinements: list[Suggestion] = Field(default_factory=list)
     traceId: str | None = None
 
 

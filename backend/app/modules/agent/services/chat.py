@@ -30,7 +30,9 @@ from app.modules.agent.schemas import (
     QueryIntent,
     SourceItem,
 )
+from app.modules.agent.services import answer as writer_answer
 from app.modules.agent.services import ask as ask_service
+from app.modules.agent.services import suggest as suggest_service
 from app.modules.agent.services import writer
 from app.web.errors import AppError
 
@@ -130,8 +132,17 @@ async def events(
         yield "step", ChatStepEvent(index=index, label=step.label, status="run")
         yield "step", ChatStepEvent(index=index, label=step.label, badge=step.badge, status="done")
 
+    applied = writer_answer.applied_conditions(result.intent, axes=suggest_service.ALL_AXES)
     if result.spots:
-        yield "cards", ChatCardsEvent(spots=result.spots, tagBasis=result.tagBasis)
+        yield (
+            "cards",
+            ChatCardsEvent(
+                spots=result.spots,
+                tagBasis=result.tagBasis,
+                applied=applied,
+                refinements=result.refinements,
+            ),
+        )
 
     if isinstance(outcome, (outcome_service.Smalltalk, outcome_service.OutOfScope)):
         async for event in _canned(
@@ -162,6 +173,8 @@ async def events(
                 sources=sources,
                 intent=result.intent,
                 totalCount=result.totalCount,
+                applied=applied,
+                refinements=result.refinements,
                 traceId=get_trace_id(),
             ),
         )
@@ -225,6 +238,8 @@ async def events(
             sources=sources,
             intent=result.intent,
             totalCount=result.totalCount,
+            applied=applied,
+            refinements=result.refinements,
             traceId=get_trace_id(),
         ),
     )
@@ -378,6 +393,8 @@ async def _search(
             image_bytes=image_bytes,
             image_mime=image_mime,
             context=payload.context,
+            intent=payload.intent,
+            patch=payload.patch,
             emitter=emitter,
         )
     finally:

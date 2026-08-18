@@ -1,12 +1,15 @@
 import { create } from "zustand";
 import type {
   AskContext,
+  ChatCardsEvent,
   ChatDoneEvent,
   ChatHistoryItem,
   ChatStepEvent,
   PhotoUpload,
   QueryIntent,
+  RefinePatch,
   SourceItem,
+  Suggestion,
   TravelSpot,
 } from "@/features/travel/api";
 
@@ -23,6 +26,8 @@ export interface ChatRequestSeed {
   message: string | null;
   photo: PhotoUpload | null;
   context: AskContext | null;
+  intent: QueryIntent | null;
+  patch: RefinePatch | null;
   history: ChatHistoryItem[];
 }
 
@@ -36,6 +41,8 @@ export interface ChatTurn {
   text: string;
   spots: TravelSpot[];
   tagBasis: string | null;
+  applied: string[];
+  refinements: Suggestion[];
   sources: SourceItem[];
   intent: QueryIntent | null;
   errorCode: string | null;
@@ -80,7 +87,7 @@ interface ChatState {
   }) => void;
   applyStep: (id: string, step: ChatStepEvent) => void;
   appendDelta: (id: string, text: string) => void;
-  setCards: (id: string, spots: TravelSpot[], tagBasis: string | null) => void;
+  setCards: (id: string, event: ChatCardsEvent) => void;
   setSources: (id: string, sources: SourceItem[]) => void;
   finish: (id: string, done: ChatDoneEvent) => void;
   fail: (id: string, errorCode: string) => void;
@@ -90,7 +97,16 @@ interface ChatState {
 
 function freshBody(): Pick<
   ChatTurn,
-  "status" | "steps" | "text" | "spots" | "tagBasis" | "sources" | "intent" | "errorCode"
+  | "status"
+  | "steps"
+  | "text"
+  | "spots"
+  | "tagBasis"
+  | "applied"
+  | "refinements"
+  | "sources"
+  | "intent"
+  | "errorCode"
 > {
   return {
     status: "streaming",
@@ -98,6 +114,8 @@ function freshBody(): Pick<
     text: "",
     spots: [],
     tagBasis: null,
+    applied: [],
+    refinements: [],
     sources: [],
     intent: null,
     errorCode: null,
@@ -156,8 +174,19 @@ export const useChat = create<ChatState>((set, get) => ({
           }
         : s,
     ),
-  setCards: (id, spots, tagBasis) =>
-    set((s) => (s.activeId === id ? { turns: patchTurn(s.turns, id, { spots, tagBasis }) } : s)),
+  setCards: (id, event) =>
+    set((s) =>
+      s.activeId === id
+        ? {
+            turns: patchTurn(s.turns, id, {
+              spots: event.spots,
+              tagBasis: event.tagBasis ?? null,
+              applied: event.applied ?? [],
+              refinements: event.refinements ?? [],
+            }),
+          }
+        : s,
+    ),
   setSources: (id, sources) =>
     set((s) => (s.activeId === id ? { turns: patchTurn(s.turns, id, { sources }) } : s)),
   finish: (id, done) =>
@@ -175,6 +204,8 @@ export const useChat = create<ChatState>((set, get) => ({
                     spots: done.spots,
                     sources: done.sources,
                     intent: done.intent,
+                    applied: done.applied ?? turn.applied,
+                    refinements: done.refinements ?? turn.refinements,
                     steps: turn.steps.map((step) => ({ ...step, status: "done" })),
                   }
                 : turn,
