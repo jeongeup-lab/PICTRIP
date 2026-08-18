@@ -282,11 +282,14 @@ async def _ask_with_question(
     region = await region_service.resolve(
         session, redis, intent=intent, context=context, lat=lat, lng=lng
     )
-    if region.guessed:
+    if not intent.regionHints and region.hints:
         intent = intent.model_copy(update={"regionHints": list(region.hints)})
-        steps.append(
-            AskStep(tool="intent", label=GUESSED_REGION_LABEL, badge=region.label or "현재 위치")
-        )
+        if region.guessed:
+            steps.append(
+                AskStep(
+                    tool="intent", label=GUESSED_REGION_LABEL, badge=region.label or "현재 위치"
+                )
+            )
     scene = scene_service.detect(question, list(intent.categoryKeywords))
     if scene is None and _asks_for_nothing(intent, prefixes=pre_ota_region_prefixes):
         sentence = NO_AXIS_ANSWER if question.strip() else BLANK_ANSWER
