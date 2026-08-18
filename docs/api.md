@@ -1,7 +1,8 @@
 # API 레퍼런스
 
-> 공개 API(`/v1`)와 에러 코드의 조회용 표. 라우트 정본은
-> `backend/app/modules/*/routes.py`, 자동 문서는 `/v1/docs`.
+> 공개 API(`/v1`) · 에러 코드 · 어드민 콘솔 · 운영 CLI 의 조회용 표.
+> 라우트 정본은 `backend/app/modules/*/routes.py`, 자동 문서는 `/v1/docs`.
+> 시스템 구조는 [architecture](architecture.md), 결정 배경은 [decisions](decisions.md).
 
 모든 응답은 JSend `{data, error, meta}`. 인증 열이 비면 게스트 가능.
 
@@ -18,8 +19,7 @@
 | GET | `/users/me/saved` | 저장 목록 (커서) | JWT |
 | POST / DELETE | `/users/me/saved/{contentId}` | 저장/해제 (멱등) | JWT |
 | GET | `/spots/{contentId}` | 스팟 상세 (KTO lazy fetch, 7일 캐시) | — |
-| GET | `/feed` | 홈 피드 — 해외 게시물 (seed+cursor, 6개) | — |
-| GET | `/explore` | 탐색 그리드 (동일 소스, 30개) | — |
+| GET | `/explore` | 해외 게시물 피드·그리드 (seed+cursor, 기본 30개) — 홈·탐색이 같은 문을 쓴다 | — |
 | GET | `/overseas/{id}/matches` | 해외→국내 매칭 3곳 | — |
 | GET | `/home/nearby` | 지금 주변 인기 장소 — 5km 내 혼잡도 랭킹 10곳 (lat/lng 필수) | — |
 | GET | `/home/trending` | 전국 트렌드 — 혼잡도 상위 10곳 | — |
@@ -28,12 +28,11 @@
 | GET | `/home/channels` | 채널 메타 (가용성 포함) | — |
 | GET | `/home/channels/{key}` | 채널 카드 (`hidden`·`festa`·`pets`·`snap`) | — |
 | POST | `/agent/chat` | 여행 탭 대화 — SSE 스트리밍, LLM 산문 + 카드 + 출처 (아래) | — |
-| POST | `/agent/ask` | 구 여행 탭 질의 — 단일 JSON 응답. **구 OTA 클라이언트 전용, OTA 완료 시 폐기** (아래) | — |
+| POST | `/agent/ask` | 단일 JSON 응답. **앱은 쓰지 않는다** — 골든셋 하네스(190케이스)의 진입점 (아래) | — |
+| GET | `/agent/mood-images` | 분위기별 대표 사진. **소비처 0** — 앱이 분위기 타일을 걷어낸 뒤 남았다 (폐기 대기) | — |
 | GET | `/map/nearby` | 내 주변 (bbox+카테고리, ≤30) | — |
 | GET | `/map/region` | 좌표→행정구역 라벨 (fail-open null) | — |
-| GET | `/map/regions-tree` | 시도·시군구 트리 (centroid 포함, 24h 캐시) | — |
-| GET | `/meta/version` | 버전·환경·ktoApiStatus | — |
-| GET | `/health` *(루트, /v1 밖)* | liveness | — |
+| GET | `/health` *(루트, /v1 밖)* | liveness + `apiVersion`·`environment` | — |
 
 `GET /spots/{contentId}`는 `X-PicTrip-Detail-Mode: deferred-v1` 요청에 한해 캐시가
 없을 때 기본 관광지 정보와
@@ -484,31 +483,103 @@ TTL 48h이며 **신선도는 TTL이 아니라 저장된 날짜로 판정한다**
 
 ## 에러 코드
 
-정본 `app/web/errors.py` — union은 `mobile/src/lib/app-error.ts`와 동기.
-**새 코드는 양쪽을 함께 갱신한다.**
+정본은 `app/web/errors.py` + `app/modules/agent/errors.py` — union 은
+`mobile/src/lib/app-error.ts` 와 동기다. **새 코드는 양쪽을 함께 갱신한다.**
+표에는 실제로 raise 되는 코드만 싣는다 — 안 던지는 클래스는 계약이 아니라 잔여물이다.
 
 | code | HTTP | 용도 |
 |---|---|---|
 | `VALIDATION_FAILED` | 422 | 요청 형식 부적합 |
 | `AUTH_TOKEN_INVALID` / `AUTH_TOKEN_EXPIRED` | 401 | 무효/만료 (만료는 모바일 silent refresh 트리거) |
-| `GUEST_FORBIDDEN` | 403 | 게스트 불가 → 로그인 시트 |
-| `PERMISSION_DENIED` | 403 | 권한 없음 |
 | `RESOURCE_NOT_FOUND` | 404 | 리소스 없음 |
-| `DUPLICATE_RESOURCE` | 409 | 중복 |
-| `EMAIL_TAKEN` | 409 | 가입된 이메일 |
-| `AUTH_INVALID_CREDENTIALS` | 401 | 이메일/비번 불일치 |
 | `AUTH_SESSION_REVOKED` | 401 | 폐기된 세션 — 재로그인 |
 | `IMAGE_INVALID` | 422 | 미지원 이미지 |
 | `RATE_LIMITED` | 429 | 요청 과다 |
-| `LBS_CONSENT_REQUIRED` | 403 | 위치 동의 필요 |
 | `KTO_API_UNAVAILABLE` | 502 | KTO 무응답 → 부분 degrade |
 | `OAUTH_PROVIDER_UNAVAILABLE` / `OAUTH_ID_TOKEN_INVALID` | 502 / 401 | 소셜 공급자 장애 / id_token 무효 |
-| `SESSION_STORE_UNAVAILABLE` | 503 | 세션 저장소 일시 장애 |
 | `ADMIN_UNAUTHORIZED` · `ADMIN_HISTORY_NOT_FOUND` · `ADMIN_TRIGGER_FAILED` · `ADMIN_VALIDATION` | 401·404·502·422 | 어드민 전용 |
 | `AGENT_INTENT_UNAVAILABLE` | 502 | Gemini Flash 무응답 → 재시도 칩 |
 | `AGENT_NO_RESULTS` | 422 | 지목한 장소를 못 찾음 · 앵커 반경에 아무것도 없음 · 축제 0건. **조건 때문에 0곳인 경우는 에러가 아니라 200이다** |
 | `AGENT_OUT_OF_SCOPE` | 422 | 해외 여행지 질의 → 국내만 가능 안내 |
+| `AGENT_FESTIVAL_UNAVAILABLE` | 502 | KTO `searchFestival2` 무응답 |
+| `AGENT_WRITER_UNAVAILABLE` | 502 | 라이터 LLM 무응답 → 결정적 답변으로 대체 |
 | `INTERNAL_ERROR` | 500 | 미분류 기본값 |
 
----
-관련: [architecture](../explanation/architecture.md) · [database-schema](database-schema.md) · [glossary](../explanation/glossary.md)
+## 어드민 콘솔 (`/admin`)
+
+> 운영자용 내부 콘솔(`https://api.pictrip.org/admin`)의 화면·인증·구성 조회용.
+
+read-only 집계 + 해외 게시물 숨김 토글만 — 회원 관리·콘텐츠 편집은 비목표.
+
+### 구성
+
+| 조각 | 위치 | 비고 |
+|---|---|---|
+| 코드 | `backend/app/modules/admin/` | `/admin` 페이지 + `/admin/api/*` JSON |
+| UI | `backend/app/modules/admin/static/` | HTML/CSS/JS 유일본(SSOT) — 여기서 직접 편집 |
+
+### 화면
+
+| 페이지 | 내용 |
+|---|---|
+| `/admin` | 운영 개요 — 총 스팟·최근 수집·임베딩 커버리지(+재임베딩 트리거) |
+| `/admin/history` | 수집 이력 롤업 (일 단위, 최근 N일) |
+| `/admin/health` | api·db·터널·가입자 컴포넌트 상태 (DB 다운 시에도 500 대신 degrade) |
+| `/admin/overseas` | 해외 게시물 목록·검색 + `is_hidden` 토글 (유일한 쓰기) |
+
+### 인증·보안
+
+- **DB-backed**: `admin_users` 테이블(bcrypt) — env 아님. 베이스라인 마이그레이션이
+  `admin`/`admin`을 시드하므로 **배포 후 즉시 로테이션**:
+  `python -m scripts.set_admin_password --username admin` (CT110 DB 쓰기만 필요).
+- `/admin/login` 5회/분/IP 레이트리밋. 세션 = 서명 쿠키
+  (`ADMIN_SESSION_SECRET`, 로테이션 시 전 세션 무효).
+- `/admin/assets`는 비인증 공개 마운트 — 민감 정보 절대 금지.
+
+### 보류
+
+- 수집 즉시 실행 버튼 — `pipeline-daily.yml` 을 `workflow_dispatch` 로 킥한다.
+  `GITHUB_DISPATCH_TOKEN`(actions:write)만 CT112 `.env` 에 있으면 동작한다;
+  없으면 "구성되지 않았습니다"로 거절.
+  조건·근거는 [crons-and-workflows](crons-and-workflows.md) 참조.
+
+## CLI·스크립트
+
+> 수동 실행 가능한 명령의 조회용 표. backend 스크립트는 **라이브 api 컨테이너
+> exec**가 기본이다(새 컨테이너 금지 — 이미지·`.env`·DB 라우트를 이미 가짐).
+
+### backend scripts (`python -m scripts.<name>`)
+
+| 명령 | 용도 | 언제 |
+|---|---|---|
+| `set_admin_password --username admin` | `admin_users` 암호 upsert (대화형은 히스토리 미기록, `ADMIN_NEW_PASSWORD` env 비대화형) | 시드 기본 교체·로테이션 |
+| `warm_channels` | festa/pets/snap 채널 캐시 예열 (fail-soft) | 크론 + `deploy.sh` 자동 |
+| `check_data_freshness [--warn-only]` | 적재가 멈췄는데 잡은 success 를 찍는 상태 탐지 — stale 이면 exit 1 | `pipeline-daily` 자동 |
+| `sync_concentration [--limit] [--dry-run]` | 집중률 idempotent 적재 | 일일 크론; 심사 전 수동 갱신 |
+| `backfill_embeddings [--limit] [--only-failed --failure-reason source_changed] [--dry-run]` | 대표사진 CLIP 백필 (resumable) | `pipeline-daily`(신규) · `pipeline-weekly`(복구) 자동 |
+| `backfill_gallery_embeddings [--limit] [--dry-run]` | 갤러리 centroid 백필 | 일일 크론 (800/일) |
+| `embed_overseas [--limit]` | 해외 임베딩 백필 | `pipeline-monthly` 자동 |
+| `backfill_nicknames [--dry-run]` | NULL name 계정 닉네임 백필 (일회성) | 완료됨 |
+
+### pipeline CLI (`uv run pictrip-data <cmd>`, CT111)
+
+| 명령 | 용도 | 언제 |
+|---|---|---|
+| `sync-daily` | KTO → `spots` 증분 (watermark upsert + soft-delete) | 04:00 KST 타이머 |
+| `sync-full` | 필터 없는 전체 재조정 (쿼터 인지) | 수동, 주간 규모 |
+| `validate-images [--dry-run] [--limit]` | `first_image_url` 생존 프로브 → 교체/NULL | 주간 크론 |
+| `sync-overseas [--limit] [--country] [--dry-run]` | Wikidata+Commons → `overseas_spots` | 월간 크론 |
+| `backfill-overseas-descriptions [--dry-run]` | 빈 `description_ko` ← ko.wikipedia intro | `sync-overseas` 가 자동 수행; 수동 재실행용 |
+| `load-codes` | 지역·분류 마스터 로드 | 부트스트랩 |
+
+수집 이력(`sync_runs`) 조회는 어드민 콘솔 `/admin/history`.
+(:8501, tailnet 전용).
+
+### 자주 쓰는 원격 진입
+
+| 대상 | 명령 |
+|---|---|
+| pve 호스트 | `ssh root@100.83.101.1` |
+| 프로드 DB (read-only) | `pct exec 110 -- docker exec -it pictrip-postgres psql -U pictrip pictrip` |
+| api 컨테이너 셸 | `pct exec 112 -- docker exec -it <api-host-api-1> sh` |
+| 디스크 풀 복구 | `pct exec 112 -- docker builder prune -af && docker image prune -af` |

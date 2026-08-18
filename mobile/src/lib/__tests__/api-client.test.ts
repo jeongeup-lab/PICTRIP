@@ -3,7 +3,7 @@ import { AppError } from "@/lib/app-error";
 
 describe("query retry predicate", () => {
   it("does not retry 4xx AppErrors", () => {
-    expect(isAppError4xx(new AppError("GUEST_FORBIDDEN", "x", 403))).toBe(true);
+    expect(isAppError4xx(new AppError("RESOURCE_NOT_FOUND", "x", 403))).toBe(true);
   });
   it("allows retry for 5xx", () => {
     expect(isAppError4xx(new AppError("INTERNAL_ERROR", "x", 500))).toBe(false);

@@ -35,13 +35,17 @@ deploy/api-host/.deploy.env
 .superpowers/
 **/.superpowers/
 
-# --- agent 작업 산출물 (핸드오프·프로토타입, 로컬 전용) ---
+# --- agent 작업 산출물 (핸드오프·프로토타입·세션 스크래치, 로컬 전용) ---
 docs/plans/
+docs/superpowers/
 .playwright-mcp/
 
 # --- 도구 작업 디렉터리 (로컬 전용) ---
 .omo/
 .worktrees/
+
+# --- 소개 페이지 스크린샷 원본 (web/about 은 참조하지 않는다) ---
+web/assets/
 
 # --- 브라우저 자동화 캡처 (스토어 심사·소개 페이지 작업 흔적, 로컬 전용) ---
 /asc-*.png
