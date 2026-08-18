@@ -222,3 +222,44 @@ describe("SpotCard", () => {
     expect(onSaveToggle).not.toHaveBeenCalled();
   });
 });
+
+describe("SpotCard 카카오 전용 카드", () => {
+  const external: TravelSpot = {
+    ...spot,
+    contentId: "kakao:24350794",
+    title: "사유",
+    regionLabel: "광진구 군자동",
+    source: "kakao",
+    imageUrl: null,
+    saveable: false,
+    externalUrl: "http://place.map.kakao.com/24350794",
+    distanceM: 240,
+    tag: "블로그 4곳",
+  };
+
+  it("저장할 수 없는 곳에는 북마크를 세우지 않는다", () => {
+    const tree = mount({ spot: external });
+
+    expect(
+      tree.root.findAllByProps({ testID: `travel-card-save-${external.contentId}` }),
+    ).toHaveLength(0);
+  });
+
+  it("상세보기 대신 카카오맵으로 안내한다", () => {
+    expect(texts(mount({ spot: external }))).toContain("카카오맵");
+    expect(texts(mount({ spot: external }))).not.toContain("상세보기");
+  });
+
+  it("사진이 없어도 거리로 자리를 채운다", () => {
+    expect(texts(mount({ spot: external, distanceKm: null }))).toContain("240m");
+  });
+
+  it("저장 가능한 곳은 예전 그대로 북마크와 상세보기를 세운다", () => {
+    const tree = mount();
+
+    expect(
+      tree.root.findAllByProps({ testID: `travel-card-save-${spot.contentId}` }).length,
+    ).toBeGreaterThan(0);
+    expect(texts(tree)).toContain("상세보기");
+  });
+});

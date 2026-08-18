@@ -193,6 +193,9 @@ class AnswerSegment(BaseModel):
     emphasis: bool = False
 
 
+CardSource = Literal["kto", "kakao"]
+
+
 class AgentSpotCard(BaseModel):
     contentId: str
     title: str
@@ -204,6 +207,11 @@ class AgentSpotCard(BaseModel):
     lng: float | None = None
     categoryGroup: str | None = None
     hasCrowd: bool = False
+    source: CardSource = "kto"
+    externalUrl: str | None = None
+    phone: str | None = None
+    distanceM: int | None = None
+    saveable: bool = True
 
 
 class AskResponse(BaseModel):

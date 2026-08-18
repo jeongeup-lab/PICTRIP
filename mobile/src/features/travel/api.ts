@@ -74,6 +74,11 @@ export interface TravelSpot {
   lng: number | null;
   categoryGroup?: string | null;
   hasCrowd?: boolean;
+  source?: "kto" | "kakao";
+  externalUrl?: string | null;
+  phone?: string | null;
+  distanceM?: number | null;
+  saveable?: boolean;
 }
 
 export interface AgentAnswer {

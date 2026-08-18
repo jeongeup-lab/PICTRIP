@@ -15,6 +15,7 @@ from app.modules.agent.errors import (
     AgentNoResults,
     AgentOutOfScope,
 )
+from app.modules.agent.kakao_places import PlaceKind
 from app.modules.agent.repositories import CandidateRow, VectorMatchRow
 from app.modules.agent.schemas import (
     MAX_HINT_TOKENS,
@@ -35,6 +36,7 @@ from app.modules.agent.services import detail as detail_service
 from app.modules.agent.services import geocode as geocode_service
 from app.modules.agent.services import intent as intent_service
 from app.modules.agent.services import photo as photo_service
+from app.modules.agent.services import places as places_service
 from app.modules.agent.services import refine as refine_service
 from app.modules.agent.services import region as region_service
 from app.modules.agent.services import resolve as resolve_service
@@ -68,6 +70,9 @@ CONTEXT_INTENT_LABEL = "앞 대화까지 보고 조건 추출"
 INTENT_FALLBACK_BADGE = "사전 매칭"
 INTENT_MODEL_BADGE = "AI 해석"
 GUESSED_REGION_LABEL = "현재 위치로 지역 추정"
+KAKAO_TOPUP_LABEL = "카카오맵에서 보충"
+PLACES_BASIS = "블로그 언급 기준"
+THIN_KTO_POOL = 10
 NEAR_PROBE_LABEL = "근처 조건 없이 다시 재보기"
 FESTIVAL_FETCH_BUDGET_SECONDS = 4.0
 ANCHOR_RADIUS_M = 3000
@@ -1053,6 +1058,21 @@ async def _food_across_region(
         near=near,
         title_terms=title_terms,
     )
+    if len(rows) < THIN_KTO_POOL:
+        topped = await _top_up_with_kakao(
+            session,
+            action,
+            prefixes,
+            rows=rows,
+            steps=steps,
+            intent=spoken,
+            lat=lat,
+            lng=lng,
+            near=near,
+            title_terms=title_terms,
+        )
+        if topped is not None:
+            return topped
     if rows or not narrowed:
         return food_in_region(
             rows,
@@ -1085,6 +1105,63 @@ async def _food_across_region(
         near=near,
         title_terms=title_terms,
     )
+
+
+async def _top_up_with_kakao(
+    session: AsyncSession,
+    action: AnchorAction,
+    prefixes: list[str],
+    *,
+    rows: list[CandidateRow],
+    steps: list[AskStep],
+    intent: QueryIntent,
+    lat: float | None,
+    lng: float | None,
+    near: bool,
+    title_terms: list[str] | None,
+) -> AskResponse | None:
+    """생활권에서는 KTO 음식·카페가 사실상 비어 있다 (광진구 카페 1곳).
+
+    관광지형은 두꺼우므로 카테고리가 아니라 후보 수로 갈린다.
+    """
+    kind: PlaceKind = "cafe" if action == "cafe" else "restaurant"
+    coords = (lat, lng) if near and lat is not None and lng is not None else None
+    cards = await places_service.search(
+        session,
+        kind=kind,
+        region=prefixes[0] if prefixes else None,
+        landmark_coords=coords,
+        dish=title_terms[0] if title_terms else None,
+        attribute=None,
+    )
+    if not cards:
+        return None
+    steps.append(AskStep(tool="nearby", label=KAKAO_TOPUP_LABEL, badge=f"{len(cards)}곳"))
+    kept = [_card(row, intent=intent, lat=lat, lng=lng, near=near) for row in rows]
+    known = {card.contentId for card in kept}
+    merged = kept + [card for card in cards if card.contentId not in known]
+    return AskResponse(
+        steps=steps,
+        answer=_places_answer(merged),
+        spots=merged,
+        totalCount=len(merged),
+        intent=intent,
+        refinements=[],
+        tagBasis=PLACES_BASIS,
+    )
+
+
+def _places_answer(cards: list[AgentSpotCard]) -> list[AnswerSegment]:
+    reduced = sum(1 for card in cards if not card.saveable)
+    lead = f"{len(cards)}곳이에요."
+    if not reduced:
+        return [AnswerSegment(text=lead)]
+    return [
+        AnswerSegment(text=f"{lead} 블로그에 반복해서 나온 순으로 놨어요."),
+        AnswerSegment(
+            text=f" 이 중 {reduced}곳은 저희 여행지 정보에 없어 저장·상세보기가 안 돼요."
+        ),
+    ]
 
 
 def _without_unapplied_axes(intent: QueryIntent) -> QueryIntent:
