@@ -154,3 +154,82 @@ async def test_a_same_named_place_far_away_is_not_mistaken_for_the_one_kakao_fou
     )
 
     assert all(card.source == "kakao" for card in cards)
+
+
+async def test_a_named_dish_goes_to_keyword_search_so_the_dish_reaches_kakao(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: dict[str, Any] = {}
+
+    async def keyword(query: str, **_k: Any) -> list[KakaoPlace]:
+        seen["query"] = query
+        return [_place("1", "청평식당")]
+
+    async def nearby(*_a: Any, **_k: Any) -> list[KakaoPlace]:
+        seen["nearby"] = True
+        return []
+
+    monkeypatch.setattr(kakao_places, "search_by_keyword", keyword)
+    monkeypatch.setattr(kakao_places, "search_nearby", nearby)
+    _blogs(monkeypatch, [])
+
+    await places_service.search(
+        db_session,
+        kind="restaurant",
+        region="전북특별자치도 정읍시",
+        landmark_coords=GUNJA,
+        dish="삼겹살",
+        attribute=None,
+    )
+
+    assert "nearby" not in seen, "요리를 지목하면 업종 코드로 훑지 않는다"
+    assert "삼겹살" in seen["query"]
+    assert "전북특별자치도 정읍시" in seen["query"]
+
+
+async def test_without_a_dish_the_coords_take_the_category_sweep(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: dict[str, Any] = {}
+
+    async def keyword(query: str, **_k: Any) -> list[KakaoPlace]:
+        seen["query"] = query
+        return []
+
+    async def nearby(kind: str, **_k: Any) -> list[KakaoPlace]:
+        seen["kind"] = kind
+        return [_place("1", "사유")]
+
+    monkeypatch.setattr(kakao_places, "search_by_keyword", keyword)
+    monkeypatch.setattr(kakao_places, "search_nearby", nearby)
+    _blogs(monkeypatch, [])
+
+    await places_service.search(
+        db_session,
+        kind="cafe",
+        region="서울특별시 광진구",
+        landmark_coords=GUNJA,
+        dish=None,
+        attribute=None,
+    )
+
+    assert seen.get("kind") == "cafe"
+    assert "query" not in seen
+
+
+async def test_a_kakao_only_card_carries_the_kind_so_the_app_can_draw_an_icon(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch, _kakao: list[KakaoPlace]
+) -> None:
+    _blogs(monkeypatch, [])
+
+    cards = await places_service.search(
+        db_session,
+        kind="restaurant",
+        region="전북특별자치도 정읍시",
+        landmark_coords=None,
+        dish="삼겹살",
+        attribute=None,
+    )
+
+    assert cards
+    assert all(card.categoryGroup == "food" for card in cards)

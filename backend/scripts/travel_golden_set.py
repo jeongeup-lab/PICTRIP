@@ -54,6 +54,7 @@ class Case:
     expect_error: str | None = None
     expect_region: str | None = None
     expect_title_terms: tuple[str, ...] | None = None
+    expect_category: str | None = None
     expect_images: bool = False
     expect_placed: bool = False
     expect_unique: bool = True
@@ -464,7 +465,7 @@ CASES: list[Case] = [
         "정읍 삼겹살집",
         expect_spots="any",
         expect_region="전북",
-        expect_title_terms=("삼겹살",),
+        expect_category="food",
     ),
     edge(
         "N9",
@@ -472,7 +473,7 @@ CASES: list[Case] = [
         "정읍 국밥집",
         expect_spots="any",
         expect_region="전북",
-        expect_title_terms=("국밥",),
+        expect_category="food",
     ),
     guard("G1", "이모지만", ask("🏖️🌊"), expect_spots="any"),
     guard("G2", "이모지 반복", ask("😀" * 200), expect_spots="any"),
@@ -710,6 +711,12 @@ def _km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
 def _judge_spots(case_: Case, spots: list[dict[str, Any]], res: Result) -> None:
     if not spots:
         return
+    if case_.expect_category is not None:
+        off = [s for s in spots if s.get("categoryGroup") != case_.expect_category]
+        if off:
+            res.ok = False
+            names = ", ".join(s["title"] for s in off[:3])
+            res.reasons.append(f"{len(off)}곳이 {case_.expect_category} 갈래가 아니다: {names}")
     if case_.expect_title_terms is not None:
         without_title_evidence = [
             spot
