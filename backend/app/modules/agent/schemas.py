@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Annotated, Literal, get_args
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, StringConstraints, computed_field
+from pydantic import BaseModel, Field, StringConstraints
 
 PlaceType = Literal["attraction", "restaurant", "cafe", "hotel", "region"]
 ResolveStatus = Literal["matched", "ambiguous", "naver_only", "unmatched"]
@@ -113,17 +113,6 @@ class MoodImagesResponse(BaseModel):
     images: list[MoodImage]
 
 
-PRE_OTA_REGION_PREFIXES: dict[str, tuple[str, ...]] = {
-    "all": (),
-    "capital": ("서울", "경기", "인천"),
-    "gangwon": ("강원",),
-    "chungcheong": ("충청", "충북", "충남", "대전", "세종"),
-    "jeolla": ("전라", "전북", "전남", "광주"),
-    "gyeongsang": ("경상", "경북", "경남", "대구", "울산", "부산"),
-    "jeju": ("제주",),
-}
-
-
 class AskAnchor(BaseModel):
     contentId: Annotated[str, StringConstraints(min_length=1, max_length=32)] | None = None
     action: AnchorAction
@@ -148,11 +137,6 @@ class AskRequest(BaseModel):
     patch: RefinePatch | None = None
     anchor: AskAnchor | None = None
     context: AskContext | None = None
-    region: str | None = None
-
-    @property
-    def pre_ota_region_prefixes(self) -> list[str]:
-        return list(PRE_OTA_REGION_PREFIXES.get(self.region or "all", ()))
 
 
 class ChatHistoryItem(BaseModel):
@@ -228,13 +212,7 @@ class AskResponse(BaseModel):
     intent: QueryIntent
     refinements: list[Suggestion]
     tagBasis: str | None = None
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def suggestions(self) -> list[str]:
-        return [
-            refinement.label for refinement in self.refinements if refinement.patch.drop is None
-        ]
+    unmet: list[str] = Field(default_factory=list)
 
 
 class ChatStepEvent(BaseModel):

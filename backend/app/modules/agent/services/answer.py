@@ -63,6 +63,25 @@ def _fallback_sentence(hint: str, *, region_has_festivals: bool) -> str:
     return f" {hint}에는 오늘 열리는 축제가 없어 전국에서 골랐어요."
 
 
+def _named(unmapped: tuple[str, ...]) -> str:
+    return "「" + " · ".join(unmapped) + "」"
+
+
+def unknown_region_answer(unmapped: tuple[str, ...]) -> str:
+    return f"{_named(unmapped)}라는 지역을 못 찾았어요. 어디로 찾아볼까요?"
+
+
+def _unmapped_sentence(unmapped: tuple[str, ...]) -> list[AnswerSegment]:
+    """말한 지역을 못 찾았으면 밝힌다.
+
+    조용히 전국을 뒤져 20곳을 주면 사용자는 자기 지역이 무시된 걸 알 방법이 없다.
+    """
+    return [
+        AnswerSegment(text=_named(unmapped), emphasis=True),
+        AnswerSegment(text="라는 지역을 못 찾아서 전국에서 골랐어요."),
+    ]
+
+
 def _widen_sentence(scope: retrieve.RegionScope) -> list[AnswerSegment]:
     return [
         AnswerSegment(text=f"{scope.narrowed_label} 안에서는 찾지 못해 "),
@@ -204,9 +223,14 @@ def _answer(
     lat: float | None,
     lng: float | None,
     region_widened: retrieve.RegionScope | None = None,
+    unmapped: tuple[str, ...] = (),
 ) -> list[AnswerSegment]:
-    lead = _lead_sentence(
-        top, intent=intent, near=near, lat=lat, lng=lng, region_widened=region_widened
+    lead = (
+        _unmapped_sentence(unmapped)
+        if unmapped
+        else _lead_sentence(
+            top, intent=intent, near=near, lat=lat, lng=lng, region_widened=region_widened
+        )
     )
     scope = _scope_sentence(top, intent=intent)
     if not lead:
@@ -271,11 +295,7 @@ def _zero_answer(intent: QueryIntent, *, axes: frozenset[DropAxis]) -> list[Answ
     ]
 
 
-def _talk_response(
-    steps: list[AskStep], intent: QueryIntent, sentence: str, *, legacy_client: bool
-) -> AskResponse:
-    if legacy_client:
-        raise AgentNoResults()
+def _talk_response(steps: list[AskStep], intent: QueryIntent, sentence: str) -> AskResponse:
     logger.info("agent.ask.talk", task=intent.task)
     return AskResponse(
         steps=steps,
@@ -295,14 +315,13 @@ def _zero_response(
     region_hints: list[str],
     keywords: list[str],
     axes: frozenset[DropAxis],
-    legacy_client: bool,
 ) -> AskResponse:
     searched = searched_intent(
         intent, has_coords=has_coords, region_hints=region_hints, keywords=keywords
     )
     refinements = suggest_service.derive_for_zero(searched, has_coords=has_coords, axes=axes)
     conditions = applied_conditions(searched, axes=axes)
-    if not conditions or legacy_client:
+    if not conditions:
         raise AgentNoResults()
     logger.info("agent.ask.zero", conditions=len(conditions), releasable=len(refinements))
     return AskResponse(

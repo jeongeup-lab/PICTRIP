@@ -52,6 +52,21 @@ FOOD_NEEDS_ORIGIN_ANSWER = (
 )
 KAKAO_TOPUP_LABEL = "카카오맵에서 보충"
 THIN_KTO_POOL = 10
+CROWD_LABELS: dict[str, str] = {"quiet": "한적한 곳", "popular": "유명한 곳"}
+
+
+def dropped_labels(intent: QueryIntent) -> list[str]:
+    """좁힌 조건으로 0곳이라 풀어버린 축을 사용자 말로 옮긴다."""
+    labels: list[str] = []
+    if (crowd := CROWD_LABELS.get(intent.crowdPreference)) is not None:
+        labels.append(crowd)
+    if intent.indoorOnly:
+        labels.append("실내")
+    if intent.moodHints:
+        labels.append("분위기")
+    return labels
+
+
 VERIFIED_ORIGIN_STATUSES = ("matched", "naver_only")
 
 
@@ -105,7 +120,6 @@ async def _ask_for_food(
     lng: float | None,
     context: AskContext | None,
     resolved: list[ResolvedPlace],
-    legacy_client: bool,
     title_terms: list[str],
 ) -> AskResponse:
     scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
@@ -159,7 +173,7 @@ async def _ask_for_food(
             carried_intent=intent,
             title_terms=title_terms,
         )
-    return _talk_response(steps, intent, FOOD_NEEDS_ORIGIN_ANSWER, legacy_client=legacy_client)
+    return _talk_response(steps, intent, FOOD_NEEDS_ORIGIN_ANSWER)
 
 
 async def _food_across_region(
@@ -231,6 +245,7 @@ async def _food_across_region(
         action,
         steps=steps,
         intent=_without_unapplied_axes(spoken),
+        unmet=dropped_labels(spoken),
         lat=lat,
         lng=lng,
         near=near,
@@ -361,6 +376,7 @@ def food_in_region(
     lng: float | None = None,
     near: bool = False,
     title_terms: list[str] | None = None,
+    unmet: list[str] | None = None,
 ) -> AskResponse:
     noun = ANCHOR_NOUNS[action]
     where = " · ".join(regions)
@@ -388,14 +404,21 @@ def food_in_region(
             refinements=[],
         )
     spots = [_region_food_card(row, lat=lat, lng=lng, near=near) for row in top]
-    logger.info("agent.food.region", action=action, results=len(spots))
+    logger.info("agent.food.region", action=action, results=len(spots), unmet=len(unmet or []))
+    lead = (
+        [AnswerSegment(text=f"{' · '.join(unmet)} 조건으로는 없어서 그 조건을 빼고 찾았어요. ")]
+        if unmet
+        else []
+    )
     return AskResponse(
         steps=scanned,
         answer=[
+            *lead,
             AnswerSegment(text=where, emphasis=True),
             AnswerSegment(text=f" {noun} "),
             AnswerSegment(text=f"{len(spots)}곳이에요."),
         ],
+        unmet=list(unmet or []),
         spots=spots,
         totalCount=len(spots),
         intent=intent,

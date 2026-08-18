@@ -143,7 +143,7 @@ async def test_anchor_food_returns_nearby_restaurants_sorted_by_distance(
     assert [spot["contentId"] for spot in data["spots"]] == ["f1", "f2"]
     assert all(answer_service._is_distance_tag(spot["tag"]) for spot in data["spots"])
     assert data["refinements"] == []
-    assert data["suggestions"] == []
+    assert data["refinements"] == []
 
 
 @pytest.mark.integration

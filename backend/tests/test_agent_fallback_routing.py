@@ -66,7 +66,6 @@ async def test_a_dish_the_region_table_rejects_becomes_a_food_search_not_a_sight
         lng: float | None,
         context: AskContext | None,
         resolved: list[ResolvedPlace],
-        legacy_client: bool,
         title_terms: list[str],
     ) -> AskResponse:
         nonlocal seen_action, seen_intent, seen_title_terms
@@ -122,7 +121,6 @@ async def test_raw_dish_evidence_repairs_a_healthy_generic_food_intent(
         lng: float | None,
         context: AskContext | None,
         resolved: list[ResolvedPlace],
-        legacy_client: bool,
         title_terms: list[str],
     ) -> AskResponse:
         nonlocal seen_intent, seen_title_terms

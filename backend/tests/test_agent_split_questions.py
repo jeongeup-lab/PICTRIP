@@ -25,6 +25,18 @@ async def _seed(session: AsyncSession, cid: str, title: str, l1: str, l2: str | 
 
 @pytest.fixture
 async def seeded(db_session: AsyncSession) -> AsyncSession:
+    await db_session.execute(
+        text(
+            "INSERT INTO regions (ldong_regn_cd, ldong_regn_nm) VALUES ('46', '전라남도') "
+            "ON CONFLICT DO NOTHING"
+        )
+    )
+    await db_session.execute(
+        text(
+            "INSERT INTO sigungus (ldong_signgu_cd, ldong_regn_cd, ldong_signgu_nm) "
+            "VALUES ('46130', '46', '여수시') ON CONFLICT DO NOTHING"
+        )
+    )
     await _seed(db_session, "9300001", "여수 바다카페", "FD", "FD05")
     await _seed(db_session, "9300002", "여수 오션커피", "FD", "FD05")
     await _seed(db_session, "9300003", "오동도", "NA", None)

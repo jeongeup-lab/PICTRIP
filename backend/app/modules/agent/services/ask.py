@@ -53,11 +53,13 @@ from app.modules.agent.services.answer import (
     _talk_response,
     _zero_response,
     searched_intent,
+    unknown_region_answer,
 )
 from app.modules.agent.services.food import (
     _ask_for_food,
     _named_a_new_region,
 )
+from app.modules.agent.services.landmarks import is_landmark
 from app.modules.agent.services.photo_ask import (
     _ask_with_photo,
 )
@@ -126,8 +128,6 @@ async def ask(
     patch: RefinePatch | None = None,
     anchor: AskAnchor | None = None,
     context: AskContext | None = None,
-    pre_ota_region_prefixes: list[str] | None = None,
-    legacy_client: bool = False,
     emitter: Emitter | None = None,
 ) -> AskResponse:
     cleaned = (question or "").strip()
@@ -145,8 +145,6 @@ async def ask(
             lng=lng,
             intent=intent,
             patch=patch,
-            pre_ota_region_prefixes=pre_ota_region_prefixes or [],
-            legacy_client=legacy_client,
             emitter=emitter,
         )
     if not cleaned and intent is None:
@@ -161,8 +159,6 @@ async def ask(
         intent=intent,
         patch=patch,
         context=context,
-        pre_ota_region_prefixes=pre_ota_region_prefixes or [],
-        legacy_client=legacy_client,
         emitter=emitter,
     )
 
@@ -181,7 +177,6 @@ async def _answer_without_searching(
     intent: QueryIntent,
     context: AskContext | None,
     steps: list[AskStep],
-    legacy_client: bool,
 ) -> AskResponse | None:
     if intent.task == "detail":
         target = detail_target(intent, context=context)
@@ -193,7 +188,7 @@ async def _answer_without_searching(
     sentence = _TALK_ANSWERS.get(intent.task)
     if sentence is None:
         return None
-    return _talk_response(steps, intent, sentence, legacy_client=legacy_client)
+    return _talk_response(steps, intent, sentence)
 
 
 def _with_dish_terms(
@@ -234,8 +229,6 @@ async def _ask_with_question(
     intent: QueryIntent | None,
     patch: RefinePatch | None,
     context: AskContext | None,
-    pre_ota_region_prefixes: list[str],
-    legacy_client: bool,
     emitter: Emitter | None = None,
 ) -> AskResponse:
     steps = Steps(emitter=emitter)
@@ -273,7 +266,6 @@ async def _ask_with_question(
         intent=intent,
         context=context,
         steps=steps,
-        legacy_client=legacy_client,
     )
     if answered is not None:
         return answered
@@ -291,11 +283,14 @@ async def _ask_with_question(
                 )
             )
     scene = scene_service.detect(question, list(intent.categoryKeywords))
-    if scene is None and _asks_for_nothing(intent, prefixes=pre_ota_region_prefixes):
+    if scene is None and _asks_for_nothing(intent):
         sentence = NO_AXIS_ANSWER if question.strip() else BLANK_ANSWER
-        return _talk_response(steps, intent, sentence, legacy_client=legacy_client)
+        return _talk_response(steps, intent, sentence)
 
     region_scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
+    unplaced = _unplaceable(region_scope)
+    if unplaced and _region_was_the_only_axis(intent):
+        return _talk_response(steps, intent, unknown_region_answer(unplaced))
     pivot = _origin_anchor(intent, context, region_named=bool(region_scope.prefixes))
     if pivot is not None:
         return await _ask_with_anchor(
@@ -330,14 +325,11 @@ async def _ask_with_question(
             lng=lng,
             context=context,
             resolved=resolved,
-            legacy_client=legacy_client,
             title_terms=_title_terms_for_action(eating, title_terms),
         )
     mood_ids = await repositories.find_mood_ids(session, list(intent.moodHints))
     scope = region_scope
-    prefixes = scope.prefixes or pre_ota_region_prefixes
-    if not scope.prefixes and pre_ota_region_prefixes:
-        intent = intent.model_copy(update={"regionHints": list(pre_ota_region_prefixes)})
+    prefixes = scope.prefixes
     region_widened: retrieve.RegionScope | None = None
     place_only = refine_service.named_place_is_the_only_constraint(
         intent, keywords=keywords, prefixes=prefixes, near=near
@@ -417,7 +409,6 @@ async def _ask_with_question(
                 if title_only or keyword in category.matched
             ],
             axes=axes,
-            legacy_client=legacy_client,
         )
 
     top = merged[: retrieve.RESULT_LIMIT]
@@ -443,7 +434,13 @@ async def _ask_with_question(
     return AskResponse(
         steps=steps,
         answer=_answer(
-            top, intent=spoken, near=near, lat=lat, lng=lng, region_widened=region_widened
+            top,
+            intent=spoken,
+            near=near,
+            lat=lat,
+            lng=lng,
+            region_widened=region_widened,
+            unmapped=unplaced,
         ),
         spots=spots,
         totalCount=len(spots),
@@ -488,8 +485,6 @@ async def _ask_each(
                 intent=None,
                 patch=None,
                 context=None,
-                pre_ota_region_prefixes=[],
-                legacy_client=False,
             )
             for one in questions
         ),
@@ -632,10 +627,24 @@ def _keywords(intent: QueryIntent) -> list[str]:
     return list(intent.categoryKeywords)
 
 
-def _asks_for_nothing(intent: QueryIntent, *, prefixes: list[str]) -> bool:
+def _asks_for_nothing(intent: QueryIntent) -> bool:
+    return not intent.regionHints and _region_was_the_only_axis(intent)
+
+
+def _unplaceable(scope: retrieve.RegionScope) -> tuple[str, ...]:
+    """말했는데 어디인지 모르겠는 지역만 고른다.
+
+    "강남역" 은 실재한다 — 행정구역이 아니라 지역 필터로 못 쓸 뿐이다.
+    그걸 "못 찾았다" 고 말하면 틀린 안내가 된다.
+    """
+    if scope.prefixes:
+        return ()
+    return tuple(hint for hint in scope.unmapped if not is_landmark(hint))
+
+
+def _region_was_the_only_axis(intent: QueryIntent) -> bool:
     return not (
         intent.categoryKeywords
-        or intent.regionHints
         or intent.namedPlaces
         or intent.moodHints
         or intent.indoorOnly
@@ -643,7 +652,6 @@ def _asks_for_nothing(intent: QueryIntent, *, prefixes: list[str]) -> bool:
         or intent.festivalOnly
         or intent.originPlace
         or intent.crowdPreference != "any"
-        or prefixes
     )
 
 

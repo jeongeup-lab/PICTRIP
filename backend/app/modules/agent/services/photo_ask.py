@@ -51,8 +51,6 @@ async def _ask_with_photo(
     lng: float | None,
     intent: QueryIntent | None,
     patch: RefinePatch | None,
-    pre_ota_region_prefixes: list[str],
-    legacy_client: bool,
     emitter: Emitter | None = None,
 ) -> AskResponse:
     steps = Steps(emitter=emitter)
@@ -91,9 +89,7 @@ async def _ask_with_photo(
                 )
 
     scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
-    prefixes = scope.prefixes or pre_ota_region_prefixes
-    if not scope.prefixes and pre_ota_region_prefixes:
-        intent = intent.model_copy(update={"regionHints": list(pre_ota_region_prefixes)})
+    prefixes = scope.prefixes
     near = intent.nearMe and lat is not None and lng is not None
 
     async def matched(within: list[str]) -> tuple[list[VectorMatchRow], list[CandidateRow]]:
@@ -135,7 +131,6 @@ async def _ask_with_photo(
             region_hints=list(prefixes),
             keywords=list(intent.categoryKeywords),
             axes=PHOTO_AXES,
-            legacy_client=legacy_client,
         )
 
     top = ordered[: retrieve.RESULT_LIMIT]
