@@ -23,6 +23,7 @@ from app.modules.agent.schemas import (
     QueryIntent,
     TaskKind,
 )
+from app.modules.agent.services import guard
 from app.modules.agent.services.landmarks import is_landmark
 from app.web.errors import RateLimited
 
@@ -217,40 +218,6 @@ class IntentOutcome:
     fallback: bool
 
 
-HUNGER_WORDS = (
-    "배고파",
-    "배고프",
-    "배가 고",
-    "출출",
-    "허기",
-    "시장해",
-    "먹고 싶",
-    "뭐 먹",
-    "먹을 거",
-    "먹을거",
-    "밥 먹자",
-)
-ASKING_ABOUT_ME = ("너 ", "너는", "니가", "당신", "먹었어", "먹었니", "먹었나", "먹었어요")
-
-
-def hungry(question: str) -> bool:
-    """자기 배고픔은 맛집 요청이다. 상대에게 묻는 말은 아니다.
-
-    "아 배고파" 를 smalltalk 으로 두면 대화가 끊긴다. "너 밥 먹었어?" 는 그대로 잡담이다.
-    """
-    asked = question.strip()
-    if any(word in asked for word in ASKING_ABOUT_ME):
-        return False
-    return any(word in asked for word in HUNGER_WORDS)
-
-
-def _as_food_search(intent: QueryIntent) -> QueryIntent:
-    keywords = list(intent.categoryKeywords)
-    if "맛집" not in keywords:
-        keywords.insert(0, "맛집")
-    return intent.model_copy(update={"task": "search", "categoryKeywords": keywords[:MAX_KEYWORDS]})
-
-
 async def resolve_intent(
     question: str,
     *,
@@ -275,12 +242,10 @@ async def resolve_intent(
             indoor=guessed.indoorOnly,
             near=guessed.nearMe,
         )
-        if hungry(question):
-            guessed = _as_food_search(guessed)
-        return IntentOutcome(intent=guessed, fallback=True)
-    if asked.task in ("smalltalk", "unsupported") and hungry(question):
-        asked = _as_food_search(asked)
-    return IntentOutcome(intent=asked, fallback=False)
+        return IntentOutcome(
+            intent=guard.apply_corrections(guessed, question, guessed=True), fallback=True
+        )
+    return IntentOutcome(intent=guard.apply_corrections(asked, question), fallback=False)
 
 
 def _carried(guessed: QueryIntent, prior: QueryIntent | None) -> QueryIntent:
