@@ -110,8 +110,8 @@ class WikidataClient:
         )
 
     @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=2, min=2, max=30),
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=5, min=5, max=120),
         retry=retry_if_exception(_is_transient),
         reraise=True,
     )

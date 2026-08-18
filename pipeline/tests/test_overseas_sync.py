@@ -1,6 +1,8 @@
+import pytest
+
 from pictrip_data.overseas.commons import Credit
 from pictrip_data.overseas.countries import Country
-from pictrip_data.overseas.sync import sync_overseas
+from pictrip_data.overseas.sync import PartialOverseasSync, sync_overseas
 from pictrip_data.overseas.wikidata import RawSpot
 
 JP = Country("Q17", "JP", "일본")
@@ -121,3 +123,51 @@ def test_sync_overseas_fills_missing_descriptions(db_conn):
     with db_conn.cursor() as cur:
         cur.execute("SELECT description_ko FROM overseas_spots WHERE wikidata_id = 'QTEST9'")
         assert cur.fetchone()[0] == "우에노는 도쿄의 지역이다."
+
+
+class Flaky(FakeWikidata):
+    def __init__(self, failing: set[str]):
+        self._failing = failing
+
+    def fetch_country(self, country):
+        if country.code in self._failing:
+            raise RuntimeError("504 Gateway Timeout")
+        return [SPOT] if country.code == "JP" else []
+
+
+def test_sync_overseas_survives_one_country_failure(db_conn):
+    others = [
+        Country("Q142", "FR", "프랑스"),
+        Country("Q183", "DE", "독일"),
+        Country("Q38", "IT", "이탈리아"),
+    ]
+    sync_overseas(
+        wikidata=Flaky({"FR"}),
+        commons=FakeCommons(),
+        wikipedia=FakeWikipedia(),
+        conn=db_conn,
+        countries=[JP, *others],
+    )
+
+    with db_conn.cursor() as cur:
+        cur.execute("SELECT count(*) FROM overseas_spots WHERE wikidata_id = 'QTEST1'")
+        assert cur.fetchone()[0] == 1
+        cur.execute("SELECT status FROM sync_runs ORDER BY id DESC LIMIT 1")
+        assert cur.fetchone()[0] == "success"
+
+
+def test_sync_overseas_fails_when_most_countries_fail(db_conn):
+    fr = Country("Q142", "FR", "프랑스")
+    de = Country("Q183", "DE", "독일")
+    with pytest.raises(PartialOverseasSync):
+        sync_overseas(
+            wikidata=Flaky({"FR", "DE"}),
+            commons=FakeCommons(),
+            wikipedia=FakeWikipedia(),
+            conn=db_conn,
+            countries=[JP, fr, de],
+        )
+
+    with db_conn.cursor() as cur:
+        cur.execute("SELECT status FROM sync_runs ORDER BY id DESC LIMIT 1")
+        assert cur.fetchone()[0] == "error"

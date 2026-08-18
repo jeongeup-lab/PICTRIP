@@ -26,9 +26,6 @@
 
 ## 예정
 
-- **해외 데이터 신선도 단언** — `pipeline-monthly` 는 Push 모니터를 못 붙인다
-  (Kuma 하트비트 상한 24일 < 30일 주기). 주간 DAG 에
-  `max(overseas_spots.updated_at) < 40일` 단언을 넣어 대체할 것.
 
 - **S14 대화형 일정 에이전트 v2** — `feat/plan-agent-v2`에서 재설계 진행 중.
   웹 플레이그라운드 선행, 앱 이식 후행. 머지 시 스펙을 이 문서 체계

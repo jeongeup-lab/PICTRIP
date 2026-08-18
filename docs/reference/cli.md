@@ -9,6 +9,7 @@
 |---|---|---|
 | `set_admin_password --username admin` | `admin_users` 암호 upsert (대화형은 히스토리 미기록, `ADMIN_NEW_PASSWORD` env 비대화형) | 시드 기본 교체·로테이션 |
 | `warm_channels` | festa/pets/snap 채널 캐시 예열 (fail-soft) | 크론 + `deploy.sh` 자동 |
+| `check_data_freshness [--warn-only]` | 적재가 멈췄는데 잡은 success 를 찍는 상태 탐지 — stale 이면 exit 1 | `pipeline-daily` 자동 |
 | `sync_concentration [--limit] [--dry-run]` | 집중률 idempotent 적재 | 일일 크론; 심사 전 수동 갱신 |
 | `backfill_embeddings [--limit] [--only-failed --failure-reason source_changed] [--dry-run]` | 대표사진 CLIP 백필 (resumable) | `pipeline-daily`(신규) · `pipeline-weekly`(복구) 자동 |
 | `backfill_gallery_embeddings [--limit] [--dry-run]` | 갤러리 centroid 백필 | 일일 크론 (800/일) |
