@@ -41,12 +41,5 @@ async def match_vector(
     return rows
 
 
-async def match_photo(
-    session: AsyncSession, *, image_bytes: bytes, image_mime: str | None
-) -> list[VectorMatchRow]:
-    vector = await embed_photo(image_bytes=image_bytes, image_mime=image_mime)
-    return await match_vector(session, vector, region_prefixes=[])
-
-
 def similarity(row: VectorMatchRow) -> float:
     return round(max(0.0, min(1.0, 1.0 - row.distance)), 3)

@@ -133,7 +133,6 @@ source_modules = [
     "app.modules.spots.routes",
     "app.modules.images.routes",
     "app.modules.map.routes",
-    "app.modules.system.routes",
     "app.modules.admin.routes",
     "app.modules.feed.routes",
     "app.modules.agent.routes",
@@ -157,7 +156,6 @@ source_modules = [
     "app.modules.spots.routes",
     "app.modules.images.routes",
     "app.modules.map.routes",
-    "app.modules.system.routes",
     "app.modules.admin.routes",
     "app.modules.feed.routes",
     "app.modules.agent.routes",
@@ -166,8 +164,6 @@ forbidden_modules = [
     "app.modules.users.models",
     "app.modules.spots.models",
     "app.modules.images.models",
-    "app.modules.map.models",
-    "app.modules.system.models",
     "app.modules.admin.models",
     "app.modules.feed.models",
 ]
@@ -183,7 +179,6 @@ source_modules = [
     "app.modules.spots.schemas",
     "app.modules.images.schemas",
     "app.modules.map.schemas",
-    # system has no schemas.py (removed as dead code) — re-add if it returns.
     "app.modules.admin.schemas",
     "app.modules.feed.schemas",
     "app.modules.agent.schemas",
@@ -205,7 +200,6 @@ source_modules = [
     "app.modules.spots.services",
     "app.modules.images.services",
     "app.modules.map.services",
-    "app.modules.system.services",
     "app.modules.admin.services",
     "app.modules.feed.services",
     "app.modules.agent.services",
@@ -214,8 +208,6 @@ forbidden_modules = [
     "app.modules.users.models",
     "app.modules.spots.models",
     "app.modules.images.models",
-    "app.modules.map.models",
-    "app.modules.system.models",
     "app.modules.admin.models",
     "app.modules.feed.models",
 ]
@@ -226,8 +218,6 @@ ignore_imports = [
     "app.modules.users.repositories -> app.modules.users.models",
     "app.modules.spots.services -> app.modules.spots.models",
     "app.modules.images.services -> app.modules.images.models",
-    "app.modules.map.services -> app.modules.map.models",
-    "app.modules.system.services -> app.modules.system.models",
     # IMG seam: services re-exports the repository, which holds own-module ORM.
     "app.modules.images.services -> app.modules.images.repositories",
     "app.modules.images.repositories -> app.modules.images.models",
@@ -256,7 +246,7 @@ unmatched_ignore_imports_alerting = "none"
 # The contract above ignores spots.services.* -> *.models broadly (for the seam
 # chains), which blinded it to a submodule directly importing ANOTHER module's
 # models. This DIRECT-only contract (allow_indirect_imports = true) closes that:
-# a spots service submodule must not import users/images/map/system models
+# a spots service submodule must not import users/images/map models
 # directly. spots.models is excluded — own-module model imports are intended (#22).
 [[tool.importlinter.contracts]]
 name = "Spots service submodules don't directly import other modules' models"
@@ -272,8 +262,6 @@ source_modules = [
 forbidden_modules = [
     "app.modules.users.models",
     "app.modules.images.models",
-    "app.modules.map.models",
-    "app.modules.system.models",
 ]
 allow_indirect_imports = true
 
@@ -295,16 +283,43 @@ forbidden_modules = [
 ]
 allow_indirect_imports = true
 
-# Shared-package layering: modules on top, then the shared utility packages
-# (mutually independent), then web (HTTP contract), then core (infra plumbing).
+# 다른 모듈은 spots 의 services 패키지(공개 seam)만 본다. 서브모듈(rows/saved/
+# nearby/…)은 spots 내부 구현이라 밖에서 직접 import 하면 seam 이 무의미해진다.
+# 실제로 agent.services.detail -> spots.services.rows, users.services ->
+# spots.services.saved 두 건이 이렇게 새 있었다.
+[[tool.importlinter.contracts]]
+name = "Other modules reach spots only through its services seam"
+type = "forbidden"
+source_modules = [
+    "app.modules.users",
+    "app.modules.feed",
+    "app.modules.map",
+    "app.modules.agent",
+    "app.modules.admin",
+    "app.modules.images",
+]
+forbidden_modules = [
+    "app.modules.spots.services.cards",
+    "app.modules.spots.services.concentration",
+    "app.modules.spots.services.detail",
+    "app.modules.spots.services.nearby",
+    "app.modules.spots.services.rows",
+    "app.modules.spots.services.saved",
+    "app.modules.spots.services.search",
+]
+allow_indirect_imports = true
+
+# Shared-package layering: modules on top, then the shared packages (external
+# providers kto/kakao/naver, ml, security — mutually independent), then web
+# (HTTP contract), then core (infra plumbing).
 # security.jwt -> users.schemas is the one sanctioned upward edge (lazy import
 # for TokenPair/UserPublic — breaking it needs a token-DTO move, not worth it).
 [[tool.importlinter.contracts]]
-name = "Shared packages are layered (modules > security|kto|ml > web > core)"
+name = "Shared packages are layered (modules > providers|security > web > core)"
 type = "layers"
 layers = [
     "app.modules",
-    "app.security | app.kto | app.ml | app.naver",
+    "app.security | app.kto | app.kakao | app.naver | app.ml",
     "app.web",
     "app.core",
 ]

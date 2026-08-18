@@ -49,28 +49,10 @@ class AuthTokenExpired(AppError):
     message = "인증이 만료되었습니다."
 
 
-class GuestForbidden(AppError):
-    code = "GUEST_FORBIDDEN"
-    http_status = 403
-    message = "게스트는 사용할 수 없는 기능입니다."
-
-
-class PermissionDenied(AppError):
-    code = "PERMISSION_DENIED"
-    http_status = 403
-    message = "권한이 없습니다."
-
-
 class ResourceNotFound(AppError):
     code = "RESOURCE_NOT_FOUND"
     http_status = 404
     message = "요청한 리소스를 찾을 수 없습니다."
-
-
-class DuplicateResource(AppError):
-    code = "DUPLICATE_RESOURCE"
-    http_status = 409
-    message = "이미 존재하는 리소스입니다."
 
 
 class ImageInvalid(AppError):
@@ -91,12 +73,6 @@ class KtoApiUnavailable(AppError):
     message = "한국관광공사 API 응답을 받지 못했습니다."
 
 
-class LbsConsentRequired(AppError):
-    code = "LBS_CONSENT_REQUIRED"
-    http_status = 403
-    message = "위치 정보 이용 동의가 필요합니다."
-
-
 class OAuthProviderUnavailable(AppError):
     code = "OAUTH_PROVIDER_UNAVAILABLE"
     http_status = 502
@@ -113,12 +89,6 @@ class AuthSessionRevoked(AppError):
     code = "AUTH_SESSION_REVOKED"
     http_status = 401
     message = "보안상 모든 세션이 종료되었습니다. 다시 로그인해 주세요."
-
-
-class SessionStoreUnavailable(AppError):
-    code = "SESSION_STORE_UNAVAILABLE"
-    http_status = 503
-    message = "세션 저장소에 일시적인 문제가 발생했습니다."
 
 
 class AdminUnauthorized(AppError):

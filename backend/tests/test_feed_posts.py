@@ -41,7 +41,7 @@ async def seeded(db_session):
 
 
 async def test_feed_returns_seeded_page(client, seeded):
-    res = await client.get("/v1/feed", params={"limit": 2})
+    res = await client.get("/v1/explore", params={"limit": 2})
     body = res.json()
     assert res.status_code == 200 and body["error"] is None
     data = body["data"]
@@ -61,16 +61,16 @@ async def test_feed_returns_seeded_page(client, seeded):
 
 
 async def test_feed_excludes_hidden(client, seeded):
-    res = await client.get("/v1/feed", params={"limit": 10})
+    res = await client.get("/v1/explore", params={"limit": 10})
     names = [i["nameKo"] for i in res.json()["data"]["items"]]
     assert "숨김" not in names and len(names) == 3
 
 
 async def test_feed_cursor_no_duplicates_same_seed(client, seeded):
-    first = (await client.get("/v1/feed", params={"limit": 2})).json()["data"]
+    first = (await client.get("/v1/explore", params={"limit": 2})).json()["data"]
     second = (
         await client.get(
-            "/v1/feed", params={"limit": 2, "seed": first["seed"], "cursor": first["nextCursor"]}
+            "/v1/explore", params={"limit": 2, "seed": first["seed"], "cursor": first["nextCursor"]}
         )
     ).json()["data"]
     ids1 = {i["id"] for i in first["items"]}
@@ -79,13 +79,13 @@ async def test_feed_cursor_no_duplicates_same_seed(client, seeded):
 
 
 async def test_feed_same_seed_stable_order(client, seeded):
-    a = (await client.get("/v1/feed", params={"limit": 3, "seed": "s1"})).json()["data"]
-    b = (await client.get("/v1/feed", params={"limit": 3, "seed": "s1"})).json()["data"]
+    a = (await client.get("/v1/explore", params={"limit": 3, "seed": "s1"})).json()["data"]
+    b = (await client.get("/v1/explore", params={"limit": 3, "seed": "s1"})).json()["data"]
     assert [i["id"] for i in a["items"]] == [i["id"] for i in b["items"]]
 
 
 async def test_feed_rejects_garbage_cursor(client, seeded):
-    res = await client.get("/v1/feed", params={"cursor": "not-a-cursor"})
+    res = await client.get("/v1/explore", params={"cursor": "not-a-cursor"})
     body = res.json()
     assert res.status_code == 422
     assert body["error"]["code"] == "VALIDATION_FAILED"

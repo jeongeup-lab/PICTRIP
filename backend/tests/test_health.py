@@ -9,17 +9,10 @@ async def test_health_returns_ok_envelope(client: AsyncClient) -> None:
     resp = await client.get("/health")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["data"] == {"status": "ok"}
+    assert body["data"]["status"] == "ok"
+    assert body["data"]["apiVersion"].startswith("1.")
     assert body["error"] is None
     assert "traceId" in body["meta"]
-
-
-@pytest.mark.asyncio
-async def test_meta_version(client: AsyncClient) -> None:
-    resp = await client.get("/v1/meta/version")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["data"]["apiVersion"].startswith("1.0")
 
 
 @pytest.mark.asyncio
@@ -36,7 +29,6 @@ async def test_openapi_schema_includes_all_domains(client: AsyncClient) -> None:
         "USR · user/auth",
         "SPT · spots",
         "MAP · map",
-        "SYS · system/meta",
         "feed",
     }
     assert expected.issubset(tags_in_schema)

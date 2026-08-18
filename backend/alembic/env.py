@@ -29,16 +29,7 @@ target_metadata = Base.metadata
 
 def include_object(object_, name, type_, reflected, compare_to):
     return not (
-        type_ == "table"
-        and name
-        in {
-            "sync_runs",
-            "curations",
-            "curation_spots",
-            "plans",
-            "travel_shorts",
-            "travel_shorts_spots",
-        }
+        type_ == "table" and name in {"sync_runs", "plans", "travel_shorts", "travel_shorts_spots"}
     )
 
 

@@ -14,10 +14,6 @@ _TIMEOUT = httpx.Timeout(connect=2.0, read=5.0, write=2.0, pool=2.0)
 _CLIENT_SECRET_TTL_SECONDS = 15 * 60
 
 
-class AppleTokenError(Exception):
-    pass
-
-
 def is_configured() -> bool:
     return bool(
         settings.APPLE_TEAM_ID

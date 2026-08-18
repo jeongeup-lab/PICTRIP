@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from app.core.logging import get_logger
-from app.modules.map.kakao_local import kakao_local_get
+from app.kakao.local import kakao_local_get
 
 logger = get_logger(__name__)
 

@@ -119,34 +119,6 @@ async def load_active_spot_cards_by_ids(
     }
 
 
-async def _load_spot_card(session: AsyncSession, content_id: str) -> SpotCardRow | None:
-    stmt = (
-        select(
-            Spot.content_id,
-            Spot.title,
-            Spot.first_image_url,
-            Spot.addr1,
-            Spot.mapx,
-            Spot.mapy,
-            LclsSystmCode.lcls_systm3_nm,
-        )
-        .outerjoin(LclsSystmCode, LclsSystmCode.lcls_systm3_cd == Spot.lcls_systm3)
-        .where(Spot.content_id == content_id)
-    )
-    row = (await session.execute(stmt)).first()
-    if row is None:
-        return None
-    return SpotCardRow(
-        content_id=row.content_id,
-        title=row.title,
-        first_image_url=row.first_image_url,
-        addr1=row.addr1,
-        mapx=float(row.mapx) if row.mapx is not None else None,
-        mapy=float(row.mapy) if row.mapy is not None else None,
-        lcls_systm3_nm=row.lcls_systm3_nm,
-    )
-
-
 async def _load_spot_cards(session: AsyncSession, content_ids: list[str]) -> list[SpotCardRow]:
     if not content_ids:
         return []

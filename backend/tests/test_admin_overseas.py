@@ -159,7 +159,7 @@ async def test_hidden_spot_excluded_from_feed(db_session, client, seeded_oversea
         await client.put(
             f"/admin/api/overseas/{oid}/visibility", json={"isHidden": True}, headers=_AUTH
         )
-        res = await client.get("/v1/feed", params={"limit": 20})
+        res = await client.get("/v1/explore", params={"limit": 20})
     finally:
         app.dependency_overrides.clear()
     assert res.status_code == 200

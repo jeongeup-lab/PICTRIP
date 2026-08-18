@@ -17,12 +17,6 @@ class SpotCardRow:
 
 
 @dataclass
-class SimilarResultRow:
-    query: SpotCardRow
-    neighbors: list[tuple[SpotCardRow, float]]
-
-
-@dataclass
 class SpotImageRow:
     origin_image_url: str
     small_image_url: str | None
@@ -59,13 +53,3 @@ class SpotDetailRow:
     category: str | None = None
     intro: SpotIntroRow | None = None
     cpyrht_div_cd: str | None = None
-
-
-@dataclass
-class RelatedSpotRow:
-    name: str
-    category: str | None
-    region_name: str | None
-    address: str | None
-    rank: int | None
-    content_id: str | None
