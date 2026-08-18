@@ -1,6 +1,6 @@
 import { Pressable, View, Text, StyleSheet } from "react-native";
 import { RemoteImage } from "@/components/RemoteImage";
-import { Icon } from "@/components/Icon";
+import { Icon, type IconName } from "@/components/Icon";
 import { useSaveOptimistic } from "@/features/saved/hooks/use-save-optimistic";
 import { prefetchSpot } from "@/features/spots/queries";
 import { distanceLabel } from "@/features/travel/lib/distance";
@@ -14,6 +14,18 @@ export const CARD_GAP = 10;
 export const CARD_STRIDE = CARD_WIDTH + CARD_GAP;
 
 export const DETAIL_LABEL = "상세보기";
+export const EXTERNAL_LABEL = "카카오맵";
+
+const KIND_ICONS: Record<string, IconName> = {
+  cafe: "tag",
+  food: "tag",
+  attraction: "image",
+};
+
+function metersLabel(meters: number | null | undefined): string | null {
+  if (typeof meters !== "number" || meters <= 0) return null;
+  return meters >= 1000 ? `${(meters / 1000).toFixed(1)}km` : `${meters}m`;
+}
 
 interface Props {
   spot: TravelSpot;
@@ -68,23 +80,35 @@ export function SpotCard({
 }: Props) {
   const { saved, toggle } = useSaveOptimistic(spot.contentId);
   const metric = metricOf(spot.tag, tagBasis);
-  const distance = distanceLabel(spot.tag, distanceKm);
+  const distance = distanceLabel(spot.tag, distanceKm) ?? metersLabel(spot.distanceM);
+  const external = spot.saveable === false;
 
   return (
     <View style={styles.card}>
       <Pressable
         testID={`travel-card-${spot.contentId}`}
         accessibilityRole="button"
-        accessibilityLabel={`${spot.title} 상세 보기`}
+        accessibilityLabel={`${spot.title} ${external ? EXTERNAL_LABEL : DETAIL_LABEL}`}
         style={({ pressed }) => [styles.tap, pressed && styles.pressed]}
         onPressIn={() => prefetchSpot(spot)}
         onPress={onDetail}
       >
-        <RemoteImage
-          uri={spot.imageUrl ?? spot.fallbackImageUrl ?? null}
-          style={styles.thumb}
-          radius={12}
-        />
+        {external ? (
+          <View style={[styles.thumb, styles.thumbBlank]}>
+            <Icon
+              name={KIND_ICONS[spot.categoryGroup ?? ""] ?? "map-pin"}
+              size={22}
+              color={colors.ter}
+              strokeWidth={1.6}
+            />
+          </View>
+        ) : (
+          <RemoteImage
+            uri={spot.imageUrl ?? spot.fallbackImageUrl ?? null}
+            style={styles.thumb}
+            radius={12}
+          />
+        )}
 
         <View style={styles.copy}>
           <View style={styles.head}>
@@ -110,37 +134,39 @@ export function SpotCard({
             <Pressable
               testID="travel-card-detail"
               accessibilityRole="button"
-              accessibilityLabel={`${spot.title} ${DETAIL_LABEL}`}
+              accessibilityLabel={`${spot.title} ${external ? EXTERNAL_LABEL : DETAIL_LABEL}`}
               style={({ pressed }) => [styles.detail, pressed && styles.pressed]}
               hitSlop={6}
               onPress={onDetail}
             >
-              <Text style={styles.detailText}>{DETAIL_LABEL}</Text>
+              <Text style={styles.detailText}>{external ? EXTERNAL_LABEL : DETAIL_LABEL}</Text>
               <Icon name="chevron-right" size={12} color={colors.ter} strokeWidth={2} />
             </Pressable>
           </View>
         </View>
       </Pressable>
 
-      <Pressable
-        testID={`travel-card-save-${spot.contentId}`}
-        accessibilityRole="button"
-        accessibilityLabel={saved ? "저장 해제" : "저장"}
-        accessibilityState={{ selected: saved }}
-        style={styles.fav}
-        hitSlop={8}
-        onPress={async () => {
-          const result = await toggle();
-          if (result !== null) onSaveToggle(result);
-        }}
-      >
-        <Icon
-          name={saved ? "bookmark-fill" : "bookmark"}
-          size={17}
-          color={saved ? colors.accent : colors.ter}
-          strokeWidth={1.9}
-        />
-      </Pressable>
+      {external ? null : (
+        <Pressable
+          testID={`travel-card-save-${spot.contentId}`}
+          accessibilityRole="button"
+          accessibilityLabel={saved ? "저장 해제" : "저장"}
+          accessibilityState={{ selected: saved }}
+          style={styles.fav}
+          hitSlop={8}
+          onPress={async () => {
+            const result = await toggle();
+            if (result !== null) onSaveToggle(result);
+          }}
+        >
+          <Icon
+            name={saved ? "bookmark-fill" : "bookmark"}
+            size={17}
+            color={saved ? colors.accent : colors.ter}
+            strokeWidth={1.9}
+          />
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -157,6 +183,12 @@ const styles = StyleSheet.create({
   tap: { flex: 1, flexDirection: "row", gap: 12, padding: 10 },
   pressed: { opacity: 0.7 },
   thumb: { width: 92, height: 92 },
+  thumbBlank: {
+    borderRadius: 12,
+    backgroundColor: colors.skeleton,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   copy: { flex: 1, minWidth: 0, justifyContent: "center" },
   head: { flexDirection: "row", alignItems: "center", gap: 7, paddingRight: 26 },
   badge: {

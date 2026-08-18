@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Linking } from "react-native";
 import { router } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { Toast } from "@/components/Toast";
@@ -15,7 +16,7 @@ import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
 import { AI_CONSENT } from "@/features/travel/lib/ai-consent";
 import { contextFrom } from "@/features/travel/lib/conversation-context";
 import { composeQuestion } from "@/features/travel/lib/question";
-import { streamChat, type PhotoUpload } from "@/features/travel/api";
+import { streamChat, type PhotoUpload, type TravelSpot } from "@/features/travel/api";
 import {
   historyOf,
   lastDoneTurn,
@@ -28,6 +29,7 @@ import { colors, spacing } from "@/constants/theme";
 
 export const WORDMARK = "PICTRIP";
 export const NEW_CHAT_LABEL = "새 대화";
+const EXTERNAL_UNAVAILABLE = "이 장소는 카카오맵에서 볼 수 있어요";
 const SAVE_COMPLETE = "여행지를 저장했어요";
 const UNSAVE_COMPLETE = "여행지 저장을 해제했어요";
 const TOAST_LIFT = 8;
@@ -152,6 +154,15 @@ export default function TravelScreen() {
     useChat.getState().clear();
   }, []);
 
+  const openSpot = useCallback((spot: TravelSpot) => {
+    if (spot.saveable === false) {
+      if (spot.externalUrl) void Linking.openURL(spot.externalUrl);
+      else setToast(EXTERNAL_UNAVAILABLE);
+      return;
+    }
+    router.push(`/spots/${spot.contentId}`);
+  }, []);
+
   const onFocusSpot = useCallback((contentId: string | null) => {
     focusedIdRef.current = contentId;
   }, []);
@@ -169,7 +180,7 @@ export default function TravelScreen() {
           latest={index === turns.length - 1}
           origin={coords}
           onRetry={onRetry}
-          onDetail={(spot) => router.push(`/spots/${spot.contentId}`)}
+          onDetail={openSpot}
           onSaveToggle={(saved) => setToast(saved ? SAVE_COMPLETE : UNSAVE_COMPLETE)}
           onNotice={(message) => setToast(message)}
           onFocusSpot={onFocusSpot}
