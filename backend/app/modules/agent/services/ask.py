@@ -36,6 +36,7 @@ from app.modules.agent.services import geocode as geocode_service
 from app.modules.agent.services import intent as intent_service
 from app.modules.agent.services import photo as photo_service
 from app.modules.agent.services import refine as refine_service
+from app.modules.agent.services import region as region_service
 from app.modules.agent.services import resolve as resolve_service
 from app.modules.agent.services import retrieve
 from app.modules.agent.services import suggest as suggest_service
@@ -66,6 +67,7 @@ RELATED_BASIS = "분위기 유사도 기준"
 CONTEXT_INTENT_LABEL = "앞 대화까지 보고 조건 추출"
 INTENT_FALLBACK_BADGE = "사전 매칭"
 INTENT_MODEL_BADGE = "AI 해석"
+GUESSED_REGION_LABEL = "현재 위치로 지역 추정"
 NEAR_PROBE_LABEL = "근처 조건 없이 다시 재보기"
 FESTIVAL_FETCH_BUDGET_SECONDS = 4.0
 ANCHOR_RADIUS_M = 3000
@@ -653,6 +655,14 @@ async def _ask_with_question(
         merged_keywords.extend(term for term in raw_dish_terms if term not in merged_keywords)
         intent = intent.model_copy(update={"categoryKeywords": merged_keywords[:MAX_KEYWORDS]})
     title_terms = retrieve.dish_search_terms(" ".join(intent.categoryKeywords))
+    region = await region_service.resolve(
+        session, redis, intent=intent, context=context, lat=lat, lng=lng
+    )
+    if region.guessed:
+        intent = intent.model_copy(update={"regionHints": list(region.hints)})
+        steps.append(
+            AskStep(tool="intent", label=GUESSED_REGION_LABEL, badge=region.label or "현재 위치")
+        )
     if _asks_for_nothing(intent, prefixes=pre_ota_region_prefixes):
         sentence = NO_AXIS_ANSWER if question.strip() else BLANK_ANSWER
         return _talk_response(steps, intent, sentence, legacy_client=legacy_client)
