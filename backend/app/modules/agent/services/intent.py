@@ -13,6 +13,7 @@ from app.modules.agent.schemas import (
     MAX_KEYWORDS,
     MAX_NAMED_PLACES,
     MAX_REGION_HINTS,
+    MAX_SUB_QUESTIONS,
     MAX_TEXT_CHARS,
     MAX_TITLE_CHARS,
     CrowdPreference,
@@ -67,6 +68,10 @@ task 가 search 가 아니면 아래 조건 필드는 모두 비운다. 애매�
 - outOfScope: 대한민국 밖의 여행지를 묻는 질문이면 true (예: "파리 가볼 만한 곳"). 국내 질문이면 false.
 - outOfScope가 true면 나머지 배열은 모두 비운다.
 - 추측으로 조건을 만들어내지 않는다. 질문에 없으면 비운다.
+- subQuestions: 한 문장이 서로 다른 두세 가지를 함께 물을 때만 채운다
+  ("여수 카페랑 지금 하는 축제" → ["여수 카페", "여수 축제"]).
+  각 항목은 그것만 따로 물어도 말이 되게 쓰고, 생략된 지역은 채워 넣는다.
+  하나만 묻는 질문이면 빈 배열로 둔다 — 같은 것을 쪼개면 결과가 중복될 뿐이다.
 
 이어지는 질문이면 직전 대화가 함께 주어진다. 그때는 아래를 지킨다.
 - 직전 조건은 사용자가 바꾸지 않는 한 그대로 유지한다. "더 한적한 곳" 은 직전
@@ -120,6 +125,7 @@ _RESPONSE_SCHEMA: dict[str, Any] = {
         "indoorOnly": {"type": "BOOLEAN"},
         "nearMe": {"type": "BOOLEAN"},
         "outOfScope": {"type": "BOOLEAN"},
+        "subQuestions": {"type": "ARRAY", "items": {"type": "STRING"}},
     },
     "required": [
         "task",
@@ -189,6 +195,7 @@ async def extract_intent(
         indoorOnly=bool(data.get("indoorOnly")),
         nearMe=bool(data.get("nearMe")),
         outOfScope=bool(data.get("outOfScope")),
+        subQuestions=_strings(data.get("subQuestions"))[:MAX_SUB_QUESTIONS],
     )
     logger.info(
         "agent.intent.done",

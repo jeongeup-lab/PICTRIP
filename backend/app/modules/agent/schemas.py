@@ -27,6 +27,7 @@ MAX_DETAIL_FIELDS = 6
 MAX_MESSAGE_CHARS = 500
 MAX_HISTORY_ITEMS = 8
 MAX_HISTORY_SPOT_IDS = 8
+MAX_SUB_QUESTIONS = 3
 
 IntentText = Annotated[str, StringConstraints(max_length=MAX_TEXT_CHARS)]
 
@@ -87,6 +88,7 @@ class QueryIntent(BaseModel):
     indoorOnly: bool = False
     nearMe: bool = False
     outOfScope: bool = False
+    subQuestions: list[IntentText] = Field(default_factory=list, max_length=MAX_SUB_QUESTIONS)
 
 
 class RefinePatch(BaseModel):

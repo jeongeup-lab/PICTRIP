@@ -73,6 +73,7 @@ GUESSED_REGION_LABEL = "현재 위치로 지역 추정"
 KAKAO_TOPUP_LABEL = "카카오맵에서 보충"
 PLACES_BASIS = "블로그 언급 기준"
 THIN_KTO_POOL = 10
+SUB_QUESTION_CARDS = 6
 NEAR_PROBE_LABEL = "근처 조건 없이 다시 재보기"
 FESTIVAL_FETCH_BUDGET_SECONDS = 4.0
 ANCHOR_RADIUS_M = 3000
@@ -639,6 +640,12 @@ async def _ask_with_question(
         )
     if intent.outOfScope:
         raise AgentOutOfScope()
+    if len(intent.subQuestions) > 1 and question.strip():
+        split = await _ask_each(
+            session, redis, kto, intent.subQuestions, lat=lat, lng=lng, steps=steps
+        )
+        if split is not None:
+            return split
     if intent.task == "unsupported":
         return _talk_response(steps, intent, UNSUPPORTED_ANSWER, legacy_client=legacy_client)
     if intent.task == "detail":
@@ -1104,6 +1111,65 @@ async def _food_across_region(
         lng=lng,
         near=near,
         title_terms=title_terms,
+    )
+
+
+async def _ask_each(
+    session: AsyncSession,
+    redis: Redis,
+    kto: KtoClient | None,
+    questions: list[str],
+    *,
+    lat: float | None,
+    lng: float | None,
+    steps: list[AskStep],
+) -> AskResponse | None:
+    """한 문장이 두세 가지를 함께 물으면 각각 따로 찾아 합친다.
+
+    if/elif 라우터는 return 으로 경로 하나만 태우기 때문에 "여수 카페랑 축제" 에
+    둘 다 줄 수 없었다. 조합마다 분기를 늘리는 대신 질문을 쪼갠다.
+    """
+    parts = await asyncio.gather(
+        *(
+            _ask_with_question(
+                session,
+                redis,
+                kto,
+                question=one,
+                lat=lat,
+                lng=lng,
+                intent=None,
+                patch=None,
+                context=None,
+                pre_ota_region_prefixes=[],
+                legacy_client=False,
+            )
+            for one in questions
+        ),
+        return_exceptions=True,
+    )
+    answered = [part for part in parts if isinstance(part, AskResponse) and part.spots]
+    if len(answered) < 2:
+        return None
+
+    spots: list[AgentSpotCard] = []
+    seen: set[str] = set()
+    for part in answered:
+        for card in part.spots[:SUB_QUESTION_CARDS]:
+            if card.contentId in seen:
+                continue
+            seen.add(card.contentId)
+            spots.append(card)
+    merged_steps = [*steps, *(step for part in answered for step in part.steps)]
+    logger.info("agent.ask.split", asked=len(questions), answered=len(answered), spots=len(spots))
+    return AskResponse(
+        steps=merged_steps,
+        answer=[AnswerSegment(text=f"{len(spots)}곳을 나눠서 찾았어요.")],
+        spots=spots,
+        totalCount=len(spots),
+        intent=answered[0].intent.model_copy(update={"subQuestions": questions}),
+        refinements=[],
+        tagBasis=answered[0].tagBasis,
     )
 
 
