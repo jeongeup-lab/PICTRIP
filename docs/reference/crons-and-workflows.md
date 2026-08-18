@@ -8,9 +8,9 @@
 ```
 Proxmox (pve, Tailscale 100.83.101.1)
 ├── CT110  PostgreSQL+pgvector          ← CT112만 라우트 보유
-├── CT111  pipeline · 러너 [ct111]
+├── CT111  pipeline · 러너 [ct111] · Uptime-Kuma(:3001, tailnet 전용)
 ├── CT112  api+Redis(compose) · cloudflared(호스트 프로세스) · 러너 [ct112]
-└── CT113  Prometheus·Grafana·Uptime-Kuma
+└── CT113  (미생성 — Prometheus·Grafana 는 Phase 3)
 Cloudflare: api.pictrip.org(터널) · pictrip.org(Pages, root=web/, main) · img.pictrip.org(Worker)
 ```
 
@@ -44,7 +44,7 @@ main = 릴리스 마커(web·CodeQL), `v*` 태그 = TestFlight(→
   중단한다(부분 응답이 전체를 숨기는 사고 방지).
 - 임베딩 잡 3종은 `admin:embed:running` Redis 락을 공유하므로 job-level
   `concurrency: embedding-job` 으로 워크플로를 가로질러 직렬화한다.
-- `heartbeat` 는 CT113 Uptime-Kuma push 모니터를 때린다. 잡 실패뿐 아니라 **"아예
+- `heartbeat` 는 **CT111** Uptime-Kuma push 모니터를 때린다(→ [monitoring](../../deploy/monitoring/README.md)). 잡 실패뿐 아니라 **"아예
   안 돌았음"**(GitHub 장애·60일 무활동 시 스케줄 자동 비활성)까지 Kuma 타임아웃으로
   잡힌다. 푸시 URL 시크릿이 없으면 조용히 건너뛴다.
 
@@ -88,7 +88,7 @@ main = 릴리스 마커(web·CodeQL), `v*` 태그 = TestFlight(→
 |---|---|
 | CT112 `/opt/pictrip-api/.env` (:ro 마운트) | 백엔드 전체 — 수정 후 `docker restart` |
 | CT111 `.../pipeline/.env` | `DATABASE_URL` · `KTO_API_KEY` |
-| GitHub Actions | `EXPO_TOKEN`; `KUMA_PUSH_PIPELINE_{DAILY,WEEKLY,MONTHLY}`(미주입 시 heartbeat no-op) |
+| GitHub Actions | `EXPO_TOKEN`; `KUMA_PUSH_PIPELINE_{DAILY,WEEKLY}`(미주입 시 heartbeat no-op) |
 | Wrangler | `T1_SECRET` (백엔드 .env와 미러) |
 | EAS `eas.json` | `EXPO_PUBLIC_*` (Kakao·Google 키) |
 
