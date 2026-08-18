@@ -94,12 +94,13 @@ async def _kto_twin(
     return None
 
 
-def _reduced_card(place: KakaoPlace, mention: Mention | None) -> AgentSpotCard:
+def _reduced_card(place: KakaoPlace, mention: Mention | None, kind: PlaceKind) -> AgentSpotCard:
     return AgentSpotCard(
         contentId=place.content_id,
         source="kakao",
         title=place.name,
         regionLabel=place.address or "",
+        categoryGroup="cafe" if kind == "cafe" else "food",
         tag=f"블로그 {mention.distinct_blogs}곳" if mention else None,
         lat=place.lat,
         lng=place.lng,
@@ -177,7 +178,9 @@ async def search(
         mention = mentions.get(place.place_id)
         twin = await _kto_twin(session, place, kind=kind)
         cards.append(
-            _full_card(twin, place, mention) if twin is not None else _reduced_card(place, mention)
+            _full_card(twin, place, mention)
+            if twin is not None
+            else _reduced_card(place, mention, kind)
         )
     logger.info(
         "agent.places.done",
