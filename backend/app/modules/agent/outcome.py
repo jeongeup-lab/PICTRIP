@@ -15,6 +15,12 @@ class SpotResults:
 
 
 @dataclass(frozen=True, slots=True)
+class PartialResults:
+    response: AskResponse
+    unmet: list[str]
+
+
+@dataclass(frozen=True, slots=True)
 class NoResults:
     response: AskResponse
     blocking_axis: BlockingAxis
@@ -47,7 +53,14 @@ class Failed:
 
 
 TurnOutcome = (
-    SpotResults | NoResults | NeedMoreInfo | OutOfCapability | Smalltalk | OutOfScope | Failed
+    SpotResults
+    | PartialResults
+    | NoResults
+    | NeedMoreInfo
+    | OutOfCapability
+    | Smalltalk
+    | OutOfScope
+    | Failed
 )
 
 PROSE_SITUATIONS: dict[type, str] = {
@@ -87,6 +100,8 @@ def _has_axis(response: AskResponse) -> bool:
 
 def classify(response: AskResponse) -> TurnOutcome:
     if response.spots:
+        if response.unmet:
+            return PartialResults(response=response, unmet=list(response.unmet))
         return SpotResults(response=response)
     if response.intent.task == "unsupported":
         return OutOfCapability(response=response)
@@ -105,4 +120,9 @@ def classify_error(exc: AppError, *, blank_answer: str) -> OutOfScope | Failed:
 
 
 def situation_of(outcome: TurnOutcome) -> str | None:
+    if isinstance(outcome, PartialResults):
+        return (
+            f"요청한 조건 중 {' · '.join(outcome.unmet)} 은(는) 적용하지 못한 채 결과를 냈다. "
+            "그 사실을 먼저 밝히고 결과를 준다"
+        )
     return PROSE_SITUATIONS.get(type(outcome))

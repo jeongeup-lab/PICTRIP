@@ -205,6 +205,7 @@ class RegionScope:
     sido_prefixes: list[str]
     narrowed_hints: tuple[str, ...] = ()
     narrowed_sidos: tuple[str, ...] = ()
+    unmapped: tuple[str, ...] = ()
 
     @property
     def widenable(self) -> bool:
@@ -227,8 +228,9 @@ async def resolve_region_scope(session: AsyncSession, *, hints: list[str]) -> Re
         return EMPTY_REGION_SCOPE
     tokens = {token for hint in hints for token in _hint_tokens(hint)}
     mapping = await map_region_tokens_to_prefixes(session, tokens)
+    _, dropped = split_unmappable_hints(hints, mapping)
     if not mapping:
-        return EMPTY_REGION_SCOPE
+        return RegionScope(prefixes=[], sido_prefixes=[], unmapped=tuple(dropped))
     narrowed = [
         (token, resolved) for token, resolved in sorted(mapping.items()) if resolved.narrowed
     ]
@@ -237,6 +239,7 @@ async def resolve_region_scope(session: AsyncSession, *, hints: list[str]) -> Re
         sido_prefixes=sorted({resolved.sido for resolved in mapping.values()}),
         narrowed_hints=tuple(token for token, _ in narrowed),
         narrowed_sidos=tuple(dict.fromkeys(resolved.sido for _, resolved in narrowed)),
+        unmapped=tuple(dropped),
     )
 
 

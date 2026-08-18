@@ -19,7 +19,7 @@ from app.core.redis import get_redis
 from app.kto.client import get_kto
 from app.main import app
 from app.modules.agent import llm, repositories
-from app.modules.agent.errors import AgentIntentUnavailable, AgentNoResults
+from app.modules.agent.errors import AgentIntentUnavailable
 from app.modules.agent.repositories import CandidateRow, VectorMatchRow
 from app.modules.agent.routes import MAX_BODY_BYTES
 from app.modules.agent.schemas import (
@@ -854,7 +854,7 @@ async def test_photo_turn_hides_chips_whose_axis_the_photo_search_never_applies(
     assert res.status_code == 200
     data = res.json()["data"]
     assert data["spots"]
-    assert data["suggestions"] == []
+    assert data["refinements"] == []
 
 
 def test_photo_chips_cover_only_the_axes_the_photo_path_applies() -> None:
@@ -1897,28 +1897,6 @@ async def test_photo_refine_reads_the_multipart_intent_and_skips_the_llm(
 
 
 @pytest.mark.integration
-async def test_suggestions_stay_plain_labels_of_the_refinements(
-    db_session, client, seeded_wide, monkeypatch
-) -> None:
-    async def fake_intent(question: str) -> QueryIntent:
-        return QueryIntent(categoryKeywords=["계곡"], regionHints=["부산"])
-
-    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
-    _override(db_session)
-    try:
-        res = await client.post("/v1/agent/ask", json={"question": "부산 계곡"})
-    finally:
-        app.dependency_overrides.clear()
-
-    assert res.status_code == 200
-    data = res.json()["data"]
-    assert data["refinements"]
-    assert all(isinstance(label, str) for label in data["suggestions"])
-    assert data["suggestions"] == [
-        chip["label"] for chip in data["refinements"] if chip["patch"]["drop"] is None
-    ]
-
-
 @pytest.mark.integration
 async def test_a_result_turn_ends_with_one_zoom_out_chip(
     db_session, client, seeded, monkeypatch
@@ -1941,50 +1919,9 @@ async def test_a_result_turn_ends_with_one_zoom_out_chip(
     drops = [chip for chip in data["refinements"] if chip["patch"]["drop"] is not None]
     assert [chip["label"] for chip in drops] == [suggest_service.ZOOM_OUT_LABEL]
     assert data["refinements"][-1]["patch"]["drop"] == "region"
-    assert data["suggestions"] == [
-        chip["label"] for chip in data["refinements"] if chip["patch"]["drop"] is None
-    ]
 
 
 @pytest.mark.integration
-async def test_photo_suggestions_stay_plain_labels_of_the_refinements(
-    db_session, client, seeded, monkeypatch
-) -> None:
-    for cid in ("v1", "j1"):
-        await db_session.execute(
-            text("INSERT INTO spot_embeddings (content_id, embedding) VALUES (:c, :v)"),
-            {"c": cid, "v": _VEC},
-        )
-    await db_session.flush()
-
-    async def fake_embed(*, image_bytes, image_mime):
-        return [0.1] * 512
-
-    monkeypatch.setattr(intent_service, "extract_intent", _forbidden_intent([]))
-    monkeypatch.setattr(photo_service, "embed_photo", fake_embed)
-    _override(db_session)
-    try:
-        res = await client.post(
-            "/v1/agent/ask",
-            files={"photo": ("a.jpg", b"x", "image/jpeg")},
-            data={
-                "intent": json.dumps({"regionHints": ["제주"]}),
-                "lat": str(LAT),
-                "lng": str(LNG),
-            },
-        )
-    finally:
-        app.dependency_overrides.clear()
-
-    assert res.status_code == 200
-    data = res.json()["data"]
-    assert data["refinements"]
-    assert all(isinstance(label, str) for label in data["suggestions"])
-    assert data["suggestions"] == [
-        chip["label"] for chip in data["refinements"] if chip["patch"]["drop"] is None
-    ]
-
-
 @pytest.mark.integration
 async def test_multipart_intent_that_is_not_json_is_rejected(db_session, client) -> None:
     _override(db_session)
@@ -2406,28 +2343,6 @@ async def test_extract_intent_truncates_a_chatty_llm_instead_of_failing(monkeypa
 
 
 @pytest.mark.integration
-async def test_legacy_region_still_filters_while_when_and_who_stay_ignored(
-    db_session, client, seeded, monkeypatch
-) -> None:
-    async def fake_intent(question: str) -> QueryIntent:
-        return QueryIntent(categoryKeywords=["계곡"])
-
-    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
-    _override(db_session)
-    try:
-        res = await client.post(
-            "/v1/agent/ask",
-            json={"question": "계곡", "region": "jeju", "when": "weekend", "who": "pets"},
-        )
-    finally:
-        app.dependency_overrides.clear()
-
-    assert res.status_code == 200
-    data = res.json()["data"]
-    assert [spot["contentId"] for spot in data["spots"]] == ["j1"]
-    assert "이번 주말" not in "".join(seg["text"] for seg in data["answer"])
-
-
 @pytest.mark.integration
 async def test_legacy_region_yields_to_a_region_the_question_names(
     db_session, client, seeded, monkeypatch
@@ -2450,46 +2365,6 @@ async def test_legacy_region_yields_to_a_region_the_question_names(
 
 
 @pytest.mark.integration
-async def test_legacy_region_narrows_a_photo_query_too(
-    db_session, client, seeded, monkeypatch
-) -> None:
-    seen: list[list[str]] = []
-
-    async def fake_embed(*, image_bytes, image_mime):
-        return [0.1] * 512
-
-    async def fake_match(session, vector, *, region_prefixes):
-        seen.append(region_prefixes)
-        return [
-            VectorMatchRow(
-                content_id="j1",
-                title="제주계곡",
-                category=None,
-                addr1=None,
-                lat=None,
-                lng=None,
-                image_url=None,
-                cpyrht_div_cd=None,
-                distance=0.2,
-            )
-        ]
-
-    monkeypatch.setattr(photo_service, "embed_photo", fake_embed)
-    monkeypatch.setattr(photo_service, "match_vector", fake_match)
-    _override(db_session)
-    try:
-        res = await client.post(
-            "/v1/agent/ask",
-            files={"photo": ("a.jpg", b"x" * 32, "image/jpeg")},
-            data={"region": "jeju", "when": "weekend", "who": "pets"},
-        )
-    finally:
-        app.dependency_overrides.clear()
-
-    assert res.status_code == 200
-    assert seen == [["제주"]]
-
-
 @pytest.mark.integration
 async def test_legacy_region_all_stays_nationwide(db_session, client, seeded, monkeypatch) -> None:
     async def fake_intent(question: str) -> QueryIntent:
@@ -2658,7 +2533,7 @@ async def test_festival_intent_returns_festival_cards_with_dday_tags(
     body = res.json()["data"]
     assert [s["contentId"] for s in body["spots"]] == ["f1"]
     assert body["spots"][0]["tag"] == "D-7"
-    assert body["suggestions"] == []
+    assert body["refinements"] == []
     assert any(step["tool"] == "festival" for step in body["steps"])
 
 
@@ -3548,43 +3423,7 @@ def test_zero_chips_do_not_offer_a_drop_that_lands_on_a_named_place_alone() -> N
 
 
 @pytest.mark.integration
-async def test_an_old_app_keeps_the_error_instead_of_a_turn_it_cannot_escape(
-    db_session, client, seeded, monkeypatch
-) -> None:
-    async def fake_intent(question: str) -> QueryIntent:
-        return QueryIntent(categoryKeywords=["존재하지않는유형"])
-
-    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
-    _override(db_session)
-    try:
-        res = await client.post(
-            "/v1/agent/ask", json={"question": "존재하지않는유형", "region": "jeju"}
-        )
-    finally:
-        app.dependency_overrides.clear()
-
-    assert res.status_code == 422
-    assert res.json()["error"]["code"] == "AGENT_NO_RESULTS"
-
-
 @pytest.mark.integration
-async def test_an_old_app_gets_back_the_region_its_search_actually_used(
-    db_session, client, seeded, monkeypatch
-) -> None:
-    async def fake_intent(question: str) -> QueryIntent:
-        return QueryIntent(categoryKeywords=["계곡"])
-
-    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
-    _override(db_session)
-    try:
-        res = await client.post("/v1/agent/ask", json={"question": "계곡", "region": "jeju"})
-    finally:
-        app.dependency_overrides.clear()
-
-    assert res.status_code == 200
-    assert res.json()["data"]["intent"]["regionHints"] == ["제주"]
-
-
 @pytest.mark.integration
 async def test_a_photo_with_no_releasable_axis_stays_an_error_not_an_empty_turn(
     db_session, client, seeded, monkeypatch
@@ -3604,25 +3443,6 @@ async def test_a_photo_with_no_releasable_axis_stays_an_error_not_an_empty_turn(
 
 
 @pytest.mark.integration
-async def test_an_old_app_on_the_default_region_is_still_treated_as_legacy(
-    db_session, client, seeded, monkeypatch
-) -> None:
-    async def fake_intent(question: str) -> QueryIntent:
-        return QueryIntent(categoryKeywords=["존재하지않는유형"])
-
-    monkeypatch.setattr(intent_service, "extract_intent", fake_intent)
-    _override(db_session)
-    try:
-        res = await client.post(
-            "/v1/agent/ask", json={"question": "존재하지않는유형", "region": "all"}
-        )
-    finally:
-        app.dependency_overrides.clear()
-
-    assert res.status_code == 422
-    assert res.json()["error"]["code"] == "AGENT_NO_RESULTS"
-
-
 @pytest.mark.integration
 async def test_a_mood_only_zero_turn_names_the_mood_instead_of_saying_this_condition(
     db_session, client, seeded, monkeypatch
@@ -4138,7 +3958,7 @@ class _ExplodingSession:
         raise AssertionError("a question with no condition must not reach the database")
 
 
-async def _ask_blank(*, legacy_client: bool = False) -> AskResponse:
+async def _ask_blank() -> AskResponse:
     return await ask_service.ask(
         _ExplodingSession(),  # type: ignore[arg-type]
         FakeRedis(),
@@ -4149,7 +3969,6 @@ async def _ask_blank(*, legacy_client: bool = False) -> AskResponse:
         image_bytes=None,
         image_mime=None,
         intent=QueryIntent(),
-        legacy_client=legacy_client,
     )
 
 
@@ -4166,21 +3985,12 @@ async def test_a_typed_question_with_no_condition_asks_for_a_region() -> None:
     assert "".join(segment.text for segment in answer.answer) == ask_service.NO_AXIS_ANSWER
 
 
-async def test_a_legacy_client_gets_an_error_instead_of_a_blank_turn() -> None:
-    with pytest.raises(AgentNoResults):
-        await _ask_blank(legacy_client=True)
-
-
 def test_a_single_axis_is_enough_to_search() -> None:
-    assert not ask_service._asks_for_nothing(QueryIntent(nearMe=True), prefixes=[])
+    assert not ask_service._asks_for_nothing(QueryIntent(nearMe=True))
 
 
 def test_a_crowd_preference_alone_is_enough_to_search() -> None:
-    assert not ask_service._asks_for_nothing(QueryIntent(crowdPreference="quiet"), prefixes=[])
-
-
-def test_a_pre_ota_region_alone_is_enough_to_search() -> None:
-    assert not ask_service._asks_for_nothing(QueryIntent(), prefixes=["제주"])
+    assert not ask_service._asks_for_nothing(QueryIntent(crowdPreference="quiet"))
 
 
 def test_a_similarity_only_batch_names_the_photo_comparison_not_the_crowd() -> None:
