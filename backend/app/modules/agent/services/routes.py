@@ -9,6 +9,7 @@ from app.modules.agent.errors import AgentNoResults
 from app.modules.agent.repositories import CandidateRow
 from app.modules.agent.schemas import AskStep, DropAxis, QueryIntent
 from app.modules.agent.services import retrieve
+from app.modules.agent.services import scene as scene_service
 from app.modules.agent.services import suggest as suggest_service
 
 TITLE_AXES: frozenset[DropAxis] = frozenset({"category", "near", "region"})
@@ -62,6 +63,7 @@ class Ask:
     near: bool
     place_only: bool
     title_only: bool
+    scene: str | None = None
 
     candidates: list[CandidateRow] = field(default_factory=list)
     widened: retrieve.RegionScope | None = None
@@ -120,6 +122,27 @@ async def _only_the_named_place(ask: Ask) -> None:
     if not ask.pinned:
         raise AgentNoResults()
     ask.candidates = []
+
+
+async def _by_scene(ask: Ask) -> None:
+    term = ask.scene
+    assert term is not None
+    ask.steps.begin("photo_match", f"{term} 사진으로 찾기")
+    ask.candidates = await scene_service.search(ask.session, term, region_prefixes=ask.prefixes)
+    ask.steps.append(
+        AskStep(
+            tool="photo_match",
+            label=f"{term} 사진으로 찾기",
+            badge=count(ask.candidates),
+        )
+    )
+    if not ask.needs_a_wider_region:
+        return
+    ask.widen()
+    ask.candidates = await scene_service.search(ask.session, term, region_prefixes=ask.prefixes)
+    ask.steps.append(
+        AskStep(tool="photo_match", label=widen_label(ask.scope), badge=count(ask.candidates))
+    )
 
 
 async def _by_title(ask: Ask) -> None:
@@ -192,6 +215,7 @@ async def _by_category(ask: Ask) -> None:
 
 SEARCHES: tuple[Choice, ...] = (
     Choice("place_only", lambda ask: ask.place_only, _only_the_named_place),
+    Choice("scene", lambda ask: ask.scene is not None, _by_scene),
     Choice("title_only", lambda ask: ask.title_only, _by_title),
     Choice("category", lambda _ask: True, _by_category),
 )
