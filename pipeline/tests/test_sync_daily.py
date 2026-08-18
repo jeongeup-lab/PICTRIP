@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from pictrip_data.kto.client import KtoServiceError, _body
 from pictrip_data.sync.audit import ensure_table
 from pictrip_data.sync.daily import (
     PartialFullSync,
@@ -167,3 +168,23 @@ def test_incremental_requests_one_call_per_day(seed_refs):
     _run("incremental", ["20260701", "20260702", "20260703"], client, conn)
 
     assert [mt for _page, mt in client.calls] == ["20260701", "20260702", "20260703"]
+
+
+def test_sync_dates_clamps_a_future_watermark():
+    assert sync_dates("20260930120000", date(2026, 6, 29)) == ["20260629"]
+
+
+def test_kto_error_envelope_raises_instead_of_looking_empty():
+    payload = {
+        "response": {
+            "header": {"resultCode": "22", "resultMsg": "LIMITED NUMBER OF SERVICE REQUESTS"},
+            "body": {},
+        }
+    }
+    with pytest.raises(KtoServiceError):
+        _body(payload, "areaBasedSyncList2")
+
+
+def test_kto_ok_envelope_returns_body():
+    payload = {"response": {"header": {"resultCode": "0000"}, "body": {"totalCount": 3}}}
+    assert _body(payload, "areaBasedSyncList2") == {"totalCount": 3}

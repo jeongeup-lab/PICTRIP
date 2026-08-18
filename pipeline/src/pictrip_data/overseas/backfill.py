@@ -1,7 +1,10 @@
 from pictrip_data.overseas.wikipedia import WikipediaClient
 
+MIN_DESC_CHARS = 80
+
 _SELECT_NODESC = (
-    "SELECT id, wikidata_id FROM overseas_spots WHERE description_ko IS NULL OR description_ko = ''"
+    "SELECT id, wikidata_id FROM overseas_spots "
+    "WHERE coalesce(length(description_ko), 0) < %(min_chars)s ORDER BY id"
 )
 _UPDATE_DESC = (
     "UPDATE overseas_spots SET description_ko = %(desc)s, updated_at = now() WHERE id = %(id)s"
@@ -29,10 +32,11 @@ def _run_descriptions(wikipedia, conn, dry_run: bool) -> dict[str, int]:
     return counters
 
 
-def fill_missing_descriptions(wikipedia, conn) -> dict[str, int]:
+def fill_missing_descriptions(wikipedia, conn, limit: int | None = None) -> dict[str, int]:
     counters = {"scanned": 0, "updated": 0, "skipped": 0}
+    sql = _SELECT_NODESC + (" LIMIT %(lim)s" if limit else "")
     with conn.cursor() as cur:
-        cur.execute(_SELECT_NODESC)
+        cur.execute(sql, {"min_chars": MIN_DESC_CHARS, "lim": limit})
         rows = cur.fetchall()
     ids_by_qid: dict[str, list[int]] = {}
     for oid, qid in rows:

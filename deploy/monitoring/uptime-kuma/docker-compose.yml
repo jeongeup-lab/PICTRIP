@@ -14,8 +14,9 @@ services:
     volumes:
       - kumadata:/app/data
     ports:
-      # tailnet/LAN 전용. 퍼블릭 노출 없음 — cloudflared 는 CT112 에만 있다.
-      - "3001:3001"
+      # tailscale0 에만 바인딩한다. Uptime-Kuma 1.x 는 계정이 없으면 첫 방문자가
+      # 관리자를 만들어 버리므로 LAN 노출도 피한다.
+      - "100.110.13.57:3001:3001"
 
 volumes:
   kumadata:

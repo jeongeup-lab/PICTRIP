@@ -1,8 +1,8 @@
 name: pipeline-daily
 # 일일 수집 DAG — 크론을 잡별로 흩뿌리는 대신 의존성을 needs 로 명시한다.
 #
-#   sync-kto ─┬─ concentration ─┬─ warm ──────┐
-#             ├─ embed ─────────┤             ├─ heartbeat
+#   sync-kto ─┬─ concentration ── warm ───────┐
+#             ├─ embed ─────────┐              ├─ heartbeat
 #             └─ detail-prewarm ─┴─ freshness ─┘
 #
 # embed 가 sync-kto 에 연쇄하는 것이 핵심이다. 신규 스팟은 트리거(UPDATE OF
@@ -26,6 +26,10 @@ on:
         description: "detailCommon2 프리워밍 스팟 수 (KTO 쿼터 예산)"
         type: string
         default: "800"
+      sync_only:
+        description: "KTO 수집만 — 프리워밍·임베딩·워밍 생략 (admin 버튼용)"
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -47,6 +51,7 @@ jobs:
 
   concentration:
     needs: sync-kto
+    if: ${{ !inputs.sync_only }}
     runs-on: [self-hosted, ct112]
     timeout-minutes: 30
     steps:
@@ -57,6 +62,7 @@ jobs:
 
   detail-prewarm:
     needs: sync-kto
+    if: ${{ !inputs.sync_only }}
     runs-on: [self-hosted, ct112]
     timeout-minutes: 90
     steps:
@@ -70,6 +76,7 @@ jobs:
   # 큰 첫 실행이 라이브 api 컨테이너의 CPU 를 하루치 잡아두지 않게 하려는 것.
   embed:
     needs: sync-kto
+    if: ${{ !inputs.sync_only }}
     runs-on: [self-hosted, ct112]
     timeout-minutes: 120
     # 임베딩 잡은 admin:embed:running Redis 락을 공유한다 — 겹치면 뒤에 온 잡이
@@ -86,7 +93,9 @@ jobs:
 
   # 엣지 워밍은 국내망(ct111)에서 돌아야 KR 콜로가 데워진다 — img-cache-warm 참조.
   warm:
-    needs: [concentration, embed]
+    # 엣지 워밍은 이미지 URL 만 있으면 된다 — 임베딩에 묶으면 CLIP 타임아웃 한 번에
+    # 하루치 워밍이 통째로 스킵된다.
+    needs: concentration
     uses: ./.github/workflows/img-cache-warm.yml
     permissions:
       contents: read

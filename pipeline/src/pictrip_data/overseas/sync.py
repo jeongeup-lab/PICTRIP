@@ -63,7 +63,7 @@ def _process(wikidata, commons, wikipedia, conn, countries, counters, limit, dry
         if limit is not None and total >= limit:
             break
 
-    descriptions = fill_missing_descriptions(wikipedia, conn)
+    descriptions = fill_missing_descriptions(wikipedia, conn, limit=limit)
     counters["updated"] += descriptions["updated"]
     if not dry_run:
         conn.commit()

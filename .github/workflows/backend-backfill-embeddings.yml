@@ -18,6 +18,10 @@ jobs:
   backfill:
     runs-on: [self-hosted, ct112]
     timeout-minutes: 180
+    # DAG 의 embed 잡들과 admin:embed:running Redis 락을 공유한다.
+    concurrency:
+      group: embedding-job
+      cancel-in-progress: false
     steps:
       - name: Verify deployed backend
         shell: bash

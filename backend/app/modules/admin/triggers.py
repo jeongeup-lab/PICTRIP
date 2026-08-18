@@ -37,7 +37,12 @@ class WorkflowDispatchTrigger:
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
         }
-        payload = {"ref": settings.COLLECTION_WORKFLOW_REF}
+        # 어드민 버튼은 KTO 수집만 돌린다 — DAG 전체를 킥하면 클릭 두 번에
+        # detailCommon2 일일 쿼터가 날아가고 라이브 컨테이너 CPU 가 묶인다.
+        payload = {
+            "ref": settings.COLLECTION_WORKFLOW_REF,
+            "inputs": {"sync_only": "true"},
+        }
         try:
             async with httpx.AsyncClient(timeout=_DISPATCH_TIMEOUT) as http:
                 resp = await http.post(url, headers=headers, json=payload)
