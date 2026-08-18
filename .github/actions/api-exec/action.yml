@@ -1,0 +1,27 @@
+name: api-exec
+description: >-
+  :8000 을 서빙 중인 라이브 api 컨테이너에서 python 모듈을 실행한다.
+  이미지·/app/.env 마운트·CT110 경로를 이미 가진 유일한 곳이라 새 컨테이너를 띄우지 않는다.
+
+inputs:
+  module:
+    description: "python -m 으로 실행할 모듈 (예: scripts.sync_concentration)"
+    required: true
+  args:
+    description: "모듈에 넘길 인자"
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        MODULE: ${{ inputs.module }}
+        ARGS: ${{ inputs.args }}
+      run: |
+        set -euo pipefail
+        cid="$(docker ps -q --filter "publish=8000" | head -n1)"
+        if [ -z "$cid" ]; then echo "api container not found on :8000"; exit 1; fi
+        # shellcheck disable=SC2086
+        docker exec "$cid" python -m "$MODULE" $ARGS

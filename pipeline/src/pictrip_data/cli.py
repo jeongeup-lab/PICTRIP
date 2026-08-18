@@ -1,10 +1,7 @@
 import typer
 
 from pictrip_data.master.load_codes import load_codes
-from pictrip_data.overseas.backfill import (
-    backfill_overseas_descriptions,
-    backfill_overseas_thumbs,
-)
+from pictrip_data.overseas.backfill import backfill_overseas_descriptions
 from pictrip_data.overseas.countries import COUNTRIES
 from pictrip_data.overseas.sync import sync_overseas
 from pictrip_data.sync.daily import sync_daily, sync_full
@@ -45,12 +42,6 @@ def sync_overseas_cmd(
 ) -> None:
     selected = [c for c in COUNTRIES if c.code in country] if country else None
     sync_overseas(countries=selected, limit=limit, dry_run=dry_run)
-
-
-@app.command("backfill-overseas-thumbs", help="해외 이미지 URL을 Commons 썸네일로 교체")
-def backfill_overseas_thumbs_cmd(dry_run: bool = typer.Option(False, "--dry-run")) -> None:
-    result = backfill_overseas_thumbs(dry_run=dry_run)
-    typer.echo(result)
 
 
 @app.command("backfill-overseas-descriptions", help="해외 설명 ko.wikipedia 백필")

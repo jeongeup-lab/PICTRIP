@@ -10,8 +10,38 @@ from pictrip_data.sync.refcodes import load_ref_codes
 from pictrip_data.sync.upsert import upsert_spots
 
 
+MIN_SEEN_RATIO = 0.5
+
+
+class PartialFullSync(RuntimeError):
+    pass
+
+
 def watermark_param(wm: str | None) -> str | None:
     return wm[:8] if wm else None
+
+
+def soft_delete_unseen(conn, seen: set[str]) -> int:
+    cur = conn.cursor()
+    cur.execute("SELECT count(*) FROM spots WHERE show_flag = 1")
+    visible = cur.fetchone()[0]
+    if visible and len(seen) < visible * MIN_SEEN_RATIO:
+        raise PartialFullSync(
+            f"full sync saw {len(seen)} of {visible} visible spots "
+            f"(< {MIN_SEEN_RATIO:.0%}) — refusing to soft-delete"
+        )
+    cur.execute(
+        "CREATE TEMP TABLE seen_content_ids (content_id varchar(32) PRIMARY KEY) ON COMMIT DROP"
+    )
+    with cur.copy("COPY seen_content_ids (content_id) FROM STDIN") as copy:
+        for content_id in seen:
+            copy.write_row((content_id,))
+    cur.execute(
+        "UPDATE spots SET show_flag = 0, synced_at = now() "
+        "WHERE show_flag = 1 AND NOT EXISTS ("
+        "SELECT 1 FROM seen_content_ids s WHERE s.content_id = spots.content_id)"
+    )
+    return cur.rowcount
 
 
 def _run(
@@ -42,13 +72,7 @@ def _run(
                     max_seen = s.modified_time
             page += 1
         if mode == "full" and seen:
-            cur = conn.cursor()
-            cur.execute(
-                "UPDATE spots SET show_flag = 0, synced_at = now() "
-                "WHERE show_flag = 1 AND content_id <> ALL(%s)",
-                (list(seen),),
-            )
-            c["soft_deleted"] += cur.rowcount
+            c["soft_deleted"] += soft_delete_unseen(conn, seen)
             conn.commit()
         c["watermark_to"] = max_seen.strftime("%Y%m%d%H%M%S") if max_seen else watermark_from
 

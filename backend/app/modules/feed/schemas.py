@@ -110,31 +110,3 @@ class RecommendationsResponse(BaseModel):
     savedCount: int
     minSaved: int
     items: list[HomeSpotCard]
-
-
-class ShortsSpotCard(BaseModel):
-    contentId: str
-    title: str
-    regionLabel: str
-    imageUrl: str | None
-
-    @field_validator("imageUrl")
-    @classmethod
-    def _upgrade_image(cls, v: str | None) -> str | None:
-        return https_kto_image(v) or v
-
-
-class ShortsCard(BaseModel):
-    videoId: str
-    title: str
-    channelTitle: str
-    thumbnailUrl: str
-    viewCount: int
-    anchorLabel: str
-    spots: list[ShortsSpotCard]
-
-
-class ShortsResponse(BaseModel):
-    items: list[ShortsCard]
-    nextCursor: str | None
-    hasMore: bool
