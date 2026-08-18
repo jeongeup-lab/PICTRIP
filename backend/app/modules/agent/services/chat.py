@@ -123,7 +123,11 @@ async def events(
     posts = await _ground_with_blogs(result, message=payload.message)
     sources = _sources(posts)
 
-    if llm.writer_depends_on_gemini() and _llm_is_down(result):
+    if (
+        llm.writer_depends_on_gemini()
+        and llm.structured_depends_on_gemini()
+        and _llm_is_down(result)
+    ):
         logger.warning("agent.chat.writer_skipped", results=len(result.spots))
         rescue = _deterministic_answer(result) or ask_service.NO_AXIS_ANSWER
         yield "delta", ChatDeltaEvent(text=rescue)

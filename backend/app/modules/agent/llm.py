@@ -170,6 +170,15 @@ class WriterClient(Protocol):
     def stream_text(self, *, system: str, user_text: str) -> AsyncIterator[str]: ...
 
 
+_JSON_INSTRUCTION = """\
+
+너는 JSON 만 출력한다. 설명·머리말·코드펜스를 붙이지 않는다.
+아래 JSON Schema 를 정확히 따른다. 스키마에 없는 키를 만들지 않는다.
+
+{schema}
+"""
+
+
 class OpenAIChatClient:
     def __init__(
         self,
@@ -190,6 +199,60 @@ class OpenAIChatClient:
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+    async def generate_json(
+        self,
+        *,
+        system: str,
+        user_text: str | None = None,
+        image_bytes: bytes | None = None,
+        image_mime: str | None = None,
+        video_uri: str | None = None,
+        response_schema: dict[str, Any],
+        request_timeout: float = STRUCTURED_TIMEOUT_SECONDS,
+    ) -> Any:
+        if image_bytes or video_uri:
+            raise AgentIntentUnavailable()
+        instructed = system + _JSON_INSTRUCTION.format(
+            schema=json.dumps(response_schema, ensure_ascii=False)
+        )
+        body = {
+            "model": self._model,
+            "temperature": 0.0,
+            "max_tokens": STRUCTURED_MAX_OUTPUT_TOKENS,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": instructed},
+                {"role": "user", "content": user_text or ""},
+            ],
+        }
+        try:
+            resp = await self._post_json(body, request_timeout=request_timeout)
+            text = resp.json()["choices"][0]["message"]["content"]
+            return json.loads(text)
+        except (httpx.HTTPError, KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
+            logger.warning(
+                "agent.llm.failed",
+                error_type=type(exc).__name__,
+                status=(
+                    exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+                ),
+                detail=_failure_detail(exc),
+            )
+            if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
+                raise RateLimited() from exc
+            raise AgentIntentUnavailable() from exc
+
+    @retry(
+        retry=retry_if_exception(_is_transient),
+        stop=stop_after_attempt(STRUCTURED_ATTEMPTS),
+        wait=wait_exponential(multiplier=0.5, max=4),
+        reraise=True,
+    )
+    async def _post_json(self, body: dict[str, Any], *, request_timeout: float) -> httpx.Response:
+        resp = await self._client.post("/chat/completions", json=body, timeout=request_timeout)
+        resp.raise_for_status()
+        return resp
 
     async def stream_text(self, *, system: str, user_text: str) -> AsyncIterator[str]:
         request = self._client.build_request(
@@ -314,7 +377,34 @@ def get_writer_client() -> WriterClient:
             assert_never(unreachable)
 
 
+class StructuredClient(Protocol):
+    async def generate_json(
+        self,
+        *,
+        system: str,
+        user_text: str | None = ...,
+        image_bytes: bytes | None = ...,
+        image_mime: str | None = ...,
+        video_uri: str | None = ...,
+        response_schema: dict[str, Any],
+        request_timeout: float = ...,
+    ) -> Any: ...
+
+
+def get_structured_client() -> StructuredClient:
+    if settings.LLM_PROVIDER == "gemini":
+        return get_client()
+    client = get_writer_client()
+    if not isinstance(client, OpenAIChatClient):
+        raise AgentIntentUnavailable()
+    return client
+
+
 def writer_depends_on_gemini() -> bool:
+    return settings.LLM_PROVIDER == "gemini"
+
+
+def structured_depends_on_gemini() -> bool:
     return settings.LLM_PROVIDER == "gemini"
 
 

@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from app.config import Settings
 from app.modules.agent import llm
+from app.modules.agent.errors import AgentIntentUnavailable
 from app.modules.agent.schemas import AnswerSegment, AskResponse, AskStep, ChatRequest, QueryIntent
 from app.modules.agent.services import ask as ask_service
 from app.modules.agent.services import chat as chat_service
@@ -374,3 +375,69 @@ async def test_a_deepseek_writer_leaves_the_gemini_rescue_path_switched_off(monk
     )
 
     assert llm.writer_depends_on_gemini() is False
+
+
+def test_a_deepseek_deployment_routes_intent_extraction_away_from_gemini(monkeypatch) -> None:
+    monkeypatch.setattr(
+        llm, "settings", Settings(LLM_PROVIDER="deepseek", DEEPSEEK_API_KEY="sk-live")
+    )
+
+    assert isinstance(llm.get_structured_client(), llm.DeepSeekClient)
+    assert llm.structured_depends_on_gemini() is False
+
+
+def test_gemini_still_serves_structured_output_when_it_is_the_configured_provider(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(llm, "settings", Settings())
+
+    assert isinstance(llm.get_structured_client(), llm.GeminiClient)
+    assert llm.structured_depends_on_gemini() is True
+
+
+@pytest.mark.anyio
+async def test_openai_structured_calls_ask_for_json_and_carry_the_schema_in_the_prompt() -> None:
+    seen: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": '{"task":"search"}'}}]}
+        )
+
+    client = llm.DeepSeekClient(
+        base_url="https://api.deepseek.com/v1",
+        model="deepseek-chat",
+        api_key="sk-live",
+        transport=httpx.MockTransport(handler),
+    )
+
+    try:
+        data = await client.generate_json(
+            system="너는 도우미다.",
+            user_text="제주 박물관",
+            response_schema={"type": "object", "properties": {"task": {"type": "string"}}},
+        )
+    finally:
+        await client.aclose()
+
+    assert data == {"task": "search"}
+    body = seen[0]
+    assert body["response_format"] == {"type": "json_object"}
+    assert body["temperature"] == 0.0
+    assert '"task"' in body["messages"][0]["content"]
+
+
+@pytest.mark.anyio
+async def test_a_photo_question_cannot_be_sent_to_a_text_only_structured_provider() -> None:
+    client = llm.DeepSeekClient(
+        base_url="https://api.deepseek.com/v1", model="deepseek-chat", api_key="sk-live"
+    )
+
+    try:
+        with pytest.raises(AgentIntentUnavailable):
+            await client.generate_json(
+                system="s", image_bytes=b"\x89PNG", response_schema={"type": "object"}
+            )
+    finally:
+        await client.aclose()
