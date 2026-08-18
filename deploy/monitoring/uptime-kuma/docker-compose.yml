@@ -1,0 +1,21 @@
+# CT111 pictrip-pipeline — Uptime-Kuma 단독.
+#
+# 왜 CT111 인가: heartbeat 잡이 실제로 도는 러너 호스트고, Streamlit 대시보드를
+# 내리면서 슬롯이 비었다. 전용 CT113 을 새로 만들어도 같은 Proxmox 호스트라
+# 가용성이 나아지지 않는다 — 홈서버 전소까지 커버하려면 오프사이트 push 대상이
+# 필요하고, heartbeat 액션은 URL 만 받으므로 그때는 URL 만 바꾸면 된다.
+#
+# Prometheus/Grafana 는 여기 없다 — deploy/monitoring/docker-compose.yml (Phase 3).
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    volumes:
+      - kumadata:/app/data
+    ports:
+      # tailnet/LAN 전용. 퍼블릭 노출 없음 — cloudflared 는 CT112 에만 있다.
+      - "3001:3001"
+
+volumes:
+  kumadata:
