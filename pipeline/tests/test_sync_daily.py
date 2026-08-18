@@ -1,4 +1,5 @@
 import json
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -6,7 +7,10 @@ import pytest
 from pictrip_data.sync.audit import ensure_table
 from pictrip_data.sync.daily import (
     PartialFullSync,
+    WatermarkTooOld,
+    _run,
     sync_daily,
+    sync_dates,
     sync_full,
     watermark_param,
 )
@@ -103,3 +107,63 @@ def test_sync_full_refuses_soft_delete_on_partial_fetch(seed_refs):
     assert cur.fetchone()[0] == 10
     cur.execute("SELECT status, soft_deleted FROM sync_runs ORDER BY id DESC LIMIT 1")
     assert cur.fetchone() == ("error", 0)
+
+
+def test_sync_dates_walks_each_day_to_today():
+    assert sync_dates("20260626183808", date(2026, 6, 29)) == [
+        "20260626",
+        "20260627",
+        "20260628",
+        "20260629",
+    ]
+
+
+def test_sync_dates_full_when_no_watermark():
+    assert sync_dates(None, date(2026, 6, 29)) == [None]
+
+
+def test_sync_dates_refuses_stale_watermark():
+    with pytest.raises(WatermarkTooOld):
+        sync_dates("20260101000000", date(2026, 6, 29))
+
+
+def test_watermark_advances_when_the_day_had_no_changes(seed_refs):
+    conn = seed_refs
+    ensure_table(conn)
+    client = FakeClient({})
+    _run("incremental", ["20260701", "20260702"], client, conn, watermark_from="20260701120000")
+
+    cur = conn.cursor()
+    cur.execute("SELECT watermark_to FROM sync_runs ORDER BY id DESC LIMIT 1")
+    assert cur.fetchone()[0] == "20260702000000"
+
+
+def test_watermark_never_regresses_below_watermark_from(seed_refs):
+    conn = seed_refs
+    ensure_table(conn)
+    client = FakeClient({1: (ITEMS, 2)})
+    _run("incremental", ["20260628"], client, conn, watermark_from="20260701000000")
+
+    cur = conn.cursor()
+    cur.execute("SELECT watermark_to FROM sync_runs ORDER BY id DESC LIMIT 1")
+    assert cur.fetchone()[0] == "20260701000000"
+
+
+def test_watermark_takes_the_newest_modified_time_seen(seed_refs):
+    conn = seed_refs
+    ensure_table(conn)
+    client = FakeClient({1: (ITEMS, 2)})
+    _run("incremental", ["20260626"], client, conn, watermark_from="20260626183808")
+
+    cur = conn.cursor()
+    cur.execute("SELECT watermark_to FROM sync_runs ORDER BY id DESC LIMIT 1")
+    assert cur.fetchone()[0] == "20260627043000"
+
+
+def test_incremental_requests_one_call_per_day(seed_refs):
+    conn = seed_refs
+    ensure_table(conn)
+    client = FakeClient({})
+    _run("incremental", ["20260701", "20260702", "20260703"], client, conn)
+
+    assert [mt for _page, mt in client.calls] == ["20260701", "20260702", "20260703"]
