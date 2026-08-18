@@ -16,6 +16,9 @@ jest.mock("@/features/channels/queries", () => ({
 }));
 jest.mock("@/features/saved/hooks/use-save-optimistic", () => ({ useSaveOptimistic: jest.fn() }));
 jest.mock("@/features/spots/queries", () => ({ prefetchSpot: jest.fn() }));
+jest.mock("@/features/home/hooks/use-home-location", () => ({
+  useHomeLocation: () => ({ coords: null, status: "denied", request: jest.fn() }),
+}));
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));

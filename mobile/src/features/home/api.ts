@@ -31,21 +31,12 @@ export interface RegionLabel {
   label: string;
 }
 
-export type RankCategory = "SPOT" | "CAFE" | "FOOD";
-
-export async function getNearby(
-  coords: { lat: number; lng: number },
-  category?: RankCategory,
-): Promise<HomeCards> {
-  return (await api.get("/home/nearby", {
-    params: { ...coords, ...(category ? { category } : {}) },
-  })) as unknown as HomeCards;
+export async function getNearby(coords: { lat: number; lng: number }): Promise<HomeCards> {
+  return (await api.get("/home/nearby", { params: coords })) as unknown as HomeCards;
 }
 
-export async function getTrending(category?: RankCategory): Promise<HomeCards> {
-  return (await api.get("/home/trending", {
-    params: category ? { category } : {},
-  })) as unknown as HomeCards;
+export async function getTrending(): Promise<HomeCards> {
+  return (await api.get("/home/trending")) as unknown as HomeCards;
 }
 
 export type TasteCategory = "SPOT" | "CAFE" | "FOOD" | "FESTA" | "HIDDEN";

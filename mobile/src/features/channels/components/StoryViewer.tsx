@@ -15,6 +15,7 @@ import { Image } from "expo-image";
 import { Icon } from "@/components/Icon";
 import { RemoteImage, fullSizeSourceUri } from "@/components/RemoteImage";
 import { useChannelCards, useChannels, useSeenChannels } from "@/features/channels/queries";
+import { useHomeLocation } from "@/features/home/hooks/use-home-location";
 import type { ChannelKey } from "@/features/channels/api";
 import { StoryCard } from "@/features/channels/components/StoryCard";
 import { prefetchSpot } from "@/features/spots/queries";
@@ -32,7 +33,8 @@ export function StoryViewer({ start }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const cardWidth = width - 32;
-  const { data: channelData, isError: channelsError } = useChannels();
+  const { coords } = useHomeLocation();
+  const { data: channelData, isError: channelsError } = useChannels(coords);
   const { markSeen } = useSeenChannels();
   const channels = (channelData?.channels ?? []).filter((c) => c.available);
 
@@ -47,7 +49,7 @@ export function StoryViewer({ start }: Props) {
   const channel = channels[channelIdx];
   const channelKey = channel?.key ?? start;
 
-  const { data: cardData, isError } = useChannelCards(channelKey);
+  const { data: cardData, isError } = useChannelCards(channelKey, coords);
   const noData = !cardData;
   const cards = cardData?.cards ?? [];
   const cardCount = cards.length;
