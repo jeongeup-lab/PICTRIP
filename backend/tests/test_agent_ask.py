@@ -43,6 +43,7 @@ from app.modules.agent.services import photo as photo_service
 from app.modules.agent.services import refine as refine_service
 from app.modules.agent.services import resolve as resolve_service
 from app.modules.agent.services import retrieve
+from app.modules.agent.services import routes as routes_module
 from app.modules.agent.services import suggest as suggest_service
 from app.modules.feed.services import kto_channels
 from app.modules.feed.services.channels import ChannelCardRow
@@ -1580,7 +1581,7 @@ async def test_indoor_with_an_outdoor_category_falls_back_to_indoor_only(
         "category_search",
     ]
     assert data["steps"][1]["badge"] == "0곳"
-    assert data["steps"][2]["label"] == ask_service.INDOOR_RETRY_LABEL
+    assert data["steps"][2]["label"] == routes_module.INDOOR_RETRY_LABEL
     assert [spot["contentId"] for spot in data["spots"]] == ["m1"]
 
 
@@ -3178,7 +3179,7 @@ async def test_widening_names_the_sido_that_owns_the_narrowed_hint() -> None:
 
     assert scope.narrowed_hints == ("여수",)
     assert scope.narrowed_sidos == ("전라남도",)
-    assert ask_service._widen_label(scope) == "여수 결과 없음 — 전라남도로 넓힘"
+    assert routes_module.widen_label(scope) == "여수 결과 없음 — 전라남도로 넓힘"
 
 
 @pytest.mark.integration
@@ -3238,7 +3239,7 @@ async def test_two_narrowed_sigungus_both_appear_in_the_widening_notice() -> Non
 
     assert scope.narrowed_hints == ("경주", "여수")
     assert scope.narrowed_sidos == ("경상북도", "전라남도")
-    assert ask_service._widen_label(scope) == "경주 · 여수 결과 없음 — 경상북도 · 전라남도로 넓힘"
+    assert routes_module.widen_label(scope) == "경주 · 여수 결과 없음 — 경상북도 · 전라남도로 넓힘"
 
 
 @pytest.mark.integration
