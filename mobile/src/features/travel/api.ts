@@ -73,6 +73,7 @@ export interface TravelSpot {
   lat: number | null;
   lng: number | null;
   categoryGroup?: string | null;
+  chips?: string[];
   hasCrowd?: boolean;
   source?: "kto" | "kakao";
   externalUrl?: string | null;
@@ -192,6 +193,8 @@ export interface ChatStepEvent {
 export interface ChatCardsEvent {
   spots: TravelSpot[];
   tagBasis?: string | null;
+  applied?: string[];
+  refinements?: Suggestion[];
 }
 
 export interface ChatDoneEvent {
@@ -200,6 +203,8 @@ export interface ChatDoneEvent {
   sources: SourceItem[];
   intent: QueryIntent;
   totalCount: number;
+  applied?: string[];
+  refinements?: Suggestion[];
   traceId?: string | null;
 }
 
@@ -214,6 +219,8 @@ export interface ChatInput {
   coords?: Coords | null;
   clientTime?: string | null;
   context?: AskContext | null;
+  intent?: QueryIntent | null;
+  patch?: RefinePatch | null;
   history?: ChatHistoryItem[] | null;
 }
 
@@ -235,6 +242,8 @@ function chatBody(input: ChatInput): Record<string, unknown> {
   }
   if (input.clientTime) body.clientTime = input.clientTime;
   if (input.context) body.context = input.context;
+  if (input.intent) body.intent = input.intent;
+  if (input.patch) body.patch = input.patch;
   if (input.history && input.history.length > 0) body.history = input.history;
   return body;
 }

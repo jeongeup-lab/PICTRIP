@@ -129,7 +129,17 @@ export function SpotCard({
           </Text>
 
           <View style={styles.row}>
-            {metric ? <MetricChip metric={metric} onPress={onMetricPress} /> : null}
+            <View style={styles.chips}>
+              {metric ? <MetricChip metric={metric} onPress={onMetricPress} /> : null}
+              {(spot.chips ?? [])
+                .filter((chip) => chip !== spot.tag)
+                .slice(0, 2)
+                .map((chip) => (
+                  <View key={chip} style={styles.chip}>
+                    <Text style={styles.chipText}>{chip}</Text>
+                  </View>
+                ))}
+            </View>
 
             <Pressable
               testID="travel-card-detail"
@@ -172,6 +182,23 @@ export function SpotCard({
 }
 
 const styles = StyleSheet.create({
+  chips: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    flexShrink: 1,
+  },
+  chip: {
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 7,
+    backgroundColor: colors.fillStrong,
+  },
+  chipText: {
+    fontSize: 11.5,
+    fontWeight: "500",
+    color: colors.sec,
+  },
   card: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,

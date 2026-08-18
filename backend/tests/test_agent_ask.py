@@ -3647,13 +3647,13 @@ async def test_a_mood_only_zero_turn_names_the_mood_instead_of_saying_this_condi
 def test_zero_answer_drops_a_category_that_never_reached_the_query() -> None:
     intent = QueryIntent(categoryKeywords=["존재하지않는유형"], indoorOnly=True)
 
-    unapplied = answer_service._applied_conditions(
+    unapplied = answer_service.applied_conditions(
         answer_service.searched_intent(
             intent, has_coords=False, region_hints=list(intent.regionHints), keywords=[]
         ),
         axes=suggest_service.ALL_AXES,
     )
-    applied = answer_service._applied_conditions(intent, axes=suggest_service.ALL_AXES)
+    applied = answer_service.applied_conditions(intent, axes=suggest_service.ALL_AXES)
 
     assert unapplied == ["실내"]
     assert applied == ["존재하지않는유형", "실내"]
@@ -3666,7 +3666,7 @@ def test_a_mood_that_survives_an_unresolved_keyword_is_labeled_as_mood() -> None
         intent, has_coords=False, region_hints=list(intent.regionHints), keywords=[]
     )
 
-    assert answer_service._applied_conditions(searched, axes=suggest_service.ALL_AXES) == ["분위기"]
+    assert answer_service.applied_conditions(searched, axes=suggest_service.ALL_AXES) == ["분위기"]
 
 
 def test_searched_intent_leaves_an_intent_alone_when_every_axis_reached_the_query() -> None:

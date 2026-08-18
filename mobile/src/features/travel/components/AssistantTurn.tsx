@@ -4,12 +4,13 @@ import { Icon } from "@/components/Icon";
 import { KakaoWebMap } from "@/features/map/components/KakaoWebMap";
 import { RichAnswerText } from "@/features/travel/components/RichAnswerText";
 import { SourcesSheet, KIND_ICONS } from "@/features/travel/components/SourcesSheet";
+import { ConditionRow } from "@/features/travel/components/ConditionRow";
 import { SpotCarousel } from "@/features/travel/components/SpotCarousel";
 import { StepSpinner } from "@/features/travel/components/StepSpinner";
 import { agentErrorMessageForCode } from "@/features/travel/lib/agent-errors";
 import { coordsOf } from "@/features/travel/lib/distance";
 import { bounds, center, pinsFrom, placed } from "@/features/travel/lib/spot-geo";
-import type { TravelSpot } from "@/features/travel/api";
+import type { RefinePatch, TravelSpot } from "@/features/travel/api";
 import type { ChatTurn } from "@/features/travel/stores/chat-store";
 import type { LatLng } from "@/features/map/lib/geo";
 import { colors, radii, spacing } from "@/constants/theme";
@@ -30,6 +31,7 @@ interface Props {
   onSaveToggle: (saved: boolean) => void;
   onNotice: (message: string) => void;
   onFocusSpot: (contentId: string | null) => void;
+  onRefine: (patch: RefinePatch) => void;
 }
 
 function StepRow({ label, badge, done }: { label: string; badge: string | null; done: boolean }) {
@@ -57,6 +59,7 @@ export function AssistantTurn({
   onSaveToggle,
   onNotice,
   onFocusSpot,
+  onRefine,
 }: Props) {
   const [focusedAt, setFocusedAt] = useState(0);
   const [scrollToAt, setScrollToAt] = useState<number | null>(null);
@@ -117,6 +120,8 @@ export function AssistantTurn({
           <RichAnswerText text={turn.text} />
         </View>
       ) : null}
+
+      <ConditionRow applied={turn.applied} refinements={turn.refinements} onRefine={onRefine} />
 
       {turn.spots.length > 0 ? (
         <View testID="travel-carousel-slot" style={styles.carouselSlot}>

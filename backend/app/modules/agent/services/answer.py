@@ -6,6 +6,7 @@ from app.core.logging import get_logger
 from app.modules.agent.errors import AgentNoResults
 from app.modules.agent.repositories import CandidateRow
 from app.modules.agent.schemas import (
+    MAX_CARD_CHIPS,
     AgentSpotCard,
     AnswerSegment,
     AskResponse,
@@ -83,17 +84,47 @@ def _card(
     lng: float | None,
     near: bool,
 ) -> AgentSpotCard:
+    card = retrieve.to_card(row, tag=_lead_tag(row, intent=intent, lat=lat, lng=lng, near=near))
+    return card.model_copy(update={"chips": _chips(row, card, intent=intent)})
+
+
+def _lead_tag(
+    row: CandidateRow,
+    *,
+    intent: QueryIntent,
+    lat: float | None,
+    lng: float | None,
+    near: bool,
+) -> str | None:
     if near and lat is not None and lng is not None:
         km = retrieve.distance_km(row, lat=lat, lng=lng)
         if km is not None:
-            return retrieve.to_card(row, tag=_km_label(km))
+            return _km_label(km)
     if intent.crowdPreference == "quiet" and row.percentile is not None:
-        return retrieve.to_card(row, tag=f"하위 {row.percentile}%")
-    return retrieve.to_card(row, tag=retrieve.crowd_label(row))
+        return f"하위 {row.percentile}%"
+    return retrieve.crowd_label(row)
+
+
+def _chips(row: CandidateRow, card: AgentSpotCard, *, intent: QueryIntent) -> list[str]:
+    """이 곳이 왜 뽑혔는지를 곳마다 다른 값으로만 말한다.
+
+    조건 줄이 이미 말하는 것(실내·한적)은 넣지 않는다 — 같은 말을 두 번 하지 않는다.
+    """
+    chips: list[str] = []
+    if card.tag:
+        chips.append(card.tag)
+    crowd = retrieve.crowd_label(row)
+    if crowd is not None and crowd not in chips:
+        chips.append(crowd)
+    if row.percentile is not None and intent.crowdPreference != "quiet":
+        percentile = f"하위 {row.percentile}%"
+        if percentile not in chips:
+            chips.append(percentile)
+    return chips[:MAX_CARD_CHIPS]
 
 
 def _answer_opening(intent: QueryIntent) -> str:
-    conditions = _applied_conditions(intent, axes=suggest_service.ALL_AXES)
+    conditions = applied_conditions(intent, axes=suggest_service.ALL_AXES)
     if not conditions:
         return "조건에 맞는 곳으로 "
     return f"{' + '.join(conditions)} 조건으로 "
@@ -195,7 +226,7 @@ def searched_intent(
     return intent.model_copy(update=update) if update else intent
 
 
-def _applied_conditions(intent: QueryIntent, *, axes: frozenset[DropAxis]) -> list[str]:
+def applied_conditions(intent: QueryIntent, *, axes: frozenset[DropAxis]) -> list[str]:
     labels: list[str] = []
     if "region" in axes and intent.regionHints:
         labels.append(intent.regionHints[0])
@@ -214,7 +245,7 @@ def _applied_conditions(intent: QueryIntent, *, axes: frozenset[DropAxis]) -> li
 
 
 def _zero_answer(intent: QueryIntent, *, axes: frozenset[DropAxis]) -> list[AnswerSegment]:
-    conditions = _applied_conditions(intent, axes=axes)
+    conditions = applied_conditions(intent, axes=axes)
     way_out = (
         " 지역을 넓히면 나올 수 있어요."
         if intent.regionHints
@@ -262,7 +293,7 @@ def _zero_response(
         intent, has_coords=has_coords, region_hints=region_hints, keywords=keywords
     )
     refinements = suggest_service.derive_for_zero(searched, has_coords=has_coords, axes=axes)
-    conditions = _applied_conditions(searched, axes=axes)
+    conditions = applied_conditions(searched, axes=axes)
     if not conditions or legacy_client:
         raise AgentNoResults()
     logger.info("agent.ask.zero", conditions=len(conditions), releasable=len(refinements))

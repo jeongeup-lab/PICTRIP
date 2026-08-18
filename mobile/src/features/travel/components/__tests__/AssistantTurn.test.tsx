@@ -32,12 +32,21 @@ function turnWith(sources: SourceItem[]): ChatTurn {
     id: "assistant-1",
     question: "제주 계곡 추천해줘",
     photoUri: null,
-    request: { message: "제주 계곡 추천해줘", photo: null, context: null, history: [] },
+    request: {
+      message: "제주 계곡 추천해줘",
+      photo: null,
+      context: null,
+      intent: null,
+      patch: null,
+      history: [],
+    },
     status: "done",
     steps: [],
     text: "",
     spots: [],
     tagBasis: null,
+    applied: [],
+    refinements: [],
     sources,
     intent: null,
     errorCode: null,
@@ -57,6 +66,7 @@ function mount(sources: SourceItem[]): renderer.ReactTestRenderer {
         onSaveToggle={jest.fn()}
         onNotice={jest.fn()}
         onFocusSpot={jest.fn()}
+        onRefine={jest.fn()}
       />,
     );
   });
