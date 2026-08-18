@@ -27,6 +27,21 @@ from app.web.envelope import ok
 router = APIRouter(tags=["feed"])
 
 
+@router.get("/feed", deprecated=True, summary="구 홈 피드 — /explore 와 동일 (v0.6.0 빌드 전용)")
+async def feed(
+    session: DbSession,
+    seed: str | None = Query(None),
+    cursor: str | None = Query(None),
+    limit: int = Query(6, ge=1, le=20),
+) -> dict[str, Any]:
+    """OTA 를 못 받는 v0.6.0 TestFlight 빌드가 홈에서 이 문을 친다.
+
+    현재 앱은 /explore 만 쓴다. v0.6.0 빌드 만료(2026-10-13) 후 삭제한다.
+    """
+    page = await posts.list_posts(session, seed=seed, cursor=cursor, limit=limit)
+    return ok(_to_response(page))
+
+
 @router.get("/explore")
 async def explore(
     session: DbSession,

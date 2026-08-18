@@ -81,6 +81,7 @@ async def test_feed_cursor_no_duplicates_same_seed(client, seeded):
 async def test_feed_same_seed_stable_order(client, seeded):
     a = (await client.get("/v1/explore", params={"limit": 3, "seed": "s1"})).json()["data"]
     b = (await client.get("/v1/explore", params={"limit": 3, "seed": "s1"})).json()["data"]
+    assert a["items"]
     assert [i["id"] for i in a["items"]] == [i["id"] for i in b["items"]]
 
 
@@ -94,3 +95,12 @@ async def test_feed_rejects_garbage_cursor(client, seeded):
 async def test_explore_same_pool(client, seeded):
     res = await client.get("/v1/explore", params={"limit": 30})
     assert len(res.json()["data"]["items"]) == 3
+
+
+async def test_feed_alias_matches_explore(client, seeded):
+    """v0.6.0 빌드는 OTA 를 못 받아 아직 /feed 를 친다 — 별칭이 살아 있어야 한다."""
+    seed = (await client.get("/v1/explore", params={"limit": 3})).json()["data"]["seed"]
+    a = (await client.get("/v1/explore", params={"limit": 3, "seed": seed})).json()["data"]
+    b = (await client.get("/v1/feed", params={"limit": 3, "seed": seed})).json()["data"]
+    assert a["items"]
+    assert [i["id"] for i in a["items"]] == [i["id"] for i in b["items"]]

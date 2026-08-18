@@ -155,7 +155,9 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
 - `hnsw.ef_search = 80` is an asyncpg `server_settings` in `app/core/db.py`.
 - 해외 게시물 피드는 `GET /explore` 하나다(홈·탐색이 같은 문을 쓴다): 커서
   페이지네이션 → 스와이프 시 `GET /overseas/{id}/matches`로 국내 매칭 3곳.
-  구 `/feed`·`/home/feed`·`/curations/{slug}`·`/taste/photo-search`는 제거됐고
+  `/feed` 는 `/explore` 의 deprecated 별칭으로만 남는다 — OTA 를 못 받는 v0.6.0
+  빌드가 아직 친다(만료 2026-10-13 후 삭제). 구 `/home/feed`·`/curations/{slug}`·
+  `/taste/photo-search`는 제거됐고
   `curations`/`curation_spots` 테이블도 리비전 `0026`에서 DROP 했다. 아직 남은
   은퇴 테이블(`plans`·`travel_shorts`·`travel_shorts_spots`)은 ORM이 없으므로
   `include_object` 제외가 유일한 보호막이다.
@@ -188,6 +190,15 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
 - 네이티브 모듈 추가는 허용한다 — Expo SDK 56 호환 여부를 먼저 확인하고,
   추가하면 OTA 로는 안 나가므로 `app.json` `version` 을 올려 `v*` 빌드로 낸다.
 - **DO NOT add `sync_runs` to backend Alembic** — pipeline owns it.
+- **엔드포인트를 지우기 전에 "배포된 빌드"를 기준으로 재라** — 현재 `mobile/src`
+  에서 호출 0건인 것과, 살아 있는 빌드가 안 부르는 것은 다르다. `runtimeVersion.
+  policy: appVersion` 이라 구 `v*` 빌드는 OTA 를 영영 못 받는다. 확인은 태그별로:
+  ```bash
+  git tag -l 'v*'
+  git grep -hoE "['\"\`]/[a-z][a-z0-9/{}$-]*" <tag> -- 'mobile/src/**/*.ts*'
+  ```
+  살아 있는 빌드가 부르면 지우지 말고 `deprecated=True` 별칭으로 남기고, 삭제
+  조건(빌드 만료일)을 docstring 에 적는다.
 - **`#` / `//` 주석 금지** — 의도는 이름·구조로 드러내고, 문맥은 커밋 메시지/PR에
   남긴다. (shebang·라이선스 헤더, raw SQL 안의 `--`, 설정 파일은 예외.)
 - **docstring 은 "왜"에만 쓴다** — 모듈 최상단 한 줄(이 파일의 책임)과, 이름으로
