@@ -117,7 +117,11 @@ export function AssistantTurn({
 
       {turn.text.length > 0 ? (
         <View style={styles.copy}>
-          <RichAnswerText text={turn.text} />
+          <RichAnswerText
+            text={turn.text}
+            spotCount={turn.spots.length}
+            onCitePress={(number) => focusSpotAt(number - 1, true)}
+          />
         </View>
       ) : null}
 

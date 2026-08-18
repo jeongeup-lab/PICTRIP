@@ -32,8 +32,7 @@ from app.web.errors import ValidationFailed
 
 PIECES = [
     "부산 계곡이라면 여기예요.\n",
-    "[[cards]]\n",
-    "- **계곡-v1** 물이 맑아요.\n",
+    "- **계곡-v1**[1] 물이 맑아요.\n",
 ]
 CLIENT_REQUEST_ID = "request-1"
 
@@ -122,25 +121,18 @@ async def test_chat_sends_cards_before_the_writer_starts_streaming(
     events = await _collect(ChatRequest(message="부산 계곡", clientRequestId=CLIENT_REQUEST_ID))
 
     names = [name for name, _ in events]
-    assert names == [
-        "step",
-        "step",
-        "step",
-        "step",
-        "cards",
-        "delta",
-        "delta",
-        "sources",
-        "done",
-    ]
+    assert names.index("cards") < names.index("delta"), "카드가 첫 글자보다 먼저 나가야 한다"
+    assert names[-2:] == ["sources", "done"]
+    assert set(names) == {"step", "cards", "delta", "sources", "done"}
     steps = [event.model_dump() for name, event in events if name == "step"]
     assert [step["status"] for step in steps] == ["run", "done", "run", "done"]
     assert steps[0]["index"] == steps[1]["index"] == 0
     assert steps[1]["badge"] == "AI 해석"
     deltas = "".join(event.model_dump()["text"] for name, event in events if name == "delta")
     assert "[[" not in deltas
+    assert "[1]" in deltas, "장소는 번호로 참조돼야 한다"
     done = events[-1][1].model_dump()
-    assert done["answerText"] == "부산 계곡이라면 여기예요.\n- **계곡-v1** 물이 맑아요."
+    assert done["answerText"] == "부산 계곡이라면 여기예요.\n- **계곡-v1**[1] 물이 맑아요."
     assert done["totalCount"] == 1
     assert [spot["contentId"] for spot in done["spots"]] == ["v1"]
 

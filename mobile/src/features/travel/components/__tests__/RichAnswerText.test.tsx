@@ -78,3 +78,64 @@ describe("RichAnswerText", () => {
     await act(async () => tree!.unmount());
   });
 });
+
+describe("인용 번호", () => {
+  it("카드 범위 안 번호는 탭 가능한 파트로 뗀다", () => {
+    const blocks = parseRichText("- **오동도**[1] 좋아요", 3);
+
+    expect(blocks[0].parts).toEqual([
+      { text: "오동도", bold: true },
+      { text: "1", bold: false, cite: 1 },
+      { text: " 좋아요", bold: false },
+    ]);
+  });
+
+  it("카드 수를 넘는 번호는 본문에서 지운다", () => {
+    const blocks = parseRichText("**어딘가**[7] 좋아요", 3);
+
+    expect(blocks[0].parts).toEqual([
+      { text: "어딘가", bold: true },
+      { text: " 좋아요", bold: false },
+    ]);
+  });
+
+  it("0번은 카드가 1번부터라 지운다", () => {
+    expect(parseRichText("가볼 만해요[0].", 3)[0].parts).toEqual([
+      { text: "가볼 만해요", bold: false },
+      { text: ".", bold: false },
+    ]);
+  });
+
+  it("숫자가 아닌 대괄호는 그대로 둔다", () => {
+    expect(parseRichText("[참고] 좋아요", 3)[0].parts).toEqual([
+      { text: "[참고] 좋아요", bold: false },
+    ]);
+  });
+
+  it("카드 수를 안 주면 번호를 건드리지 않는다", () => {
+    expect(parseRichText("**오동도**[1] 좋아요")[0].parts).toEqual([
+      { text: "오동도", bold: true },
+      { text: "[1] 좋아요", bold: false },
+    ]);
+  });
+
+  it("번호를 누르면 그 카드 순번을 알린다", async () => {
+    const tapped: number[] = [];
+    let tree: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(
+        <RichAnswerText
+          text="**오동도**[2] 좋아요"
+          spotCount={3}
+          onCitePress={(n) => tapped.push(n)}
+        />,
+      );
+    });
+
+    const cite = tree!.root.findAll((node) => node.props.testID === "answer-cite-2")[0];
+    await act(async () => cite.props.onPress());
+
+    expect(tapped).toEqual([2]);
+    await act(async () => tree!.unmount());
+  });
+});

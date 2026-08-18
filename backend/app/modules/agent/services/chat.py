@@ -191,14 +191,12 @@ async def events(
     )
     chunks = llm.get_writer_client().stream_text(system=system, user_text=user_text)
     guarded = _watchdog(chunks)
-    parsed = writer.parse_stream(guarded)
     parts: list[str] = []
     try:
         try:
-            async for written in parsed:
-                if isinstance(written, writer.WriterDelta):
-                    parts.append(written.text)
-                    yield "delta", ChatDeltaEvent(text=written.text)
+            async for written in guarded:
+                parts.append(written)
+                yield "delta", ChatDeltaEvent(text=written)
         except (httpx.HTTPError, llm.CodexStreamProtocolError, TimeoutError) as exc:
             logger.warning(
                 "agent.chat.writer_failed",
@@ -210,7 +208,7 @@ async def events(
                 yield "error", ChatErrorEvent(code=failure.code, message=failure.message)
                 return
     finally:
-        await _shutdown(parsed, guarded, chunks)
+        await _shutdown(guarded, chunks)
 
     answer = _written(parts)
     if not answer:
