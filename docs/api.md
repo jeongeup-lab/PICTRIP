@@ -20,6 +20,7 @@
 | POST / DELETE | `/users/me/saved/{contentId}` | 저장/해제 (멱등) | JWT |
 | GET | `/spots/{contentId}` | 스팟 상세 (KTO lazy fetch, 7일 캐시) | — |
 | GET | `/explore` | 해외 게시물 피드·그리드 (seed+cursor, 기본 30개) — 홈·탐색이 같은 문을 쓴다 | — |
+| GET | `/feed` | **deprecated 별칭** — `/explore` 와 같은 코드. OTA 를 못 받는 v0.6.0 빌드가 아직 친다. 만료(2026-10-13) 후 삭제 | — |
 | GET | `/overseas/{id}/matches` | 해외→국내 매칭 3곳 | — |
 | GET | `/home/nearby` | 지금 주변 인기 장소 — 5km 내 혼잡도 랭킹 10곳 (lat/lng 필수) | — |
 | GET | `/home/trending` | 전국 트렌드 — 혼잡도 상위 10곳 | — |
