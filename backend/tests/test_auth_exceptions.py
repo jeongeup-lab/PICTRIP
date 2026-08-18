@@ -3,7 +3,6 @@ from app.web.errors import (
     AuthSessionRevoked,
     OAuthIdTokenInvalid,
     OAuthProviderUnavailable,
-    SessionStoreUnavailable,
 )
 
 
@@ -24,9 +23,3 @@ def test_auth_session_revoked_maps_to_401():
     err = AuthSessionRevoked()
     assert err.code == "AUTH_SESSION_REVOKED"
     assert err.http_status == 401
-
-
-def test_session_store_unavailable_maps_to_503():
-    err = SessionStoreUnavailable()
-    assert err.code == "SESSION_STORE_UNAVAILABLE"
-    assert err.http_status == 503

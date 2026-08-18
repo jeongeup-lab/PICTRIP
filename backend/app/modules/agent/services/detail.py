@@ -6,6 +6,7 @@ from app.core.db import AsyncSession
 from app.core.logging import get_logger
 from app.kto.client import KtoClient
 from app.kto.display import t1_display_url
+from app.kto.text import to_plain_text
 from app.modules.agent.emitter import begin_step, branch_of
 from app.modules.agent.errors import AgentNoResults
 from app.modules.agent.schemas import (
@@ -16,9 +17,7 @@ from app.modules.agent.schemas import (
     DetailField,
     QueryIntent,
 )
-from app.modules.spots.services import load_spot_detail
-from app.modules.spots.services.rows import SpotDetailRow, SpotIntroRow
-from app.modules.spots.text import to_plain_text
+from app.modules.spots.services import SpotDetailRow, SpotIntroRow, load_spot_detail
 from app.web.errors import AppError
 
 logger = get_logger(__name__)

@@ -25,7 +25,6 @@ from app.modules.feed import router as feed_router
 from app.modules.images import router as images_router
 from app.modules.map import router as map_router
 from app.modules.spots import router as spots_router
-from app.modules.system import router as system_router
 from app.modules.users import router as users_router
 from app.web.envelope import ok
 from app.web.errors import register_error_handlers
@@ -107,7 +106,13 @@ def create_app() -> FastAPI:
 
     @app.get("/health", include_in_schema=False)
     async def health() -> dict[str, Any]:
-        return ok({"status": "ok"})
+        return ok(
+            {
+                "status": "ok",
+                "apiVersion": API_VERSION,
+                "environment": settings.ENVIRONMENT,
+            }
+        )
 
     app.include_router(admin_router, prefix="/admin")
     admin_assets = Path(__file__).parent / "modules" / "admin" / "static" / "assets"
@@ -124,7 +129,6 @@ def create_app() -> FastAPI:
     app.include_router(images_router, prefix=prefix)
     app.include_router(map_router, prefix=prefix)
     app.include_router(agent_router, prefix=prefix)
-    app.include_router(system_router, prefix=prefix)
 
     return app
 

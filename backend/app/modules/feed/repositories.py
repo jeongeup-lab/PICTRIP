@@ -253,30 +253,6 @@ _NEARBY_CATEGORY_SQL: dict[str, str] = {
 }
 
 
-_NEARBY_RANKED_SQL = f"""
-SELECT * FROM (
-    SELECT {_SPOT_COLUMNS_SQL},
-           sc.concentration_rate AS rate,
-           sc.base_ymd AS base_ymd,
-           {_HAVERSINE_SQL} AS dist
-    FROM spots
-    LEFT JOIN spot_concentration sc ON sc.content_id = spots.content_id
-    {_SPOT_JOINS_SQL}
-    WHERE spots.show_flag = 1
-      AND spots.first_image_url IS NOT NULL
-      AND spots.first_image_url <> ''
-      AND spots.mapx IS NOT NULL
-      AND spots.mapy IS NOT NULL
-      AND spots.mapy BETWEEN (:min_lat)::double precision AND (:max_lat)::double precision
-      AND spots.mapx BETWEEN (:min_lng)::double precision AND (:max_lng)::double precision
-      AND ({_ALL_CATEGORIES_SQL})
-) near
-WHERE dist <= (:radius)::double precision
-ORDER BY rate DESC NULLS LAST, dist ASC, content_id ASC
-LIMIT (:lim)::int
-"""
-
-
 def _taste_picks_concentration_sql(category_sql: str, *, ascending: bool) -> str:
     direction = "ASC" if ascending else "DESC"
     return f"""
@@ -400,34 +376,6 @@ async def fetch_nearby_by_category(
 ) -> list[HomeSpotRow]:
     result = await session.execute(
         text(_NEARBY_CATEGORY_SQL[category]),
-        {
-            "lat": lat,
-            "lng": lng,
-            "min_lat": min_lat,
-            "max_lat": max_lat,
-            "min_lng": min_lng,
-            "max_lng": max_lng,
-            "radius": radius,
-            "lim": limit,
-        },
-    )
-    return [_home_spot_row(row) for row in result]
-
-
-async def fetch_nearby_ranked(
-    session: AsyncSession,
-    *,
-    lat: float,
-    lng: float,
-    min_lat: float,
-    max_lat: float,
-    min_lng: float,
-    max_lng: float,
-    radius: int,
-    limit: int,
-) -> list[HomeSpotRow]:
-    result = await session.execute(
-        text(_NEARBY_RANKED_SQL),
         {
             "lat": lat,
             "lng": lng,

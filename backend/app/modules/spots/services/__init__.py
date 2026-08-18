@@ -42,8 +42,14 @@ from app.modules.spots.services.rows import (
     SpotCardRow,
     SpotDetailRow,
     SpotImageRow,
+    SpotIntroRow,
 )
-from app.modules.spots.services.saved import list_saved_spots, save_spot, unsave_spot
+from app.modules.spots.services.saved import (
+    delete_all_saved_for_user,
+    list_saved_spots,
+    save_spot,
+    unsave_spot,
+)
 from app.modules.spots.services.search import (
     MAX_REGION_TOKENS,
     RegionPrefix,
@@ -63,6 +69,7 @@ __all__ = [
     "SpotCardRow",
     "SpotDetailRow",
     "SpotImageRow",
+    "SpotIntroRow",
     "SpotSearchRow",
     "all_categories_predicate",
     "all_categories_sql",
@@ -71,6 +78,7 @@ __all__ = [
     "canonical_region_token",
     "category_predicate",
     "category_sql",
+    "delete_all_saved_for_user",
     "derive_category",
     "fetch_detail_common",
     "find_nearby_spots",

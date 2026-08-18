@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from redis.asyncio import Redis
 
 from app.core.db import AsyncSession
 from app.core.logging import get_logger
+from app.kakao.local import kakao_local_get
 from app.kto.display import T1_TILE_WIDTH, t1_display_url
-from app.modules.map import repositories as repo
-from app.modules.map.kakao_local import kakao_local_get
 from app.modules.map.schemas import NearbySpotCard, RegionLabel
 from app.modules.spots.services import (
     NearbyCategory,
@@ -26,9 +24,6 @@ _NEARBY_LIMIT = 30
 _REGION_CACHE_KEY = "region:{lat:.3f}:{lng:.3f}"
 _REGION_CACHE_TTL = 86_400
 _COORD2REGIONCODE_PATH = "/geo/coord2regioncode.json"
-
-REGIONS_TREE_KEY = "regions:tree"
-_REGIONS_TREE_TTL = 86_400
 
 
 async def _enrich(session: AsyncSession, rows: list[NearbySpotRow]) -> list[NearbySpotRow]:
@@ -156,54 +151,3 @@ async def reverse_geocode(redis: Redis, *, lat: float, lng: float) -> RegionLabe
     except Exception as exc:
         logger.warning("map.region.cache_set_failed", error=str(exc))
     return label
-
-
-async def regions_tree(session: AsyncSession, redis: Redis) -> list[dict[str, Any]]:
-    try:
-        cached = await redis.get(REGIONS_TREE_KEY)
-    except Exception as exc:
-        logger.warning("map.regions_tree.cache_get_failed", error=str(exc))
-        cached = None
-    if cached is not None:
-        try:
-            raw = cached.decode() if isinstance(cached, bytes) else cached
-            return list(json.loads(raw))
-        except (ValueError, TypeError) as exc:
-            logger.warning("map.regions_tree.cache_corrupt", error=str(exc))
-
-    regions = await repo.fetch_regions(session)
-    sigungus = await repo.fetch_sigungus(session)
-    sido_centroids = await repo.fetch_sido_centroids(session)
-    sigungu_centroids = await repo.fetch_sigungu_centroids(session)
-
-    sigungus_by_regn: dict[str, list[Any]] = {}
-    for sg in sigungus:
-        sigungus_by_regn.setdefault(sg.ldong_regn_cd, []).append(sg)
-
-    tree: list[dict[str, Any]] = []
-    for region in regions:
-        sido_lng, sido_lat = sido_centroids.get(region.ldong_regn_cd, (0.0, 0.0))
-        sg_nodes: list[dict[str, Any]] = []
-        for sg in sigungus_by_regn.get(region.ldong_regn_cd, []):
-            lng, lat = sigungu_centroids.get(sg.ldong_signgu_cd, (sido_lng, sido_lat))
-            sg_nodes.append(
-                {
-                    "sigunguCode": sg.ldong_signgu_cd,
-                    "sigunguName": sg.ldong_signgu_nm,
-                    "centroid": {"lat": lat, "lng": lng},
-                }
-            )
-        tree.append(
-            {
-                "regionCode": region.ldong_regn_cd,
-                "regionName": region.ldong_regn_nm,
-                "centroid": {"lat": sido_lat, "lng": sido_lng},
-                "sigungus": sg_nodes,
-            }
-        )
-
-    try:
-        await redis.set(REGIONS_TREE_KEY, json.dumps(tree), ex=_REGIONS_TREE_TTL)
-    except Exception as exc:
-        logger.warning("map.regions_tree.cache_set_failed", error=str(exc))
-    return tree

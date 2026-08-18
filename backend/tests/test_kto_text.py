@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.modules.spots.text import clean_homepage
+from app.kto.text import clean_homepage
 
 
 @pytest.mark.parametrize(

@@ -17,7 +17,6 @@ from app.web.errors import AppError
 logger = get_logger(__name__)
 
 KST = timezone(timedelta(hours=9))
-_ROWS = 30
 _CARD_COUNT = 10
 _FESTA_WINDOW_DAYS = 90
 _FESTA_MAX_PAGES = 5
@@ -59,15 +58,6 @@ def _coord(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return parsed or None
-
-
-def _https(url: Any) -> str | None:
-    if not url:
-        return None
-    text = str(url)
-    if text.startswith("http://"):
-        return "https://" + text[len("http://") :]
-    return text
 
 
 async def _fetch_festival_items(

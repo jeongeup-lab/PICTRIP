@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.security.passwords import hash_password, verify_password
+from app.modules.admin.passwords import hash_password, verify_password
 
 
 def test_hash_password_is_not_plaintext() -> None:

@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import async_session_factory
 from app.core.logging import get_logger
 from app.kto.client import KtoClient, KtoService
+from app.kto.text import clean_homepage, clean_scalar, verbatim
 from app.modules.spots.models import (
     LclsSystmCode,
     Region,
@@ -29,7 +30,6 @@ from app.modules.spots.services.rows import (
     SpotImageRow,
     SpotIntroRow,
 )
-from app.modules.spots.text import clean_homepage, clean_scalar, verbatim
 from app.web.errors import KtoApiUnavailable, ResourceNotFound
 
 logger = get_logger(__name__)

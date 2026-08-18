@@ -6,12 +6,8 @@ from fastapi import APIRouter, Query, status
 
 from app.core.db import DbSession
 from app.core.redis import RedisDep
-from app.modules.map.schemas import RegionLabel, RegionNode
-from app.modules.map.services import (
-    nearby_cards,
-    regions_tree,
-    reverse_geocode,
-)
+from app.modules.map.schemas import RegionLabel
+from app.modules.map.services import nearby_cards, reverse_geocode
 from app.modules.spots.services import NearbyCategory
 from app.web.envelope import ok
 
@@ -56,12 +52,3 @@ async def region(
 ) -> dict[str, Any]:
     label: RegionLabel | None = await reverse_geocode(redis, lat=lat, lng=lng)
     return ok(label)
-
-
-@router.get(
-    "/map/regions-tree",
-    summary="17 시도 + 시군구 트리 (런타임 AVG centroid, 24h 캐시)",
-)
-async def regions_tree_route(session: DbSession, redis: RedisDep) -> dict[str, Any]:
-    tree = await regions_tree(session, redis)
-    return ok([RegionNode.model_validate(node) for node in tree])

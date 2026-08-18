@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from redis.asyncio import Redis
 
 from app.core.db import AsyncSession
-from app.modules.spots.services.saved import delete_all_saved_for_user
+from app.modules.spots.services import delete_all_saved_for_user
 from app.modules.users import apple_tokens
 from app.modules.users import repositories as repo
 from app.modules.users.oidc import verify_oauth_id_token

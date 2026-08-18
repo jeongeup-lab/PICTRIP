@@ -27,17 +27,6 @@ from app.web.envelope import ok
 router = APIRouter(tags=["feed"])
 
 
-@router.get("/feed")
-async def feed(
-    session: DbSession,
-    seed: str | None = Query(None),
-    cursor: str | None = Query(None),
-    limit: int = Query(6, ge=1, le=20),
-) -> dict[str, Any]:
-    page = await posts.list_posts(session, seed=seed, cursor=cursor, limit=limit)
-    return ok(_to_response(page))
-
-
 @router.get("/explore")
 async def explore(
     session: DbSession,
