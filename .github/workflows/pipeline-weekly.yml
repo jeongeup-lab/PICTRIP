@@ -1,9 +1,8 @@
 name: pipeline-weekly
 # 주간 정합성 DAG — 일일 증분이 못 보는 것들을 잡는다.
 #
-#   sync-full ─┬─ image-validate ─┬─ embed-repair ─┐
-#              │                  └─ gallery-repair┤
-#              └─ signals ─────────────────────────┴─ heartbeat
+#   sync-full ─┬─ image-validate ─ embed-repair ─ gallery-repair ─┐
+#              └─ signals ──────────────────────────────────────────┴─ heartbeat
 #
 # sync-full 이 유일한 soft-delete 경로다. 일일 증분(modifiedtime 필터)은
 # "사라진 스팟"을 볼 수 없어서, 전량 재조정 없이는 폐업·비공개 전환된 스팟이
@@ -78,7 +77,9 @@ jobs:
   # URL 을 고치면 트리거가 행을 지우므로 다시 채워야 한다. 일일 슬롯에서 빼고
   # 원인(image-validate) 뒤로 옮겼다.
   gallery-repair:
-    needs: image-validate
+    # embed-repair 뒤에 줄 세운다. 둘 다 image-validate 만 보고 동시에 pending 이 되면
+    # 같은 concurrency group 에서 나중에 들어온 쪽이 앞선 pending 을 취소한다.
+    needs: embed-repair
     runs-on: [self-hosted, ct112]
     timeout-minutes: 60
     # 임베딩 잡은 admin:embed:running Redis 락을 공유한다 — 겹치면 뒤에 온 잡이

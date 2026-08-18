@@ -33,7 +33,7 @@ def sync_dates(wm: str | None, today: date | None = None) -> list[str | None]:
     start = watermark_param(wm)
     if start is None:
         return [None]
-    day = datetime.strptime(start, "%Y%m%d").date()
+    day = min(datetime.strptime(start, "%Y%m%d").date(), today)
     if (today - day).days > MAX_CATCHUP_DAYS:
         raise WatermarkTooOld(
             f"watermark {start} 이 {MAX_CATCHUP_DAYS}일보다 오래됐다 — sync-full 로 복구할 것"

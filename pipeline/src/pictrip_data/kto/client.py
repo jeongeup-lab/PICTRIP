@@ -13,6 +13,21 @@ from tenacity import (
 from pictrip_data.config import settings
 
 _OPERATION = "areaBasedSyncList2"
+_OK_RESULT_CODES = {"0000", "00"}
+
+
+class KtoServiceError(RuntimeError):
+    pass
+
+
+def _body(payload: dict[str, Any], operation: str) -> dict[str, Any]:
+    response = payload.get("response", {})
+    header = response.get("header", {})
+    code = header.get("resultCode")
+    if code is not None and code not in _OK_RESULT_CODES:
+        raise KtoServiceError(f"{operation} resultCode={code} msg={header.get('resultMsg')}")
+    body: dict[str, Any] = response.get("body", {})
+    return body
 
 
 def _is_transient(exc: BaseException) -> bool:
@@ -49,7 +64,7 @@ class KtoClient:
         url = f"{settings.kto_base_url_kor}/{operation}"
         resp = self._client.get(url, params=merged)
         resp.raise_for_status()
-        body = resp.json().get("response", {}).get("body", {})
+        body = _body(resp.json(), operation)
         items = body.get("items")
         if not items:
             return []
@@ -80,7 +95,7 @@ class KtoClient:
         url = f"{settings.kto_base_url_kor}/{_OPERATION}"
         resp = self._client.get(url, params=params)
         resp.raise_for_status()
-        body = resp.json().get("response", {}).get("body", {})
+        body = _body(resp.json(), _OPERATION)
         total = int(body.get("totalCount") or 0)
         items = body.get("items")
         if not items:

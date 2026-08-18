@@ -14,7 +14,11 @@ INSERT INTO overseas_spots (
 ON CONFLICT (wikidata_id) DO UPDATE SET
     name_ko = EXCLUDED.name_ko, name_en = EXCLUDED.name_en,
     country_code = EXCLUDED.country_code, country_name_ko = EXCLUDED.country_name_ko,
-    description_ko = EXCLUDED.description_ko,
+    description_ko = CASE
+        WHEN EXCLUDED.description_ko IS NULL THEN overseas_spots.description_ko
+        WHEN length(coalesce(overseas_spots.description_ko, '')) >
+             length(EXCLUDED.description_ko) THEN overseas_spots.description_ko
+        ELSE EXCLUDED.description_ko END,
     embedding = CASE WHEN overseas_spots.image_url IS DISTINCT FROM EXCLUDED.image_url
                      THEN NULL ELSE overseas_spots.embedding END,
     image_url = EXCLUDED.image_url, image_author = EXCLUDED.image_author,
