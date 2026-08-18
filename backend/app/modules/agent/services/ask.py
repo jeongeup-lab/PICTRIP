@@ -65,6 +65,7 @@ PHOTO_BASIS = "사진 유사도 기준"
 RELATED_BASIS = "분위기 유사도 기준"
 CONTEXT_INTENT_LABEL = "앞 대화까지 보고 조건 추출"
 INTENT_FALLBACK_BADGE = "사전 매칭"
+INTENT_MODEL_BADGE = "AI 해석"
 NEAR_PROBE_LABEL = "근처 조건 없이 다시 재보기"
 FESTIVAL_FETCH_BUDGET_SECONDS = 4.0
 ANCHOR_RADIUS_M = 3000
@@ -190,7 +191,9 @@ async def _ask_with_photo(
             try:
                 intent = await intent_task
                 steps.append(
-                    AskStep(tool="intent", label="덧붙인 말에서 조건 추출", badge="Gemini")
+                    AskStep(
+                        tool="intent", label="덧붙인 말에서 조건 추출", badge=INTENT_MODEL_BADGE
+                    )
                 )
             except AppError as exc:
                 logger.warning("agent.photo.intent_fallback", code=exc.code)
@@ -624,7 +627,7 @@ async def _ask_with_question(
             AskStep(
                 tool="intent",
                 label=CONTEXT_INTENT_LABEL if prior or prior_spots else "질문에서 지역·조건 추출",
-                badge=INTENT_FALLBACK_BADGE if outcome.fallback else "Gemini",
+                badge=INTENT_FALLBACK_BADGE if outcome.fallback else INTENT_MODEL_BADGE,
             )
         )
     if intent.outOfScope:
