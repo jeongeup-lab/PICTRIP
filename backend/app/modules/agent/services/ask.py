@@ -37,6 +37,7 @@ from app.modules.agent.services import refine as refine_service
 from app.modules.agent.services import region as region_service
 from app.modules.agent.services import resolve as resolve_service
 from app.modules.agent.services import retrieve, routes
+from app.modules.agent.services import scene as scene_service
 from app.modules.agent.services import suggest as suggest_service
 from app.modules.agent.services.anchor import (
     _ask_with_anchor,
@@ -286,7 +287,8 @@ async def _ask_with_question(
         steps.append(
             AskStep(tool="intent", label=GUESSED_REGION_LABEL, badge=region.label or "현재 위치")
         )
-    if _asks_for_nothing(intent, prefixes=pre_ota_region_prefixes):
+    scene = scene_service.detect(question, list(intent.categoryKeywords))
+    if scene is None and _asks_for_nothing(intent, prefixes=pre_ota_region_prefixes):
         sentence = NO_AXIS_ANSWER if question.strip() else BLANK_ANSWER
         return _talk_response(steps, intent, sentence, legacy_client=legacy_client)
 
@@ -368,6 +370,7 @@ async def _ask_with_question(
         near=near,
         place_only=place_only,
         title_only=title_only,
+        scene=scene,
     )
     await routes.run_search(ask)
     intent = ask.intent
