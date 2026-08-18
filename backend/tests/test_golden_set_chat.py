@@ -233,3 +233,13 @@ def test_a_citation_when_no_cards_came_back_is_caught() -> None:
     )
 
     assert result.ok is False
+
+
+def test_the_app_naming_itself_is_not_a_place_hallucination() -> None:
+    result = judge_chat(
+        chat_case(expect_spots="none"),
+        200,
+        transcript(answer="**PICTRIP**은 여행지를 찾아드려요.", spots=[]),
+    )
+
+    assert result.ok is True, result.reasons

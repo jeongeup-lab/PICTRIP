@@ -732,6 +732,7 @@ MARKER_LEAKS = ("cards", "[[", FULLWIDTH_OPEN * 2)
 PHONE = re.compile(r"\d{2,4}-\d{3,4}-\d{4}")
 BOLD = re.compile(r"\*\*(.+?)\*\*")
 CITATION = re.compile(r"\[(\d{1,3})\]")
+NOT_A_PLACE = ("PICTRIP", "픽트립")
 
 _FORMAL_TAIL = re.compile(r"(.)니다")
 _HANGUL_BASE = 0xAC00
@@ -835,6 +836,8 @@ def asked_text(case_: Case) -> str:
 def grounded_in(name: str, spots: list[dict[str, Any]], question: str) -> bool:
     wanted = name.replace(" ", "")
     if not wanted:
+        return True
+    if any(word.lower() in wanted.lower() for word in NOT_A_PLACE):
         return True
     haystacks = [question.replace(" ", "")]
     for found in spots:
