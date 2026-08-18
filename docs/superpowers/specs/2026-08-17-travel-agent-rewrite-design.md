@@ -355,12 +355,31 @@ class AgentSpotCard(BaseModel):
 
 ---
 
-## 7.5 LLM 프로바이더 — writer만 DeepSeek
+## 7.5 LLM 프로바이더 — 전 구간 DeepSeek
 
-| 단계 | 프로바이더 | 이유 |
+> **2026-08-18 갱신.** 애초 이 절은 "writer 만 DeepSeek, intent 는 Gemini 유지"였다.
+> 근거는 `responseSchema` 강제였는데, **운영 Gemini 크레딧이 소진되면서**
+> (`429 RESOURCE_EXHAUSTED`) 그 전제가 무너졌다. 폴백이 살아 서비스는 유지됐지만
+> intent 가 계속 키워드 매칭으로 돌아 품질이 떨어졌다 — `"비 와도"` 를 `"와도"` 라는
+> 조건으로 뜯었다. **Gemini 를 기본에서 뺀다.**
+
+| 단계 | 프로바이더 | 방식 |
 |---|---|---|
-| intent 추출 | **Gemini 유지** | `responseSchema` 강제에 의존. 옮기면 `_RESPONSE_SCHEMA` 130줄 대체 설계 + 골든셋 500턴 재검증이 필요 |
-| writer | **DeepSeek** (`deepseek-v4-flash`) | 출력이 길어 비용을 태우는 쪽 |
+| intent 추출 | **DeepSeek** | `response_format: json_object` + 스키마를 프롬프트에 실음 |
+| writer | **DeepSeek** (`deepseek-chat`) | 스트리밍 |
+
+Gemini 경로는 코드에 남아 있다 (`LLM_PROVIDER=gemini`). 크레딧을 채우면 즉시 되돌릴 수 있다.
+
+**스키마는 프로바이더별로 만든다.** Gemini 는 대문자 방언(`"type": "OBJECT"`)이라 기존
+`_RESPONSE_SCHEMA` 를 쓰고, OpenAI 계열은 `QueryIntent.model_json_schema()` 로 생성한다.
+후자는 **모델이 곧 스키마**라 손으로 동기화할 것이 없다 — 130줄 이중관리가 사라진다.
+
+DeepSeek 은 스키마를 강제하지 않으므로 최종 방어는 기존 `QueryIntent` 파싱이 맡고,
+깨지면 `fallback_intent()` 키워드 폴백으로 떨어지는 경로가 그대로 살아있다.
+
+**사진 질의는 거절한다.** 텍스트 전용 프로바이더에 `image_bytes` 가 오면
+`AgentIntentUnavailable` 을 던진다. 이미지를 버리고 텍스트만으로 답하면 사용자가
+왜 사진이 무시됐는지 알 수 없다.
 
 ```python
 LLM_PROVIDER: Literal["gemini", "codex", "deepseek"] = "gemini"
@@ -374,7 +393,11 @@ DEEPSEEK_MODEL: str = "deepseek-v4-flash"
 **설정 검증** — codex는 local 전용이지만 deepseek은 호스티드라 운영에서도 허용한다.
 대신 API 키 필수 + HTTPS 강제.
 
-### 파생 효과 — Gemini 구조 탈출 경로가 꺼진다
+### 파생 효과 — Gemini 구조 탈출 경로가 꺼진다 (해소됨)
+
+> 아래는 writer 만 옮겼을 때의 서술이다. 이제 intent 도 DeepSeek 이라
+> `writer_depends_on_gemini() and structured_depends_on_gemini()` 가 둘 다 False 이고,
+> 이 탈출 경로는 `LLM_PROVIDER=gemini` 로 되돌릴 때만 살아난다.
 
 ```python
 # chat.py:122
