@@ -41,7 +41,7 @@ CLIENT_REQUEST_ID = "request-1"
 def _result(answer: list[AnswerSegment] | None = None) -> AskResponse:
     return AskResponse(
         steps=[
-            AskStep(tool="intent", label="질문에서 지역·조건 추출", badge="Gemini"),
+            AskStep(tool="intent", label="질문에서 지역·조건 추출", badge="AI 해석"),
             AskStep(tool="category_search", label="부산 관광지 조회", badge="1곳"),
         ],
         answer=answer or [],
@@ -136,7 +136,7 @@ async def test_chat_sends_cards_before_the_writer_starts_streaming(
     steps = [event.model_dump() for name, event in events if name == "step"]
     assert [step["status"] for step in steps] == ["run", "done", "run", "done"]
     assert steps[0]["index"] == steps[1]["index"] == 0
-    assert steps[1]["badge"] == "Gemini"
+    assert steps[1]["badge"] == "AI 해석"
     deltas = "".join(event.model_dump()["text"] for name, event in events if name == "delta")
     assert "[[" not in deltas
     done = events[-1][1].model_dump()
