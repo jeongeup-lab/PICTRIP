@@ -85,7 +85,7 @@ def _card(
     near: bool,
 ) -> AgentSpotCard:
     card = retrieve.to_card(row, tag=_lead_tag(row, intent=intent, lat=lat, lng=lng, near=near))
-    return card.model_copy(update={"chips": _chips(row, card, intent=intent)})
+    return card.model_copy(update={"chips": _chips(row, card, lat=lat, lng=lng, near=near)})
 
 
 def _lead_tag(
@@ -105,21 +105,29 @@ def _lead_tag(
     return retrieve.crowd_label(row)
 
 
-def _chips(row: CandidateRow, card: AgentSpotCard, *, intent: QueryIntent) -> list[str]:
+def _chips(
+    row: CandidateRow,
+    card: AgentSpotCard,
+    *,
+    lat: float | None,
+    lng: float | None,
+    near: bool,
+) -> list[str]:
     """이 곳이 왜 뽑혔는지를 곳마다 다른 값으로만 말한다.
 
-    조건 줄이 이미 말하는 것(실내·한적)은 넣지 않는다 — 같은 말을 두 번 하지 않는다.
+    같은 종류를 두 번 세지 않는다 — '하위 1%' 옆에 '한산' 을 붙이면 한 신호가 두 칸을
+    먹는다. 조건 줄이 이미 말하는 것(실내·한적·지역)도 넣지 않는다.
     """
     chips: list[str] = []
-    if card.tag:
-        chips.append(card.tag)
-    crowd = retrieve.crowd_label(row)
-    if crowd is not None and crowd not in chips:
+    if near and lat is not None and lng is not None:
+        km = retrieve.distance_km(row, lat=lat, lng=lng)
+        if km is not None:
+            chips.append(_km_label(km))
+    crowd = f"하위 {row.percentile}%" if row.percentile is not None else retrieve.crowd_label(row)
+    if crowd is not None:
         chips.append(crowd)
-    if row.percentile is not None and intent.crowdPreference != "quiet":
-        percentile = f"하위 {row.percentile}%"
-        if percentile not in chips:
-            chips.append(percentile)
+    if card.tag and card.tag not in chips:
+        chips.insert(0, card.tag)
     return chips[:MAX_CARD_CHIPS]
 
 
