@@ -1,9 +1,9 @@
 name: pipeline-daily
 # 일일 수집 DAG — 크론을 잡별로 흩뿌리는 대신 의존성을 needs 로 명시한다.
 #
-#   sync-kto ─┬─ concentration ─┐
-#             ├─ embed ─────────┴─ warm ─┐
-#             └─ detail-prewarm ─────────┴─ heartbeat
+#   sync-kto ─┬─ concentration ─┬─ warm ──────┐
+#             ├─ embed ─────────┤             ├─ heartbeat
+#             └─ detail-prewarm ─┴─ freshness ─┘
 #
 # embed 가 sync-kto 에 연쇄하는 것이 핵심이다. 신규 스팟은 트리거(UPDATE OF
 # first_image_url)에 걸리지 않아 embedding_failures 에도 안 쌓인다 — 이 링크가
@@ -91,8 +91,21 @@ jobs:
     permissions:
       contents: read
 
+  # 잡이 성공했다는 것과 데이터가 실제로 전진했다는 것은 다르다. 증분이 워터마크에
+  # 갇혔던 54일 동안 sync_runs 는 매일 success 를 찍었다.
+  freshness:
+    needs: [concentration, detail-prewarm, embed]
+    if: always()
+    runs-on: [self-hosted, ct112]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/api-exec
+        with:
+          module: scripts.check_data_freshness
+
   heartbeat:
-    needs: [warm, detail-prewarm]
+    needs: [warm, detail-prewarm, freshness]
     if: always()
     runs-on: [self-hosted, ct111]
     steps:
@@ -101,5 +114,5 @@ jobs:
         with:
           url: ${{ secrets.KUMA_PUSH_PIPELINE_DAILY }}
           # skipped(상류 실패로 안 돈 경우)도 down 이다 — success 만 up.
-          status: ${{ (needs.warm.result == 'success' && needs['detail-prewarm'].result == 'success') && 'up' || 'down' }}
-          msg: "daily warm=${{ needs.warm.result }} prewarm=${{ needs['detail-prewarm'].result }}"
+          status: ${{ (needs.warm.result == 'success' && needs['detail-prewarm'].result == 'success' && needs.freshness.result == 'success') && 'up' || 'down' }}
+          msg: "daily warm=${{ needs.warm.result }} prewarm=${{ needs['detail-prewarm'].result }} fresh=${{ needs.freshness.result }}"

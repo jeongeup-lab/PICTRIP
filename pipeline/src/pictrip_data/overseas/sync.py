@@ -7,6 +7,12 @@ from pictrip_data.overseas.wikidata import WikidataClient
 from pictrip_data.overseas.wikipedia import WikipediaClient
 from pictrip_data.sync.audit import ensure_table, record_run
 
+MAX_FAILED_COUNTRY_RATIO = 1 / 3
+
+
+class PartialOverseasSync(RuntimeError):
+    pass
+
 
 def sync_overseas(
     *,
@@ -31,8 +37,14 @@ def sync_overseas(
 
 def _process(wikidata, commons, wikipedia, conn, countries, counters, limit, dry_run) -> None:
     total = 0
+    failed: list[str] = []
     for country in countries:
-        spots = wikidata.fetch_country(country)
+        try:
+            spots = wikidata.fetch_country(country)
+        except Exception as exc:
+            conn.rollback()
+            failed.append(f"{country.code}({type(exc).__name__})")
+            continue
         counters["api_calls"] += 1
         if limit is not None:
             spots = spots[: max(limit - total, 0)]
@@ -55,6 +67,9 @@ def _process(wikidata, commons, wikipedia, conn, countries, counters, limit, dry
     counters["updated"] += descriptions["updated"]
     if not dry_run:
         conn.commit()
+
+    if failed and len(failed) > len(countries) * MAX_FAILED_COUNTRY_RATIO:
+        raise PartialOverseasSync(f"{len(failed)}/{len(countries)} 국가 실패: {', '.join(failed)}")
 
 
 def _run(wikidata, commons, wikipedia, conn, countries, limit, dry_run) -> None:
