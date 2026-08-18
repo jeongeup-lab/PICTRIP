@@ -16,7 +16,13 @@ import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
 import { AI_CONSENT } from "@/features/travel/lib/ai-consent";
 import { contextFrom } from "@/features/travel/lib/conversation-context";
 import { composeQuestion } from "@/features/travel/lib/question";
-import { streamChat, type PhotoUpload, type TravelSpot } from "@/features/travel/api";
+import {
+  streamChat,
+  type PhotoUpload,
+  type RefinePatch,
+  type TravelSpot,
+} from "@/features/travel/api";
+import { refineQuestion } from "@/features/travel/lib/refine-label";
 import {
   historyOf,
   lastDoneTurn,
@@ -68,7 +74,7 @@ export default function TravelScreen() {
       {
         onStep: (event) => store.applyStep(id, event),
         onDelta: (text) => store.appendDelta(id, text),
-        onCards: (event) => store.setCards(id, event.spots, event.tagBasis ?? null),
+        onCards: (event) => store.setCards(id, event),
         onSources: (items) => store.setSources(id, items),
         onDone: (event) => store.finish(id, event),
         onError: (event) => store.fail(id, event.code),
@@ -86,6 +92,29 @@ export default function TravelScreen() {
       });
   }, []);
 
+  const onRefine = useCallback(
+    (patch: RefinePatch) => {
+      const state = useChat.getState();
+      if (state.streaming) return;
+      const previous = lastDoneTurn(state.turns);
+      if (previous?.intent == null) return;
+      const label = refineQuestion(patch);
+      const seed: ChatRequestSeed = {
+        message: null,
+        photo: null,
+        context: contextFrom(previous, null),
+        intent: previous.intent,
+        patch,
+        history: historyOf(state.turns),
+      };
+      const id = state.nextTurnId();
+      state.begin({ id, question: label, photoUri: null, request: seed });
+      focusedIdRef.current = null;
+      run(id, seed);
+    },
+    [run],
+  );
+
   const { granted: aiGranted, grant: grantAi } = useAiConsent();
   const [askingConsent, setAskingConsent] = useState(false);
   const pendingRef = useRef<{ text: string; photo: PhotoUpload | null } | null>(null);
@@ -101,6 +130,8 @@ export default function TravelScreen() {
         message: text.trim() || null,
         photo,
         context: contextFrom(previous, focusedIdRef.current),
+        intent: null,
+        patch: null,
         history: historyOf(state.turns),
       };
       const id = state.nextTurnId();
@@ -184,10 +215,11 @@ export default function TravelScreen() {
           onSaveToggle={(saved) => setToast(saved ? SAVE_COMPLETE : UNSAVE_COMPLETE)}
           onNotice={(message) => setToast(message)}
           onFocusSpot={onFocusSpot}
+          onRefine={onRefine}
         />
       </View>
     ),
-    [turns.length, coords, onRetry, onFocusSpot],
+    [turns.length, coords, onRetry, onFocusSpot, onRefine],
   );
 
   const bottomPad = keyboardPx;

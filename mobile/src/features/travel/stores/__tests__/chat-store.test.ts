@@ -9,7 +9,14 @@ import {
 } from "@/features/travel/stores/chat-store";
 import type { ChatDoneEvent, TravelSpot } from "@/features/travel/api";
 
-const seed: ChatRequestSeed = { message: "정읍 맛집", photo: null, context: null, history: [] };
+const seed: ChatRequestSeed = {
+  message: "정읍 맛집",
+  photo: null,
+  context: null,
+  intent: null,
+  patch: null,
+  history: [],
+};
 
 const spot = (id: string): TravelSpot => ({
   contentId: id,
@@ -73,7 +80,9 @@ describe("chat-store 스트리밍", () => {
 
   it("cards와 sources가 턴에 붙는다", () => {
     begin();
-    useChat.getState().setCards("turn-1", [spot("1"), spot("2")], "한적함 기준");
+    useChat
+      .getState()
+      .setCards("turn-1", { spots: [spot("1"), spot("2")], tagBasis: "한적함 기준" });
     useChat.getState().setSources("turn-1", [{ kind: "kto", title: "관광정보" }]);
 
     const turn = useChat.getState().turns[0];
@@ -151,6 +160,8 @@ describe("historyOf", () => {
     text,
     spots,
     tagBasis: null,
+    applied: [],
+    refinements: [],
     sources: [],
     intent: null,
     errorCode: null,
@@ -201,6 +212,8 @@ describe("lastDoneTurn", () => {
       text: "",
       spots: [],
       tagBasis: null,
+      applied: [],
+      refinements: [],
       sources: [],
       intent: null,
       errorCode: null,
