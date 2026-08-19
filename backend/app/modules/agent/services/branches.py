@@ -4,6 +4,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 from app.core.db import AsyncSession
+from app.modules.agent import repositories
 from app.modules.agent.emitter import Steps
 from app.modules.agent.errors import AgentNoResults
 from app.modules.agent.repositories import CandidateRow
@@ -95,14 +96,17 @@ class Ask:
     ) -> list[CandidateRow]:
         return await retrieve.search_candidates(
             self.session,
-            codes=codes,
-            region_prefixes=prefixes,
+            repositories.CandidateQuery(
+                limit=retrieve.CANDIDATE_LIMIT,
+                codes=codes or None,
+                region_prefixes=prefixes or None,
+                lat=self.lat,
+                lng=self.lng,
+                indoor_only=self.intent.indoorOnly,
+                mood_ids=self.mood_ids,
+            ),
             preference=self.intent.crowdPreference,
-            lat=self.lat,
-            lng=self.lng,
             near=self.near if with_near is None else with_near,
-            indoor_only=self.intent.indoorOnly,
-            mood_ids=self.mood_ids,
         )
 
 

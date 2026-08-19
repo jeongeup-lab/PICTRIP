@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
 from app.core.db import AsyncSession
@@ -295,38 +295,27 @@ def _hint_tokens(hint: str) -> list[str]:
 
 async def search_candidates(
     session: AsyncSession,
+    base: repositories.CandidateQuery,
     *,
-    codes: list[str],
-    region_prefixes: list[str],
     preference: CrowdPreference,
-    lat: float | None,
-    lng: float | None,
     near: bool,
-    indoor_only: bool = False,
-    mood_ids: list[int] | None = None,
-    pool_sql: str | None = None,
-    title_terms: list[str] | None = None,
-    theme: repositories.BuzzTheme = "spot",
 ) -> list[CandidateRow]:
+    """혼잡도 선호를 아는 후보 검색.
+
+    선호가 `any` 가 아니면 백분위로 한 번 좁혀 보고, 비면 조건 없이 다시 찾는다.
+    좁힌 결과가 0곳이라고 빈손으로 돌려주지 않기 위한 2패스다.
+    """
     quiet = preference == "quiet"
+    base = replace(
+        base,
+        limit=CANDIDATE_LIMIT,
+        order=candidate_order(preference=preference, near=near),
+        rated_only=preference != "any",
+    )
 
     async def query(*, ceiling: int | None, floor: int | None) -> list[CandidateRow]:
         return await repositories.find_candidates(
-            session,
-            theme=theme,
-            codes=codes or None,
-            region_prefixes=region_prefixes or None,
-            limit=CANDIDATE_LIMIT,
-            order=candidate_order(preference=preference, near=near),
-            rated_only=preference != "any",
-            percentile_ceiling=ceiling,
-            percentile_floor=floor,
-            lat=lat,
-            lng=lng,
-            indoor_only=indoor_only,
-            mood_ids=mood_ids,
-            pool_sql=pool_sql,
-            title_terms=title_terms,
+            session, replace(base, percentile_ceiling=ceiling, percentile_floor=floor)
         )
 
     if preference == "any":
@@ -354,17 +343,19 @@ async def search_food(
     pool = NearbyCategory.cafe if action == "cafe" else NearbyCategory.food
     return await search_candidates(
         session,
-        theme="cafe" if action == "cafe" else "food",
-        codes=[],
-        region_prefixes=region_prefixes,
+        repositories.CandidateQuery(
+            limit=CANDIDATE_LIMIT,
+            theme="cafe" if action == "cafe" else "food",
+            region_prefixes=region_prefixes or None,
+            lat=lat,
+            lng=lng,
+            indoor_only=indoor_only,
+            mood_ids=mood_ids,
+            pool_sql=category_sql(pool),
+            title_terms=title_terms,
+        ),
         preference=preference,
-        lat=lat,
-        lng=lng,
         near=near,
-        indoor_only=indoor_only,
-        mood_ids=mood_ids,
-        pool_sql=category_sql(pool),
-        title_terms=title_terms,
     )
 
 

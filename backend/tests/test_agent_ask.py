@@ -1500,12 +1500,14 @@ async def test_title_search_queries_each_region_instead_of_filtering_after_the_l
 async def test_quiet_threshold_is_applied_in_sql_before_the_limit(db_session, seeded) -> None:
     within = await repositories.find_candidates(
         db_session,
-        codes=None,
-        region_prefixes=None,
-        limit=400,
-        order="rate_asc",
-        rated_only=True,
-        percentile_ceiling=30,
+        repositories.CandidateQuery(
+            codes=None,
+            region_prefixes=None,
+            limit=400,
+            order="rate_asc",
+            rated_only=True,
+            percentile_ceiling=30,
+        ),
     )
 
     assert [row.content_id for row in within] == ["v1"]
@@ -1554,7 +1556,8 @@ async def test_travel_predicate_surfaces_museums_that_the_map_predicate_drops(
     db_session, seeded
 ) -> None:
     rows = await repositories.find_candidates(
-        db_session, codes=["VE070100"], region_prefixes=None, limit=50
+        db_session,
+        repositories.CandidateQuery(codes=["VE070100"], region_prefixes=None, limit=50),
     )
 
     assert [row.content_id for row in rows] == ["m1"]
@@ -1563,7 +1566,8 @@ async def test_travel_predicate_surfaces_museums_that_the_map_predicate_drops(
 @pytest.mark.integration
 async def test_indoor_only_excludes_outdoor_experience_tourism(db_session, seeded) -> None:
     rows = await repositories.find_candidates(
-        db_session, codes=None, region_prefixes=None, limit=50, indoor_only=True
+        db_session,
+        repositories.CandidateQuery(codes=None, region_prefixes=None, limit=50, indoor_only=True),
     )
 
     ids = {row.content_id for row in rows}
@@ -1675,7 +1679,8 @@ async def test_mood_filter_narrows_candidates(db_session, seeded) -> None:
     night = await repositories.find_mood_ids(db_session, ["night"])
 
     rows = await repositories.find_candidates(
-        db_session, codes=None, region_prefixes=None, limit=50, mood_ids=night
+        db_session,
+        repositories.CandidateQuery(codes=None, region_prefixes=None, limit=50, mood_ids=night),
     )
 
     assert [row.content_id for row in rows] == ["v1"]
@@ -3728,9 +3733,9 @@ async def test_the_near_probe_reuses_the_codes_the_indoor_fallback_settled_on(
     seen: list[list[str]] = []
     real_search = retrieve.search_candidates
 
-    async def spy(session, **kwargs):  # type: ignore[no-untyped-def]
-        seen.append(list(kwargs["codes"]))
-        return await real_search(session, **kwargs)
+    async def spy(session, base, **kwargs):  # type: ignore[no-untyped-def]
+        seen.append(list(base.codes or []))
+        return await real_search(session, base, **kwargs)
 
     monkeypatch.setattr(retrieve, "search_candidates", spy)
 
