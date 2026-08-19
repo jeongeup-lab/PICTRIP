@@ -77,12 +77,9 @@ async def _kto_twin(
     pool = NearbyCategory.cafe if kind == "cafe" else NearbyCategory.food
     rows = await repositories.find_candidates(
         session,
-        codes=None,
-        region_prefixes=None,
-        limit=20,
-        order="id",
-        pool_sql=category_sql(pool),
-        title_terms=[place.name],
+        repositories.CandidateQuery(
+            limit=20, pool_sql=category_sql(pool), title_terms=[place.name]
+        ),
     )
     for row in rows:
         if row.lat is None or row.lng is None:

@@ -32,11 +32,9 @@ async def _seed(session: AsyncSession, cid: str, *, rate: float | None) -> None:
 async def _ids(session: AsyncSession, *, seed: str) -> list[str]:
     rows = await repositories.find_candidates(
         session,
-        codes=None,
-        region_prefixes=[REGION],
-        limit=50,
-        order="id",
-        rank_seed=seed,
+        repositories.CandidateQuery(
+            codes=None, region_prefixes=[REGION], limit=50, order="id", rank_seed=seed
+        ),
     )
     return [row.content_id for row in rows]
 

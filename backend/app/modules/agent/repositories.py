@@ -304,31 +304,38 @@ def rank_seed_for_today() -> str:
     return datetime.now(KST).date().isoformat()
 
 
-async def find_candidates(
-    session: AsyncSession,
-    *,
-    codes: list[str] | None,
-    region_prefixes: list[str] | None,
-    limit: int,
-    order: CandidateOrder = "id",
-    rated_only: bool = False,
-    percentile_ceiling: int | None = None,
-    percentile_floor: int | None = None,
-    lat: float | None = None,
-    lng: float | None = None,
-    indoor_only: bool = False,
-    mood_ids: list[int] | None = None,
-    pool_sql: str | None = None,
-    title_terms: list[str] | None = None,
-    rank_seed: str | None = None,
-    theme: BuzzTheme = "spot",
-    scored: bool = True,
-) -> list[CandidateRow]:
+@dataclass(frozen=True, slots=True)
+class CandidateQuery:
+    """후보 조회 한 번의 조건 전부.
+
+    낱개 인자 17개를 나르던 자리다 — 조건이 하나 늘 때마다 세 파일의 시그니처가
+    함께 늘어났다. 기본값은 "아무 조건 없이 id 순"이다.
+    """
+
+    limit: int
+    codes: list[str] | None = None
+    region_prefixes: list[str] | None = None
+    order: CandidateOrder = "id"
+    rated_only: bool = False
+    percentile_ceiling: int | None = None
+    percentile_floor: int | None = None
+    lat: float | None = None
+    lng: float | None = None
+    indoor_only: bool = False
+    mood_ids: list[int] | None = None
+    pool_sql: str | None = None
+    title_terms: list[str] | None = None
+    rank_seed: str | None = None
+    theme: BuzzTheme = "spot"
+    scored: bool = True
+
+
+async def find_candidates(session: AsyncSession, q: CandidateQuery) -> list[CandidateRow]:
     stats = await load_rank_stats(session)
     params: dict[str, object] = {
-        "lim": limit,
-        "rank_seed": rank_seed or rank_seed_for_today(),
-        "theme_like": f"%:{theme}",
+        "lim": q.limit,
+        "rank_seed": q.rank_seed or rank_seed_for_today(),
+        "theme_like": f"%:{q.theme}",
         "fame_norm": stats.fame_norm,
         "fame_median": stats.fame_median,
         "themed_cap": THEMED_CAP,
@@ -338,49 +345,49 @@ async def find_candidates(
         "vt_sd": stats.deviations,
     }
     percentile_clause = ""
-    if rated_only and percentile_ceiling is not None:
+    if q.rated_only and q.percentile_ceiling is not None:
         percentile_clause = _CEILING_CLAUSE
-        params["ceiling"] = percentile_ceiling
-    elif rated_only and percentile_floor is not None:
+        params["ceiling"] = q.percentile_ceiling
+    elif q.rated_only and q.percentile_floor is not None:
         percentile_clause = _FLOOR_CLAUSE
-        params["floor"] = percentile_floor
+        params["floor"] = q.percentile_floor
     code_clause = ""
-    if codes:
+    if q.codes:
         code_clause = _CODE_CLAUSE
-        params["codes"] = codes
+        params["codes"] = q.codes
     region_clause = ""
-    if region_prefixes:
+    if q.region_prefixes:
         region_clause = _REGION_CLAUSE
-        params["region_patterns"] = [f"{prefix}%" for prefix in region_prefixes]
+        params["region_patterns"] = [f"{prefix}%" for prefix in q.region_prefixes]
     title_clause = ""
-    if title_terms:
+    if q.title_terms:
         title_clause = _TITLE_CLAUSE
-        params["title_patterns"] = [f"%{term}%" for term in title_terms]
+        params["title_patterns"] = [f"%{term}%" for term in q.title_terms]
     params["indoor_l2"] = list(INDOOR_L2)
     params["indoor_l3"] = list(INDOOR_L3)
-    indoor_clause = _INDOOR_CLAUSE if indoor_only else ""
+    indoor_clause = _INDOOR_CLAUSE if q.indoor_only else ""
     mood_clause = ""
-    if mood_ids:
+    if q.mood_ids:
         mood_clause = _MOOD_CLAUSE
-        params["mood_ids"] = mood_ids
-    if order == "distance":
-        if lat is None or lng is None:
-            raise ValueError("distance order requires lat/lng")
-        params["lat"] = lat
-        params["lng"] = lng
-        params["lng_scale"] = math.cos(math.radians(lat))
+        params["mood_ids"] = q.mood_ids
+    if q.order == "distance":
+        if q.lat is None or q.lng is None:
+            raise ValueError("distance q.order requires q.lat/lng")
+        params["lat"] = q.lat
+        params["lng"] = q.lng
+        params["lng_scale"] = math.cos(math.radians(q.lat))
     sql = _CANDIDATE_SQL.format(
-        attraction=pool_sql or travel_category_sql(),
+        attraction=q.pool_sql or travel_category_sql(),
         code_clause=code_clause,
         region_clause=region_clause,
         title_clause=title_clause,
         indoor_clause=indoor_clause,
         mood_clause=mood_clause,
-        locatable_clause=_LOCATABLE_CLAUSE if order == "distance" else "",
-        concentration_join="JOIN" if rated_only else "LEFT JOIN",
-        percentile=_PERCENTILE_EXPR if rated_only else "NULL",
+        locatable_clause=_LOCATABLE_CLAUSE if q.order == "distance" else "",
+        concentration_join="JOIN" if q.rated_only else "LEFT JOIN",
+        percentile=_PERCENTILE_EXPR if q.rated_only else "NULL",
         percentile_clause=percentile_clause,
-        order=(_LEGACY_ID_ORDER if order == "id" and not scored else _ORDER_BY[order]),
+        order=(_LEGACY_ID_ORDER if q.order == "id" and not q.scored else _ORDER_BY[q.order]),
     )
     result = await session.execute(text(sql), params)
     return [
