@@ -1,5 +1,15 @@
 from __future__ import annotations
 
+from app.modules.spots.categories import (
+    NearbyCategory,
+    all_categories_predicate,
+    all_categories_sql,
+    attraction_category_sql,
+    category_predicate,
+    category_sql,
+    derive_category,
+    travel_category_sql,
+)
 from app.modules.spots.services.cards import (
     attraction_image_spots_stmt,
     image_bearing_spots_stmt,
@@ -26,17 +36,9 @@ from app.modules.spots.services.detail import (
     replace_spot_images,
 )
 from app.modules.spots.services.nearby import (
-    NearbyCategory,
     NearbySpotRow,
-    all_categories_predicate,
-    all_categories_sql,
-    attraction_category_sql,
-    category_predicate,
-    category_sql,
-    derive_category,
     find_nearby_spots,
     find_nearby_spots_bbox,
-    travel_category_sql,
 )
 from app.modules.spots.services.rows import (
     SpotCardRow,

@@ -13,7 +13,7 @@ from app.modules.agent.kakao_places import KakaoPlace, PlaceKind
 from app.modules.agent.schemas import AgentSpotCard
 from app.modules.agent.services.geo import haversine_km
 from app.modules.agent.services.geocode import names_match_exactly
-from app.modules.spots.services import NearbyCategory, category_sql
+from app.modules.spots.categories import NearbyCategory, category_sql
 from app.naver.client import NaverBlogPost, is_configured, search_blog
 
 logger = get_logger(__name__)

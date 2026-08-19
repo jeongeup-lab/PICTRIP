@@ -31,11 +31,8 @@ from app.modules.agent.services.phrasing import (
     meters_label,
     subject_particle,
 )
-from app.modules.spots.services import (
-    NearbyCategory,
-    NearbySpotRow,
-    find_nearby_spots,
-)
+from app.modules.spots.categories import NearbyCategory
+from app.modules.spots.services import NearbySpotRow, find_nearby_spots
 from app.web.errors import ValidationFailed
 
 logger = get_logger(__name__)

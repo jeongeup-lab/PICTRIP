@@ -9,8 +9,8 @@ from app.core.logging import get_logger
 from app.kakao.local import kakao_local_get
 from app.kto.display import T1_TILE_WIDTH, t1_display_url
 from app.modules.map.schemas import NearbySpotCard, RegionLabel
+from app.modules.spots.categories import NearbyCategory
 from app.modules.spots.services import (
-    NearbyCategory,
     NearbySpotRow,
     find_nearby_spots,
     find_nearby_spots_bbox,

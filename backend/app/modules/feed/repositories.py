@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.spots.services import (
+from app.modules.spots.categories import (
     NearbyCategory,
     all_categories_sql,
     attraction_category_sql,

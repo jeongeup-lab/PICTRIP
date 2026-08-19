@@ -8,7 +8,7 @@ from typing import Literal
 from sqlalchemy import text
 
 from app.core.db import AsyncSession
-from app.modules.spots.services import derive_category, travel_category_sql
+from app.modules.spots.categories import derive_category, travel_category_sql
 
 INDOOR_L2 = ("VE06", "VE07")
 INDOOR_L3 = ("VE020400", "VE120300")

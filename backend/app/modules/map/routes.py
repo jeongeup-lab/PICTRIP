@@ -8,7 +8,7 @@ from app.core.db import DbSession
 from app.core.redis import RedisDep
 from app.modules.map.schemas import RegionLabel
 from app.modules.map.services import nearby_cards, reverse_geocode
-from app.modules.spots.services import NearbyCategory
+from app.modules.spots.categories import NearbyCategory
 from app.web.envelope import ok
 
 router = APIRouter(tags=["MAP · map"])

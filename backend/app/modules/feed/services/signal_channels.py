@@ -10,11 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
 from app.modules.feed.services.channels import ChannelCardRow
-from app.modules.spots.services import (
-    NearbyCategory,
-    category_sql,
-    travel_category_sql,
-)
+from app.modules.spots.categories import NearbyCategory, category_sql, travel_category_sql
 
 logger = get_logger(__name__)
 
