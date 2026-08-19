@@ -104,15 +104,6 @@ class Suggestion(BaseModel):
     patch: RefinePatch
 
 
-class MoodImage(BaseModel):
-    code: Mood
-    imageUrl: str
-
-
-class MoodImagesResponse(BaseModel):
-    images: list[MoodImage]
-
-
 class AskAnchor(BaseModel):
     contentId: Annotated[str, StringConstraints(min_length=1, max_length=32)] | None = None
     action: AnchorAction

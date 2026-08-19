@@ -30,7 +30,6 @@
 | GET | `/home/channels/{key}` | 채널 카드 (`hidden`·`festa`·`pets`·`snap`) | — |
 | POST | `/agent/chat` | 여행 탭 대화 — SSE 스트리밍, LLM 산문 + 카드 + 출처 (아래) | — |
 | POST | `/agent/ask` | 단일 JSON 응답. **앱은 쓰지 않는다** — 골든셋 하네스(190케이스)의 진입점 (아래) | — |
-| GET | `/agent/mood-images` | 분위기별 대표 사진. **소비처 0** — 앱이 분위기 타일을 걷어낸 뒤 남았다 (폐기 대기) | — |
 | GET | `/map/nearby` | 내 주변 (bbox+카테고리, ≤30) | — |
 | GET | `/map/region` | 좌표→행정구역 라벨 (fail-open null) | — |
 | GET | `/health` *(루트, /v1 밖)* | liveness + `apiVersion`·`environment` | — |
