@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 from enum import StrEnum
 from typing import Annotated, Any
 from urllib.parse import urlparse
@@ -17,9 +18,15 @@ from tenacity import (
 
 from app.config import settings
 from app.core.logging import get_logger
-from app.web.errors import KtoApiUnavailable
+from app.web.errors import KtoApiUnavailable, KtoQuotaExhausted
 
 logger = get_logger(__name__)
+
+OK_RESULT_CODE = "0000"
+QUOTA_ERROR_MARKERS = (
+    "LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR",
+    "SERVICE_ACCESS_DENIED_ERROR",
+)
 
 
 def _is_transient(exc: BaseException) -> bool:
@@ -27,6 +34,17 @@ def _is_transient(exc: BaseException) -> bool:
         status = exc.response.status_code
         return status == 429 or status >= 500
     return isinstance(exc, (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError))
+
+
+_SERVICE_KEY_PATTERN = re.compile(r"serviceKey=[^&\s'\"]+")
+
+
+def redact_service_key(text: str) -> str:
+    return _SERVICE_KEY_PATTERN.sub("serviceKey=***", text)
+
+
+def _quota_exhausted(body_text: str) -> bool:
+    return any(marker in body_text for marker in QUOTA_ERROR_MARKERS)
 
 
 class KtoService(StrEnum):
@@ -72,6 +90,14 @@ class KtoClient:
         retry=retry_if_exception(_is_transient),
         reraise=True,
     )
+    async def _request(self, url: str, params: dict[str, Any]) -> httpx.Response:
+        """재시도 판정이 가능하도록 httpx 예외를 감싸지 않고 그대로 올린다."""
+        resp = await self._client.get(url, params=params)
+        if resp.status_code == 429 and _quota_exhausted(resp.text):
+            raise KtoQuotaExhausted()
+        resp.raise_for_status()
+        return resp
+
     async def call(
         self,
         service: KtoService,
@@ -87,20 +113,63 @@ class KtoClient:
             **{k: v for k, v in params.items() if v is not None},
         }
         try:
-            resp = await self._client.get(url, params=merged)
-            resp.raise_for_status()
+            resp = await self._request(url, merged)
+        except KtoQuotaExhausted:
+            logger.warning("kto.call.quota_exhausted", service=service.value, operation=operation)
+            raise
         except httpx.HTTPError as e:
             logger.warning(
                 "kto.call.failed",
                 service=service.value,
                 operation=operation,
                 error_type=type(e).__name__,
-                error=str(e),
+                error=redact_service_key(str(e)),
             )
             raise KtoApiUnavailable() from e
 
-        body = resp.json().get("response", {}).get("body", {})
-        items = body.get("items")
+        return self._items(resp, service=service, operation=operation)
+
+    def _items(
+        self, resp: httpx.Response, *, service: KtoService, operation: str
+    ) -> list[dict[str, Any]]:
+        try:
+            payload = resp.json()
+        except ValueError:
+            if _quota_exhausted(resp.text):
+                logger.warning(
+                    "kto.call.quota_exhausted", service=service.value, operation=operation
+                )
+                raise KtoQuotaExhausted() from None
+            logger.warning("kto.call.unparsable", service=service.value, operation=operation)
+            raise KtoApiUnavailable() from None
+        if not isinstance(payload, dict):
+            raise KtoApiUnavailable()
+        if "response" not in payload:
+            if _quota_exhausted(resp.text):
+                logger.warning(
+                    "kto.call.quota_exhausted", service=service.value, operation=operation
+                )
+                raise KtoQuotaExhausted()
+            logger.warning(
+                "kto.call.rejected",
+                service=service.value,
+                operation=operation,
+                result_code=payload.get("resultCode"),
+                result_msg=payload.get("resultMsg"),
+            )
+            raise KtoApiUnavailable()
+        envelope = payload["response"]
+        result_code = envelope.get("header", {}).get("resultCode")
+        if result_code not in (OK_RESULT_CODE, None):
+            logger.warning(
+                "kto.call.rejected",
+                service=service.value,
+                operation=operation,
+                result_code=result_code,
+                result_msg=envelope.get("header", {}).get("resultMsg"),
+            )
+            raise KtoApiUnavailable()
+        items = envelope.get("body", {}).get("items")
         if not items or items == "":
             return []
         item = items.get("item", [])

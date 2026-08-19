@@ -133,7 +133,7 @@ describe("chat-store 재시도", () => {
     useChat.getState().appendDelta("turn-1", "부분");
     useChat.getState().fail("turn-1", "NETWORK_ERROR");
 
-    useChat.getState().retry("turn-1");
+    useChat.getState().retry("turn-1", seed);
 
     const state = useChat.getState();
     expect(state.turns).toHaveLength(1);
@@ -146,6 +146,16 @@ describe("chat-store 재시도", () => {
     expect(turn.errorCode).toBeNull();
     expect(turn.question).toBe("정읍 맛집");
     expect(turn.request).toEqual(seed);
+  });
+
+  it("재시도 시드로 이력을 갈아끼운다", () => {
+    begin("turn-1");
+    useChat.getState().fail("turn-1", "VALIDATION_FAILED");
+
+    const rebuilt: ChatRequestSeed = { ...seed, history: [{ role: "user", text: "이전" }] };
+    useChat.getState().retry("turn-1", rebuilt);
+
+    expect(useChat.getState().turns[0].request).toEqual(rebuilt);
   });
 });
 

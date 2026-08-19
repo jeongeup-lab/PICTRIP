@@ -31,6 +31,7 @@ WITH scored AS (
            {_KEY_EXPR} AS shuffle_key
     FROM overseas_spots
     WHERE is_hidden = false
+      AND embedding IS NOT NULL
 )
 SELECT * FROM scored
 WHERE ((:cursor_key)::double precision IS NULL)

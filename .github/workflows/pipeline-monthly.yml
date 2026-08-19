@@ -15,6 +15,11 @@ on:
   schedule:
     - cron: "13 18 1 * *" # 매월 2일 03:13 KST (1일 18:13 UTC + 9h)
   workflow_dispatch:
+    inputs:
+      skip_etl:
+        description: "ETL 건너뛰고 임베딩만 — ETL 이 잘려 embed 가 skip 된 뒤 백로그를 메울 때"
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -24,6 +29,7 @@ concurrency:
 
 jobs:
   overseas-etl:
+    if: ${{ !inputs.skip_etl }}
     runs-on: [self-hosted, ct111]
     # 36개국 순차 SPARQL. 2026-08-19 실측 5.8분/국 = 207분 — WDQS 가 느리고 504 가
     # 잦아 재시도(5회/최대 120초)가 그대로 벽시계에 얹힌다. 120분이면 21개국에서 잘린다.
@@ -36,6 +42,7 @@ jobs:
 
   embed:
     needs: overseas-etl
+    if: ${{ always() && needs.overseas-etl.result != 'failure' && needs.overseas-etl.result != 'cancelled' }}
     runs-on: [self-hosted, ct112]
     timeout-minutes: 120
     # 임베딩 잡은 admin:embed:running Redis 락을 공유한다 — 겹치면 뒤에 온 잡이
@@ -51,6 +58,7 @@ jobs:
 
   warm:
     needs: overseas-etl
+    if: ${{ always() && needs.overseas-etl.result != 'failure' && needs.overseas-etl.result != 'cancelled' }}
     uses: ./.github/workflows/img-cache-warm.yml
     permissions:
       contents: read

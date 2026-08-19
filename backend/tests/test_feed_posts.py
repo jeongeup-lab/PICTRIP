@@ -6,9 +6,12 @@ from app.main import app
 
 SEED_SQL = text("""
 INSERT INTO overseas_spots (wikidata_id, name_ko, country_code, country_name_ko,
-    description_ko, image_url, image_source_url, fame_score, is_hidden)
-VALUES (:qid, :name, :cc, :cn, :desc, :img, :src, :fame, :hidden)
+    description_ko, image_url, image_source_url, fame_score, is_hidden, embedding)
+VALUES (:qid, :name, :cc, :cn, :desc, :img, :src, :fame, :hidden,
+        CAST(:emb AS halfvec(512)))
 """)
+
+_EMBEDDING = "[" + ",".join(["0.1"] * 512) + "]"
 
 
 @pytest.fixture
@@ -32,8 +35,17 @@ async def seeded(db_session):
                 "src": f"https://src/{qid}",
                 "fame": fame,
                 "hidden": hidden,
+                "emb": _EMBEDDING,
             },
         )
+    await db_session.execute(
+        text(
+            "INSERT INTO overseas_spots (wikidata_id, name_ko, country_code, country_name_ko, "
+            "image_url, image_source_url, fame_score, is_hidden) "
+            "VALUES ('QN1', '임베딩없음', 'IT', '이탈리아', 'https://img/QN1', "
+            "'https://src/QN1', 400, false)"
+        )
+    )
     await db_session.commit()
     app.dependency_overrides[get_db] = lambda: db_session
     yield
@@ -64,6 +76,13 @@ async def test_feed_excludes_hidden(client, seeded):
     res = await client.get("/v1/explore", params={"limit": 10})
     names = [i["nameKo"] for i in res.json()["data"]["items"]]
     assert "숨김" not in names and len(names) == 3
+
+
+async def test_feed_excludes_posts_that_can_never_match(client, seeded):
+    """임베딩이 없는 게시물은 눌러도 매칭이 0건이다 — 피드에 올리지 않는다."""
+    res = await client.get("/v1/explore", params={"limit": 10})
+    names = [i["nameKo"] for i in res.json()["data"]["items"]]
+    assert "임베딩없음" not in names
 
 
 async def test_feed_cursor_no_duplicates_same_seed(client, seeded):

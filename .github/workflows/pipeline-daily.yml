@@ -23,9 +23,9 @@ on:
         type: string
         default: "1000"
       prewarm_limit:
-        description: "detailCommon2 프리워밍 스팟 수 (KTO 쿼터 예산)"
+        description: "detailCommon2 프리워밍 스팟 수 (KTO 쿼터 예산 — 라이브 상세 조회분을 남긴다)"
         type: string
-        default: "800"
+        default: "400"
       sync_only:
         description: "KTO 수집만 — 프리워밍·임베딩·워밍 생략 (admin 버튼용)"
         type: boolean
@@ -70,7 +70,7 @@ jobs:
       - uses: ./.github/actions/api-exec
         with:
           module: scripts.prewarm_details
-          args: --limit ${{ inputs.prewarm_limit || '800' }}
+          args: --limit ${{ inputs.prewarm_limit || '400' }}
 
   # 신규·이미지 교체 스팟을 CLIP 으로 채운다. --limit 로 묶는 이유는 백로그가
   # 큰 첫 실행이 라이브 api 컨테이너의 CPU 를 하루치 잡아두지 않게 하려는 것.

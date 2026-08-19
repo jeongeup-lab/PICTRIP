@@ -60,10 +60,13 @@ flowchart LR
 ### 매칭 경로
 
 `GET /explore`가 해외 게시물을 seed+커서로 내려주고, 사용자가 스와이프하면
-`GET /overseas/{id}/matches`가 ANN 검색으로 국내 3곳을 반환한다. 후보는
-attraction 버킷으로 게이트하고, 대표사진 편향은 갤러리(최대 5장) centroid
-임베딩으로 완화한다. 결과는 `match:{revision}:{id}`에 6h 캐시하고
-`matching:revision` incr로 전체 무효화한다.
+`GET /overseas/{id}/matches`가 ANN 검색으로 국내 3곳을 반환한다. 피드는
+`embedding IS NOT NULL`로 게이트한다 — 임베딩이 없는 게시물은 눌러도 매칭이
+0건이라 피드에 올리지 않는다. 후보는 attraction 버킷으로 게이트하고, 대표사진
+편향은 갤러리(최대 5장) centroid 임베딩으로 완화한다. 결과는
+`match:{revision}:{id}`에 6h 캐시한다. 한 건 무효화는 그 키만 지우고,
+`matching:revision` incr는 전수 무효화 전용이다 — 한 스팟 때문에 리비전을
+올리면 캐시가 늘 비어 있다.
 
 ### 이미지 경로
 

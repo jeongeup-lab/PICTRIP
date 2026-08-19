@@ -174,8 +174,12 @@ export default function TravelScreen() {
     if (state.streaming) return;
     const turn = state.turns[state.turns.length - 1];
     if (!turn || turn.status !== "error") return;
-    state.retry(turn.id);
-    run(turn.id, turn.request);
+    const seed: ChatRequestSeed = {
+      ...turn.request,
+      history: historyOf(state.turns.slice(0, -1)),
+    };
+    state.retry(turn.id, seed);
+    run(turn.id, seed);
   }, [run]);
 
   const onNewChat = useCallback(() => {

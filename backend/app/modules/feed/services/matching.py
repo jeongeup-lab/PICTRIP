@@ -44,15 +44,15 @@ async def find_matches(session: AsyncSession, redis: Redis, overseas_id: int) ->
         expected = {row.content_id: row.image_url for row in cached}
         state = await repositories.get_cached_match_state(session, overseas_id, list(expected))
         if state is None:
-            await _bump_cache_revision(redis, overseas_id=overseas_id)
+            await _cache_drop(redis, revision, overseas_id)
             raise ResourceNotFound(f"overseas spot {overseas_id} not found")
         has_embedding, current = state
         if not has_embedding:
-            await _bump_cache_revision(redis, overseas_id=overseas_id)
+            await _cache_drop(redis, revision, overseas_id)
             return []
         if current == expected:
             return cached
-        revision = await _bump_cache_revision(redis, overseas_id=overseas_id)
+        await _cache_drop(redis, revision, overseas_id)
         overseas_validated = True
     if not overseas_validated:
         brief = await repositories.get_overseas_brief(session, overseas_id)
@@ -70,20 +70,18 @@ async def find_matches(session: AsyncSession, redis: Redis, overseas_id: int) ->
     ]
     candidate_ids = [content_id for content_id, _image_url in candidates]
     source_by_id = dict(candidates)
-    rows, changed = await _hydrate(session, candidate_ids, source_by_id)
+    rows = await _hydrate(session, candidate_ids, source_by_id)
     state = await repositories.get_cached_match_state(
         session, overseas_id, [row.content_id for row in rows]
     )
     if state is None:
-        await _bump_cache_revision(redis, overseas_id=overseas_id)
+        await _cache_drop(redis, revision, overseas_id)
         raise ResourceNotFound(f"overseas spot {overseas_id} not found")
     has_embedding, current = state
     if not has_embedding:
-        await _bump_cache_revision(redis, overseas_id=overseas_id)
+        await _cache_drop(redis, revision, overseas_id)
         return []
     current_rows = [row for row in rows if current.get(row.content_id) == row.image_url]
-    if changed or len(current_rows) != len(rows):
-        revision = await _bump_cache_revision(redis, overseas_id=overseas_id)
     rows = current_rows[:_MATCH_COUNT]
     await _cache_set(redis, revision, overseas_id, rows)
     return rows
@@ -93,21 +91,18 @@ async def _hydrate(
     session: AsyncSession,
     candidate_ids: list[str],
     source_by_id: dict[str, str],
-) -> tuple[list[MatchRow], bool]:
+) -> list[MatchRow]:
     if not candidate_ids:
-        return [], False
+        return []
     cards = await spots_services.load_active_spot_cards_by_ids(session, candidate_ids)
     region_meta = await spots_services.load_region_meta(session, candidate_ids)
     overview_map = await spots_services.load_overview_map(session, candidate_ids)
     rows: list[MatchRow] = []
-    changed = False
     for cid in candidate_ids:
         card = cards.get(cid)
         if card is None or not card.first_image_url:
-            changed = True
             continue
         if source_by_id.get(cid) != card.first_image_url:
-            changed = True
             continue
         region_name, sigungu_name = region_meta.get(cid, (None, None))
         rows.append(
@@ -120,7 +115,7 @@ async def _hydrate(
                 cpyrht_div_cd=card.cpyrht_div_cd,
             )
         )
-    return rows, changed
+    return rows
 
 
 def _region_label(region_name: str | None, sigungu_name: str | None) -> str:
@@ -156,6 +151,16 @@ async def _cache_get(redis: Redis, revision: int | None, overseas_id: int) -> li
         return None
 
 
+async def _cache_drop(redis: Redis, revision: int | None, overseas_id: int) -> None:
+    if revision is None:
+        return
+    key = _KEY.format(revision=revision, overseas_id=overseas_id)
+    try:
+        await redis.delete(key)
+    except Exception as exc:
+        logger.warning("feed.match.cache_drop_failed", overseas_id=overseas_id, error=str(exc))
+
+
 async def _cache_set(
     redis: Redis, revision: int | None, overseas_id: int, rows: list[MatchRow]
 ) -> None:
@@ -170,21 +175,18 @@ async def _cache_set(
 
 
 async def invalidate_match_cache(redis: Redis, overseas_id: int) -> None:
-    await _bump_cache_revision(redis, overseas_id=overseas_id)
+    await _cache_drop(redis, await _cache_revision(redis), overseas_id)
 
 
 async def invalidate_all_match_cache(redis: Redis) -> int:
+    """리비전 전역 증가는 전수 무효화 전용이다 — 한 스팟 때문에 올리면 캐시가 늘 비어 있다."""
     revision = await _bump_cache_revision(redis)
     return revision or 0
 
 
-async def _bump_cache_revision(redis: Redis, *, overseas_id: int | None = None) -> int | None:
+async def _bump_cache_revision(redis: Redis) -> int | None:
     try:
         return int(await redis.incr(_REVISION_KEY))
     except Exception as exc:
-        logger.warning(
-            "feed.match.cache_revision_bump_failed",
-            overseas_id=overseas_id,
-            error=str(exc),
-        )
+        logger.warning("feed.match.cache_revision_bump_failed", error=str(exc))
         return None

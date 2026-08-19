@@ -11,7 +11,7 @@ async def main() -> None:
     parser = argparse.ArgumentParser(
         description="Prewarm spot_details.overview via KTO detailCommon2 (1 call per spot)."
     )
-    parser.add_argument("--limit", type=int, default=800, help="spots per run (KTO quota budget)")
+    parser.add_argument("--limit", type=int, default=400, help="spots per run (KTO quota budget)")
     parser.add_argument("--pause", type=float, default=0.0, help="seconds between KTO calls")
     parser.add_argument("--dry-run", action="store_true", help="count targets, no KTO/write")
     args = parser.parse_args()

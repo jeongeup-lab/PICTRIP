@@ -50,16 +50,17 @@ export interface ChatTurn {
 
 export const HISTORY_LIMIT = 8;
 export const HISTORY_TEXT_LIMIT = 300;
+export const HISTORY_SPOT_ID_LIMIT = 8;
 
 export function historyOf(turns: ChatTurn[]): ChatHistoryItem[] {
   const items: ChatHistoryItem[] = [];
   for (const turn of turns) {
-    items.push({ role: "user", text: turn.question });
+    items.push({ role: "user", text: turn.question.slice(0, HISTORY_TEXT_LIMIT) });
     if (turn.status === "done") {
       items.push({
         role: "assistant",
         text: turn.text.slice(0, HISTORY_TEXT_LIMIT),
-        spotIds: turn.spots.map((spot) => spot.contentId),
+        spotIds: turn.spots.slice(0, HISTORY_SPOT_ID_LIMIT).map((spot) => spot.contentId),
       });
     }
   }
@@ -91,7 +92,7 @@ interface ChatState {
   setSources: (id: string, sources: SourceItem[]) => void;
   finish: (id: string, done: ChatDoneEvent) => void;
   fail: (id: string, errorCode: string) => void;
-  retry: (id: string) => void;
+  retry: (id: string, request: ChatRequestSeed) => void;
   clear: () => void;
 }
 
@@ -223,11 +224,11 @@ export const useChat = create<ChatState>((set, get) => ({
           }
         : s,
     ),
-  retry: (id) =>
+  retry: (id, request) =>
     set((s) => ({
       streaming: true,
       activeId: id,
-      turns: s.turns.map((turn) => (turn.id === id ? { ...turn, ...freshBody() } : turn)),
+      turns: s.turns.map((turn) => (turn.id === id ? { ...turn, ...freshBody(), request } : turn)),
     })),
   clear: () => set({ turns: [], streaming: false, activeId: null }),
 }));

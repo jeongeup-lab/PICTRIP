@@ -93,24 +93,23 @@ export default function SpotScreen() {
           }
         />
 
-        {detailUnavailable ? (
-          <View style={styles.detailState}>
-            <Text style={styles.errTitle}>상세 정보를 준비하지 못했어요</Text>
-            <Text style={styles.errSub}>
-              기본 관광지 정보는 볼 수 있고, 잠시 후 자동으로 다시 시도해요
-            </Text>
-            <Pressable style={styles.retryBtn} onPress={() => refetch()}>
-              <Text style={styles.retryText}>지금 다시 시도</Text>
-            </Pressable>
-          </View>
-        ) : isLoading || !data || isPlaceholderData || detailPending ? (
+        {isLoading || !data || isPlaceholderData || detailPending ? (
           <View style={{ padding: spacing.lg, gap: spacing.md }}>
             <Skeleton height={18} />
             <Skeleton height={18} width="80%" />
           </View>
         ) : (
           <>
-            <IntroSection overview={data.overview} />
+            {detailUnavailable ? (
+              <View style={styles.introNotice}>
+                <Text style={styles.noticeTitle}>소개글을 아직 못 받아왔어요</Text>
+                <Pressable onPress={() => refetch()} hitSlop={6}>
+                  <Text style={styles.noticeAction}>다시 시도</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <IntroSection overview={data.overview} />
+            )}
             <View style={styles.band} />
             <LocationSection spot={data} />
             <VisitSection
@@ -157,11 +156,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.inset,
   },
   errWrap: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 44 },
-  detailState: {
+  introNotice: {
+    flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 36,
-    paddingVertical: spacing.xxl,
+    justifyContent: "space-between",
+    gap: spacing.md,
+    marginHorizontal: spacing.lg,
+    marginTop: 24,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: colors.inset,
   },
+  noticeTitle: { flex: 1, fontSize: 13.5, color: colors.sec },
+  noticeAction: { fontSize: 13.5, fontWeight: "700", color: colors.accentText },
   errTitle: {
     fontSize: 20,
     fontWeight: "700",

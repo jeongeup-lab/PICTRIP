@@ -182,8 +182,8 @@ async def test_stale_cached_match_is_recomputed(
 
     refreshed_ids = {row["contentId"] for row in refreshed.json()["data"]["matches"]}
     assert stale_id not in refreshed_ids
-    assert await redis_client_fake.get("matching:revision") == "1"
-    assert await redis_client_fake.get(f"match:1:{seeded_matching.overseas_id}") is not None
+    assert await redis_client_fake.get("matching:revision") is None
+    assert await redis_client_fake.get(f"match:0:{seeded_matching.overseas_id}") is not None
 
 
 async def test_cached_match_is_hidden_when_overseas_embedding_becomes_invalid(
@@ -204,9 +204,8 @@ async def test_cached_match_is_hidden_when_overseas_embedding_becomes_invalid(
 
     assert refreshed.status_code == 200
     assert refreshed.json()["data"]["matches"] == []
-    assert await redis_client_fake.get("matching:revision") == "1"
-    assert await redis_client_fake.get(f"match:0:{seeded_matching.overseas_id}") is not None
-    assert await redis_client_fake.get(f"match:1:{seeded_matching.overseas_id}") is None
+    assert await redis_client_fake.get("matching:revision") is None
+    assert await redis_client_fake.get(f"match:0:{seeded_matching.overseas_id}") is None
 
 
 async def test_source_change_between_neighbor_search_and_hydration_is_filtered(
@@ -242,7 +241,7 @@ async def test_source_change_between_neighbor_search_and_hydration_is_filtered(
     assert changed_content_id is not None
     assert changed_content_id not in content_ids
     assert len(content_ids) == 3
-    assert await redis_client_fake.get("matching:revision") == "1"
+    assert await redis_client_fake.get("matching:revision") is None
 
 
 async def test_source_change_after_hydration_backfills_from_remaining_candidates(
@@ -276,7 +275,7 @@ async def test_source_change_after_hydration_backfills_from_remaining_candidates
 
     matches = response.json()["data"]["matches"]
     content_ids = {row["contentId"] for row in matches}
-    cached = await redis_client_fake.get(f"match:1:{seeded_matching.overseas_id}")
+    cached = await redis_client_fake.get(f"match:0:{seeded_matching.overseas_id}")
     assert response.status_code == 200
     assert changed_content_id is not None
     assert changed_content_id not in content_ids
@@ -412,6 +411,21 @@ async def test_matches_unknown_id_404(client):
 async def test_matches_without_embedding_returns_empty(client, seeded_overseas_no_embedding):
     res = await client.get(f"/v1/overseas/{seeded_overseas_no_embedding}/matches")
     assert res.json()["data"]["matches"] == []
+
+
+async def test_one_spots_invalidation_keeps_other_caches(
+    client, db_session, seeded_matching, redis_client_fake
+):
+    """전역 리비전을 올리면 임베딩 없는 게시물 한 건이 전체 매칭 캐시를 매번 날린다."""
+    warmed = seeded_matching.overseas_id
+    await client.get(f"/v1/overseas/{warmed}/matches")
+    assert await redis_client_fake.get(f"match:0:{warmed}") is not None
+
+    blank = await _insert_overseas(db_session, embedding=None)
+    await db_session.commit()
+    await client.get(f"/v1/overseas/{blank}/matches")
+
+    assert await redis_client_fake.get(f"match:0:{warmed}") is not None
 
 
 def _match_row(cpyrht_div_cd: str | None) -> matching.MatchRow:
