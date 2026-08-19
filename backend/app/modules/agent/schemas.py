@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Annotated, Literal, get_args
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints, field_validator
 
 PlaceType = Literal["attraction", "restaurant", "cafe", "hotel", "region"]
 ResolveStatus = Literal["matched", "ambiguous", "naver_only", "unmatched"]
@@ -131,11 +131,26 @@ class AskRequest(BaseModel):
 
 
 class ChatHistoryItem(BaseModel):
+    """대화 이력은 참고 자료다 — 넘치면 잘라 쓰고, 턴 전체를 거절하지 않는다."""
+
     role: Literal["user", "assistant"]
     text: Annotated[str, StringConstraints(max_length=MAX_MESSAGE_CHARS)]
     spotIds: list[Annotated[str, StringConstraints(min_length=1, max_length=32)]] = Field(
-        default_factory=list, max_length=MAX_HISTORY_SPOT_IDS
+        default_factory=list
     )
+
+    @field_validator("text", mode="before")
+    @classmethod
+    def _clip_text(cls, value: object) -> object:
+        return value[:MAX_MESSAGE_CHARS] if isinstance(value, str) else value
+
+    @field_validator("spotIds", mode="before")
+    @classmethod
+    def _clip_spot_ids(cls, value: object) -> object:
+        if not isinstance(value, list):
+            return value
+        kept = [item for item in value if isinstance(item, str) and 0 < len(item) <= 32]
+        return kept[:MAX_HISTORY_SPOT_IDS]
 
 
 class ChatRequest(BaseModel):
@@ -149,7 +164,12 @@ class ChatRequest(BaseModel):
     context: AskContext | None = None
     intent: QueryIntent | None = None
     patch: RefinePatch | None = None
-    history: list[ChatHistoryItem] = Field(default_factory=list, max_length=MAX_HISTORY_ITEMS)
+    history: list[ChatHistoryItem] = Field(default_factory=list)
+
+    @field_validator("history", mode="before")
+    @classmethod
+    def _clip_history(cls, value: object) -> object:
+        return value[-MAX_HISTORY_ITEMS:] if isinstance(value, list) else value
 
 
 SourceKind = Literal["naver_blog", "kto", "kakao"]

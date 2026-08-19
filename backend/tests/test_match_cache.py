@@ -34,12 +34,17 @@ async def test_invalidate_all_match_cache_fails_open(
     assert await invalidate_all_match_cache(redis_client_fake) == 0
 
 
-async def test_per_id_invalidation_advances_global_revision(redis_client_fake) -> None:
+async def test_per_id_invalidation_drops_only_that_key(redis_client_fake) -> None:
+    """한 건 무효화가 리비전을 올리면 나머지 스팟 캐시까지 통째로 버려진다."""
     await redis_client_fake.set("matching:revision", 7)
+    await redis_client_fake.set("match:7:42", "cached")
+    await redis_client_fake.set("match:7:99", "other")
 
     await invalidate_match_cache(redis_client_fake, overseas_id=42)
 
-    assert await redis_client_fake.get("matching:revision") == "8"
+    assert await redis_client_fake.get("matching:revision") == "7"
+    assert await redis_client_fake.get("match:7:42") is None
+    assert await redis_client_fake.get("match:7:99") == "other"
 
 
 async def test_in_flight_old_generation_write_is_not_visible(redis_client_fake) -> None:

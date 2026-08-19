@@ -73,6 +73,10 @@ class KtoApiUnavailable(AppError):
     message = "한국관광공사 API 응답을 받지 못했습니다."
 
 
+class KtoQuotaExhausted(KtoApiUnavailable):
+    """재시도가 무의미한 일일 요청제한 초과 — 프리워밍은 즉시 중단해야 한다."""
+
+
 class OAuthProviderUnavailable(AppError):
     code = "OAUTH_PROVIDER_UNAVAILABLE"
     http_status = 502

@@ -42,6 +42,7 @@ _REFRESH_LOCK_KEY = "spotdetail:refresh:v1:{content_id}"
 _REFRESH_LOCK_TTL_SECONDS = 20
 _REFRESH_BACKOFF_KEY = "spotdetail:refresh-backoff:v1:{content_id}"
 _REFRESH_BACKOFF_TTL_SECONDS = 60
+_NEVER_CACHED = datetime(1970, 1, 1, tzinfo=UTC)
 _RELEASE_REFRESH_LOCK_SCRIPT = """
 if redis.call("get", KEYS[1]) == ARGV[1] then
   return redis.call("del", KEYS[1])
@@ -298,35 +299,53 @@ async def _persist_detail(
     session: AsyncSession,
     content_id: str,
     content_type_id: int,
-    overview: str | None,
-    homepage: str | None,
-    tel: str | None,
-    images: list[SpotImageRow],
-    intro_data: dict[str, Any] | None = None,
+    fetched: _KtoDetail,
 ) -> None:
+    """실패한 오퍼레이션의 칸은 건드리지 않는다 — 쿼터 초과가 캐시를 NULL 로 지우면 안 된다."""
+    updated: dict[str, Any] = {"content_type_id": content_type_id}
+    if fetched.common_ok:
+        updated |= {
+            "overview": fetched.overview,
+            "homepage": fetched.homepage,
+            "tel": fetched.tel,
+        }
+    if fetched.intro_ok:
+        updated["intro_data"] = fetched.intro_data
+    if fetched.complete:
+        updated["cached_at"] = func.now()
+
     detail_stmt = pg_insert(SpotDetail).values(
         content_id=content_id,
         content_type_id=content_type_id,
-        overview=overview,
-        homepage=homepage,
-        tel=tel,
-        intro_data=intro_data,
-        cached_at=func.now(),
+        overview=fetched.overview,
+        homepage=fetched.homepage,
+        tel=fetched.tel,
+        intro_data=fetched.intro_data,
+        cached_at=func.now() if fetched.complete else _NEVER_CACHED,
     )
     detail_stmt = detail_stmt.on_conflict_do_update(
         index_elements=["content_id"],
-        set_={
-            "content_type_id": content_type_id,
-            "overview": overview,
-            "homepage": homepage,
-            "tel": tel,
-            "intro_data": intro_data,
-            "cached_at": func.now(),
-        },
+        set_=updated,
     )
     await session.execute(detail_stmt)
-    await replace_spot_images(session, content_id, images)
+    if fetched.images_ok:
+        await replace_spot_images(session, content_id, fetched.images)
     await session.commit()
+
+
+def _merge_with_cache(fetched: _KtoDetail, cache: _DetailCache | None) -> _KtoDetail:
+    if cache is None or fetched.complete:
+        return fetched
+    return _KtoDetail(
+        overview=fetched.overview if fetched.common_ok else cache.overview,
+        homepage=fetched.homepage if fetched.common_ok else cache.homepage,
+        tel=fetched.tel if fetched.common_ok else cache.tel,
+        images=fetched.images if fetched.images_ok else cache.images,
+        intro_data=fetched.intro_data if fetched.intro_ok else cache.intro_data,
+        common_ok=fetched.common_ok,
+        images_ok=fetched.images_ok,
+        intro_ok=fetched.intro_ok,
+    )
 
 
 async def persist_detail_common(
@@ -460,11 +479,32 @@ def parse_kto_detail_images(items: list[dict[str, Any]]) -> list[SpotImageRow]:
 _KTO_DETAIL_BUDGET = 8.0
 
 
-async def _fetch_kto_detail(
-    kto: KtoClient, content_id: str, content_type_id: int
-) -> tuple[str | None, str | None, str | None, list[SpotImageRow], dict[str, Any]]:
+@dataclass(frozen=True)
+class _KtoDetail:
+    """오퍼레이션별 성공 여부를 들고 다닌다 — 실패한 칸을 DB 에 NULL 로 덮어쓰지 않으려고."""
+
+    overview: str | None
+    homepage: str | None
+    tel: str | None
+    images: list[SpotImageRow]
+    intro_data: dict[str, Any] | None
+    common_ok: bool
+    images_ok: bool
+    intro_ok: bool
+
+    @property
+    def complete(self) -> bool:
+        return self.common_ok and self.images_ok and self.intro_ok
+
+
+def _settled(outcome: Any) -> list[dict[str, Any]] | None:
+    return None if isinstance(outcome, BaseException) else cast("list[dict[str, Any]]", outcome)
+
+
+async def _fetch_kto_detail(kto: KtoClient, content_id: str, content_type_id: int) -> _KtoDetail:
+    """세 오퍼레이션을 독립으로 정산한다 — detailCommon2 쿼터 초과가 나머지 둘을 버리지 않게."""
     try:
-        common_items, image_items, intro_items = await asyncio.wait_for(
+        outcomes = await asyncio.wait_for(
             asyncio.gather(
                 kto.call(KtoService.KOR, "detailCommon2", contentId=content_id),
                 kto.call(KtoService.KOR, "detailImage2", contentId=content_id, imageYN="Y"),
@@ -474,20 +514,39 @@ async def _fetch_kto_detail(
                     contentId=content_id,
                     contentTypeId=content_type_id,
                 ),
+                return_exceptions=True,
             ),
             timeout=_KTO_DETAIL_BUDGET,
         )
     except TimeoutError as exc:
         raise KtoApiUnavailable("KTO detail fetch exceeded budget") from exc
 
-    common = common_items[0] if common_items else {}
-    overview = verbatim(common.get("overview"))
-    homepage = clean_homepage(common.get("homepage"))
-    tel = clean_scalar(common.get("tel"))
-    images = parse_kto_detail_images(image_items)
+    common_items = _settled(outcomes[0])
+    image_items = _settled(outcomes[1])
+    intro_items = _settled(outcomes[2])
+    if common_items is None and image_items is None and intro_items is None:
+        logger.warning("spot.detail.kto_all_failed", content_id=content_id)
+        raise KtoApiUnavailable("every KTO detail operation failed")
+    if common_items is None or image_items is None or intro_items is None:
+        logger.info(
+            "spot.detail.kto_partial",
+            content_id=content_id,
+            common=common_items is not None,
+            images=image_items is not None,
+            intro=intro_items is not None,
+        )
 
-    intro_data: dict[str, Any] = intro_items[0] if intro_items else {}
-    return overview, homepage, tel, images, intro_data
+    common = common_items[0] if common_items else {}
+    return _KtoDetail(
+        overview=verbatim(common.get("overview")),
+        homepage=clean_homepage(common.get("homepage")),
+        tel=clean_scalar(common.get("tel")),
+        images=parse_kto_detail_images(image_items or []),
+        intro_data=(intro_items[0] if intro_items else {}) if intro_items is not None else None,
+        common_ok=common_items is not None,
+        images_ok=image_items is not None,
+        intro_ok=intro_items is not None,
+    )
 
 
 def _serves(cache: _DetailCache | None, *, require_intro: bool) -> bool:
@@ -561,9 +620,7 @@ async def load_spot_detail(
         )
 
     try:
-        overview, homepage, tel, images, intro_data = await _fetch_kto_detail(
-            kto, content_id, spot.content_type_id
-        )
+        fetched = await _fetch_kto_detail(kto, content_id, spot.content_type_id)
     except KtoApiUnavailable:
         if cache is not None:
             return ctx.assemble(
@@ -583,29 +640,29 @@ async def load_spot_detail(
             intro=None,
         )
 
-    await _persist_detail(
-        session, content_id, spot.content_type_id, overview, homepage, tel, images, intro_data
-    )
-    await _redis_set_detail(
-        redis,
-        content_id,
-        _DetailCache(
-            overview=overview,
-            homepage=homepage,
-            tel=tel,
-            intro_data=intro_data,
-            cached_at=datetime.now(UTC),
-            images=images,
-        ),
-    )
+    merged = _merge_with_cache(fetched, cache)
+    await _persist_detail(session, content_id, spot.content_type_id, fetched)
+    if fetched.complete:
+        await _redis_set_detail(
+            redis,
+            content_id,
+            _DetailCache(
+                overview=merged.overview,
+                homepage=merged.homepage,
+                tel=merged.tel,
+                intro_data=merged.intro_data,
+                cached_at=datetime.now(UTC),
+                images=merged.images,
+            ),
+        )
 
     return ctx.assemble(
-        overview=overview,
-        homepage=homepage,
-        tel=tel,
-        images=images,
-        status="fresh",
-        intro=_extract_intro(spot.content_type_id, intro_data),
+        overview=merged.overview,
+        homepage=merged.homepage,
+        tel=merged.tel,
+        images=merged.images,
+        status="fresh" if fetched.complete else "stale",
+        intro=_extract_intro(spot.content_type_id, merged.intro_data),
     )
 
 

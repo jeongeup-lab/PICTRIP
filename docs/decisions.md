@@ -22,6 +22,8 @@
 | 8 | 2026-08-10 | **상세 프리워밍은 `detailCommon2` 1콜만** | 모수가 5만이 아니라 attraction 11,575곳이었다. `detailIntro2` 까지 2콜로 늘리면 29일이 걸리는데 얻는 게 빈약하다 — `usetime` 56% 가 "상시 개방", `parking` 91% 가 한 단어, `usefee` 유효율 0.9% | `scripts/prewarm_details.py` |
 | 9 | 2026-08-11 | **여행 탭은 채팅-first, 검색은 결정적·작문만 LLM** | 아래 상세 | `POST /agent/chat` · `agent/services/` |
 | 10 | 2026-08-19 | **문서는 5개 · ADR 은 이 표로 접는다** | 아래 상세 | `docs/` |
+| 11 | 2026-08-19 | **KTO 상세 3콜은 독립 정산 · 프리워밍은 라이브 몫을 남긴다** | `detailCommon2` 일일 쿼터는 실측 ~600콜인데 프리워밍이 04:37 KST 에 전부 태웠다(written=599·kto_failed=200). 게다가 `gather` 가 그 429 하나로 성공한 `detailImage2`·`detailIntro2` 까지 버려 상세 화면이 통째로 비었다 | `app/modules/spots/services/detail.py` · `prewarm_job.py` |
+| 12 | 2026-08-19 | **대화 이력은 참고 자료 — 넘치면 잘라 쓰고 턴을 거절하지 않는다** | 20장을 돌려준 턴이 다음 턴의 `spotIds`(상한 8)를 넘겨 `VALIDATION_FAILED` 로 죽었고, 재시도는 같은 시드를 재생해 영구 실패했다. 구 `v*` 빌드는 OTA 를 못 받으므로 관용은 서버 쪽에 있어야 한다 | `app/modules/agent/schemas.py` · `travel/stores/chat-store.ts` |
 
 ## 상세
 

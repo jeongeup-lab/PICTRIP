@@ -15,12 +15,14 @@ from app.modules.spots.services import (
     fetch_detail_common,
     persist_detail_common,
 )
+from app.web.errors import KtoQuotaExhausted
 
 logger = get_logger(__name__)
 
 WRITTEN = "written"
 KTO_FAILED = "kto_failed"
 EMPTY = "empty_overview"
+QUOTA_SKIPPED = "quota_skipped"
 
 
 @dataclass
@@ -63,6 +65,8 @@ async def _prewarm_one(
 ) -> str:
     try:
         overview, homepage, tel = await fetch_detail_common(kto, content_id)
+    except KtoQuotaExhausted:
+        raise
     except Exception as exc:
         logger.warning(
             "spot.prewarm.kto_failed", content_id=content_id, error_type=type(exc).__name__
@@ -81,8 +85,15 @@ async def run_prewarm_job(*, limit: int, pause_seconds: float = 0.0) -> PrewarmR
         async with async_session_factory() as session:
             targets = await collect_prewarm_targets(session, limit=limit)
             logger.info("spot.prewarm.start", targets=len(targets))
-            for content_id, content_type_id in targets:
-                result.record(await _prewarm_one(session, kto, content_id, content_type_id))
+            for index, (content_id, content_type_id) in enumerate(targets):
+                try:
+                    result.record(await _prewarm_one(session, kto, content_id, content_type_id))
+                except KtoQuotaExhausted:
+                    remaining = len(targets) - index
+                    logger.warning("spot.prewarm.quota_exhausted", remaining=remaining)
+                    for _ in range(remaining):
+                        result.record(QUOTA_SKIPPED)
+                    break
                 if pause_seconds:
                     await asyncio.sleep(pause_seconds)
     finally:

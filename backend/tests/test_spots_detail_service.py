@@ -20,7 +20,7 @@ from app.modules.spots.services.detail import (
     _redis_set_detail,
     _release_refresh_lock,
 )
-from app.web.errors import KtoApiUnavailable, ResourceNotFound
+from app.web.errors import KtoApiUnavailable, KtoQuotaExhausted, ResourceNotFound
 
 _STALE_AGE_DAYS = _DETAIL_TTL.days + 1
 
@@ -567,3 +567,75 @@ async def test_invalidate_detail_cache_drops_the_current_key(
     await invalidate_spot_detail_cache(redis, "DT-INVAL")
 
     assert await redis.get("spotdetail:v2:DT-INVAL") is None
+
+
+class QuotaSplitKto(FakeKto):
+    """detailCommon2 만 일일 쿼터에 걸리는 실제 장애 형태를 재현한다."""
+
+    async def call(self, service, operation, **params):
+        if operation == "detailCommon2":
+            raise KtoQuotaExhausted()
+        return await super().call(service, operation, **params)
+
+
+@pytest.mark.asyncio
+async def test_common_quota_failure_keeps_images_and_intro(
+    db_session: AsyncSession, redis: FakeRedis
+) -> None:
+    await _insert_spot(db_session, "DT-PARTIAL")
+    kto = QuotaSplitKto(images=_IMAGES, intro=_INTRO)
+
+    row = await load_spot_detail(db_session, kto, redis, "DT-PARTIAL")
+
+    assert row.detail_status == "stale"
+    assert [i.origin_image_url for i in row.images] == ["http://kto/1.jpg", "http://kto/2.jpg"]
+    assert row.intro is not None
+    assert row.overview is None
+
+
+@pytest.mark.asyncio
+async def test_partial_fetch_does_not_erase_cached_overview(
+    db_session: AsyncSession, redis: FakeRedis
+) -> None:
+    await _insert_spot(db_session, "DT-KEEP")
+    await _insert_detail(db_session, "DT-KEEP", overview="예전 소개글", age_days=_STALE_AGE_DAYS)
+    await db_session.commit()
+
+    row = await load_spot_detail(
+        db_session, QuotaSplitKto(images=_IMAGES, intro=_INTRO), redis, "DT-KEEP"
+    )
+
+    assert row.overview == "예전 소개글"
+    stored = (
+        await db_session.execute(
+            text("SELECT overview FROM spot_details WHERE content_id = 'DT-KEEP'")
+        )
+    ).scalar_one()
+    assert stored == "예전 소개글"
+
+
+@pytest.mark.asyncio
+async def test_partial_fetch_stays_refetchable(db_session: AsyncSession, redis: FakeRedis) -> None:
+    await _insert_spot(db_session, "DT-RETRY")
+    await load_spot_detail(
+        db_session, QuotaSplitKto(images=_IMAGES, intro=_INTRO), redis, "DT-RETRY"
+    )
+    await invalidate_spot_detail_cache(redis, "DT-RETRY")
+
+    row = await load_spot_detail(
+        db_session, FakeKto(common=_COMMON, images=_IMAGES, intro=_INTRO), redis, "DT-RETRY"
+    )
+
+    assert row.detail_status == "fresh"
+    assert row.overview == "한라산 정상 풍경"
+
+
+@pytest.mark.asyncio
+async def test_every_operation_failing_is_unavailable(
+    db_session: AsyncSession, redis: FakeRedis
+) -> None:
+    await _insert_spot(db_session, "DT-DEAD")
+
+    row = await load_spot_detail(db_session, FakeKto(fail=True), redis, "DT-DEAD")
+
+    assert row.detail_status == "unavailable"

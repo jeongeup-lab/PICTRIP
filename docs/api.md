@@ -19,7 +19,7 @@
 | GET | `/users/me/saved` | 저장 목록 (커서) | JWT |
 | POST / DELETE | `/users/me/saved/{contentId}` | 저장/해제 (멱등) | JWT |
 | GET | `/spots/{contentId}` | 스팟 상세 (KTO lazy fetch, 7일 캐시) | — |
-| GET | `/explore` | 해외 게시물 피드·그리드 (seed+cursor, 기본 30개) — 홈·탐색이 같은 문을 쓴다 | — |
+| GET | `/explore` | 해외 게시물 피드·그리드 (seed+cursor, 기본 30개) — 홈·탐색이 같은 문을 쓴다. 임베딩 있는 게시물만 | — |
 | GET | `/feed` | **deprecated 별칭** — `/explore` 와 같은 코드. OTA 를 못 받는 v0.6.0 빌드가 아직 친다. 만료(2026-10-13) 후 삭제 | — |
 | GET | `/overseas/{id}/matches` | 해외→국내 매칭 3곳 | — |
 | GET | `/home/nearby` | 지금 주변 인기 장소 — 5km 내 혼잡도 랭킹 10곳 (lat/lng 필수) | — |
@@ -42,6 +42,12 @@
 `detailStatus="unavailable"`로 재시도를 제한한다. 캐시가 없는 `unavailable` 화면은
 백오프가 끝나는 60초 뒤 다시 조회한다. 헤더가 없는 기존 클라이언트에는 배포 호환성을
 위해 KTO 조회가 끝난 완성 응답을 유지한다.
+
+상세는 `detailCommon2`·`detailImage2`·`detailIntro2` 세 콜을 독립으로 정산한다.
+일부만 실패하면 성공한 칸만 저장하고 `detailStatus="stale"`로 내려간다 —
+`detailCommon2` 일일 쿼터가 끊겨도 사진·이용안내는 그대로 보인다. 셋 다 실패하고
+캐시도 없을 때만 `unavailable`이며, 이때도 화면은 위치·저장·주변만 유지하고
+소개 자리에만 재시도를 띄운다.
 
 어드민 콘솔은 `/v1` 밖 `/admin` — 페이지 4종 + `/admin/api/*`(수집·임베딩
 상태/트리거, 이력, 헬스, overseas 목록·`is_hidden` 토글). 서명 쿠키 세션,

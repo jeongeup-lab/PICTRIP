@@ -486,3 +486,42 @@ async def test_an_unsupported_request_still_reaches_the_writer_so_it_can_offer_a
         "".join(event.text for name, event in events if name == "delta")
         == "날씨는 못 보지만 실내 여행지는 찾아드릴 수 있어요."
     )
+
+
+def test_history_over_the_cap_is_clipped_not_rejected() -> None:
+    """20장을 돌려준 직전 턴이 다음 턴을 통째로 400 으로 죽이면 안 된다."""
+    payload = ChatRequest.model_validate(
+        {
+            "message": "다른 곳도 알려줘",
+            "history": [
+                {"role": "user", "text": "제주 자연 풍경 좋은 곳"},
+                {
+                    "role": "assistant",
+                    "text": "가",
+                    "spotIds": [str(i) for i in range(20)],
+                },
+            ],
+        }
+    )
+
+    assert len(payload.history[-1].spotIds) == 8
+    assert payload.history[-1].spotIds == [str(i) for i in range(8)]
+
+
+def test_history_longer_than_the_window_keeps_the_latest_turns() -> None:
+    payload = ChatRequest.model_validate(
+        {
+            "message": "그럼 근처 카페는?",
+            "history": [{"role": "user", "text": f"질문{i}"} for i in range(12)],
+        }
+    )
+
+    assert len(payload.history) == 8
+    assert payload.history[0].text == "질문4"
+    assert payload.history[-1].text == "질문11"
+
+
+def test_overlong_history_text_is_clipped() -> None:
+    payload = ChatRequest.model_validate({"history": [{"role": "assistant", "text": "가" * 900}]})
+
+    assert len(payload.history[0].text) == 500

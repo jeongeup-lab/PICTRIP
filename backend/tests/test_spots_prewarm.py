@@ -5,9 +5,10 @@ from fakeredis.aioredis import FakeRedis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.spots import prewarm_job
 from app.modules.spots.prewarm_job import collect_prewarm_targets
 from app.modules.spots.services import load_spot_detail, persist_detail_common
-from app.web.errors import KtoApiUnavailable
+from app.web.errors import KtoApiUnavailable, KtoQuotaExhausted
 
 _COMMON = [{"overview": "프리워밍 개요", "homepage": "<a>hp</a>", "tel": "064-000"}]
 _INTRO = [{"usetime": "09:30~17:30", "restdate": "매주 월요일"}]
@@ -160,3 +161,59 @@ async def test_intro_fetch_failure_falls_back_to_prewarmed_overview(
 
     assert row.detail_status == "stale"
     assert row.overview == "프리워밍 개요"
+
+
+class QuotaKto(FakeKto):
+    def __init__(self, allowance: int) -> None:
+        super().__init__(common=_COMMON)
+        self.allowance = allowance
+
+    async def call(self, service, operation, **params):
+        if len(self.operations) >= self.allowance:
+            self.operations.append(operation)
+            raise KtoQuotaExhausted()
+        return await super().call(service, operation, **params)
+
+    async def aclose(self) -> None:
+        return None
+
+
+@pytest.mark.asyncio
+async def test_prewarm_stops_when_the_daily_quota_runs_out(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """쿼터가 끊긴 뒤에도 남은 타깃을 계속 때리면 그날 라이브 조회분까지 태운다."""
+    targets = [(f"pw-{i}", 12) for i in range(10)]
+    kto = QuotaKto(allowance=3)
+    monkeypatch.setattr(prewarm_job, "KtoClient", lambda: kto)
+    monkeypatch.setattr(prewarm_job, "collect_prewarm_targets", _fixed_targets(targets))
+    monkeypatch.setattr(prewarm_job, "persist_detail_common", _noop_persist)
+    monkeypatch.setattr(prewarm_job, "async_session_factory", _session_factory(db_session))
+
+    result = await prewarm_job.run_prewarm_job(limit=10)
+
+    assert result.written == 3
+    assert result.by_status[prewarm_job.QUOTA_SKIPPED] == 7
+    assert len(kto.operations) == 4
+
+
+def _fixed_targets(targets):
+    async def _collect(session, *, limit=None):
+        return targets[:limit] if limit else targets
+
+    return _collect
+
+
+async def _noop_persist(session, content_id, content_type_id, overview, homepage, tel):
+    return None
+
+
+def _session_factory(session):
+    class _Ctx:
+        async def __aenter__(self):
+            return session
+
+        async def __aexit__(self, *exc):
+            return False
+
+    return lambda: _Ctx()
