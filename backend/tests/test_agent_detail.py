@@ -16,11 +16,11 @@ from app.modules.agent.schemas import (
     QueryIntent,
 )
 from app.modules.agent.services import anchor as anchor_service
-from app.modules.agent.services import answer as answer_service
 from app.modules.agent.services import ask as ask_service
 from app.modules.agent.services import detail as detail_service
 from app.modules.agent.services import food as food_service
 from app.modules.agent.services import intent as intent_service
+from app.modules.agent.services import phrasing as phrasing_service
 from app.modules.spots.services.rows import SpotDetailRow, SpotIntroRow
 
 SEBYEONGGWAN = AskContextSpot(contentId="126198", title="통영 세병관")
@@ -1292,7 +1292,7 @@ async def test_a_region_food_query_measures_from_me_when_i_said_nearby(monkeypat
     assert seen["lat"] == 35.15
     assert answer.intent.nearMe is True
     assert answer.tagBasis == "직선거리 기준"
-    assert answer_service._is_distance_tag(answer.spots[0].tag)
+    assert phrasing_service.is_distance_tag(answer.spots[0].tag)
 
 
 async def test_a_region_food_query_without_coords_stays_a_plain_listing(monkeypatch) -> None:

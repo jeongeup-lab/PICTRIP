@@ -6,7 +6,7 @@ from app.modules.agent.schemas import AgentSpotCard, QueryIntent
 from app.modules.agent.services import writer
 
 
-def _card(content_id: str, title: str) -> AgentSpotCard:
+def card(content_id: str, title: str) -> AgentSpotCard:
     return AgentSpotCard(contentId=content_id, title=title, regionLabel="제주 제주시")
 
 
@@ -14,7 +14,7 @@ def _prompt(*titles: str) -> tuple[str, str]:
     return writer.build_prompt(
         question="제주 박물관",
         intent=QueryIntent(regionHints=["제주"]),
-        spots=[_card(str(index), title) for index, title in enumerate(titles, start=1)],
+        spots=[card(str(index), title) for index, title in enumerate(titles, start=1)],
         blog_posts=[],
         client_time=None,
         history=[],

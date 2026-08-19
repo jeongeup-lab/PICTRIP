@@ -22,16 +22,18 @@ from app.modules.agent.services import photo as photo_service
 from app.modules.agent.services import refine as refine_service
 from app.modules.agent.services import retrieve
 from app.modules.agent.services import suggest as suggest_service
-from app.modules.agent.services.anchor import _subject_particle
 from app.modules.agent.services.answer import (
-    _km_label,
-    _nearest_sentence,
-    _rebadge_last,
-    _tag_basis,
-    _widen_sentence,
-    _zero_response,
+    nearest_sentence,
+    rebadge_last,
+    tag_basis,
+    widen_sentence,
+    zero_response,
 )
-from app.modules.agent.services.routes import count, widen_label
+from app.modules.agent.services.branches import count, widen_label
+from app.modules.agent.services.phrasing import (
+    km_label,
+    subject_particle,
+)
 from app.web.errors import AppError
 
 logger = get_logger(__name__)
@@ -41,7 +43,7 @@ INTENT_MODEL_BADGE = "AI 해석"
 INTENT_FALLBACK_BADGE = "사전 매칭"
 
 
-async def _ask_with_photo(
+async def ask_with_photo(
     session: AsyncSession,
     *,
     question: str,
@@ -123,8 +125,8 @@ async def _ask_with_photo(
         steps.append(AskStep(tool="nearby", label="현재 위치에서 가까운 순", badge=count(ordered)))
 
     if not ordered:
-        _rebadge_last(steps, "photo_match", f"{len(rows)}곳")
-        return _zero_response(
+        rebadge_last(steps, "photo_match", f"{len(rows)}곳")
+        return zero_response(
             steps,
             intent,
             has_coords=lat is not None and lng is not None and bool(rows),
@@ -141,7 +143,7 @@ async def _ask_with_photo(
         spots=spots,
         totalCount=len(spots),
         intent=intent,
-        tagBasis=_tag_basis(top, spots, near=near),
+        tagBasis=tag_basis(top, spots, near=near),
         refinements=suggest_service.derive(
             intent,
             has_coords=lat is not None and lng is not None,
@@ -163,11 +165,11 @@ def _photo_answer(
 ) -> list[AnswerSegment]:
     lead: list[AnswerSegment] = []
     if near and lat is not None and lng is not None:
-        lead = _nearest_sentence(top, lat=lat, lng=lng)
+        lead = nearest_sentence(top, lat=lat, lng=lng)
     if not lead:
         lead = [
             AnswerSegment(text=spots[0].title, emphasis=True),
-            AnswerSegment(text=f"{_subject_particle(spots[0].title)} 가장 비슷해요."),
+            AnswerSegment(text=f"{subject_particle(spots[0].title)} 가장 비슷해요."),
         ]
     answer = [
         *lead,
@@ -176,7 +178,7 @@ def _photo_answer(
     ]
     if widened is not None:
         answer.append(AnswerSegment(text=" "))
-        answer.extend(_widen_sentence(widened))
+        answer.extend(widen_sentence(widened))
     answer.append(AnswerSegment(text=" 원본 사진은 비교 후 바로 폐기했어요."))
     return answer
 
@@ -198,5 +200,5 @@ def _photo_card(
     if near and lat is not None and lng is not None:
         km = retrieve.distance_km(row, lat=lat, lng=lng)
         if km is not None:
-            return retrieve.to_card(row, tag=_km_label(km))
+            return retrieve.to_card(row, tag=km_label(km))
     return retrieve.to_card(row, tag=f"유사도 {round(similarity.get(row.content_id, 0.0) * 100)}%")

@@ -40,13 +40,14 @@ from app.modules.agent.schemas import (
 from app.modules.agent.services import anchor as anchor_service
 from app.modules.agent.services import answer as answer_service
 from app.modules.agent.services import ask as ask_service
+from app.modules.agent.services import branches as routes_module
 from app.modules.agent.services import intent as intent_service
 from app.modules.agent.services import photo as photo_service
 from app.modules.agent.services import photo_ask as photo_ask_service
+from app.modules.agent.services import phrasing as phrasing_service
 from app.modules.agent.services import refine as refine_service
 from app.modules.agent.services import resolve as resolve_service
 from app.modules.agent.services import retrieve
-from app.modules.agent.services import routes as routes_module
 from app.modules.agent.services import suggest as suggest_service
 from app.modules.feed.services import kto_channels
 from app.modules.feed.services.channels import ChannelCardRow
@@ -124,16 +125,16 @@ def test_card_tag_prefers_distance_then_percentile() -> None:
     pool = _pool()
     quiet = QueryIntent(crowdPreference="quiet")
 
-    near_card = answer_service._card(pool[0], intent=quiet, lat=LAT, lng=LNG, near=True)
-    quiet_card = answer_service._card(pool[0], intent=quiet, lat=None, lng=None, near=False)
+    near_card = answer_service.card(pool[0], intent=quiet, lat=LAT, lng=LNG, near=True)
+    quiet_card = answer_service.card(pool[0], intent=quiet, lat=None, lng=None, near=False)
 
     assert near_card.tag == "10m"
-    assert answer_service._is_distance_tag(near_card.tag)
+    assert phrasing_service.is_distance_tag(near_card.tag)
     assert quiet_card.tag == "하위 10%"
 
 
 def test_a_quiet_answer_leads_with_the_percentile_not_the_count() -> None:
-    segments = answer_service._answer(
+    segments = answer_service.answer_segments(
         _pool()[:4],
         intent=QueryIntent(crowdPreference="quiet"),
         near=False,
@@ -151,7 +152,9 @@ def test_a_quiet_answer_leads_with_the_percentile_not_the_count() -> None:
 def test_a_plain_answer_says_how_many_of_the_results_are_calm() -> None:
     rows = [_row("a", rate=10.0), _row("b", rate=90.0), _row("c", rate=50.0)]
 
-    segments = answer_service._answer(rows, intent=QueryIntent(), near=False, lat=None, lng=None)
+    segments = answer_service.answer_segments(
+        rows, intent=QueryIntent(), near=False, lat=None, lng=None
+    )
 
     text = "".join(s.text for s in segments)
     assert "이 중 " in text
@@ -163,7 +166,9 @@ def test_a_plain_answer_says_how_many_of_the_results_are_calm() -> None:
 def test_a_plain_answer_says_all_when_every_result_is_calm() -> None:
     rows = [_row("a", rate=10.0), _row("b", rate=12.0)]
 
-    segments = answer_service._answer(rows, intent=QueryIntent(), near=False, lat=None, lng=None)
+    segments = answer_service.answer_segments(
+        rows, intent=QueryIntent(), near=False, lat=None, lng=None
+    )
 
     assert "".join(s.text for s in segments).endswith(answer_service.CALM_MIX_ALL)
 
@@ -171,7 +176,9 @@ def test_a_plain_answer_says_all_when_every_result_is_calm() -> None:
 def test_a_plain_answer_without_crowd_data_keeps_the_narrowing_hint() -> None:
     rows = [_row("a", rate=None), _row("b", rate=None)]
 
-    segments = answer_service._answer(rows, intent=QueryIntent(), near=False, lat=None, lng=None)
+    segments = answer_service.answer_segments(
+        rows, intent=QueryIntent(), near=False, lat=None, lng=None
+    )
 
     assert "".join(s.text for s in segments).endswith(answer_service.NARROW_HINT)
 
@@ -179,7 +186,9 @@ def test_a_plain_answer_without_crowd_data_keeps_the_narrowing_hint() -> None:
 def test_a_busy_only_answer_does_not_claim_calm() -> None:
     rows = [_row("a", rate=90.0), _row("b", rate=95.0)]
 
-    segments = answer_service._answer(rows, intent=QueryIntent(), near=False, lat=None, lng=None)
+    segments = answer_service.answer_segments(
+        rows, intent=QueryIntent(), near=False, lat=None, lng=None
+    )
 
     text = "".join(s.text for s in segments)
     assert "사람이 적은" not in text
@@ -187,7 +196,7 @@ def test_a_busy_only_answer_does_not_claim_calm() -> None:
 
 
 def test_a_near_answer_leads_with_the_closest_distance() -> None:
-    segments = answer_service._answer(
+    segments = answer_service.answer_segments(
         _pool()[:4],
         intent=QueryIntent(nearMe=True),
         near=True,
@@ -197,7 +206,7 @@ def test_a_near_answer_leads_with_the_closest_distance() -> None:
 
     text = "".join(s.text for s in segments)
     assert text.startswith("가장 가까운 곳이 ")
-    assert answer_service._is_distance_tag(next(s.text for s in segments if s.emphasis))
+    assert phrasing_service.is_distance_tag(next(s.text for s in segments if s.emphasis))
 
 
 def _photo_spots(rows: list[CandidateRow], *, near: bool) -> list[AgentSpotCard]:
@@ -251,7 +260,7 @@ def test_a_distance_ordered_photo_answer_leads_with_the_distance_not_similarity(
     assert text.startswith("가장 가까운 곳이 ")
     assert "가장 비슷해요" not in text
     assert "사진과 닮은 곳으로 2곳이에요." in text
-    assert answer_service._is_distance_tag(next(s.text for s in segments if s.emphasis))
+    assert phrasing_service.is_distance_tag(next(s.text for s in segments if s.emphasis))
 
 
 def test_a_photo_answer_never_emphasises_a_bare_count() -> None:
@@ -271,7 +280,7 @@ def test_a_photo_answer_never_emphasises_a_bare_count() -> None:
 
 
 def test_an_answer_with_no_specific_fact_leads_with_the_conditions() -> None:
-    segments = answer_service._answer(
+    segments = answer_service.answer_segments(
         _pool()[:4],
         intent=QueryIntent(regionHints=["통영"], categoryKeywords=["계곡"]),
         near=False,
@@ -284,7 +293,7 @@ def test_an_answer_with_no_specific_fact_leads_with_the_conditions() -> None:
 
 
 def test_an_answer_with_nothing_nameable_keeps_the_plain_opening() -> None:
-    segments = answer_service._answer(
+    segments = answer_service.answer_segments(
         _pool()[:4],
         intent=QueryIntent(namedPlaces=[ExtractedPlace(name="감천문화마을")]),
         near=False,
@@ -296,7 +305,7 @@ def test_an_answer_with_nothing_nameable_keeps_the_plain_opening() -> None:
 
 
 def test_a_widened_answer_leads_with_the_region_it_widened_to() -> None:
-    segments = answer_service._answer(
+    segments = answer_service.answer_segments(
         _pool()[:4],
         intent=QueryIntent(regionHints=["수영"]),
         near=False,
@@ -316,7 +325,7 @@ def test_a_widened_answer_leads_with_the_region_it_widened_to() -> None:
 
 
 def test_an_answer_never_emphasises_a_bare_count() -> None:
-    segments = answer_service._answer(
+    segments = answer_service.answer_segments(
         _pool()[:4],
         intent=QueryIntent(crowdPreference="quiet"),
         near=False,
@@ -735,7 +744,7 @@ async def test_near_me_orders_candidates_by_distance_in_sql(
     data = res.json()["data"]
     assert [spot["contentId"] for spot in data["spots"]] == ["v3", "v2", "v1"]
     assert [step["tool"] for step in data["steps"]][-1] == "nearby"
-    assert all(answer_service._is_distance_tag(spot["tag"]) for spot in data["spots"])
+    assert all(phrasing_service.is_distance_tag(spot["tag"]) for spot in data["spots"])
 
 
 @pytest.mark.integration
@@ -1527,7 +1536,7 @@ async def test_near_with_quiet_still_filters_by_percentile_in_sql(
 def test_a_search_lead_never_reports_a_zero_kilometre_distance() -> None:
     here = _row("c0", rate=10.0, percentile=10, lat=LAT, lng=LNG)
 
-    segments = answer_service._answer(
+    segments = answer_service.answer_segments(
         [here],
         intent=QueryIntent(nearMe=True),
         near=True,
@@ -3857,7 +3866,7 @@ def test_a_mixed_tag_batch_does_not_claim_every_card_is_a_distance() -> None:
         AgentSpotCard(contentId="b", title="t", regionLabel="r", tag="한산"),
     ]
 
-    assert answer_service._tag_basis(rows, mixed, near=True) == "혼잡도 8/3 예측 기준"
+    assert answer_service.tag_basis(rows, mixed, near=True) == "혼잡도 8/3 예측 기준"
 
 
 def test_an_all_distance_batch_says_so() -> None:
@@ -3866,7 +3875,7 @@ def test_an_all_distance_batch_says_so() -> None:
         AgentSpotCard(contentId="b", title="t", regionLabel="r", tag="0.4km"),
     ]
 
-    assert answer_service._tag_basis([], cards, near=True) == "직선거리 기준"
+    assert answer_service.tag_basis([], cards, near=True) == "직선거리 기준"
 
 
 def test_a_metre_tagged_batch_keeps_the_straight_line_basis() -> None:
@@ -3875,7 +3884,7 @@ def test_a_metre_tagged_batch_keeps_the_straight_line_basis() -> None:
         AgentSpotCard(contentId="b", title="t", regionLabel="r", tag="40m"),
     ]
 
-    assert answer_service._tag_basis([], cards, near=True) == "직선거리 기준"
+    assert answer_service.tag_basis([], cards, near=True) == "직선거리 기준"
 
 
 def test_metres_and_kilometres_mixed_still_read_as_one_distance_batch() -> None:
@@ -3884,23 +3893,23 @@ def test_metres_and_kilometres_mixed_still_read_as_one_distance_batch() -> None:
         AgentSpotCard(contentId="b", title="t", regionLabel="r", tag="3.2km"),
     ]
 
-    assert answer_service._tag_basis([], cards, near=True) == "직선거리 기준"
+    assert answer_service.tag_basis([], cards, near=True) == "직선거리 기준"
 
 
 @pytest.mark.parametrize("tag", ["40m", "870m", "1.0km", "3.2km", "12km"])
 def test_every_distance_label_the_formatter_emits_is_shaped_like_a_distance(tag) -> None:
-    assert answer_service._is_distance_tag(tag)
+    assert phrasing_service.is_distance_tag(tag)
 
 
 @pytest.mark.parametrize("tag", ["한산", "하위 8%", "유사도 87%", "D-3", "바다뷰", None, ""])
 def test_a_non_distance_tag_is_not_mistaken_for_one(tag) -> None:
-    assert not answer_service._is_distance_tag(tag)
+    assert not phrasing_service.is_distance_tag(tag)
 
 
 def test_the_formatter_and_the_basis_gate_agree_on_every_step_from_zero_to_two_km() -> None:
-    labels = [answer_service._meters_label(float(m)) for m in range(0, 2000, 7)]
+    labels = [phrasing_service.meters_label(float(m)) for m in range(0, 2000, 7)]
 
-    assert all(answer_service._is_distance_tag(label) for label in labels)
+    assert all(phrasing_service.is_distance_tag(label) for label in labels)
 
 
 def test_no_crowd_tag_means_no_crowd_basis() -> None:
@@ -3913,7 +3922,7 @@ def test_no_crowd_tag_means_no_crowd_basis() -> None:
         AgentSpotCard(contentId="b", title="t", regionLabel="r", tag="3.2km"),
     ]
 
-    assert answer_service._tag_basis(rows, cards, near=True) is None
+    assert answer_service.tag_basis(rows, cards, near=True) is None
 
 
 def test_a_visible_crowd_tag_brings_the_crowd_basis_back() -> None:
@@ -3926,7 +3935,7 @@ def test_a_visible_crowd_tag_brings_the_crowd_basis_back() -> None:
         AgentSpotCard(contentId="b", title="t", regionLabel="r", tag="3.2km"),
     ]
 
-    assert answer_service._tag_basis(rows, cards, near=True) == "혼잡도 8/3 예측 기준"
+    assert answer_service.tag_basis(rows, cards, near=True) == "혼잡도 8/3 예측 기준"
 
 
 def test_a_card_carries_the_category_the_map_pin_draws() -> None:
@@ -4000,7 +4009,7 @@ def test_a_similarity_only_batch_names_the_photo_comparison_not_the_crowd() -> N
     rows = [replace(_row("a", rate=10.0), base_ymd=date(2026, 8, 3))]
     cards = [AgentSpotCard(contentId="a", title="t", regionLabel="r", tag="유사도 84%")]
 
-    assert answer_service._tag_basis(rows, cards, near=False) == answer_service.PHOTO_BASIS
+    assert answer_service.tag_basis(rows, cards, near=False) == answer_service.PHOTO_BASIS
 
 
 @pytest.mark.integration
@@ -4114,11 +4123,11 @@ def test_a_zero_answer_leads_with_the_conditions_that_failed() -> None:
 
 
 def test_a_headline_particle_follows_the_place_name_it_attaches_to() -> None:
-    assert anchor_service._subject_particle("우도") == "가"
-    assert anchor_service._subject_particle("오동도") == "가"
-    assert anchor_service._subject_particle("봉화은어축제") == "가"
-    assert anchor_service._subject_particle("성산일출봉") == "이"
-    assert anchor_service._subject_particle("한라산") == "이"
+    assert anchor_service.subject_particle("우도") == "가"
+    assert anchor_service.subject_particle("오동도") == "가"
+    assert anchor_service.subject_particle("봉화은어축제") == "가"
+    assert anchor_service.subject_particle("성산일출봉") == "이"
+    assert anchor_service.subject_particle("한라산") == "이"
 
 
 def test_a_zero_answer_without_a_region_does_not_tell_me_to_widen_one() -> None:
