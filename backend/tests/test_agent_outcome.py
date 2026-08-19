@@ -23,13 +23,13 @@ def _response(**kwargs: object) -> AskResponse:
     return AskResponse(**base)  # type: ignore[arg-type]
 
 
-def _card() -> AgentSpotCard:
+def card() -> AgentSpotCard:
     return AgentSpotCard(contentId="1", title="국립제주박물관", regionLabel="제주 제주시")
 
 
 def test_results_win_over_every_other_reading_of_the_turn() -> None:
     outcome = outcome_service.classify(
-        _response(spots=[_card()], totalCount=1, intent=QueryIntent(task="smalltalk"))
+        _response(spots=[card()], totalCount=1, intent=QueryIntent(task="smalltalk"))
     )
 
     assert isinstance(outcome, outcome_service.SpotResults)

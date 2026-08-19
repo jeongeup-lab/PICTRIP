@@ -17,27 +17,25 @@ def _response(**kw: object) -> AskResponse:
     return AskResponse(**{**base, **kw})
 
 
-def _card() -> AgentSpotCard:
+def card() -> AgentSpotCard:
     return AgentSpotCard(contentId="1", title="여수 밥집", regionLabel="전남 여수시")
 
 
 def test_results_that_dropped_a_condition_are_partial_not_a_clean_hit() -> None:
-    outcome = outcome_service.classify(
-        _response(spots=[_card()], totalCount=1, unmet=["한적한 곳"])
-    )
+    outcome = outcome_service.classify(_response(spots=[card()], totalCount=1, unmet=["한적한 곳"]))
 
     assert isinstance(outcome, outcome_service.PartialResults)
     assert outcome.unmet == ["한적한 곳"]
 
 
 def test_results_with_every_condition_applied_stay_a_clean_hit() -> None:
-    outcome = outcome_service.classify(_response(spots=[_card()], totalCount=1))
+    outcome = outcome_service.classify(_response(spots=[card()], totalCount=1))
 
     assert isinstance(outcome, outcome_service.SpotResults)
 
 
 def test_the_writer_is_told_what_it_could_not_honour() -> None:
-    outcome = outcome_service.classify(_response(spots=[_card()], totalCount=1, unmet=["실내"]))
+    outcome = outcome_service.classify(_response(spots=[card()], totalCount=1, unmet=["실내"]))
 
     assert outcome_service.situation_of(outcome) is not None
     assert "실내" in (outcome_service.situation_of(outcome) or "")

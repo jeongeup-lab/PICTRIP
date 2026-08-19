@@ -76,7 +76,7 @@ async def test_a_dish_the_region_table_rejects_becomes_a_food_search_not_a_sight
 
     monkeypatch.setattr(retrieve, "map_region_tokens_to_prefixes", fake_mapping)
     monkeypatch.setattr(retrieve, "resolve_category_scope", fake_scope)
-    monkeypatch.setattr(ask_service, "_ask_for_food", fake_food)
+    monkeypatch.setattr(ask_service, "ask_for_food", fake_food)
 
     await ask_service.ask(
         db_session,
@@ -131,7 +131,7 @@ async def test_raw_dish_evidence_repairs_a_healthy_generic_food_intent(
     monkeypatch.setattr(intent_service, "extract_intent", fake_extract)
     monkeypatch.setattr(retrieve, "map_region_tokens_to_prefixes", fake_mapping)
     monkeypatch.setattr(retrieve, "resolve_category_scope", fake_scope)
-    monkeypatch.setattr(ask_service, "_ask_for_food", fake_food)
+    monkeypatch.setattr(ask_service, "ask_for_food", fake_food)
 
     await ask_service.ask(
         db_session,
@@ -173,7 +173,7 @@ async def test_focused_dish_followup_replaces_carried_category_when_gemini_is_do
         seen_title_terms = title_terms
         return _blank_response()
 
-    monkeypatch.setattr(ask_service, "_ask_with_anchor", fake_anchor)
+    monkeypatch.setattr(ask_service, "ask_with_anchor", fake_anchor)
 
     await ask_service.ask(
         db_session,

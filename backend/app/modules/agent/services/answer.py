@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import re
-
 from app.core.logging import get_logger
 from app.modules.agent.errors import AgentNoResults
 from app.modules.agent.repositories import CandidateRow
@@ -16,48 +14,29 @@ from app.modules.agent.schemas import (
 )
 from app.modules.agent.services import retrieve
 from app.modules.agent.services import suggest as suggest_service
+from app.modules.agent.services.phrasing import (
+    is_distance_tag,
+    km_label,
+)
 from app.modules.feed import services as feed_services
 
 logger = get_logger(__name__)
 
 PLACES_BASIS = "블로그 언급 기준"
 RELATED_BASIS = "분위기 유사도 기준"
-METERS_STEP = 10
-DISTANCE_TAG = re.compile(r"^\d+(\.\d+)?(km|m)$")
 PHOTO_BASIS = "사진 유사도 기준"
 CALM_MIX_ALL = " 모두 사람이 적은 편이에요."
 NARROW_HINT = " 마음에 드는 게 없으면 조건을 좁혀 말해주세요."
 CROWD_LABELS = frozenset({"한산", "보통", "붐빔"})
 
 
-def _addr_label(addr1: str | None) -> str:
-    if not addr1:
-        return ""
-    return " ".join(addr1.split()[:2])
-
-
-def _meters_label(meters: float) -> str:
-    rounded = max(METERS_STEP, round(meters / METERS_STEP) * METERS_STEP)
-    if rounded < 1000:
-        return f"{rounded}m"
-    return f"{meters / 1000:.1f}km"
-
-
-def _km_label(km: float) -> str:
-    return _meters_label(km * 1000)
-
-
-def _is_distance_tag(tag: str | None) -> bool:
-    return tag is not None and DISTANCE_TAG.match(tag) is not None
-
-
-def _keep(
+def keep(
     cards: list[feed_services.ChannelCardRow], openable: set[str]
 ) -> list[feed_services.ChannelCardRow]:
     return [card for card in cards if card.content_id in openable]
 
 
-def _fallback_sentence(hint: str, *, region_has_festivals: bool) -> str:
+def fallback_sentence(hint: str, *, region_has_festivals: bool) -> str:
     if region_has_festivals:
         return f" {hint} 축제는 아직 상세 정보가 없어 전국에서 골랐어요."
     return f" {hint}에는 오늘 열리는 축제가 없어 전국에서 골랐어요."
@@ -82,7 +61,7 @@ def _unmapped_sentence(unmapped: tuple[str, ...]) -> list[AnswerSegment]:
     ]
 
 
-def _widen_sentence(scope: retrieve.RegionScope) -> list[AnswerSegment]:
+def widen_sentence(scope: retrieve.RegionScope) -> list[AnswerSegment]:
     return [
         AnswerSegment(text=f"{scope.narrowed_label} 안에서는 찾지 못해 "),
         AnswerSegment(text=scope.widened_label, emphasis=True),
@@ -90,12 +69,12 @@ def _widen_sentence(scope: retrieve.RegionScope) -> list[AnswerSegment]:
     ]
 
 
-def _merge(pinned: list[CandidateRow], pool: list[CandidateRow]) -> list[CandidateRow]:
+def merge(pinned: list[CandidateRow], pool: list[CandidateRow]) -> list[CandidateRow]:
     seen = {row.content_id for row in pinned}
     return pinned + [row for row in pool if row.content_id not in seen]
 
 
-def _card(
+def card(
     row: CandidateRow,
     *,
     intent: QueryIntent,
@@ -103,11 +82,11 @@ def _card(
     lng: float | None,
     near: bool,
 ) -> AgentSpotCard:
-    card = retrieve.to_card(row, tag=_lead_tag(row, intent=intent, lat=lat, lng=lng, near=near))
-    return card.model_copy(update={"chips": _chips(row, card, lat=lat, lng=lng, near=near)})
+    card = retrieve.to_card(row, tag=lead_tag(row, intent=intent, lat=lat, lng=lng, near=near))
+    return card.model_copy(update={"chips": chips(row, card, lat=lat, lng=lng, near=near)})
 
 
-def _lead_tag(
+def lead_tag(
     row: CandidateRow,
     *,
     intent: QueryIntent,
@@ -118,13 +97,13 @@ def _lead_tag(
     if near and lat is not None and lng is not None:
         km = retrieve.distance_km(row, lat=lat, lng=lng)
         if km is not None:
-            return _km_label(km)
+            return km_label(km)
     if intent.crowdPreference == "quiet" and row.percentile is not None:
         return f"하위 {row.percentile}%"
     return retrieve.crowd_label(row)
 
 
-def _chips(
+def chips(
     row: CandidateRow,
     card: AgentSpotCard,
     *,
@@ -141,7 +120,7 @@ def _chips(
     if near and lat is not None and lng is not None:
         km = retrieve.distance_km(row, lat=lat, lng=lng)
         if km is not None:
-            chips.append(_km_label(km))
+            chips.append(km_label(km))
     crowd = f"하위 {row.percentile}%" if row.percentile is not None else retrieve.crowd_label(row)
     if crowd is not None:
         chips.append(crowd)
@@ -174,7 +153,7 @@ def _lead_sentence(
     region_widened: retrieve.RegionScope | None,
 ) -> list[AnswerSegment]:
     if region_widened is not None:
-        return _widen_sentence(region_widened)
+        return widen_sentence(region_widened)
     if intent.crowdPreference == "quiet":
         pcts = [row.percentile for row in top if row.percentile is not None]
         if pcts:
@@ -184,17 +163,17 @@ def _lead_sentence(
                 AnswerSegment(text=" 안쪽으로만 골랐어요."),
             ]
     if near and lat is not None and lng is not None:
-        return _nearest_sentence(top, lat=lat, lng=lng)
+        return nearest_sentence(top, lat=lat, lng=lng)
     return []
 
 
-def _nearest_sentence(top: list[CandidateRow], *, lat: float, lng: float) -> list[AnswerSegment]:
+def nearest_sentence(top: list[CandidateRow], *, lat: float, lng: float) -> list[AnswerSegment]:
     kms = [km for row in top if (km := retrieve.distance_km(row, lat=lat, lng=lng)) is not None]
     if not kms:
         return []
     return [
         AnswerSegment(text="가장 가까운 곳이 "),
-        AnswerSegment(text=_km_label(min(kms)), emphasis=True),
+        AnswerSegment(text=km_label(min(kms)), emphasis=True),
         AnswerSegment(text="예요."),
     ]
 
@@ -215,7 +194,7 @@ def _calm_mix_sentence(top: list[CandidateRow]) -> list[AnswerSegment]:
     ]
 
 
-def _answer(
+def answer_segments(
     top: list[CandidateRow],
     *,
     intent: QueryIntent,
@@ -295,7 +274,7 @@ def _zero_answer(intent: QueryIntent, *, axes: frozenset[DropAxis]) -> list[Answ
     ]
 
 
-def _talk_response(steps: list[AskStep], intent: QueryIntent, sentence: str) -> AskResponse:
+def talk_response(steps: list[AskStep], intent: QueryIntent, sentence: str) -> AskResponse:
     logger.info("agent.ask.talk", task=intent.task)
     return AskResponse(
         steps=steps,
@@ -307,7 +286,7 @@ def _talk_response(steps: list[AskStep], intent: QueryIntent, sentence: str) -> 
     )
 
 
-def _zero_response(
+def zero_response(
     steps: list[AskStep],
     intent: QueryIntent,
     *,
@@ -350,8 +329,8 @@ def _is_crowd_tag(tag: str | None) -> bool:
     return tag in CROWD_LABELS or tag.startswith("하위 ")
 
 
-def _tag_basis(rows: list[CandidateRow], spots: list[AgentSpotCard], *, near: bool) -> str | None:
-    if near and spots and all(_is_distance_tag(spot.tag) for spot in spots):
+def tag_basis(rows: list[CandidateRow], spots: list[AgentSpotCard], *, near: bool) -> str | None:
+    if near and spots and all(is_distance_tag(spot.tag) for spot in spots):
         return "직선거리 기준"
     if any((spot.tag or "").startswith("유사도 ") for spot in spots):
         return PHOTO_BASIS
@@ -360,17 +339,13 @@ def _tag_basis(rows: list[CandidateRow], spots: list[AgentSpotCard], *, near: bo
     return None
 
 
-def _without_unapplied_axes(intent: QueryIntent) -> QueryIntent:
+def without_unapplied_axes(intent: QueryIntent) -> QueryIntent:
     return intent.model_copy(
         update={"crowdPreference": "any", "indoorOnly": False, "moodHints": []}
     )
 
 
-def _dish_title_condition(title_terms: list[str]) -> str:
-    return f"상호에 요청한 음식명({' · '.join(title_terms)})이 모두 들어간 곳"
-
-
-def _rebadge_last(steps: list[AskStep], tool: str, badge: str) -> None:
+def rebadge_last(steps: list[AskStep], tool: str, badge: str) -> None:
     for index in reversed(range(len(steps))):
         if steps[index].tool == tool:
             steps[index] = steps[index].model_copy(update={"badge": badge})

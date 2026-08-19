@@ -22,10 +22,14 @@ from app.modules.agent.services import photo as photo_service
 from app.modules.agent.services import retrieve
 from app.modules.agent.services.answer import (
     RELATED_BASIS,
-    _addr_label,
-    _dish_title_condition,
-    _meters_label,
-    _without_unapplied_axes,
+    without_unapplied_axes,
+)
+from app.modules.agent.services.phrasing import (
+    addr_label,
+    copula,
+    dish_title_condition,
+    meters_label,
+    subject_particle,
 )
 from app.modules.spots.services import (
     NearbyCategory,
@@ -45,7 +49,7 @@ ANCHOR_CATEGORIES: dict[str, NearbyCategory] = {
 ANCHOR_NOUNS: dict[str, str] = {"food": "맛집", "cafe": "카페", "nearby": "볼거리"}
 
 
-async def _ask_with_anchor(
+async def ask_with_anchor(
     session: AsyncSession,
     anchor: AskAnchor,
     *,
@@ -100,8 +104,8 @@ async def _ask_with_anchor(
             title_terms=title_terms,
         )
     rated = await repositories.load_candidates_by_ids(session, [n.content_id for n in kept])
-    spots = [_anchor_card(near, has_crowd=_has_crowd(rated.get(near.content_id))) for near in kept]
-    await _fill_missing_card_images(session, spots)
+    spots = [anchor_card(near, has_crowd=has_crowd(rated.get(near.content_id))) for near in kept]
+    await fill_missing_card_images(session, spots)
     steps = branch_of(prior_steps or [], prior_steps or [])
     if steps.emitter is None:
         steps.emitter = emitter
@@ -109,7 +113,7 @@ async def _ask_with_anchor(
         AskStep(tool="nearby", label=f"{origin} 주변 {noun} 조회", badge=f"{len(spots)}곳")
     )
     answer = [
-        *_anchor_lead(origin, anchor.action, nearest_m=kept[0].dist),
+        *anchor_lead(origin, anchor.action, nearest_m=kept[0].dist),
         AnswerSegment(text=f" {origin} 주변으로 "),
         AnswerSegment(text=f"{len(spots)}곳이에요."),
     ]
@@ -119,7 +123,7 @@ async def _ask_with_anchor(
         answer=answer,
         spots=spots,
         totalCount=len(spots),
-        intent=_without_unapplied_axes(carried_intent or QueryIntent()),
+        intent=without_unapplied_axes(carried_intent or QueryIntent()),
         tagBasis="직선거리 기준",
         refinements=[],
     )
@@ -144,7 +148,7 @@ def empty_anchor_response(
             AnswerSegment(
                 text=(
                     f"{origin} 주변 {ANCHOR_RADIUS_M // 1000}km 안에서 "
-                    f"{_dish_title_condition(title_terms)}을 찾지 못했어요. "
+                    f"{dish_title_condition(title_terms)}을 찾지 못했어요. "
                     "다른 곳을 골라 보세요."
                 )
             )
@@ -154,7 +158,7 @@ def empty_anchor_response(
             AnswerSegment(text=f"{origin} 주변 "),
             AnswerSegment(text=f"{ANCHOR_RADIUS_M // 1000}km", emphasis=True),
             AnswerSegment(
-                text=f" 안에는 {noun}{_subject_particle(noun)} 없어요. 다른 곳을 골라 보세요."
+                text=f" 안에는 {noun}{subject_particle(noun)} 없어요. 다른 곳을 골라 보세요."
             ),
         ]
     )
@@ -163,28 +167,20 @@ def empty_anchor_response(
         answer=answer,
         spots=[],
         totalCount=0,
-        intent=_without_unapplied_axes(intent or QueryIntent()),
+        intent=without_unapplied_axes(intent or QueryIntent()),
         refinements=[],
     )
 
 
-def _subject_particle(word: str) -> str:
-    return "이" if detail_service.ends_with_consonant(word) else "가"
-
-
-def _copula(word: str) -> str:
-    return "이에요" if detail_service.ends_with_consonant(word) else "예요"
-
-
-def _anchor_lead(
+def anchor_lead(
     origin: str, action: AnchorAction, *, nearest_m: float | None
 ) -> list[AnswerSegment]:
     noun = ANCHOR_NOUNS[action]
     if nearest_m is None:
-        return [AnswerSegment(text=f"{origin} 주변 {noun}{_copula(noun)}.")]
+        return [AnswerSegment(text=f"{origin} 주변 {noun}{copula(noun)}.")]
     return [
-        AnswerSegment(text=f"가장 가까운 {noun}{_subject_particle(noun)} "),
-        AnswerSegment(text=_meters_label(nearest_m), emphasis=True),
+        AnswerSegment(text=f"가장 가까운 {noun}{subject_particle(noun)} "),
+        AnswerSegment(text=meters_label(nearest_m), emphasis=True),
         AnswerSegment(text=" 거리예요."),
     ]
 
@@ -233,7 +229,7 @@ async def _anchor_related_response(
         answer=answer,
         spots=spots,
         totalCount=len(spots),
-        intent=_without_unapplied_axes(carried_intent or QueryIntent()),
+        intent=without_unapplied_axes(carried_intent or QueryIntent()),
         tagBasis=RELATED_BASIS,
         refinements=[],
     )
@@ -269,11 +265,11 @@ def _anchor_crowd_response(row: CandidateRow) -> AskResponse:
     )
 
 
-def _has_crowd(row: CandidateRow | None) -> bool:
+def has_crowd(row: CandidateRow | None) -> bool:
     return row is not None and row.concentration_rate is not None
 
 
-async def _fill_missing_card_images(session: AsyncSession, spots: list[AgentSpotCard]) -> None:
+async def fill_missing_card_images(session: AsyncSession, spots: list[AgentSpotCard]) -> None:
     missing = [card for card in spots if not card.imageUrl]
     if not missing:
         return
@@ -288,13 +284,13 @@ async def _fill_missing_card_images(session: AsyncSession, spots: list[AgentSpot
         card.fallbackImageUrl = url
 
 
-def _anchor_card(row: NearbySpotRow, *, has_crowd: bool) -> AgentSpotCard:
+def anchor_card(row: NearbySpotRow, *, has_crowd: bool) -> AgentSpotCard:
     return AgentSpotCard(
         contentId=row.content_id,
         title=row.title,
-        regionLabel=_addr_label(row.addr1),
+        regionLabel=addr_label(row.addr1),
         imageUrl=t1_display_url(row.first_image_url, row.cpyrht_div_cd),
-        tag=_meters_label(row.dist) if row.dist is not None else None,
+        tag=meters_label(row.dist) if row.dist is not None else None,
         lat=row.mapy,
         lng=row.mapx,
         categoryGroup=row.category_group,
@@ -302,9 +298,7 @@ def _anchor_card(row: NearbySpotRow, *, has_crowd: bool) -> AgentSpotCard:
     )
 
 
-async def _locatable_focus(
-    session: AsyncSession, context: AskContext | None
-) -> CandidateRow | None:
+async def locatable_focus(session: AsyncSession, context: AskContext | None) -> CandidateRow | None:
     if context is None or context.focusContentId is None:
         return None
     briefs = await repositories.load_candidates_by_ids(session, [context.focusContentId])

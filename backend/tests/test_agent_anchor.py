@@ -13,9 +13,9 @@ from app.main import app
 from app.modules.agent.repositories import CandidateRow
 from app.modules.agent.schemas import QueryIntent
 from app.modules.agent.services import anchor as anchor_service
-from app.modules.agent.services import answer as answer_service
 from app.modules.agent.services import ask as ask_service
 from app.modules.agent.services import food as food_service
+from app.modules.agent.services import phrasing as phrasing_service
 from app.modules.spots.services import NearbyCategory, NearbySpotRow
 
 ANCHOR_LAT, ANCHOR_LNG = 33.5567, 126.7597
@@ -141,7 +141,7 @@ async def test_anchor_food_returns_nearby_restaurants_sorted_by_distance(
     assert [step["tool"] for step in data["steps"]] == ["nearby"]
     assert "김녕미로공원 주변 맛집" in data["steps"][0]["label"]
     assert [spot["contentId"] for spot in data["spots"]] == ["f1", "f2"]
-    assert all(answer_service._is_distance_tag(spot["tag"]) for spot in data["spots"])
+    assert all(phrasing_service.is_distance_tag(spot["tag"]) for spot in data["spots"])
     assert data["refinements"] == []
     assert data["refinements"] == []
 
@@ -512,7 +512,7 @@ async def test_anchor_rejects_an_unknown_action(db_session, client) -> None:
 
 
 def test_anchor_card_carries_distance_tag_and_short_region() -> None:
-    card = anchor_service._anchor_card(
+    card = anchor_service.anchor_card(
         NearbySpotRow(
             content_id="f1",
             title="해녀촌식당",
@@ -565,8 +565,8 @@ def test_anchor_card_reports_whether_crowd_data_exists() -> None:
         cpyrht_div_cd="Type1",
     )
 
-    assert anchor_service._anchor_card(row, has_crowd=True).hasCrowd is True
-    assert anchor_service._anchor_card(row, has_crowd=False).hasCrowd is False
+    assert anchor_service.anchor_card(row, has_crowd=True).hasCrowd is True
+    assert anchor_service.anchor_card(row, has_crowd=False).hasCrowd is False
 
 
 def test_the_travel_anchor_keeps_museums_that_the_map_predicate_drops() -> None:
@@ -824,7 +824,7 @@ def test_naming_the_origin_still_pivots_even_with_a_region() -> None:
 
 
 def test_an_anchor_answer_leads_with_the_nearest_distance() -> None:
-    segments = anchor_service._anchor_lead("성산일출봉", "food", nearest_m=420)
+    segments = anchor_service.anchor_lead("성산일출봉", "food", nearest_m=420)
 
     text = "".join(s.text for s in segments)
     assert text.startswith("가장 가까운 맛집이 420m 거리예요.")
@@ -832,25 +832,25 @@ def test_an_anchor_answer_leads_with_the_nearest_distance() -> None:
 
 
 def test_a_sub_kilometre_distance_reads_in_metres_not_zero_point_something() -> None:
-    assert answer_service._meters_label(38.0) == "40m"
-    assert answer_service._meters_label(874.0) == "870m"
-    assert answer_service._meters_label(4.0) == "10m"
+    assert phrasing_service.meters_label(38.0) == "40m"
+    assert phrasing_service.meters_label(874.0) == "870m"
+    assert phrasing_service.meters_label(4.0) == "10m"
 
 
 def test_a_kilometre_scale_distance_keeps_the_kilometre_form() -> None:
-    assert answer_service._meters_label(1000.0) == "1.0km"
-    assert answer_service._meters_label(3210.0) == "3.2km"
-    assert answer_service._meters_label(996.0) == "1.0km"
+    assert phrasing_service.meters_label(1000.0) == "1.0km"
+    assert phrasing_service.meters_label(3210.0) == "3.2km"
+    assert phrasing_service.meters_label(996.0) == "1.0km"
 
 
 def test_a_close_anchor_never_leads_with_a_zero_distance() -> None:
-    segments = anchor_service._anchor_lead("성산일출봉", "cafe", nearest_m=32.0)
+    segments = anchor_service.anchor_lead("성산일출봉", "cafe", nearest_m=32.0)
 
     assert "".join(s.text for s in segments) == "가장 가까운 카페가 30m 거리예요."
 
 
 def test_an_anchor_answer_without_a_distance_states_the_scope() -> None:
-    segments = anchor_service._anchor_lead("성산일출봉", "cafe", nearest_m=None)
+    segments = anchor_service.anchor_lead("성산일출봉", "cafe", nearest_m=None)
 
     assert "".join(s.text for s in segments) == "성산일출봉 주변 카페예요."
 
@@ -858,7 +858,7 @@ def test_an_anchor_answer_without_a_distance_states_the_scope() -> None:
 def test_an_anchor_answer_attaches_the_particle_each_noun_actually_takes() -> None:
     leads = {
         action: "".join(
-            part.text for part in anchor_service._anchor_lead("성산일출봉", action, nearest_m=420)
+            part.text for part in anchor_service.anchor_lead("성산일출봉", action, nearest_m=420)
         )
         for action in ("food", "cafe", "nearby")
     }
@@ -903,7 +903,7 @@ def test_an_empty_region_line_attaches_the_particle_each_noun_takes() -> None:
 def test_an_anchor_scope_line_ends_with_the_copula_each_noun_takes() -> None:
     scopes = {
         action: "".join(
-            part.text for part in anchor_service._anchor_lead("성산일출봉", action, nearest_m=None)
+            part.text for part in anchor_service.anchor_lead("성산일출봉", action, nearest_m=None)
         )
         for action in ("food", "cafe", "nearby")
     }

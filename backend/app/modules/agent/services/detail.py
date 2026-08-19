@@ -131,7 +131,7 @@ def _sentence(row: SpotDetailRow, field: DetailField) -> list[AnswerSegment]:
     ]
 
 
-def _card(row: SpotDetailRow) -> AgentSpotCard:
+def card(row: SpotDetailRow) -> AgentSpotCard:
     return AgentSpotCard(
         contentId=row.content_id,
         title=row.title,
@@ -186,7 +186,7 @@ async def answer_about_spot(
     return AskResponse(
         steps=steps,
         answer=answer,
-        spots=[_card(row)],
+        spots=[card(row)],
         totalCount=1,
         intent=intent,
         refinements=[],

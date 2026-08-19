@@ -24,24 +24,26 @@ from app.modules.agent.services.anchor import (
     ANCHOR_CATEGORIES,
     ANCHOR_NOUNS,
     ANCHOR_RADIUS_M,
-    _anchor_card,
-    _anchor_lead,
-    _ask_with_anchor,
-    _fill_missing_card_images,
-    _has_crowd,
-    _locatable_focus,
-    _subject_particle,
+    anchor_card,
+    anchor_lead,
+    ask_with_anchor,
     empty_anchor_response,
+    fill_missing_card_images,
+    has_crowd,
+    locatable_focus,
 )
 from app.modules.agent.services.answer import (
     PLACES_BASIS,
-    _card,
-    _dish_title_condition,
-    _km_label,
-    _talk_response,
-    _without_unapplied_axes,
+    card,
+    talk_response,
+    without_unapplied_axes,
 )
-from app.modules.agent.services.routes import count
+from app.modules.agent.services.branches import count
+from app.modules.agent.services.phrasing import (
+    dish_title_condition,
+    km_label,
+    subject_particle,
+)
 from app.modules.spots.services import find_nearby_spots
 
 logger = get_logger(__name__)
@@ -110,7 +112,7 @@ async def _named_origin(
     return None
 
 
-async def _ask_for_food(
+async def ask_for_food(
     session: AsyncSession,
     *,
     action: AnchorAction,
@@ -123,10 +125,10 @@ async def _ask_for_food(
     title_terms: list[str],
 ) -> AskResponse:
     scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
-    stale = context is not None and _named_a_new_region(intent, context)
-    focus = None if stale else await _locatable_focus(session, context)
+    stale = context is not None and named_a_new_region(intent, context)
+    focus = None if stale else await locatable_focus(session, context)
     if focus is not None and _stands_in_region(focus, scope.prefixes):
-        return await _ask_with_anchor(
+        return await ask_with_anchor(
             session,
             AskAnchor(contentId=focus.content_id, action=action),
             lat=lat,
@@ -164,7 +166,7 @@ async def _ask_for_food(
             title_terms=title_terms,
         )
     if lat is not None and lng is not None:
-        return await _ask_with_anchor(
+        return await ask_with_anchor(
             session,
             AskAnchor(action=action),
             lat=lat,
@@ -173,7 +175,7 @@ async def _ask_for_food(
             carried_intent=intent,
             title_terms=title_terms,
         )
-    return _talk_response(steps, intent, FOOD_NEEDS_ORIGIN_ANSWER)
+    return talk_response(steps, intent, FOOD_NEEDS_ORIGIN_ANSWER)
 
 
 async def _food_across_region(
@@ -244,7 +246,7 @@ async def _food_across_region(
         prefixes,
         action,
         steps=steps,
-        intent=_without_unapplied_axes(spoken),
+        intent=without_unapplied_axes(spoken),
         unmet=dropped_labels(spoken),
         lat=lat,
         lng=lng,
@@ -284,7 +286,7 @@ async def _top_up_with_kakao(
     if not cards:
         return None
     steps.append(AskStep(tool="nearby", label=KAKAO_TOPUP_LABEL, badge=f"{len(cards)}곳"))
-    kept = [_card(row, intent=intent, lat=lat, lng=lng, near=near) for row in rows]
+    kept = [card(row, intent=intent, lat=lat, lng=lng, near=near) for row in rows]
     known = {card.contentId for card in kept}
     merged = kept + [card for card in cards if card.contentId not in known]
     return AskResponse(
@@ -342,14 +344,14 @@ async def _ask_around(
             title_terms=title_terms,
         )
     rated = await repositories.load_candidates_by_ids(session, [n.content_id for n in kept])
-    spots = [_anchor_card(near, has_crowd=_has_crowd(rated.get(near.content_id))) for near in kept]
-    await _fill_missing_card_images(session, spots)
+    spots = [anchor_card(near, has_crowd=has_crowd(rated.get(near.content_id))) for near in kept]
+    await fill_missing_card_images(session, spots)
     walked = [
         *steps,
         AskStep(tool="nearby", label=f"{origin} 주변 {noun} 조회", badge=f"{len(kept)}곳"),
     ]
     answer = [
-        *_anchor_lead(origin, action, nearest_m=kept[0].dist),
+        *anchor_lead(origin, action, nearest_m=kept[0].dist),
         AnswerSegment(text=f" {origin} 주변으로 "),
         AnswerSegment(text=f"{len(spots)}곳이에요."),
     ]
@@ -359,7 +361,7 @@ async def _ask_around(
         answer=answer,
         spots=spots,
         totalCount=len(spots),
-        intent=_without_unapplied_axes(intent),
+        intent=without_unapplied_axes(intent),
         tagBasis="직선거리 기준",
         refinements=[],
     )
@@ -389,11 +391,11 @@ def food_in_region(
         answer = (
             [
                 AnswerSegment(
-                    text=f"{where}에서 {_dish_title_condition(title_terms)}을 찾지 못했어요."
+                    text=f"{where}에서 {dish_title_condition(title_terms)}을 찾지 못했어요."
                 )
             ]
             if title_terms
-            else [AnswerSegment(text=f"{where}에는 등록된 {noun}{_subject_particle(noun)} 없어요.")]
+            else [AnswerSegment(text=f"{where}에는 등록된 {noun}{subject_particle(noun)} 없어요.")]
         )
         return AskResponse(
             steps=scanned,
@@ -433,10 +435,10 @@ def _region_food_card(
     if near and lat is not None and lng is not None:
         km = retrieve.distance_km(row, lat=lat, lng=lng)
         if km is not None:
-            return retrieve.to_card(row, tag=_km_label(km))
+            return retrieve.to_card(row, tag=km_label(km))
     return retrieve.to_card(row, tag=None)
 
 
-def _named_a_new_region(intent: QueryIntent, context: AskContext) -> bool:
+def named_a_new_region(intent: QueryIntent, context: AskContext) -> bool:
     carried = list(context.intent.regionHints) if context.intent else []
     return bool(intent.regionHints) and list(intent.regionHints) != carried

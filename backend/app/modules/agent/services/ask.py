@@ -31,39 +31,39 @@ from app.modules.agent.schemas import (
     RefinePatch,
     ResolvedPlace,
 )
+from app.modules.agent.services import branches, retrieve
 from app.modules.agent.services import detail as detail_service
 from app.modules.agent.services import intent as intent_service
 from app.modules.agent.services import refine as refine_service
 from app.modules.agent.services import region as region_service
 from app.modules.agent.services import resolve as resolve_service
-from app.modules.agent.services import retrieve, routes
 from app.modules.agent.services import scene as scene_service
 from app.modules.agent.services import suggest as suggest_service
 from app.modules.agent.services.anchor import (
-    _ask_with_anchor,
-    _subject_particle,
+    ask_with_anchor,
 )
 from app.modules.agent.services.answer import (
-    _answer,
-    _card,
-    _fallback_sentence,
-    _keep,
-    _merge,
-    _tag_basis,
-    _talk_response,
-    _zero_response,
+    answer_segments,
+    card,
+    fallback_sentence,
+    keep,
+    merge,
     searched_intent,
+    tag_basis,
+    talk_response,
     unknown_region_answer,
+    zero_response,
 )
+from app.modules.agent.services.branches import count
 from app.modules.agent.services.food import (
-    _ask_for_food,
-    _named_a_new_region,
+    ask_for_food,
+    named_a_new_region,
 )
 from app.modules.agent.services.landmarks import is_landmark
 from app.modules.agent.services.photo_ask import (
-    _ask_with_photo,
+    ask_with_photo,
 )
-from app.modules.agent.services.routes import count
+from app.modules.agent.services.phrasing import subject_particle
 from app.modules.feed import services as feed_services
 from app.modules.spots.services import (
     load_active_spot_cards_by_ids,
@@ -134,9 +134,9 @@ async def ask(
     if anchor is not None:
         if image_bytes is not None:
             raise ValidationFailed("anchor cannot be combined with photo")
-        return await _ask_with_anchor(session, anchor, lat=lat, lng=lng, emitter=emitter)
+        return await ask_with_anchor(session, anchor, lat=lat, lng=lng, emitter=emitter)
     if image_bytes is not None:
-        return await _ask_with_photo(
+        return await ask_with_photo(
             session,
             question=cleaned,
             image_bytes=image_bytes,
@@ -188,7 +188,7 @@ async def _answer_without_searching(
     sentence = _TALK_ANSWERS.get(intent.task)
     if sentence is None:
         return None
-    return _talk_response(steps, intent, sentence)
+    return talk_response(steps, intent, sentence)
 
 
 def _with_dish_terms(
@@ -285,15 +285,15 @@ async def _ask_with_question(
     scene = scene_service.detect(question, list(intent.categoryKeywords))
     if scene is None and _asks_for_nothing(intent):
         sentence = NO_AXIS_ANSWER if question.strip() else BLANK_ANSWER
-        return _talk_response(steps, intent, sentence)
+        return talk_response(steps, intent, sentence)
 
     region_scope = await retrieve.resolve_region_scope(session, hints=intent.regionHints)
     unplaced = _unplaceable(region_scope)
     if unplaced and _region_was_the_only_axis(intent):
-        return _talk_response(steps, intent, unknown_region_answer(unplaced))
+        return talk_response(steps, intent, unknown_region_answer(unplaced))
     pivot = _origin_anchor(intent, context, region_named=bool(region_scope.prefixes))
     if pivot is not None:
-        return await _ask_with_anchor(
+        return await ask_with_anchor(
             session,
             pivot,
             lat=lat,
@@ -316,7 +316,7 @@ async def _ask_with_question(
     codes = category.codes
     eating = retrieve.food_action(codes) or retrieve.food_word(keywords)
     if eating is not None:
-        return await _ask_for_food(
+        return await ask_for_food(
             session,
             action=eating,
             intent=intent,
@@ -350,7 +350,7 @@ async def _ask_with_question(
         steps.append(AskStep(tool="resolve_place", label="질문 속 장소 확인", badge=count(pinned)))
 
     near_is_a_cause = True
-    ask = routes.Ask(
+    ask = branches.Ask(
         session=session,
         steps=steps,
         intent=intent,
@@ -367,7 +367,7 @@ async def _ask_with_question(
         title_only=title_only,
         scene=scene,
     )
-    await routes.run_search(ask)
+    await branches.run_search(ask)
     intent = ask.intent
     prefixes = ask.prefixes
     candidates = ask.candidates
@@ -383,7 +383,7 @@ async def _ask_with_question(
         pool = retrieve.sort_by_distance(pool, lat=lat, lng=lng)
         steps.append(AskStep(tool="nearby", label="현재 위치에서 가까운 순", badge=count(pool)))
 
-    merged = _merge(pinned, pool)
+    merged = merge(pinned, pool)
     if not merged:
         if near and title_only:
             near_is_a_cause = bool(candidates)
@@ -398,7 +398,7 @@ async def _ask_with_question(
                         badge=count(without_near),
                     )
                 )
-        return _zero_response(
+        return zero_response(
             steps,
             intent,
             has_coords=lat is not None and lng is not None and near_is_a_cause,
@@ -412,8 +412,8 @@ async def _ask_with_question(
         )
 
     top = merged[: retrieve.RESULT_LIMIT]
-    spots = [_card(row, intent=intent, lat=lat, lng=lng, near=near) for row in top]
-    tag_basis = _tag_basis(top, spots, near=near)
+    spots = [card(row, intent=intent, lat=lat, lng=lng, near=near) for row in top]
+    basis = tag_basis(top, spots, near=near)
     logger.info(
         "agent.ask.done",
         candidates=len(candidates),
@@ -433,7 +433,7 @@ async def _ask_with_question(
     )
     return AskResponse(
         steps=steps,
-        answer=_answer(
+        answer=answer_segments(
             top,
             intent=spoken,
             near=near,
@@ -445,7 +445,7 @@ async def _ask_with_question(
         spots=spots,
         totalCount=len(spots),
         intent=intent,
-        tagBasis=tag_basis,
+        tagBasis=basis,
         refinements=suggest_service.derive(
             intent,
             has_coords=lat is not None and lng is not None,
@@ -497,11 +497,11 @@ async def _ask_each(
     spots: list[AgentSpotCard] = []
     seen: set[str] = set()
     for part in answered:
-        for card in part.spots[:SUB_QUESTION_CARDS]:
-            if card.contentId in seen:
+        for spot in part.spots[:SUB_QUESTION_CARDS]:
+            if spot.contentId in seen:
                 continue
-            seen.add(card.contentId)
-            spots.append(card)
+            seen.add(spot.contentId)
+            spots.append(spot)
     merged_steps = [*steps, *(step for part in answered for step in part.steps)]
     logger.info("agent.ask.split", asked=len(questions), answered=len(answered), spots=len(spots))
     return AskResponse(
@@ -536,14 +536,14 @@ async def _ask_festivals(
         logger.warning("agent.festival.unavailable", error_type=type(exc).__name__)
         raise AgentFestivalUnavailable() from exc
     openable = await _openable_ids(session, pool)
-    nationwide = _keep(pool, openable)
+    nationwide = keep(pool, openable)
     fallback: str | None = None
     if intent.regionHints:
         scoped = _match_region(pool, intent.regionHints)
-        cards = _keep(scoped, openable)
+        cards = keep(scoped, openable)
         if not cards:
             cards = nationwide
-            fallback = _fallback_sentence(intent.regionHints[0], region_has_festivals=bool(scoped))
+            fallback = fallback_sentence(intent.regionHints[0], region_has_festivals=bool(scoped))
     else:
         cards = nationwide
     shown = [card for card in cards[: retrieve.RESULT_LIMIT] if card.content_id]
@@ -566,7 +566,7 @@ async def _ask_festivals(
     steps.append(AskStep(tool="festival", label="오늘 열리는 축제 조회", badge=f"{len(spots)}곳"))
     answer = [
         AnswerSegment(text=spots[0].title, emphasis=True),
-        AnswerSegment(text=f"{_subject_particle(spots[0].title)} 오늘 열려요. 오늘 열리는 축제로 "),
+        AnswerSegment(text=f"{subject_particle(spots[0].title)} 오늘 열려요. 오늘 열리는 축제로 "),
         AnswerSegment(text=f"{len(spots)}곳이에요."),
     ]
     if fallback is not None:
@@ -688,7 +688,7 @@ def _origin_anchor(
         match = next((spot for spot in context.spots if spot.title.strip() == wanted), None)
         if match is not None:
             return AskAnchor(contentId=match.contentId, action=_origin_action(intent))
-    if region_named and _named_a_new_region(intent, context):
+    if region_named and named_a_new_region(intent, context):
         return None
     if context.focusContentId is not None and (intent.aroundOrigin or intent.nearMe):
         return AskAnchor(contentId=context.focusContentId, action=_origin_action(intent))
