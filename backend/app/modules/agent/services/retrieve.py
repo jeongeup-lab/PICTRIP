@@ -18,10 +18,9 @@ from app.modules.agent.schemas import (
     QueryIntent,
 )
 from app.modules.agent.services.geo import haversine_km
+from app.modules.spots.categories import NearbyCategory, category_sql
 from app.modules.spots.services import (
-    NearbyCategory,
     RegionPrefix,
-    category_sql,
     map_region_tokens_to_prefixes,
     search_spots_by_title,
 )

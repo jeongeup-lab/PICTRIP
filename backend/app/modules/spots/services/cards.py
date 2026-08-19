@@ -6,8 +6,8 @@ from datetime import datetime
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.spots.categories import NearbyCategory, category_predicate, derive_category
 from app.modules.spots.models import LclsSystmCode, Region, Sigungu, Spot, SpotDetail
-from app.modules.spots.services.nearby import NearbyCategory, category_predicate, derive_category
 from app.modules.spots.services.rows import SpotCardRow
 
 

@@ -7,9 +7,9 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.spots.categories import all_categories_predicate
 from app.modules.spots.models import Spot, SpotConcentration, SpotDetail
 from app.modules.spots.services.cards import load_region_meta
-from app.modules.spots.services.nearby import all_categories_predicate
 
 
 @dataclass(frozen=True)

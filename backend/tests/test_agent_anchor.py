@@ -570,7 +570,8 @@ def test_anchor_card_reports_whether_crowd_data_exists() -> None:
 
 
 def test_the_travel_anchor_keeps_museums_that_the_map_predicate_drops() -> None:
-    from app.modules.spots.services.nearby import _predicate_for, _predicate_sql
+    from app.modules.spots.categories import _predicate_sql
+    from app.modules.spots.services.nearby import _predicate_for
 
     assert anchor_service.ANCHOR_CATEGORIES["nearby"] is NearbyCategory.attraction
     map_sql = _predicate_sql(_predicate_for(NearbyCategory.attraction, False))
