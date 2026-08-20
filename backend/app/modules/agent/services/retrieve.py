@@ -20,6 +20,7 @@ from app.modules.agent.schemas import (
 from app.modules.agent.services.geo import haversine_km
 from app.modules.spots.categories import NearbyCategory, category_sql
 from app.modules.spots.services import (
+    MERGED_SIDOS,
     RegionPrefix,
     map_region_tokens_to_prefixes,
     search_spots_by_title,
@@ -234,12 +235,25 @@ async def resolve_region_scope(session: AsyncSession, *, hints: list[str]) -> Re
         (token, resolved) for token, resolved in sorted(mapping.items()) if resolved.narrowed
     ]
     return RegionScope(
-        prefixes=_drop_covered({resolved.prefix for resolved in mapping.values()}),
-        sido_prefixes=sorted({resolved.sido for resolved in mapping.values()}),
+        prefixes=_drop_covered(
+            {prefix for resolved in mapping.values() for prefix in resolved.prefixes}
+        ),
+        sido_prefixes=sorted(
+            {
+                sido
+                for resolved in mapping.values()
+                for sido in (resolved.sido, *_merged_of(resolved.sido))
+            }
+        ),
         narrowed_hints=tuple(token for token, _ in narrowed),
         narrowed_sidos=tuple(dict.fromkeys(resolved.sido for _, resolved in narrowed)),
         unmapped=tuple(dropped),
     )
+
+
+def _merged_of(sido: str) -> tuple[str, ...]:
+    merged = MERGED_SIDOS.get(sido)
+    return (merged,) if merged else ()
 
 
 def _drop_covered(prefixes: set[str]) -> list[str]:
