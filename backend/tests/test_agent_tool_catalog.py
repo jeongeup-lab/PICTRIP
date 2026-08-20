@@ -45,22 +45,20 @@ async def test_category_search_matches_the_service_it_wraps(
 ) -> None:
     """어댑터가 기존 검색과 다른 결과를 내면 라우팅 전환이 회귀가 된다."""
     await _seed(db_session, "tc-1", title="통영 바다카페", addr1="경상남도 통영시 1")
-    await _seed(db_session, "tc-2", title="서울 카페", addr1="서울특별시 중구 1")
+    await _seed(db_session, "tc-2", title="서울 어딘가", addr1="서울특별시 중구 1")
     await db_session.flush()
 
-    prefixes = await retrieve.resolve_region_prefixes(db_session, hints=["통영"])
     expected = await retrieve.search_candidates(
         db_session,
-        repositories.CandidateQuery(
-            limit=retrieve.CANDIDATE_LIMIT, region_prefixes=prefixes or None
-        ),
+        repositories.CandidateQuery(limit=retrieve.CANDIDATE_LIMIT),
         preference="any",
         near=False,
     )
 
-    result = await CATALOG["category_search"].run(ctx, {"regions": ["통영"]})
+    result = await CATALOG["category_search"].run(ctx, {})
 
     assert [row.content_id for row in result.rows] == [row.content_id for row in expected]
+    assert expected
 
 
 async def test_title_search_matches_the_service_it_wraps(
@@ -108,13 +106,59 @@ async def test_observation_caps_the_row_dump() -> None:
     assert observation.count("장소") == 12
 
 
-async def test_empty_result_tells_the_model_what_to_do_next(
-    ctx: ToolContext, db_session: AsyncSession
+@pytest.mark.parametrize("tool", ["category_search", "title_search", "photo_match"])
+async def test_unmapped_region_does_not_become_a_nationwide_search(
+    ctx: ToolContext, db_session: AsyncSession, tool: str
 ) -> None:
-    result = await CATALOG["category_search"].run(ctx, {"regions": ["없는지역명xyz"]})
+    """오타 하나가 전국 검색이 되면 모델이 지역을 고쳐 부를 기회를 잃는다."""
+    await _seed(db_session, f"ur-{tool}", title="서울 어딘가", addr1="서울특별시 중구 9")
+    await db_session.flush()
+
+    result = await CATALOG[tool].run(
+        ctx, {"regions": ["없는지역명xyz"], "keywords": ["어딘가"], "scene": "단풍"}
+    )
 
     assert result.rows == []
-    assert "넓혀" in result.observation
+    assert "지역으로 해석하지 못했습니다" in result.observation
+
+
+async def test_food_categories_use_the_food_pool(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """카페·맛집은 FD 코드로 풀리는데 기본 후보 풀은 FD 를 뺀다 — 섞으면 항상 0곳이다."""
+    called: dict[str, object] = {}
+
+    async def spy(session, **kwargs):
+        called.update(kwargs)
+        return []
+
+    from app.modules.agent.services import retrieve
+
+    original = retrieve.search_food
+    retrieve.search_food = spy
+    try:
+        await CATALOG["category_search"].run(ctx, {"categories": ["카페"], "regions": []})
+    finally:
+        retrieve.search_food = original
+
+    assert called.get("action") == "cafe"
+
+
+async def test_free_form_scene_is_normalised_not_crashed(ctx: ToolContext) -> None:
+    """스키마 예시를 그대로 부르면 SCENE_PROMPTS[term] 이 KeyError 를 냈다."""
+    result = await CATALOG["photo_match"].run(ctx, {"scene": "우주정거장"})
+
+    assert result.rows == []
+    assert "지원하지 않는 장면" in result.observation
+
+
+async def test_scene_enum_only_advertises_supported_keys() -> None:
+    from app.modules.agent.services import scene as scene_service
+
+    declared = {tool["name"]: tool for tool in schemas()}
+    allowed = declared["photo_match"]["parameters"]["properties"]["scene"]["enum"]
+
+    assert set(allowed) == set(scene_service.SCENE_PROMPTS)
 
 
 async def test_mood_is_an_axis_of_category_search_not_a_separate_tool() -> None:
