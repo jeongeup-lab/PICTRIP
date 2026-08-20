@@ -5,6 +5,7 @@ from app.modules.agent.errors import AgentNoResults
 from app.modules.agent.repositories import CandidateRow
 from app.modules.agent.schemas import (
     MAX_CARD_CHIPS,
+    MAX_HINT_TOKENS,
     AgentSpotCard,
     AnswerSegment,
     AskResponse,
@@ -21,6 +22,51 @@ from app.modules.agent.services.phrasing import (
 from app.modules.feed import services as feed_services
 
 logger = get_logger(__name__)
+
+MIN_HINT_TOKEN_CHARS = 2
+SIDO_ALIASES: dict[str, tuple[str, ...]] = {
+    "강원도": ("강원",),
+    "경남": ("경상남도",),
+    "경북": ("경상북도",),
+    "경상남도": ("경남",),
+    "경상북도": ("경북",),
+    "전남": ("전라남도",),
+    "전라남도": ("전남",),
+    "전라북도": ("전북",),
+    "전북": ("전라북도",),
+    "제주도": ("제주",),
+    "충남": ("충청남도",),
+    "충북": ("충청북도",),
+    "충청남도": ("충남",),
+    "충청북도": ("충북",),
+}
+
+
+def match_region(
+    cards: list[feed_services.ChannelCardRow], hints: list[str]
+) -> list[feed_services.ChannelCardRow]:
+    """지역 힌트로 축제 카드를 거른다. ask 와 축제 도구가 함께 쓴다."""
+    hint_tokens = [tokens for hint in hints if (tokens := _region_tokens(hint))]
+    if not hint_tokens:
+        return []
+    return [
+        card for card in cards if any(_covers(tokens, card.region_label) for tokens in hint_tokens)
+    ]
+
+
+def _region_tokens(hint: str) -> list[str]:
+    return [token for token in hint.split()[:MAX_HINT_TOKENS] if len(token) >= MIN_HINT_TOKEN_CHARS]
+
+
+def _covers(tokens: list[str], region_label: str) -> bool:
+    address = region_label.split()
+    return all(_token_hits(token, address) for token in tokens)
+
+
+def _token_hits(token: str, address: list[str]) -> bool:
+    forms = (token, *SIDO_ALIASES.get(token, ()))
+    return any(part.startswith(form) for part in address for form in forms)
+
 
 PLACES_BASIS = "블로그 언급 기준"
 RELATED_BASIS = "분위기 유사도 기준"

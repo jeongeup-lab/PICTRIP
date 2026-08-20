@@ -153,3 +153,19 @@ async def test_results_are_deduplicated_across_rounds(
     trace = await loop.route(ctx, "아무거나")
 
     assert [row.content_id for row in trace.rows].count("rt-1") == 1
+
+
+async def test_unrecoverable_tool_errors_stop_the_turn(
+    ctx: ToolContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """복구 가능한 빈손은 관찰로, 복구 불가는 그대로 올린다 — 모바일이 err.code 로 분기한다."""
+    from app.modules.agent.errors import AgentFestivalUnavailable
+
+    async def unavailable(*_args: Any, **_kwargs: Any) -> Any:
+        raise AgentFestivalUnavailable()
+
+    monkeypatch.setitem(loop.CATALOG, "festival", _stub(loop.CATALOG["festival"], unavailable))
+    _wire(monkeypatch, ScriptedRouter(Decision(calls=[ToolCall(name="festival", args={})])))
+
+    with pytest.raises(AgentFestivalUnavailable):
+        await loop.route(ctx, "지금 열리는 축제")
