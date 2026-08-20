@@ -176,6 +176,8 @@ class HomeSpotRow:
     dist: float | None = None
     anchor_content_id: str | None = None
     base_ymd: date | None = None
+    lat: float | None = None
+    lng: float | None = None
 
 
 _SPOT_COLUMNS_SQL = """
@@ -185,7 +187,9 @@ _SPOT_COLUMNS_SQL = """
        spots.cpyrht_div_cd,
        c.lcls_systm3_nm AS category,
        r.ldong_regn_nm AS region_name,
-       sg.ldong_signgu_nm AS sigungu_name
+       sg.ldong_signgu_nm AS sigungu_name,
+       spots.mapy AS lat,
+       spots.mapx AS lng
 """
 
 _SPOT_JOINS_SQL = """
@@ -257,7 +261,8 @@ _NEARBY_CATEGORY_SQL: dict[str, str] = {
 def _taste_picks_concentration_sql(category_sql: str, *, ascending: bool) -> str:
     direction = "ASC" if ascending else "DESC"
     return f"""
-SELECT content_id, title, first_image_url, cpyrht_div_cd, category, region_name, sigungu_name
+SELECT content_id, title, first_image_url, cpyrht_div_cd, category, region_name, sigungu_name,
+       lat, lng
 FROM (
     SELECT DISTINCT ON (spots.ldong_signgu_cd)
            {_SPOT_COLUMNS_SQL},
@@ -279,7 +284,8 @@ LIMIT (:lim)::int
 
 def _taste_picks_shuffle_sql(category_sql: str) -> str:
     return f"""
-SELECT content_id, title, first_image_url, cpyrht_div_cd, category, region_name, sigungu_name
+SELECT content_id, title, first_image_url, cpyrht_div_cd, category, region_name, sigungu_name,
+       lat, lng
 FROM (
     SELECT DISTINCT ON (spots.ldong_signgu_cd)
            {_SPOT_COLUMNS_SQL},
@@ -309,6 +315,29 @@ _TASTE_CATEGORY_PICKS_SQL: dict[str, str] = {
     "FOOD": _taste_picks_shuffle_sql(category_sql(NearbyCategory.food)),
     "FESTA": _taste_picks_shuffle_sql(_FESTA_CATEGORY_SQL),
 }
+
+_CURATION_SQL = f"""
+SELECT content_id, title, first_image_url, cpyrht_div_cd, category, region_name, sigungu_name,
+       lat, lng
+FROM (
+    SELECT DISTINCT ON (spots.ldong_signgu_cd)
+           {_SPOT_COLUMNS_SQL},
+           sc.concentration_rate AS rate
+    FROM spots
+    LEFT JOIN spot_concentration sc ON sc.content_id = spots.content_id
+    {_SPOT_JOINS_SQL}
+    WHERE spots.show_flag = 1
+      AND spots.first_image_url IS NOT NULL
+      AND spots.first_image_url <> ''
+      AND spots.mapx IS NOT NULL
+      AND spots.mapy IS NOT NULL
+      AND c.lcls_systm3_nm = ANY(CAST(:categories AS text[]))
+    ORDER BY spots.ldong_signgu_cd, sc.concentration_rate DESC NULLS LAST, spots.content_id
+) picks
+ORDER BY rate DESC NULLS LAST, content_id
+LIMIT (:lim)::int
+"""
+
 
 _TASTE_NEIGHBORS_SQL = f"""
 WITH seed AS (
@@ -391,6 +420,13 @@ async def fetch_nearby_by_category(
     return [_home_spot_row(row) for row in result]
 
 
+async def fetch_curation(
+    session: AsyncSession, *, categories: list[str], limit: int
+) -> list[HomeSpotRow]:
+    result = await session.execute(text(_CURATION_SQL), {"categories": categories, "lim": limit})
+    return [_home_spot_row(row) for row in result]
+
+
 async def fetch_taste_picks(
     session: AsyncSession, *, limit: int, category: str | None = None
 ) -> list[HomeSpotRow]:
@@ -430,4 +466,10 @@ def _home_spot_row(row: Any) -> HomeSpotRow:
         dist=float(dist) if dist is not None else None,
         anchor_content_id=mapping.get("anchor_content_id"),
         base_ymd=mapping.get("base_ymd"),
+        lat=_coord(mapping.get("lat")),
+        lng=_coord(mapping.get("lng")),
     )
+
+
+def _coord(value: Any) -> float | None:
+    return float(value) if value is not None else None

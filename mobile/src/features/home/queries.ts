@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import {
+  getCuration,
   getNearby,
   getRecommendations,
   getRegionLabel,
@@ -12,6 +13,7 @@ import type { Coords } from "@/features/map/usecases/request-location";
 
 const NEARBY_STALE_MS = 5 * 60 * 1000;
 const TRENDING_STALE_MS = 10 * 60 * 1000;
+const CURATION_STALE_MS = 60 * 60 * 1000;
 
 function coordKey(coords: Coords | null): [number, number] | null {
   return coords ? [Math.round(coords.lat * 1000), Math.round(coords.lng * 1000)] : null;
@@ -20,6 +22,7 @@ function coordKey(coords: Coords | null): [number, number] | null {
 export const homeKeys = {
   nearby: (coords: Coords | null) => ["home-nearby", coordKey(coords)] as const,
   trending: ["home-trending"] as const,
+  curation: ["home-curation"] as const,
   region: (coords: Coords | null) => ["home-region", coordKey(coords)] as const,
   tastePicks: ["home-taste-picks"] as const,
   recommendationsRoot: ["home-recommendations"] as const,
@@ -41,6 +44,14 @@ export function useTrending() {
     queryKey: homeKeys.trending,
     queryFn: () => getTrending(),
     staleTime: TRENDING_STALE_MS,
+  });
+}
+
+export function useCuration() {
+  return useQuery({
+    queryKey: homeKeys.curation,
+    queryFn: () => getCuration(),
+    staleTime: CURATION_STALE_MS,
   });
 }
 

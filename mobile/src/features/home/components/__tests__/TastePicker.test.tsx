@@ -32,6 +32,8 @@ function picks(n: number): HomeSpotCard[] {
     category: "자연관광지",
     tag: null,
     anchorTitle: null,
+    lat: null,
+    lng: null,
   }));
 }
 
