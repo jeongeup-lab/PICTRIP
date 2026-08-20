@@ -37,3 +37,17 @@ async def test_tarrlte_tables_dropped(db_session: AsyncSession, dropped_table: s
         {"t": dropped_table},
     )
     assert exists is None, f"{dropped_table} should be dropped per ADR-0005"
+
+
+@pytest.mark.parametrize("index_name", ["idx_spots_title_trgm", "idx_spots_addr1_trgm"])
+async def test_trgm_indexes_are_declared_in_orm(db_session: AsyncSession, index_name: str) -> None:
+    """ORM 에 없으면 autogenerate 가 매번 DROP 을 제안한다 — 놓치면 검색이 죽는다."""
+    from app.modules.spots.models import Spot
+
+    assert index_name in {index.name for index in Spot.__table__.indexes}
+    assert (
+        await db_session.scalar(
+            text("SELECT 1 FROM pg_indexes WHERE indexname = :name"), {"name": index_name}
+        )
+        == 1
+    )

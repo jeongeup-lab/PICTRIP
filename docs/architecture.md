@@ -178,6 +178,7 @@ flowchart TD
 | `embedding_failures` | backend 잡 | 재시도 큐 (`reason`, `--only-failed` 대상) |
 | `overseas_spots` | pipeline (월간) | 해외 게시물. `wikidata_id` unique · `fame_score` · `is_hidden`(admin 토글) · embedding HNSW · 0019 트리거 |
 | `spot_concentration` | 일일 크론 | 집중률 0–100 — Hot/Hidden 채널 · agent 혼잡도 축 소스. 커버리지는 전량이 아니다(2026-07-26 실측: attraction 모수 11,575곳 중 5,323곳 = **46.0%**) |
+| `spot_concentration_daily` | 일일 크론 | 집중률 원장 — PK `(content_id, base_ymd)`. `spot_concentration` 은 최신값 캐시라 매일 덮어써 추세가 남지 않는다. 요일·주간 패턴 분석의 유일한 소스 |
 | `users` | backend | `taste_vector halfvec(512)` · email 부분 unique(`deleted_at IS NULL`) · `password_hash` 는 구 이메일 로그인 잔재로 쓰기 경로가 없다(탈퇴 시 NULL로 지움) |
 | `user_auth_providers` | backend | provider CHECK(kakao/google/apple/email) — 서빙은 kakao·apple만, google/email 행은 잔존 · (provider, provider_user_id) unique · `provider_refresh_token` 은 애플 전용(탈퇴 시 `/auth/revoke` 호출용) |
 | `user_consents` | backend | `notification_consent` 컬럼은 의도적 unmapped. `photo_consent` 는 그 반대 — ORM에 매핑돼 있으나 읽기·쓰기 경로가 없다(DROP 보류) |
