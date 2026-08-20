@@ -63,27 +63,42 @@ def _loads(raw: Any) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
-def _gemini_turn(turn: Turn) -> dict[str, Any]:
-    if turn.role == "call":
-        return {
-            "role": "model",
-            "parts": [
-                {"functionCall": {"name": call.name, "args": call.args}} for call in turn.calls
-            ],
-        }
-    if turn.role == "observation":
-        return {
-            "role": "user",
-            "parts": [
+def _gemini_contents(turns: list[Turn]) -> list[dict[str, Any]]:
+    """한 모델 턴의 병렬 호출 응답은 하나의 user content 로 묶는다 — 쪼개면 400 이 난다."""
+    contents: list[dict[str, Any]] = []
+    pending: list[dict[str, Any]] = []
+
+    def flush() -> None:
+        if pending:
+            contents.append({"role": "user", "parts": list(pending)})
+            pending.clear()
+
+    for turn in turns:
+        if turn.role == "observation":
+            pending.append(
                 {
                     "functionResponse": {
                         "name": turn.tool_name or "",
                         "response": {"result": turn.text},
                     }
                 }
-            ],
-        }
-    return {"role": "user", "parts": [{"text": turn.text}]}
+            )
+            continue
+        flush()
+        if turn.role == "call":
+            contents.append(
+                {
+                    "role": "model",
+                    "parts": [
+                        {"functionCall": {"name": call.name, "args": call.args}}
+                        for call in turn.calls
+                    ],
+                }
+            )
+        else:
+            contents.append({"role": "user", "parts": [{"text": turn.text}]})
+    flush()
+    return contents
 
 
 def _openai_turns(turns: list[Turn]) -> list[dict[str, Any]]:
@@ -210,7 +225,7 @@ class GeminiClient:
     ) -> Decision:
         body = {
             "systemInstruction": {"parts": [{"text": system}]},
-            "contents": [_gemini_turn(turn) for turn in turns],
+            "contents": _gemini_contents(turns),
             "tools": [{"functionDeclarations": tools}],
             "generationConfig": {
                 "temperature": 0.0,
@@ -350,12 +365,6 @@ class OpenAIChatClient:
                 raise RateLimited() from exc
             raise AgentIntentUnavailable() from exc
 
-    @retry(
-        retry=retry_if_exception(_is_transient),
-        stop=stop_after_attempt(STRUCTURED_ATTEMPTS),
-        wait=wait_exponential(multiplier=0.5, max=4),
-        reraise=True,
-    )
     async def decide(
         self,
         *,
@@ -388,6 +397,12 @@ class OpenAIChatClient:
         said = message.get("content")
         return Decision(calls=calls, text=said if isinstance(said, str) and said else None)
 
+    @retry(
+        retry=retry_if_exception(_is_transient),
+        stop=stop_after_attempt(STRUCTURED_ATTEMPTS),
+        wait=wait_exponential(multiplier=0.5, max=4),
+        reraise=True,
+    )
     async def _post_json(self, body: dict[str, Any], *, request_timeout: float) -> httpx.Response:
         resp = await self._client.post("/chat/completions", json=body, timeout=request_timeout)
         resp.raise_for_status()

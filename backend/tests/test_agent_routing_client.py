@@ -223,3 +223,57 @@ async def test_gemini_sends_function_responses_not_plain_text() -> None:
     assert roles == ["user", "model", "user"]
     assert captured["contents"][2]["parts"][0]["functionResponse"]["name"] == "category_search"
     assert captured["tools"] == [{"functionDeclarations": TOOLS}]
+
+
+async def test_transient_errors_are_still_retried_on_the_http_call() -> None:
+    """데코레이터가 예외를 변환하는 메서드로 옮겨가면 재시도가 조용히 죽는다."""
+    attempts: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        attempts.append(1)
+        if len(attempts) < 2:
+            return httpx.Response(503, text="upstream down")
+        return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+
+    client = _openai(handler)
+    try:
+        await client.generate_json(system="s", user_text="u", response_schema={"type": "object"})
+    finally:
+        await client.aclose()
+
+    assert len(attempts) == 2
+
+
+async def test_gemini_merges_parallel_observations_into_one_content() -> None:
+    """한 모델 턴의 병렬 호출 응답을 쪼개 보내면 Gemini 가 400 을 낸다."""
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(json.loads(request.content))
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": "끝"}]}}]})
+
+    client = _gemini(handler)
+    try:
+        await client.decide(
+            system="라우터",
+            turns=[
+                Turn(role="user", text="통영 카페랑 맛집"),
+                Turn(
+                    role="call",
+                    calls=[
+                        ToolCall(name="category_search", args={"categories": ["카페"]}),
+                        ToolCall(name="category_search", args={"categories": ["맛집"]}),
+                    ],
+                ),
+                Turn(role="observation", text="11곳", tool_name="category_search"),
+                Turn(role="observation", text="37곳", tool_name="category_search"),
+            ],
+            tools=TOOLS,
+        )
+    finally:
+        await client.aclose()
+
+    contents = captured["contents"]
+    assert [content["role"] for content in contents] == ["user", "model", "user"]
+    assert len(contents[1]["parts"]) == 2
+    assert len(contents[2]["parts"]) == 2
