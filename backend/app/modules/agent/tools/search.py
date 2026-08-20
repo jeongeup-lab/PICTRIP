@@ -41,7 +41,10 @@ async def _prefixes(ctx: ToolContext, hints: list[str]) -> list[str] | None:
 _REGION_HINTS = {
     "type": "array",
     "items": {"type": "string"},
-    "description": "시도·시군구 이름. 예: ['통영'], ['제주특별자치도']. 전국이면 비운다.",
+    "description": (
+        "시도·시군구 이름. 예: ['통영'], ['제주특별자치도']. 전국이면 비운다. "
+        "지역명은 반드시 여기에 넣는다 — 카테고리나 이름 낱말에 섞지 않는다."
+    ),
 }
 
 
@@ -133,7 +136,7 @@ async def _photo_match(ctx: ToolContext, args: Mapping[str, Any]) -> ToolResult:
 CATEGORY_SEARCH = Tool(
     name="category_search",
     description=(
-        "지역·카테고리·분위기로 국내 여행지를 찾는다. 가장 기본이 되는 검색이다. "
+        "지역·카테고리·분위기로 국내 여행지를 찾는다. 대부분의 질문은 이 도구로 답한다. "
         "결과가 0곳이면 지역을 넓히거나 카테고리를 지워 다시 부를 수 있다."
     ),
     parameters={
@@ -143,7 +146,16 @@ CATEGORY_SEARCH = Tool(
             "categories": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "카테고리 낱말. 예: ['카페'], ['박물관','미술관'].",
+                "description": (
+                    "찾는 장소의 종류를 한국어 일반명사로. 예: 박물관 · 미술관 · 사찰 · "
+                    "전망대 · 수목원 · 테마파크 · 계곡 · 해수욕장. 먹고 마시는 곳은 그 말 "
+                    "그대로 쓴다(맛집 · 식당 · 카페). "
+                    "바다 · 산 · 숲 · 호수 · 섬 · 한옥 · 고궁 · 야경 · 골목은 여기가 아니라 "
+                    "moods 가 맡는다. "
+                    "동반자만 말하면(아이랑 · 애들이랑 · 가족이) 그에 맞는 종류로 편다 — "
+                    "테마파크 · 동물원 · 수족관 · 어린이공원 · 체험농장. 단 종류나 분위기를 "
+                    "함께 말했으면 그쪽을 쓰고 동반자는 무시한다."
+                ),
             },
             "crowd": {
                 "type": "string",
@@ -165,7 +177,11 @@ CATEGORY_SEARCH = Tool(
 
 TITLE_SEARCH = Tool(
     name="title_search",
-    description="이름에 특정 낱말이 든 여행지를 찾는다. 예: '케이블카', '출렁다리'.",
+    description=(
+        "장소 이름에 그 낱말이 글자 그대로 든 곳만 찾는다. 예: '케이블카', '출렁다리'. "
+        "카테고리나 지역을 여기로 보내지 마라 — '폭포'는 카테고리이고 '세종'은 지역이라 "
+        "둘 다 category_search 가 맡는다. 이름 자체를 찾을 때만 쓴다."
+    ),
     parameters={
         "type": "object",
         "properties": {
