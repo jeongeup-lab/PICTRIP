@@ -1,0 +1,145 @@
+from __future__ import annotations
+
+import json
+
+import pytest
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.modules.agent import repositories
+from app.modules.agent.services import retrieve
+from app.modules.agent.tools import CATALOG, ToolContext, schemas
+from app.modules.agent.tools.base import describe
+
+pytestmark = pytest.mark.asyncio
+
+
+@pytest.fixture
+def ctx(db_session: AsyncSession, redis_client_fake) -> ToolContext:
+    return ToolContext(session=db_session, redis=redis_client_fake, kto=None)
+
+
+async def _seed(session: AsyncSession, content_id: str, *, title: str, addr1: str) -> None:
+    await session.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, addr1, first_image_url, "
+            "show_flag, lcls_systm1, mapx, mapy) "
+            "VALUES (:cid, 12, :t, :a, 'http://kto/i.jpg', 1, 'NA', 128.0, 35.0)"
+        ),
+        {"cid": content_id, "t": title, "a": addr1},
+    )
+
+
+async def test_every_tool_exposes_an_object_schema() -> None:
+    declared = schemas()
+
+    assert {tool["name"] for tool in declared} == set(CATALOG)
+    for tool in declared:
+        assert tool["parameters"]["type"] == "object"
+        assert tool["description"]
+        json.dumps(tool)
+
+
+async def test_category_search_matches_the_service_it_wraps(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """어댑터가 기존 검색과 다른 결과를 내면 라우팅 전환이 회귀가 된다."""
+    await _seed(db_session, "tc-1", title="통영 바다카페", addr1="경상남도 통영시 1")
+    await _seed(db_session, "tc-2", title="서울 카페", addr1="서울특별시 중구 1")
+    await db_session.flush()
+
+    prefixes = await retrieve.resolve_region_prefixes(db_session, hints=["통영"])
+    expected = await retrieve.search_candidates(
+        db_session,
+        repositories.CandidateQuery(
+            limit=retrieve.CANDIDATE_LIMIT, region_prefixes=prefixes or None
+        ),
+        preference="any",
+        near=False,
+    )
+
+    result = await CATALOG["category_search"].run(ctx, {"regions": ["통영"]})
+
+    assert [row.content_id for row in result.rows] == [row.content_id for row in expected]
+
+
+async def test_title_search_matches_the_service_it_wraps(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    await _seed(db_session, "tt-1", title="통영 케이블카", addr1="경상남도 통영시 2")
+    await db_session.flush()
+
+    expected = await retrieve.search_by_title(db_session, ["케이블카"], region_prefixes=[])
+
+    result = await CATALOG["title_search"].run(ctx, {"keywords": ["케이블카"]})
+
+    assert [row.content_id for row in result.rows] == [row.content_id for row in expected]
+
+
+async def test_missing_required_argument_returns_a_usable_observation(ctx: ToolContext) -> None:
+    """빈 인자로 예외를 던지면 루프가 죽는다 — 모델이 고쳐 부를 수 있게 관찰로 돌려준다."""
+    for name, args in (("title_search", {}), ("photo_match", {})):
+        result = await CATALOG[name].run(ctx, args)
+        assert result.rows == []
+        assert "비었습니다" in result.observation
+
+
+async def test_observation_caps_the_row_dump() -> None:
+    rows = [
+        repositories.CandidateRow(
+            content_id=str(i),
+            title=f"장소{i}",
+            addr1=None,
+            region_name="경상남도",
+            sigungu_name="통영시",
+            lat=None,
+            lng=None,
+            image_url=None,
+            cpyrht_div_cd=None,
+            concentration_rate=None,
+        )
+        for i in range(30)
+    ]
+
+    observation = describe(rows, empty="없음")
+
+    assert observation.startswith("30곳:")
+    assert "외 18곳" in observation
+    assert observation.count("장소") == 12
+
+
+async def test_empty_result_tells_the_model_what_to_do_next(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    result = await CATALOG["category_search"].run(ctx, {"regions": ["없는지역명xyz"]})
+
+    assert result.rows == []
+    assert "넓혀" in result.observation
+
+
+async def test_mood_is_an_axis_of_category_search_not_a_separate_tool() -> None:
+    """분위기는 검색을 갈아타는 게 아니라 같은 검색을 좁히는 축이다."""
+    declared = {tool["name"]: tool for tool in schemas()}
+
+    assert "mood_search" not in declared
+    moods = declared["category_search"]["parameters"]["properties"]["moods"]
+    assert "sea" in moods["items"]["enum"]
+
+
+async def test_unknown_mood_is_dropped(ctx: ToolContext, db_session: AsyncSession) -> None:
+    await _seed(db_session, "tm-1", title="바다 전망대", addr1="경상남도 통영시 3")
+    await db_session.flush()
+
+    result = await CATALOG["category_search"].run(
+        ctx, {"regions": ["통영"], "moods": ["sea", "nonsense"]}
+    )
+
+    assert isinstance(result.rows, list)
+
+
+async def test_labels_render_for_every_tool() -> None:
+    assert CATALOG["category_search"].label({"categories": ["카페"]}) == "카페 관광지 조회"
+    assert CATALOG["category_search"].label({"indoor": True}) == "실내 관광지 조회"
+    assert CATALOG["category_search"].label({}) == "전국 관광지 조회"
+    assert CATALOG["title_search"].label({"keywords": ["케이블카"]}) == "케이블카 이름으로 조회"
+    assert CATALOG["photo_match"].label({"scene": "노을"}) == "노을 사진으로 찾기"
