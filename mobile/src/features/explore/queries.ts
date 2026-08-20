@@ -1,7 +1,16 @@
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { getExplore, getMatches } from "@/features/explore/api";
+import { queryClient } from "@/lib/query-client";
 
 const MATCHES_STALE = 6 * 60 * 60 * 1000;
+
+function matchesQuery(id: number) {
+  return {
+    queryKey: ["matches", id],
+    queryFn: () => getMatches(id),
+    staleTime: MATCHES_STALE,
+  };
+}
 
 export function useExploreFeed(seed: string) {
   return useInfiniteQuery({
@@ -14,10 +23,10 @@ export function useExploreFeed(seed: string) {
 }
 
 export function useMatches(id: number, opts: { enabled: boolean }) {
-  return useQuery({
-    queryKey: ["matches", id],
-    queryFn: () => getMatches(id),
-    enabled: opts.enabled,
-    staleTime: MATCHES_STALE,
-  });
+  return useQuery({ ...matchesQuery(id), enabled: opts.enabled });
+}
+
+export function prefetchMatches(id: number | null | undefined): void {
+  if (id == null) return;
+  void queryClient.prefetchQuery(matchesQuery(id));
 }
