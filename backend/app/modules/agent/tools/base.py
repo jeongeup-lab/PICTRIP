@@ -51,6 +51,8 @@ class Tool:
     parameters: dict[str, Any]
     label: Callable[[Mapping[str, Any]], str]
     run: Run
+    carries_facts: bool = False
+    """관찰 자체가 답인 도구. 목록이 아니라 값을 돌려주므로 응답에 실어야 한다."""
 
 
 def recoverable(run: Run) -> Run:

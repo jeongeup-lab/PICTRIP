@@ -18,8 +18,9 @@ from app.core.logging import get_logger
 from app.modules.agent import llm
 from app.modules.agent.repositories import CandidateRow
 from app.modules.agent.routing import ToolCall, Turn
-from app.modules.agent.schemas import AskResponse, AskStep, Mood, QueryIntent
+from app.modules.agent.schemas import AnswerSegment, AskResponse, AskStep, Mood, QueryIntent
 from app.modules.agent.services import answer as answer_service
+from app.modules.agent.services import ask as ask_service
 from app.modules.agent.services import retrieve
 from app.modules.agent.services import suggest as suggest_service
 from app.modules.agent.tools import CATALOG, ToolContext, schemas
@@ -52,6 +53,8 @@ class Trace:
     rows: list[CandidateRow] = field(default_factory=list)
     steps: list[AskStep] = field(default_factory=list)
     calls_made: list[ToolCall] = field(default_factory=list)
+    facts: list[str] = field(default_factory=list)
+    said: str = ask_service.BLANK_ANSWER
     calls: int = 0
     rounds: int = 0
     stopped: str = "done"
@@ -74,9 +77,13 @@ async def _run_one(ctx: ToolContext, call: ToolCall, trace: Trace) -> str:
         return TIMED_OUT
 
     label: str = tool.label(call.args)
-    trace.steps.append(AskStep(tool=tool.name, label=label, badge=f"{len(result.rows)}곳"))
-    seen = {row.content_id for row in trace.rows}
-    trace.rows.extend(row for row in result.rows if row.content_id not in seen)
+    badge = "조회" if tool.carries_facts else f"{len(result.rows)}곳"
+    trace.steps.append(AskStep(tool=tool.name, label=label, badge=badge))
+    if tool.carries_facts:
+        trace.facts.append(result.observation)
+    if not tool.carries_facts:
+        seen = {row.content_id for row in trace.rows}
+        trace.rows.extend(row for row in result.rows if row.content_id not in seen)
     return result.observation
 
 
@@ -100,6 +107,8 @@ async def route(ctx: ToolContext, question: str) -> Trace:
 
         decision = await client.decide(system=SYSTEM, turns=turns, tools=declared)
         if decision.done:
+            if decision.text:
+                trace.said = decision.text
             break
 
         picked = decision.calls[:MAX_CALLS_PER_ROUND]
@@ -135,27 +144,50 @@ async def _observe(ctx: ToolContext, call: ToolCall, trace: Trace, fired: set[st
     return await _run_one(ctx, call, trace)
 
 
+_SEARCHES = frozenset({"category_search", "title_search", "photo_match", "festival"})
+
+
 def intent_of(calls: list[ToolCall]) -> QueryIntent:
-    """도구 인자가 곧 의도다 — 문구를 짓고 칩을 뽑는 데 다시 LLM 을 부르지 않는다."""
-    merged: dict[str, Any] = {}
-    for call in calls:
-        args = call.args
-        if call.name == "festival":
-            merged["festivalOnly"] = True
-        if regions := _texts(args, "regions"):
-            merged["regionHints"] = regions
-        keywords = _texts(args, "categories") or _texts(args, "keywords")
-        if keywords:
-            merged["categoryKeywords"] = keywords
-        if moods := [mood for mood in _texts(args, "moods") if mood in _MOODS]:
-            merged["moodHints"] = moods
-        if args.get("crowd") in ("quiet", "any", "popular"):
-            merged["crowdPreference"] = args["crowd"]
-        if args.get("indoor"):
-            merged["indoorOnly"] = True
-        if args.get("near"):
-            merged["nearMe"] = True
-    return QueryIntent(**merged)
+    """마지막으로 실제 검색한 호출만 읽는다.
+
+    누적하면 완화 재시도가 지운 조건이 살아남아, 수족관을 지우고 다시 찾은 결과에
+    "수족관 조건으로" 라는 문구와 칩이 붙는다.
+    """
+    searched = [call for call in calls if call.name in _SEARCHES]
+    if not searched:
+        return QueryIntent()
+    last = searched[-1]
+    args = last.args
+    return QueryIntent(
+        festivalOnly=last.name == "festival",
+        regionHints=_texts(args, "regions"),
+        categoryKeywords=_texts(args, "categories") or _texts(args, "keywords"),
+        moodHints=[mood for mood in _texts(args, "moods") if mood in _MOODS],
+        crowdPreference=(
+            args["crowd"] if args.get("crowd") in ("quiet", "any", "popular") else "any"
+        ),
+        indoorOnly=bool(args.get("indoor")),
+        nearMe=bool(args.get("near")),
+    )
+
+
+def _fact_segments(trace: Trace) -> list[AnswerSegment]:
+    """조회한 값을 검색 문구 앞에 세운다 — 뒤에 붙이면 물어본 사실이 묻힌다."""
+    if not trace.facts:
+        return []
+    return [AnswerSegment(text=" ".join(trace.facts) + " ")]
+
+
+def _facts_response(trace: Trace, intent: QueryIntent) -> AskResponse:
+    """조회한 값이 답이다 — 검색 문구로 덮으면 물어본 사실이 사라진다."""
+    return AskResponse(
+        steps=trace.steps,
+        answer=_fact_segments(trace),
+        spots=[],
+        totalCount=0,
+        intent=intent,
+        refinements=[],
+    )
 
 
 def _texts(args: Mapping[str, Any], key: str) -> list[str]:
@@ -169,6 +201,10 @@ def respond(trace: Trace, *, lat: float | None, lng: float | None) -> AskRespons
     """루프 결과를 기존 응답 조립에 넘긴다 — 작문과 칩은 손대지 않는다."""
     intent = intent_of(trace.calls_made)
     near = intent.nearMe and lat is not None and lng is not None
+    if not trace.calls_made:
+        return answer_service.talk_response(trace.steps, QueryIntent(task="smalltalk"), trace.said)
+    if trace.facts and not trace.rows:
+        return _facts_response(trace, intent)
     if not trace.rows:
         return answer_service.zero_response(
             trace.steps,
@@ -187,9 +223,10 @@ def respond(trace: Trace, *, lat: float | None, lng: float | None) -> AskRespons
         region_hints=list(intent.regionHints),
         keywords=list(intent.categoryKeywords),
     )
+    searched = answer_service.answer_segments(top, intent=spoken, near=near, lat=lat, lng=lng)
     return AskResponse(
         steps=trace.steps,
-        answer=answer_service.answer_segments(top, intent=spoken, near=near, lat=lat, lng=lng),
+        answer=[*_fact_segments(trace), *searched],
         spots=spots,
         totalCount=len(spots),
         intent=intent,
