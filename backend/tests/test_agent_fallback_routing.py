@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import Settings
 from app.modules.agent import llm, repositories
 from app.modules.agent.schemas import (
     AnchorAction,
@@ -147,6 +148,12 @@ async def test_raw_dish_evidence_repairs_a_healthy_generic_food_intent(
     assert seen_intent is not None
     assert seen_intent.categoryKeywords == ["맛집", "삼겹살"]
     assert seen_title_terms == ["삼겹살"]
+
+
+@pytest.fixture(autouse=True)
+def _gemini_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    """이 파일은 Gemini 경로를 겨냥한다 — 기본 프로바이더(DeepSeek)에 기대지 않는다."""
+    monkeypatch.setattr(llm, "settings", Settings(LLM_PROVIDER="gemini", GEMINI_API_KEY="k"))
 
 
 @pytest.mark.parametrize("prior_keyword", ["계곡", "국밥"])

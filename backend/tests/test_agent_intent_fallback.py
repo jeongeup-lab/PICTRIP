@@ -4,6 +4,7 @@ from typing import Any
 
 import pytest
 
+from app.config import Settings
 from app.modules.agent import llm
 from app.modules.agent.errors import AgentIntentUnavailable
 from app.modules.agent.schemas import AskContext, AskContextSpot, QueryIntent
@@ -57,6 +58,12 @@ def test_fallback_picks_category_nouns_from_the_dictionary() -> None:
     assert intent_service.fallback_intent("강릉 커피 마시고 싶어").categoryKeywords == ["카페"]
     assert intent_service.fallback_intent("놀이공원 가고 싶어").categoryKeywords == ["테마파크"]
     assert intent_service.fallback_intent("제주 바다").categoryKeywords == []
+
+
+@pytest.fixture(autouse=True)
+def _gemini_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    """이 파일은 Gemini 경로를 겨냥한다 — 기본 프로바이더(DeepSeek)에 기대지 않는다."""
+    monkeypatch.setattr(llm, "settings", Settings(LLM_PROVIDER="gemini", GEMINI_API_KEY="k"))
 
 
 @pytest.mark.parametrize(
