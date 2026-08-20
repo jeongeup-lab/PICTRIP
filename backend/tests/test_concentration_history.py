@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
@@ -143,3 +143,37 @@ async def test_sync_keeps_yesterdays_history_row(db_session: AsyncSession) -> No
     )
 
     assert days == [date(2026, 8, 19), date(2026, 8, 20)]
+
+
+@pytest.mark.asyncio
+async def test_seeded_history_keeps_the_original_collection_time(
+    db_session: AsyncSession,
+) -> None:
+    """이관 행이 마이그레이션 실행 시각을 가지면 원장의 신선도 분석이 왜곡된다."""
+    await _insert_spot(db_session, "cch-5")
+    await db_session.execute(
+        text(
+            "INSERT INTO spot_concentration "
+            "(content_id, concentration_rate, base_ymd, raw_name, collected_at) "
+            "VALUES (:cid, 30.0, :d, '원본', :t)"
+        ),
+        {"cid": "cch-5", "d": date(2026, 8, 15), "t": datetime(2026, 8, 15, 3, 0, tzinfo=UTC)},
+    )
+    await db_session.execute(
+        text(
+            "INSERT INTO spot_concentration_daily "
+            "(content_id, base_ymd, concentration_rate, collected_at) "
+            "SELECT content_id, base_ymd, concentration_rate, collected_at "
+            "FROM spot_concentration WHERE content_id = :cid ON CONFLICT DO NOTHING"
+        ),
+        {"cid": "cch-5"},
+    )
+    await db_session.commit()
+
+    collected = (
+        await db_session.execute(
+            text("SELECT collected_at FROM spot_concentration_daily WHERE content_id='cch-5'")
+        )
+    ).scalar_one()
+
+    assert collected == datetime(2026, 8, 15, 3, 0, tzinfo=UTC)

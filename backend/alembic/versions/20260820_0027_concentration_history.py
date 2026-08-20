@@ -30,8 +30,9 @@ def upgrade() -> None:
     )
     op.create_index("idx_spot_concentration_daily_ymd", "spot_concentration_daily", ["base_ymd"])
     op.execute(
-        "INSERT INTO spot_concentration_daily (content_id, base_ymd, concentration_rate) "
-        "SELECT content_id, base_ymd, concentration_rate FROM spot_concentration "
+        "INSERT INTO spot_concentration_daily "
+        "(content_id, base_ymd, concentration_rate, collected_at) "
+        "SELECT content_id, base_ymd, concentration_rate, collected_at FROM spot_concentration "
         "ON CONFLICT DO NOTHING"
     )
 
