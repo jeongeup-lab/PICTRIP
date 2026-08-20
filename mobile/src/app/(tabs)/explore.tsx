@@ -1,19 +1,5 @@
-import { View, StyleSheet } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { ExploreGrid } from "@/features/explore/components/ExploreGrid";
-import { colors } from "@/constants/theme";
+import { ExploreDeck } from "@/features/explore/components/ExploreDeck";
 
 export default function ExploreScreen() {
-  return (
-    <SafeAreaView style={styles.root} edges={["top"]}>
-      <View style={styles.body}>
-        <ExploreGrid />
-      </View>
-    </SafeAreaView>
-  );
+  return <ExploreDeck />;
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
-  body: { flex: 1 },
-});
