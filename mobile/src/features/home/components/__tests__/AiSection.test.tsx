@@ -38,6 +38,8 @@ const card = (over: Partial<HomeSpotCard> = {}): HomeSpotCard => ({
   category: "카페",
   tag: null,
   anchorTitle: "밀크컨셉 건대점",
+  lat: null,
+  lng: null,
   ...over,
 });
 

@@ -1,35 +1,47 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useScrollToTop } from "expo-router";
 import { Icon } from "@/components/Icon";
-import { ChannelTiles } from "@/features/channels/components/ChannelTiles";
+import { ChannelChips } from "@/features/channels/components/ChannelChips";
 import { AiSection } from "@/features/home/components/AiSection";
-import { RankSection } from "@/features/home/components/RankSection";
-import { ScopeTabs, type HomeScope } from "@/features/home/components/ScopeTabs";
+import { CurationSection } from "@/features/home/components/CurationSection";
+import { NearbyMapCard } from "@/features/home/components/NearbyMapCard";
+import { RankList } from "@/features/home/components/RankList";
 import { useHomeLocation } from "@/features/home/hooks/use-home-location";
 import { formatBaseDate } from "@/features/home/lib/base-date";
+import { scopeTitle, todayLine } from "@/features/home/lib/today-line";
 import {
+  useCuration,
   useNearby,
   useRecommendations,
   useRegionLabel,
   useTrending,
 } from "@/features/home/queries";
+import type { HomeSpotCard } from "@/features/home/api";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
+import { prefetchSpot } from "@/features/spots/queries";
 import { queryClient } from "@/lib/query-client";
 import { colors, spacing } from "@/constants/theme";
+
+export const COLLAPSED_RANKS = 7;
+export const LOCATION_CTA = "위치를 켜면 지금 주변 인기 장소를 보여드려요";
+
+type HomeScope = "nearby" | "national";
 
 export default function HomeScreen() {
   const listRef = useRef<ScrollView>(null);
   useScrollToTop(listRef);
 
   const [scope, setScope] = useState<HomeScope>("nearby");
+  const [expanded, setExpanded] = useState(false);
   const { coords, status, request } = useHomeLocation();
   const displayName = useAuthStore((s) => s.user?.displayName ?? null);
 
   const region = useRegionLabel(coords);
   const nearby = useNearby(coords);
   const national = useTrending();
+  const curation = useCuration();
   const recommendations = useRecommendations(coords);
 
   const locationDenied = status === "denied" || status === "undetermined";
@@ -38,8 +50,27 @@ export default function HomeScreen() {
   const showNational = scope === "national" || locationDenied || (!!coords && nearbyIsEmpty);
   const active = showNational ? national : nearby;
   const waitingForFix = !showNational && !coords;
-  const cards = active.data?.items ?? [];
+  const cards = useMemo(() => active.data?.items ?? [], [active.data]);
+  const shown = expanded ? cards : cards.slice(0, COLLAPSED_RANKS);
   const regionLabel = region.data?.label ?? null;
+  const effectiveScope: HomeScope = showNational ? "national" : "nearby";
+
+  const openSpot = useCallback(
+    (contentId: string) => {
+      const card = findCard(contentId, cards, curation.data?.items);
+      if (card) {
+        prefetchSpot({
+          contentId: card.contentId,
+          title: card.title,
+          imageUrl: card.imageUrl,
+          category: card.category,
+          regionLabel: card.regionLabel,
+        });
+      }
+      router.push(`/spots/${contentId}`);
+    },
+    [cards, curation.data],
+  );
 
   const onRefresh = useCallback(() => {
     void queryClient.invalidateQueries({
@@ -50,12 +81,14 @@ export default function HomeScreen() {
     });
   }, []);
 
+  const toggleScope = useCallback(() => {
+    setScope((current) => (current === "nearby" ? "national" : "nearby"));
+    setExpanded(false);
+    if (effectiveScope === "national" && !coords) void request();
+  }, [effectiveScope, coords, request]);
+
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <View style={styles.bar}>
-        <Text style={styles.wordmark}>PICTRIP</Text>
-      </View>
-
       <ScrollView
         ref={listRef}
         showsVerticalScrollIndicator={false}
@@ -68,18 +101,32 @@ export default function HomeScreen() {
           />
         }
       >
-        <View style={styles.channels}>
-          <ChannelTiles coords={coords} onOpen={(key) => router.push(`/channels?start=${key}`)} />
+        <View style={styles.header}>
+          <View style={styles.headerCopy}>
+            <Text style={styles.kicker}>{todayLine(regionLabel)}</Text>
+            <Pressable
+              testID="home-scope"
+              accessibilityRole="button"
+              accessibilityLabel={`${scopeTitle(effectiveScope)}, 눌러서 범위 바꾸기`}
+              hitSlop={6}
+              style={({ pressed }) => [styles.titleRow, pressed && styles.pressed]}
+              onPress={toggleScope}
+            >
+              <Text style={styles.title}>{scopeTitle(effectiveScope)}</Text>
+              <Icon name="chevron-down" size={20} color={colors.ter} strokeWidth={1.9} />
+            </Pressable>
+          </View>
+          <Pressable
+            testID="home-profile"
+            accessibilityRole="button"
+            accessibilityLabel="마이 페이지"
+            hitSlop={8}
+            style={({ pressed }) => pressed && styles.pressed}
+            onPress={() => router.push("/(tabs)/profile")}
+          >
+            <Icon name="person" size={20} color={colors.ink} strokeWidth={1.9} />
+          </Pressable>
         </View>
-
-        <ScopeTabs
-          scope={showNational ? "national" : "nearby"}
-          nearbyLabel={regionLabel ?? "내 주변"}
-          onChange={(next) => {
-            setScope(next);
-            if (next === "nearby" && !coords) void request();
-          }}
-        />
 
         {locationDenied && scope === "nearby" ? (
           <Pressable
@@ -88,25 +135,57 @@ export default function HomeScreen() {
             style={styles.permit}
           >
             <Icon name="location" size={18} color={colors.accentText} />
-            <Text style={styles.permitText}>위치를 켜면 지금 주변 인기 장소를 보여드려요</Text>
+            <Text style={styles.permitText}>{LOCATION_CTA}</Text>
             <Icon name="chevron-right" size={16} color={colors.ter} />
           </Pressable>
         ) : null}
 
-        <RankSection
-          title={
-            showNational
-              ? "전국 인기 장소"
-              : regionLabel
-                ? `${regionLabel} 근처 인기 장소`
-                : "지금 주변 인기 장소"
-          }
-          note={cards.length > 0 ? formatBaseDate(active.data?.baseDate) : null}
+        <NearbyMapCard
+          title={`${effectiveScope === "nearby" ? "내 주변" : "전국 인기"} ${cards.length}곳`}
           cards={cards}
+          origin={coords}
+          onOpenSpot={openSpot}
+        />
+
+        <View style={styles.gap} />
+
+        <CurationSection
+          data={curation.data}
+          isLoading={curation.isLoading}
+          onOpenSpot={openSpot}
+        />
+
+        <View style={styles.divider} />
+
+        <RankList
+          title={effectiveScope === "nearby" ? "주변 인기 순위" : "전국 인기 순위"}
+          note={cards.length > 0 ? formatBaseDate(active.data?.baseDate) : null}
+          cards={shown}
           isLoading={active.isLoading || waitingForFix}
           isError={active.isError}
           onRetry={() => void active.refetch()}
+          onOpenSpot={openSpot}
         />
+
+        {cards.length > COLLAPSED_RANKS ? (
+          <Pressable
+            testID="home-rank-expand"
+            accessibilityRole="button"
+            onPress={() => setExpanded((v) => !v)}
+            style={styles.expand}
+          >
+            <Text style={styles.expandText}>
+              {expanded ? "접기" : `${COLLAPSED_RANKS + 1}~${cards.length}위 더보기`}
+            </Text>
+            <Icon name={expanded ? "chevron-up" : "chevron-down"} size={16} color={colors.sec} />
+          </Pressable>
+        ) : null}
+
+        <View style={styles.divider} />
+
+        <View style={styles.channels}>
+          <ChannelChips coords={coords} onOpen={(key) => router.push(`/channels?start=${key}`)} />
+        </View>
 
         <AiSection
           displayName={displayName}
@@ -120,28 +199,58 @@ export default function HomeScreen() {
   );
 }
 
+function findCard(
+  contentId: string,
+  cards: HomeSpotCard[],
+  curated: HomeSpotCard[] | undefined,
+): HomeSpotCard | null {
+  return (
+    cards.find((c) => c.contentId === contentId) ??
+    curated?.find((c) => c.contentId === contentId) ??
+    null
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  bar: {
+  content: { paddingTop: spacing.xs, paddingBottom: spacing.xxl },
+  header: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    alignItems: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
+    paddingBottom: spacing.lg,
   },
-  wordmark: { fontSize: 20, fontWeight: "800", letterSpacing: -0.5, color: colors.ink },
-  content: { paddingTop: spacing.md, paddingBottom: spacing.xxl },
-  channels: { paddingBottom: spacing.lg },
+  headerCopy: { flex: 1, minWidth: 0 },
+  kicker: { fontSize: 11.5, fontWeight: "700", color: colors.ter },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6 },
+  title: { fontSize: 26, fontWeight: "800", letterSpacing: -0.9, color: colors.ink },
+  gap: { height: spacing.xl },
+  divider: { height: 8, backgroundColor: colors.inset, marginTop: spacing.xl },
+  channels: { paddingTop: spacing.lg, paddingBottom: spacing.xs },
+  expand: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    height: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderRadius: 14,
+    backgroundColor: colors.fill,
+  },
+  expandText: { fontSize: 14.5, fontWeight: "700", letterSpacing: -0.3, color: colors.sec },
   permit: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
+    marginBottom: spacing.md,
     paddingHorizontal: spacing.md,
     height: 52,
     borderRadius: 14,
     backgroundColor: colors.accentFill,
   },
   permitText: { flex: 1, fontSize: 13.5, fontWeight: "700", color: colors.ink },
+  pressed: { opacity: 0.7 },
 });

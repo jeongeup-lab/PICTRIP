@@ -10,6 +10,15 @@ export interface HomeSpotCard {
   category: string | null;
   tag: string | null;
   anchorTitle: string | null;
+  lat: number | null;
+  lng: number | null;
+}
+
+export interface Curation {
+  kicker: string;
+  title: string;
+  subtitle: string;
+  items: HomeSpotCard[];
 }
 
 export interface HomeCards {
@@ -33,6 +42,10 @@ export interface RegionLabel {
 
 export async function getNearby(coords: { lat: number; lng: number }): Promise<HomeCards> {
   return (await api.get("/home/nearby", { params: coords })) as unknown as HomeCards;
+}
+
+export async function getCuration(): Promise<Curation> {
+  return (await api.get("/home/curation")) as unknown as Curation;
 }
 
 export async function getTrending(): Promise<HomeCards> {

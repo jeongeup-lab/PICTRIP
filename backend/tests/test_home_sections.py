@@ -4,6 +4,7 @@ import uuid
 from collections.abc import AsyncIterator
 from datetime import date
 
+import pytest
 import pytest_asyncio
 from fakeredis.aioredis import FakeRedis
 from httpx import AsyncClient
@@ -15,6 +16,7 @@ from app.config import settings
 from app.core.redis import get_redis
 from app.kto.client import get_kto
 from app.main import app
+from app.modules.feed.services import home
 from app.security.jwt import create_access_token
 
 LAT, LNG = 35.15, 129.05
@@ -86,15 +88,34 @@ async def _seed_spot(
     lat: float = LAT,
     lng: float = LNG,
     signgu: str = "26380",
+    lcls3: str = "NA010100",
+    title: str | None = None,
 ) -> None:
     await session.execute(
         text(
             "INSERT INTO spots (content_id, content_type_id, title, first_image_url, show_flag, "
             "mapx, mapy, lcls_systm1, lcls_systm3, ldong_regn_cd, ldong_signgu_cd) "
             "VALUES (:cid, 12, :t, 'http://tong.visitkorea.or.kr/i.jpg', 1, :lng, :lat, 'NA', "
-            "'NA010100', '26', :sg) ON CONFLICT (content_id) DO NOTHING"
+            ":l3, '26', :sg) ON CONFLICT (content_id) DO NOTHING"
         ),
-        {"cid": cid, "t": f"스팟-{cid}", "lng": lng, "lat": lat, "sg": signgu},
+        {
+            "cid": cid,
+            "t": title or f"스팟-{cid}",
+            "lng": lng,
+            "lat": lat,
+            "sg": signgu,
+            "l3": lcls3,
+        },
+    )
+
+
+async def _seed_ridge_code(session: AsyncSession) -> None:
+    await session.execute(
+        text(
+            "INSERT INTO lcls_systm_codes (lcls_systm3_cd, lcls_systm3_nm) "
+            "VALUES ('NA010200', :nm) ON CONFLICT DO NOTHING"
+        ),
+        {"nm": home.CURATION_CATEGORIES[0]},
     )
 
 
@@ -420,3 +441,55 @@ async def test_rank_category_rejects_unknown_values(
 ) -> None:
     res = await client.get("/v1/home/nearby", params={"lat": LAT, "lng": LNG, "category": "PETS"})
     assert res.status_code == 422
+
+
+async def test_nearby_cards_carry_coordinates_for_the_home_map(
+    client: AsyncClient, seeded: AsyncSession
+) -> None:
+    await _seed_region(seeded)
+    await _seed_spot(seeded, "coord-one", lat=LAT + 0.001, lng=LNG + 0.002)
+    await seeded.commit()
+
+    res = await client.get("/v1/home/nearby", params={"lat": LAT, "lng": LNG, "limit": 20})
+    assert res.status_code == 200
+    card = next(i for i in res.json()["data"]["items"] if i["contentId"] == "coord-one")
+    assert card["lat"] == pytest.approx(LAT + 0.001, abs=1e-6)
+    assert card["lng"] == pytest.approx(LNG + 0.002, abs=1e-6)
+
+
+async def test_curation_picks_the_edition_category_and_names_both_ends(
+    client: AsyncClient, seeded: AsyncSession
+) -> None:
+    await _seed_region(seeded)
+    await _seed_ridge_code(seeded)
+    await _seed_spot(seeded, "ridge-top", lcls3="NA010200", signgu="26380", title="지리산 천왕봉")
+    await _seed_spot(seeded, "ridge-low", lcls3="NA010200", signgu="26440", title="윗세오름")
+    await _seed_spot(seeded, "not-a-ridge", signgu="26380")
+    await _seed_rate(seeded, "ridge-top", "90.00")
+    await _seed_rate(seeded, "ridge-low", "20.00")
+    await seeded.commit()
+
+    res = await client.get("/v1/home/curation")
+    assert res.status_code == 200
+    body = res.json()["data"]
+    ids = [i["contentId"] for i in body["items"]]
+    assert ids == ["ridge-top", "ridge-low"]
+    assert "not-a-ridge" not in ids
+    assert body["kicker"] == home.CURATION_KICKER
+    assert body["title"] == home.CURATION_TITLE
+    assert body["subtitle"].startswith("윗세오름에서 지리산 천왕봉까지 두 곳.")
+
+
+async def test_curation_drops_the_names_when_it_cannot_name_both_ends(
+    client: AsyncClient, seeded: AsyncSession
+) -> None:
+    await _seed_region(seeded)
+    await _seed_ridge_code(seeded)
+    await _seed_spot(seeded, "ridge-only", lcls3="NA010200", title="천황산")
+    await seeded.commit()
+
+    res = await client.get("/v1/home/curation")
+    assert res.status_code == 200
+    body = res.json()["data"]
+    assert len(body["items"]) == 1
+    assert body["subtitle"] == home.CURATION_FALLBACK_SUBTITLE

@@ -93,6 +93,8 @@ class HomeSpotCard(BaseModel):
     category: str | None = None
     tag: str | None = None
     anchorTitle: str | None = None
+    lat: float | None = None
+    lng: float | None = None
 
     @field_validator("imageUrl")
     @classmethod
@@ -103,6 +105,13 @@ class HomeSpotCard(BaseModel):
 class HomeCardsResponse(BaseModel):
     items: list[HomeSpotCard]
     baseDate: str | None = None
+
+
+class CurationResponse(BaseModel):
+    kicker: str
+    title: str
+    subtitle: str
+    items: list[HomeSpotCard]
 
 
 class RecommendationsResponse(BaseModel):

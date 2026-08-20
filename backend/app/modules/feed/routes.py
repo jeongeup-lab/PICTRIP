@@ -13,6 +13,7 @@ from app.modules.feed.schemas import (
     ChannelCardsResponse,
     ChannelMeta,
     ChannelsResponse,
+    CurationResponse,
     HomeCardsResponse,
     HomeSpotCard,
     MatchCard,
@@ -154,6 +155,21 @@ def _home_card(row: home.HomeCardRow) -> HomeSpotCard:
         category=row.category,
         tag=row.tag,
         anchorTitle=row.anchor_title,
+        lat=row.lat,
+        lng=row.lng,
+    )
+
+
+@router.get("/home/curation", summary="이번 주 큐레이션 — 편성 규칙으로 고른 여섯 곳")
+async def home_curation(session: DbSession, redis: RedisDep) -> dict[str, Any]:
+    ranking = await home.load_curation(session, redis)
+    return ok(
+        CurationResponse(
+            kicker=home.CURATION_KICKER,
+            title=home.CURATION_TITLE,
+            subtitle=home.curation_subtitle(ranking.cards),
+            items=[_home_card(r) for r in ranking.cards],
+        )
     )
 
 

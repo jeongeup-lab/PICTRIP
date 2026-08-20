@@ -25,6 +25,7 @@ from app.modules.spots import services as spots_services
 logger = get_logger(__name__)
 
 CARD_COUNT = 10
+CURATION_COUNT = 6
 TASTE_PICK_COUNT = 12
 MIN_TASTE_SEEDS = 3
 
@@ -35,7 +36,14 @@ _TRENDING_TTL = 3600
 _TASTE_PICKS_TTL = 21_600
 _SEED_LIMIT = 30
 _NEIGHBOR_OVERFETCH = 3
-_CACHE_VERSION = "v3"
+_CURATION_TTL = 21_600
+_CACHE_VERSION = "v4"
+
+CURATION_KICKER = "이번 주 큐레이션"
+CURATION_TITLE = "능선 위에는 다른 바람이 분다"
+CURATION_FALLBACK_SUBTITLE = "오르는 데 걸리는 시간만큼, 아래와 다른 걸 봅니다."
+CURATION_CATEGORIES = ("산, 고개, 오름, 봉우리",)
+_KOREAN_COUNTS = ("", "한", "두", "세", "네", "다섯", "여섯", "일곱", "여덟", "아홉", "열")
 
 
 @dataclass(frozen=True)
@@ -49,6 +57,8 @@ class HomeCardRow:
     category: str | None = None
     tag: str | None = None
     anchor_title: str | None = None
+    lat: float | None = None
+    lng: float | None = None
 
 
 @dataclass(frozen=True)
@@ -112,6 +122,34 @@ async def load_nearby_ranked(
     )
     await _cache_set(redis, key, ranking, _NEARBY_TTL if ranking.cards else _EMPTY_TTL)
     return ranking
+
+
+async def load_curation(
+    session: AsyncSession, redis: Redis, *, limit: int = CURATION_COUNT
+) -> HomeRanking:
+    key = f"home:curation:{_CACHE_VERSION}:{limit}"
+    cached = await _cache_get(redis, key)
+    if cached is not None:
+        return cached
+
+    rows = await repo.fetch_curation(session, categories=list(CURATION_CATEGORIES), limit=limit)
+    ranking = HomeRanking(cards=[_card(row) for row in rows], base_date=None)
+    await _cache_set(redis, key, ranking, _CURATION_TTL if ranking.cards else _EMPTY_TTL)
+    return ranking
+
+
+def curation_subtitle(cards: list[HomeCardRow]) -> str:
+    """편성 문구가 데이터와 어긋나지 않도록 뽑힌 곳 이름으로 채운다."""
+    if len(cards) < 2:
+        return CURATION_FALLBACK_SUBTITLE
+    return (
+        f"{cards[-1].title}에서 {cards[0].title}까지 {_korean_count(len(cards))} 곳. "
+        f"{CURATION_FALLBACK_SUBTITLE}"
+    )
+
+
+def _korean_count(count: int) -> str:
+    return _KOREAN_COUNTS[count] if 0 < count < len(_KOREAN_COUNTS) else str(count)
 
 
 async def load_trending(
@@ -246,6 +284,8 @@ def _card(
         category=row.category,
         tag=row.category or _last_token(region_label) or None,
         anchor_title=anchor_title,
+        lat=row.lat,
+        lng=row.lng,
     )
 
 

@@ -17,6 +17,8 @@ const card = (over: Partial<HomeSpotCard> = {}): HomeSpotCard => ({
   category: null,
   tag: null,
   anchorTitle: null,
+  lat: null,
+  lng: null,
   ...over,
 });
 
