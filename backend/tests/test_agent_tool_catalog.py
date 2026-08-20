@@ -238,3 +238,26 @@ async def test_unknown_content_id_never_raises(ctx: ToolContext) -> None:
         result = await CATALOG[name].run(ctx, {"contentId": "does-not-exist"})
         assert result.rows == []
         assert result.observation
+
+
+async def test_resolve_place_needs_a_name(ctx: ToolContext) -> None:
+    result = await CATALOG["resolve_place"].run(ctx, {})
+
+    assert result.rows == []
+    assert "names" in result.observation
+
+
+async def test_resolve_place_reports_what_it_could_not_find(ctx: ToolContext) -> None:
+    """못 찾았을 때 이름을 되돌려줘야 모델이 일반 검색으로 갈아탈지 정한다."""
+    result = await CATALOG["resolve_place"].run(ctx, {"names": ["없는장소이름xyz"]})
+
+    assert result.rows == []
+    assert "없는장소이름xyz" in result.observation
+
+
+async def test_resolve_place_advertises_the_boundary_against_common_nouns() -> None:
+    declared = {tool["name"]: tool for tool in schemas()}
+
+    description = declared["resolve_place"]["description"]
+    assert "일반명사" in description
+    assert "지역명" in description
