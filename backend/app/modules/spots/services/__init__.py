@@ -54,6 +54,7 @@ from app.modules.spots.services.saved import (
 )
 from app.modules.spots.services.search import (
     MAX_REGION_TOKENS,
+    MERGED_SIDOS,
     RegionPrefix,
     SpotSearchRow,
     canonical_region_token,
@@ -64,6 +65,7 @@ from app.modules.spots.services.search import (
 
 __all__ = [
     "MAX_REGION_TOKENS",
+    "MERGED_SIDOS",
     "ConcentrationCardRow",
     "NearbyCategory",
     "NearbySpotRow",

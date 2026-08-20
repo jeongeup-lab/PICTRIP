@@ -123,6 +123,14 @@ class RegionPrefix:
     def narrowed(self) -> bool:
         return self.prefix != self.sido
 
+    @property
+    def prefixes(self) -> list[str]:
+        """개편으로 통합된 광역명은 주소에만 있고 코드 테이블에는 없다 — 둘 다 맞춘다."""
+        merged = MERGED_SIDOS.get(self.sido)
+        if merged is None:
+            return [self.prefix]
+        return [self.prefix, merged + self.prefix[len(self.sido) :]]
+
 
 _MIN_MERGED_CHARS = 2
 _SIDO_TIER = 1
@@ -144,6 +152,12 @@ SIDO_SPELLINGS: dict[str, str] = {
     "대전시": "대전",
     "울산시": "울산",
     "세종시": "세종",
+}
+
+
+MERGED_SIDOS: dict[str, str] = {
+    "전라남도": "전남광주통합특별시",
+    "광주광역시": "전남광주통합특별시",
 }
 
 
