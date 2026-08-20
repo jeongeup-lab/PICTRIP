@@ -11,9 +11,14 @@ from app.kto.client import KtoClient
 from app.modules.agent.errors import AgentNoResults
 from app.modules.agent.repositories import CandidateRow
 from app.modules.agent.schemas import ToolName
+from app.web.errors import ResourceNotFound
 
 OBSERVATION_ROWS = 12
 EMPTY = "결과 0곳. 조건을 줄이거나 지역을 넓혀 다시 부르세요."
+NOT_A_SPOT = (
+    "그 contentId 로 스팟을 찾지 못했습니다. contentId 는 직전 결과의 값이어야 하고 "
+    "장소 이름이 아닙니다."
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +61,8 @@ def recoverable(run: Run) -> Run:
             return await run(ctx, args)
         except AgentNoResults:
             return ToolResult(rows=[], observation=EMPTY)
+        except ResourceNotFound:
+            return ToolResult(rows=[], observation=NOT_A_SPOT)
 
     return guarded
 

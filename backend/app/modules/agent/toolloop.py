@@ -9,17 +9,24 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from time import monotonic
+from typing import Any, get_args
 
 from app.core.logging import get_logger
 from app.modules.agent import llm
 from app.modules.agent.repositories import CandidateRow
 from app.modules.agent.routing import ToolCall, Turn
-from app.modules.agent.schemas import AskStep
+from app.modules.agent.schemas import AskResponse, AskStep, Mood, QueryIntent
+from app.modules.agent.services import answer as answer_service
+from app.modules.agent.services import retrieve
+from app.modules.agent.services import suggest as suggest_service
 from app.modules.agent.tools import CATALOG, ToolContext, schemas
 
 logger = get_logger(__name__)
+
+_MOODS = frozenset(get_args(Mood))
 
 MAX_TOOL_CALLS = 4
 MAX_CALLS_PER_ROUND = 3
@@ -44,6 +51,7 @@ class Trace:
 
     rows: list[CandidateRow] = field(default_factory=list)
     steps: list[AskStep] = field(default_factory=list)
+    calls_made: list[ToolCall] = field(default_factory=list)
     calls: int = 0
     rounds: int = 0
     stopped: str = "done"
@@ -123,4 +131,74 @@ async def _observe(ctx: ToolContext, call: ToolCall, trace: Trace, fired: set[st
         return REPEATED
     fired.add(mark)
     trace.calls += 1
+    trace.calls_made.append(call)
     return await _run_one(ctx, call, trace)
+
+
+def intent_of(calls: list[ToolCall]) -> QueryIntent:
+    """도구 인자가 곧 의도다 — 문구를 짓고 칩을 뽑는 데 다시 LLM 을 부르지 않는다."""
+    merged: dict[str, Any] = {}
+    for call in calls:
+        args = call.args
+        if call.name == "festival":
+            merged["festivalOnly"] = True
+        if regions := _texts(args, "regions"):
+            merged["regionHints"] = regions
+        keywords = _texts(args, "categories") or _texts(args, "keywords")
+        if keywords:
+            merged["categoryKeywords"] = keywords
+        if moods := [mood for mood in _texts(args, "moods") if mood in _MOODS]:
+            merged["moodHints"] = moods
+        if args.get("crowd") in ("quiet", "any", "popular"):
+            merged["crowdPreference"] = args["crowd"]
+        if args.get("indoor"):
+            merged["indoorOnly"] = True
+        if args.get("near"):
+            merged["nearMe"] = True
+    return QueryIntent(**merged)
+
+
+def _texts(args: Mapping[str, Any], key: str) -> list[str]:
+    raw = args.get(key)
+    if not isinstance(raw, list):
+        return []
+    return [item for item in raw if isinstance(item, str) and item]
+
+
+def respond(trace: Trace, *, lat: float | None, lng: float | None) -> AskResponse:
+    """루프 결과를 기존 응답 조립에 넘긴다 — 작문과 칩은 손대지 않는다."""
+    intent = intent_of(trace.calls_made)
+    near = intent.nearMe and lat is not None and lng is not None
+    if not trace.rows:
+        return answer_service.zero_response(
+            trace.steps,
+            intent,
+            has_coords=lat is not None and lng is not None,
+            region_hints=list(intent.regionHints),
+            keywords=list(intent.categoryKeywords),
+            axes=suggest_service.ALL_AXES,
+        )
+
+    top = trace.rows[: retrieve.RESULT_LIMIT]
+    spots = [answer_service.card(row, intent=intent, lat=lat, lng=lng, near=near) for row in top]
+    spoken = answer_service.searched_intent(
+        intent,
+        has_coords=lat is not None and lng is not None,
+        region_hints=list(intent.regionHints),
+        keywords=list(intent.categoryKeywords),
+    )
+    return AskResponse(
+        steps=trace.steps,
+        answer=answer_service.answer_segments(top, intent=spoken, near=near, lat=lat, lng=lng),
+        spots=spots,
+        totalCount=len(spots),
+        intent=intent,
+        tagBasis=answer_service.tag_basis(top, spots, near=near),
+        refinements=suggest_service.derive(
+            intent,
+            has_coords=lat is not None and lng is not None,
+            result_count=len(spots),
+            axes=suggest_service.ALL_AXES,
+            indoor_available=any(row.indoor for row in trace.rows),
+        ),
+    )

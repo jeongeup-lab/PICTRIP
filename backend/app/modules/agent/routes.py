@@ -12,8 +12,8 @@ from starlette.formparsers import MultiPartParser
 from app.core.db import DbSession
 from app.core.redis import RedisDep
 from app.kto.client import KtoDep
+from app.modules.agent import search
 from app.modules.agent.schemas import AskRequest, ChatRequest
-from app.modules.agent.services import ask as ask_service
 from app.modules.agent.services import chat as chat_service
 from app.modules.agent.services.photo import MAX_IMAGE_BYTES
 from app.web.envelope import ok
@@ -39,7 +39,7 @@ async def agent_ask(
     request: Request, session: DbSession, redis: RedisDep, kto: KtoDep
 ) -> dict[str, Any]:
     payload, image_bytes, image_mime = await _read_payload(request)
-    result = await ask_service.ask(
+    result = await search.run(
         session,
         redis,
         kto,

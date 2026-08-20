@@ -13,7 +13,7 @@ from redis.asyncio import Redis
 from app.core.db import AsyncSession
 from app.core.logging import get_logger, get_trace_id
 from app.kto.client import KtoClient
-from app.modules.agent import llm, naver
+from app.modules.agent import llm, naver, search
 from app.modules.agent import outcome as outcome_service
 from app.modules.agent.emitter import Emitter
 from app.modules.agent.errors import AgentWriterUnavailable
@@ -381,7 +381,7 @@ async def _search(
 ) -> AskResponse:
     """검색을 돌리고, 어떻게 끝나든 스텝 스트림을 닫는다."""
     try:
-        return await ask_service.ask(
+        return await search.run(
             session,
             redis,
             kto,
