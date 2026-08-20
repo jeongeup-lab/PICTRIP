@@ -92,9 +92,12 @@ async def _concentration(ctx: ToolContext, args: Mapping[str, Any]) -> ToolResul
     if row is None:
         return ToolResult(rows=[], observation=_NO_ANCHOR)
     if row.concentration_rate is None:
-        return ToolResult(rows=[row], observation=f"{row.title} 은 혼잡도 자료가 없습니다.")
+        return ToolResult(
+            rows=[], anchors=[row], observation=f"{row.title} 은 혼잡도 자료가 없습니다."
+        )
     return ToolResult(
-        rows=[row],
+        rows=[],
+        anchors=[row],
         observation=f"{row.title} 혼잡도 {round(row.concentration_rate)}점 (0~100, 높을수록 붐빔)",
     )
 

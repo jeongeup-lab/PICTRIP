@@ -63,6 +63,7 @@ class Trace:
     steps: list[AskStep] = field(default_factory=list)
     calls_made: list[ToolCall] = field(default_factory=list)
     facts: list[str] = field(default_factory=list)
+    anchors: list[CandidateRow] = field(default_factory=list)
     said: str = ask_service.BLANK_ANSWER
     calls: int = 0
     rounds: int = 0
@@ -90,6 +91,8 @@ async def _run_one(ctx: ToolContext, call: ToolCall, trace: Trace) -> str:
     trace.steps.append(AskStep(tool=tool.name, label=label, badge=badge))
     if tool.carries_facts:
         trace.facts.append(result.observation)
+    seen_anchor = {row.content_id for row in trace.anchors}
+    trace.anchors.extend(row for row in result.anchors if row.content_id not in seen_anchor)
     if not tool.carries_facts:
         seen = {row.content_id for row in trace.rows}
         trace.rows.extend(row for row in result.rows if row.content_id not in seen)
@@ -209,12 +212,16 @@ def _fact_segments(trace: Trace) -> list[AnswerSegment]:
 
 
 def _facts_response(trace: Trace, intent: QueryIntent) -> AskResponse:
-    """조회한 값이 답이다 — 검색 문구로 덮으면 물어본 사실이 사라진다."""
+    """조회한 값이 답이다. 기준 카드는 남긴다 — 없으면 다음 턴이 그 장소를 잃는다."""
+    spots = [
+        answer_service.card(row, intent=intent, lat=None, lng=None, near=False)
+        for row in trace.anchors
+    ]
     return AskResponse(
         steps=trace.steps,
         answer=_fact_segments(trace),
-        spots=[],
-        totalCount=0,
+        spots=spots,
+        totalCount=len(spots),
         intent=intent,
         refinements=[],
     )

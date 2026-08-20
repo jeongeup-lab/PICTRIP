@@ -266,3 +266,25 @@ async def test_prior_spots_are_capped() -> None:
     turns = toolloop.opening_turns("더 보여줘", AskContext(spots=spots))
 
     assert turns[0].text.count("(") == toolloop.CONTEXT_SPOTS
+
+
+async def test_a_detail_answer_keeps_the_card_it_looked_up() -> None:
+    """카드를 비우면 모바일 context 가 비고, 다음 "주차는?" 이 그 장소를 잃는다."""
+    trace = toolloop.Trace(
+        calls_made=[ToolCall(name="spot_detail", args={"contentId": "126508"})],
+        facts=["경복궁 — 이용시간 09:00~18:00"],
+        anchors=[_row("126508", "경복궁")],
+    )
+
+    response = toolloop.respond(trace, lat=None, lng=None)
+
+    assert [spot.contentId for spot in response.spots] == ["126508"]
+    assert "09:00~18:00" in "".join(segment.text for segment in response.answer)
+
+
+async def test_a_looked_up_spot_is_not_counted_as_a_search_result() -> None:
+    """상세 조회 대상이 검색 결과로 섞이면 "1곳을 찾았어요" 같은 거짓 문구가 붙는다."""
+    from app.modules.agent.tools import CATALOG
+
+    assert CATALOG["spot_detail"].carries_facts is True
+    assert CATALOG["concentration"].carries_facts is True
