@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from base64 import urlsafe_b64encode
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Generator
 
 import jwt
 import pytest
@@ -16,11 +16,20 @@ from sqlalchemy.pool import NullPool
 
 from app.config import settings
 from app.main import app
+from app.modules.agent import llm
 
 
 @pytest.fixture(scope="session")
 def anyio_backend() -> str:
     return "asyncio"
+
+
+@pytest.fixture(autouse=True)
+def _close_llm_clients() -> Generator[None, None, None]:
+    """캐시된 httpx 클라이언트를 테스트마다 버린다 — GC 가 닫힌 루프를 건드리면 teardown 이 깨진다."""
+    yield
+    llm._client = None
+    llm._writer_client = None
 
 
 @pytest_asyncio.fixture

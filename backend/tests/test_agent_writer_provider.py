@@ -25,10 +25,11 @@ async def _close_llm_clients() -> AsyncIterator[None]:
     await llm.close_client()
 
 
-def test_gemini_remains_the_default_writer_provider() -> None:
+def test_deepseek_is_the_default_writer_provider() -> None:
+    """기본값이 운영과 어긋나면 .env 를 빠뜨린 배포가 크레딧 없는 Gemini 로 조용히 떨어진다."""
     settings = Settings()
 
-    assert settings.LLM_PROVIDER == "gemini"
+    assert settings.LLM_PROVIDER == "deepseek"
 
 
 def test_local_codex_writer_uses_the_planned_endpoint_and_model(monkeypatch) -> None:
@@ -284,6 +285,7 @@ async def test_gemini_writer_skips_after_intent_fallback_badge(monkeypatch) -> N
 @pytest.mark.anyio
 async def test_intent_extraction_uses_existing_gemini_client(monkeypatch) -> None:
     intent_client = _FakeIntentClient()
+    monkeypatch.setattr(llm, "settings", Settings(LLM_PROVIDER="gemini", GEMINI_API_KEY="k"))
     monkeypatch.setattr(llm, "get_client", lambda: intent_client)
 
     await intent_service.extract_intent("question")
@@ -315,8 +317,8 @@ def test_deepseek_writer_sends_the_api_key_because_it_is_a_metered_endpoint(monk
 @pytest.mark.parametrize(
     "overrides",
     [
-        {"LLM_PROVIDER": "deepseek"},
-        {"LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": ""},
+        {"ENVIRONMENT": "production", "LLM_PROVIDER": "deepseek"},
+        {"ENVIRONMENT": "production", "LLM_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": ""},
         {
             "LLM_PROVIDER": "deepseek",
             "DEEPSEEK_API_KEY": "sk-live",
@@ -389,7 +391,7 @@ def test_a_deepseek_deployment_routes_intent_extraction_away_from_gemini(monkeyp
 def test_gemini_still_serves_structured_output_when_it_is_the_configured_provider(
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(llm, "settings", Settings())
+    monkeypatch.setattr(llm, "settings", Settings(LLM_PROVIDER="gemini", GEMINI_API_KEY="k"))
 
     assert isinstance(llm.get_structured_client(), llm.GeminiClient)
     assert llm.structured_depends_on_gemini() is True
@@ -441,3 +443,11 @@ async def test_a_photo_question_cannot_be_sent_to_a_text_only_structured_provide
             )
     finally:
         await client.aclose()
+
+
+def test_a_keyless_provider_is_tolerated_only_in_local() -> None:
+    """CI 와 로컬은 키 없이 떠야 하고, 운영은 키가 없으면 부팅에서 죽어야 한다."""
+    assert Settings(LLM_PROVIDER="deepseek").ENVIRONMENT == "local"
+
+    with pytest.raises(ValidationError):
+        Settings(ENVIRONMENT="production", LLM_PROVIDER="gemini")

@@ -48,9 +48,10 @@ uv run ruff check . && uv run pytest
 
 - **Backend**: Python 3.12 · FastAPI modular monolith (`app/modules/`: users ·
   spots · feed · images · map · admin · agent) · SQLAlchemy 2.0 async ·
-  PostgreSQL + pgvector · Redis · CLIP ViT-B/32 · LLM(`LLM_PROVIDER`: gemini 기본 ·
-  deepseek · 로컬 codex) — agent 모듈에서 **의도 추출과 답변 작문** 둘 다 맡되
-  검색 자체는 결정적 SQL/pgvector 툴이다.
+  PostgreSQL + pgvector · Redis · CLIP ViT-B/32 · LLM(`LLM_PROVIDER`: **deepseek
+  기본** · gemini · 로컬 codex — 2026-08-18 Gemini 크레딧 소진으로 전 구간
+  DeepSeek) — agent 모듈에서 **의도 추출과 답변 작문** 둘 다 맡되 검색 자체는
+  결정적 SQL/pgvector 툴이다.
 - **Mobile**: Expo SDK 56 · RN 0.85 · React 19.2 · TypeScript strict · Expo
   Router (typed routes) · Zustand · TanStack Query · axios · expo-secure-store.
 - **Web**: Cloudflare Pages static (legal · `.well-known` deep-link files ·

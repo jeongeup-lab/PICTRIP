@@ -14,6 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import formparsers
 
+from app.config import Settings
 from app.core.db import get_db
 from app.core.redis import get_redis
 from app.kto.client import get_kto
@@ -2325,6 +2326,8 @@ async def test_over_long_named_places_are_rejected_before_the_naver_fanout(
 
 
 async def test_extract_intent_truncates_a_chatty_llm_instead_of_failing(monkeypatch) -> None:
+    monkeypatch.setattr(llm, "settings", Settings(LLM_PROVIDER="gemini", GEMINI_API_KEY="k"))
+
     class FakeClient:
         async def generate_json(self, **kwargs):
             return {
