@@ -18,7 +18,6 @@ from app.modules.agent.errors import (
 )
 from app.modules.agent.repositories import CandidateRow
 from app.modules.agent.schemas import (
-    MAX_HINT_TOKENS,
     MAX_KEYWORDS,
     AgentSpotCard,
     AnchorAction,
@@ -47,6 +46,7 @@ from app.modules.agent.services.answer import (
     card,
     fallback_sentence,
     keep,
+    match_region,
     merge,
     searched_intent,
     tag_basis,
@@ -95,23 +95,6 @@ ORIGIN_ACTION_WORDS: tuple[tuple[str, AnchorAction], ...] = (
     ("식당", "food"),
     ("먹을", "food"),
 )
-MIN_HINT_TOKEN_CHARS = 2
-SIDO_ALIASES: dict[str, tuple[str, ...]] = {
-    "강원도": ("강원",),
-    "경남": ("경상남도",),
-    "경북": ("경상북도",),
-    "경상남도": ("경남",),
-    "경상북도": ("경북",),
-    "전남": ("전라남도",),
-    "전라남도": ("전남",),
-    "전라북도": ("전북",),
-    "전북": ("전라북도",),
-    "제주도": ("제주",),
-    "충남": ("충청남도",),
-    "충북": ("충청북도",),
-    "충청남도": ("충남",),
-    "충청북도": ("충북",),
-}
 
 
 async def ask(
@@ -539,7 +522,7 @@ async def _ask_festivals(
     nationwide = keep(pool, openable)
     fallback: str | None = None
     if intent.regionHints:
-        scoped = _match_region(pool, intent.regionHints)
+        scoped = match_region(pool, intent.regionHints)
         cards = keep(scoped, openable)
         if not cards:
             cards = nationwide
@@ -596,31 +579,6 @@ async def _openable_ids(
     if not content_ids:
         return set()
     return set(await load_active_spot_cards_by_ids(session, content_ids))
-
-
-def _match_region(
-    cards: list[feed_services.ChannelCardRow], hints: list[str]
-) -> list[feed_services.ChannelCardRow]:
-    hint_tokens = [tokens for hint in hints if (tokens := _region_tokens(hint))]
-    if not hint_tokens:
-        return []
-    return [
-        card for card in cards if any(_covers(tokens, card.region_label) for tokens in hint_tokens)
-    ]
-
-
-def _region_tokens(hint: str) -> list[str]:
-    return [token for token in hint.split()[:MAX_HINT_TOKENS] if len(token) >= MIN_HINT_TOKEN_CHARS]
-
-
-def _covers(tokens: list[str], region_label: str) -> bool:
-    address = region_label.split()
-    return all(_token_hits(token, address) for token in tokens)
-
-
-def _token_hits(token: str, address: list[str]) -> bool:
-    forms = (token, *SIDO_ALIASES.get(token, ()))
-    return any(part.startswith(form) for part in address for form in forms)
 
 
 def _keywords(intent: QueryIntent) -> list[str]:

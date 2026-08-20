@@ -261,3 +261,46 @@ async def test_resolve_place_advertises_the_boundary_against_common_nouns() -> N
     description = declared["resolve_place"]["description"]
     assert "일반명사" in description
     assert "지역명" in description
+
+
+async def test_catalog_covers_every_real_tool() -> None:
+    """스텝 표시(mood_search·intent)는 도구가 아니다 — 모델에게 없는 선택지를 주면 안 된다."""
+    assert set(CATALOG) == {
+        "category_search",
+        "title_search",
+        "photo_match",
+        "nearby",
+        "related",
+        "concentration",
+        "resolve_place",
+        "spot_detail",
+        "festival",
+    }
+
+
+async def test_spot_detail_needs_a_content_id(ctx: ToolContext) -> None:
+    result = await CATALOG["spot_detail"].run(ctx, {})
+
+    assert result.rows == []
+    assert "contentId" in result.observation
+
+
+async def test_spot_detail_says_when_kto_has_not_answered_yet(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """자료가 없다는 걸 알려야 모델이 없는 사실을 지어내지 않는다."""
+    await _seed(db_session, "sd-1", title="자료없는곳", addr1="서울특별시 중구 5")
+    await db_session.flush()
+
+    result = await CATALOG["spot_detail"].run(ctx, {"contentId": "sd-1", "fields": ["parking"]})
+
+    assert "자료없는곳" in result.observation
+    assert "다른 곳으로 답하세요" in result.observation
+
+
+async def test_festival_unavailability_is_not_swallowed(ctx: ToolContext) -> None:
+    """삼키면 축제 질문에 엉뚱한 스팟이 간다 — 모바일은 err.code 로 분기한다."""
+    from app.modules.agent.errors import AgentFestivalUnavailable
+
+    with pytest.raises(AgentFestivalUnavailable):
+        await CATALOG["festival"].run(ctx, {})
