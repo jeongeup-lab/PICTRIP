@@ -143,3 +143,54 @@ async def test_labels_render_for_every_tool() -> None:
     assert CATALOG["category_search"].label({}) == "전국 관광지 조회"
     assert CATALOG["title_search"].label({"keywords": ["케이블카"]}) == "케이블카 이름으로 조회"
     assert CATALOG["photo_match"].label({"scene": "노을"}) == "노을 사진으로 찾기"
+
+
+async def test_nearby_without_an_anchor_or_coords_asks_for_one(ctx: ToolContext) -> None:
+    result = await CATALOG["nearby"].run(ctx, {})
+
+    assert result.rows == []
+    assert "contentId" in result.observation
+
+
+async def test_nearby_excludes_the_anchor_itself(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    await _seed(db_session, "an-1", title="기준지", addr1="경상남도 통영시 10")
+    await _seed(db_session, "an-2", title="옆집", addr1="경상남도 통영시 11")
+    await db_session.flush()
+
+    result = await CATALOG["nearby"].run(ctx, {"contentId": "an-1"})
+
+    assert "an-1" not in [row.content_id for row in result.rows]
+
+
+async def test_related_without_an_embedding_says_so(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """임베딩이 없으면 예외가 아니라 관찰로 알려야 모델이 다른 도구로 넘어간다."""
+    await _seed(db_session, "rl-1", title="임베딩없는곳", addr1="경상남도 통영시 12")
+    await db_session.flush()
+
+    result = await CATALOG["related"].run(ctx, {"contentId": "rl-1"})
+
+    assert result.rows == []
+    assert "임베딩" in result.observation
+
+
+async def test_concentration_reports_a_single_spot(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    await _seed(db_session, "cn-1", title="혼잡도없는곳", addr1="경상남도 통영시 13")
+    await db_session.flush()
+
+    result = await CATALOG["concentration"].run(ctx, {"contentId": "cn-1"})
+
+    assert [row.content_id for row in result.rows] == ["cn-1"]
+    assert "혼잡도" in result.observation
+
+
+async def test_unknown_content_id_never_raises(ctx: ToolContext) -> None:
+    for name in ("nearby", "related", "concentration"):
+        result = await CATALOG[name].run(ctx, {"contentId": "does-not-exist"})
+        assert result.rows == []
+        assert result.observation
