@@ -13,6 +13,7 @@ from redis.asyncio import Redis, from_url
 from app.config import settings
 from app.core.db import async_session_factory
 from app.modules.agent import toolloop
+from app.modules.agent.schemas import AskContext
 from app.modules.agent.services import ask as ask_service
 from app.modules.agent.tools import ToolContext
 from app.web.errors import AppError
@@ -54,6 +55,11 @@ def _question(case: Case) -> str | None:
     return raw if isinstance(raw, str) and raw else None
 
 
+def _context(case: Case) -> AskContext | None:
+    raw = case.payload.get("context")
+    return AskContext.model_validate(raw) if isinstance(raw, dict) else None
+
+
 async def _old_side(session: Any, redis: Any, case: Case) -> Side:
     started = monotonic()
     try:
@@ -66,6 +72,7 @@ async def _old_side(session: Any, redis: Any, case: Case) -> Side:
             lng=case.payload.get("lng"),
             image_bytes=None,
             image_mime=None,
+            context=_context(case),
         )
     except AppError as exc:
         return Side(ids=[], tools=[], elapsed=monotonic() - started, llm_calls=1, error=exc.code)
@@ -87,7 +94,7 @@ async def _new_side(session: Any, redis: Any, case: Case) -> Side:
         lng=case.payload.get("lng"),
     )
     try:
-        trace = await toolloop.route(ctx, _question(case) or "")
+        trace = await toolloop.route(ctx, _question(case) or "", context=_context(case))
     except AppError as exc:
         return Side(ids=[], tools=[], elapsed=monotonic() - started, llm_calls=1, error=exc.code)
     return Side(

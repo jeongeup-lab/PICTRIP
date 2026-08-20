@@ -47,7 +47,7 @@ async def run(
         question, image_bytes=image_bytes, intent=intent, anchor=anchor, context=context
     ):
         ctx = ToolContext(session=session, redis=redis, kto=kto, lat=lat, lng=lng)
-        trace = await toolloop.route(ctx, (question or "").strip())
+        trace = await toolloop.route(ctx, (question or "").strip(), context=context)
         logger.info("agent.search.routed", router="tools", calls=trace.calls)
         return toolloop.respond(trace, lat=lat, lng=lng)
 
@@ -76,15 +76,9 @@ def _takes_tools(
     anchor: AskAnchor | None,
     context: AskContext | None,
 ) -> bool:
-    """루프는 첫 턴의 자유문만 받는다.
-
-    사진·앵커·칩 재생·후속 질문은 인자로 받지 못한다. 특히 후속은 조용히 나쁜
-    답을 낸다 — "그 주변 카페" 가 직전 카드를 못 보고 전국을 뒤진다.
-    """
+    """루프는 자유문 질문만 받는다 — 사진·앵커·칩 재생은 인자로 못 받는다."""
     if settings.AGENT_ROUTER != "tools":
         return False
     if image_bytes or intent or anchor:
-        return False
-    if context is not None and (context.spots or context.intent or context.focusContentId):
         return False
     return bool(question and question.strip())
