@@ -8,10 +8,12 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.kto.client import KtoClient
+from app.modules.agent.errors import AgentNoResults
 from app.modules.agent.repositories import CandidateRow
 from app.modules.agent.schemas import ToolName
 
 OBSERVATION_ROWS = 12
+EMPTY = "결과 0곳. 조건을 줄이거나 지역을 넓혀 다시 부르세요."
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,13 +36,28 @@ class ToolResult:
     observation: str
 
 
+Run = Callable[["ToolContext", Mapping[str, Any]], Awaitable["ToolResult"]]
+
+
 @dataclass(frozen=True, slots=True)
 class Tool:
     name: ToolName
     description: str
     parameters: dict[str, Any]
     label: Callable[[Mapping[str, Any]], str]
-    run: Callable[[ToolContext, Mapping[str, Any]], Awaitable[ToolResult]]
+    run: Run
+
+
+def recoverable(run: Run) -> Run:
+    """빈손을 예외가 아니라 관찰로 만든다 — 루프 안에서 예외는 턴을 죽인다."""
+
+    async def guarded(ctx: ToolContext, args: Mapping[str, Any]) -> ToolResult:
+        try:
+            return await run(ctx, args)
+        except AgentNoResults:
+            return ToolResult(rows=[], observation=EMPTY)
+
+    return guarded
 
 
 def describe(rows: Sequence[CandidateRow], *, empty: str) -> str:

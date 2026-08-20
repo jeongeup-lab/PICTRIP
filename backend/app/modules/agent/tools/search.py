@@ -13,9 +13,30 @@ from app.modules.agent.schemas import (
 )
 from app.modules.agent.services import retrieve
 from app.modules.agent.services import scene as scene_service
-from app.modules.agent.tools.base import Tool, ToolContext, ToolResult, describe, strings
+from app.modules.agent.tools.base import (
+    EMPTY,
+    Tool,
+    ToolContext,
+    ToolResult,
+    describe,
+    recoverable,
+    strings,
+)
 
-_NO_MATCH = "결과 0곳. 조건을 줄이거나 지역을 넓혀 다시 부르세요."
+_NO_MATCH = EMPTY
+_SCENES = sorted(scene_service.SCENE_PROMPTS)
+
+
+def _unknown_region(hints: list[str]) -> str:
+    return f"{hints[0]} 를 지역으로 해석하지 못했습니다. 시도·시군구 이름으로 다시 부르세요."
+
+
+async def _prefixes(ctx: ToolContext, hints: list[str]) -> list[str] | None:
+    """해석 실패를 전국 검색으로 바꾸지 않는다 — 오타 하나가 엉뚱한 추천이 된다."""
+    if not hints:
+        return []
+    return await retrieve.resolve_region_prefixes(ctx.session, hints=hints) or None
+
 
 _REGION_HINTS = {
     "type": "array",
@@ -42,9 +63,27 @@ async def _category_search(ctx: ToolContext, args: Mapping[str, Any]) -> ToolRes
     hints = strings(args, "regions", limit=MAX_REGION_HINTS)
     near = bool(args.get("near")) and ctx.lat is not None and ctx.lng is not None
 
+    prefixes = await _prefixes(ctx, hints)
+    if prefixes is None:
+        return ToolResult(rows=[], observation=_unknown_region(hints))
+
     codes = await retrieve.resolve_category_codes(ctx.session, keywords)
-    prefixes = await retrieve.resolve_region_prefixes(ctx.session, hints=hints)
     mood_ids = await repositories.find_mood_ids(ctx.session, _moods(args))
+    eating = retrieve.food_action(codes) or retrieve.food_word(keywords)
+    if eating is not None:
+        rows = await retrieve.search_food(
+            ctx.session,
+            action=eating,
+            region_prefixes=prefixes,
+            preference=_crowd(args),
+            indoor_only=bool(args.get("indoor")),
+            mood_ids=mood_ids,
+            lat=ctx.lat,
+            lng=ctx.lng,
+            near=near,
+        )
+        return ToolResult(rows=rows, observation=describe(rows, empty=_NO_MATCH))
+
     rows = await retrieve.search_candidates(
         ctx.session,
         repositories.CandidateQuery(
@@ -66,20 +105,27 @@ async def _title_search(ctx: ToolContext, args: Mapping[str, Any]) -> ToolResult
     keywords = strings(args, "keywords", limit=MAX_KEYWORDS)
     if not keywords:
         return ToolResult(rows=[], observation="keywords 가 비었습니다.")
-    prefixes = await retrieve.resolve_region_prefixes(
-        ctx.session, hints=strings(args, "regions", limit=MAX_REGION_HINTS)
-    )
+    hints = strings(args, "regions", limit=MAX_REGION_HINTS)
+    prefixes = await _prefixes(ctx, hints)
+    if prefixes is None:
+        return ToolResult(rows=[], observation=_unknown_region(hints))
     rows = await retrieve.search_by_title(ctx.session, keywords, region_prefixes=prefixes)
     return ToolResult(rows=rows, observation=describe(rows, empty=_NO_MATCH))
 
 
 async def _photo_match(ctx: ToolContext, args: Mapping[str, Any]) -> ToolResult:
-    term = args.get("scene")
-    if not isinstance(term, str) or not term:
+    raw = args.get("scene")
+    if not isinstance(raw, str) or not raw:
         return ToolResult(rows=[], observation="scene 이 비었습니다.")
-    prefixes = await retrieve.resolve_region_prefixes(
-        ctx.session, hints=strings(args, "regions", limit=MAX_REGION_HINTS)
-    )
+    term = raw if raw in scene_service.SCENE_PROMPTS else scene_service.detect(raw, [])
+    if term is None:
+        return ToolResult(
+            rows=[], observation=f"{raw} 는 지원하지 않는 장면입니다. 쓸 수 있는 값: {_SCENES}"
+        )
+    hints = strings(args, "regions", limit=MAX_REGION_HINTS)
+    prefixes = await _prefixes(ctx, hints)
+    if prefixes is None:
+        return ToolResult(rows=[], observation=_unknown_region(hints))
     rows = await scene_service.search(ctx.session, term, region_prefixes=prefixes)
     return ToolResult(rows=rows, observation=describe(rows, empty=_NO_MATCH))
 
@@ -114,7 +160,7 @@ CATEGORY_SEARCH = Tool(
         },
     },
     label=lambda args: _category_label(args),
-    run=_category_search,
+    run=recoverable(_category_search),
 )
 
 TITLE_SEARCH = Tool(
@@ -133,7 +179,7 @@ TITLE_SEARCH = Tool(
         "required": ["keywords"],
     },
     label=lambda args: f"{_first(args, 'keywords')} 이름으로 조회",
-    run=_title_search,
+    run=recoverable(_title_search),
 )
 
 PHOTO_MATCH = Tool(
@@ -142,13 +188,17 @@ PHOTO_MATCH = Tool(
     parameters={
         "type": "object",
         "properties": {
-            "scene": {"type": "string", "description": "장면 문구. 예: '노을 지는 바닷가'."},
+            "scene": {
+                "type": "string",
+                "enum": _SCENES,
+                "description": "계절·현상 장면. 목록 밖의 자유 문구는 쓸 수 없다.",
+            },
             "regions": _REGION_HINTS,
         },
         "required": ["scene"],
     },
     label=lambda args: f"{args.get('scene', '사진')} 사진으로 찾기",
-    run=_photo_match,
+    run=recoverable(_photo_match),
 )
 
 

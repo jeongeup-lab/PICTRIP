@@ -7,7 +7,13 @@ from app.modules.agent import repositories
 from app.modules.agent.repositories import CandidateRow
 from app.modules.agent.services import anchor as anchor_service
 from app.modules.agent.services import retrieve
-from app.modules.agent.tools.base import Tool, ToolContext, ToolResult, describe
+from app.modules.agent.tools.base import (
+    Tool,
+    ToolContext,
+    ToolResult,
+    describe,
+    recoverable,
+)
 from app.modules.spots.services import find_nearby_spots
 
 _NO_ANCHOR = "contentId 가 없습니다. 먼저 검색해 스팟을 고르세요."
@@ -116,7 +122,7 @@ NEARBY = Tool(
     label=lambda args: (
         f"주변 {anchor_service.ANCHOR_NOUNS.get(str(args.get('kind')), '볼거리')} 조회"
     ),
-    run=_nearby,
+    run=recoverable(_nearby),
 )
 
 RELATED = Tool(
@@ -124,7 +130,7 @@ RELATED = Tool(
     description="기준 스팟과 사진이 닮은 국내 여행지를 임베딩 이웃으로 찾는다.",
     parameters=_ANCHOR_PARAMS,
     label=lambda _args: "연관 관광지 조회",
-    run=_related,
+    run=recoverable(_related),
 )
 
 CONCENTRATION = Tool(
@@ -132,5 +138,5 @@ CONCENTRATION = Tool(
     description="특정 스팟 한 곳의 혼잡도를 조회한다. 여러 곳을 거르는 용도가 아니다.",
     parameters=_ANCHOR_PARAMS,
     label=lambda _args: "혼잡도 조회",
-    run=_concentration,
+    run=recoverable(_concentration),
 )
