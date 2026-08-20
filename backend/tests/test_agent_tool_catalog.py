@@ -304,3 +304,15 @@ async def test_festival_unavailability_is_not_swallowed(ctx: ToolContext) -> Non
 
     with pytest.raises(AgentFestivalUnavailable):
         await CATALOG["festival"].run(ctx, {})
+
+
+@pytest.mark.parametrize("tool", ["spot_detail", "nearby", "related", "concentration"])
+async def test_a_title_passed_as_a_content_id_never_leaks_an_internal_error(
+    ctx: ToolContext, tool: str
+) -> None:
+    """모델이 contentId 자리에 제목을 넣으면 ResourceNotFound 가 답변으로 샜다."""
+    result = await CATALOG[tool].run(ctx, {"contentId": "클라우드힐"})
+
+    assert result.rows == []
+    assert "not found" not in result.observation
+    assert "contentId" in result.observation
