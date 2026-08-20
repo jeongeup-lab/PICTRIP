@@ -17,6 +17,7 @@ from tenacity import (
 from app.config import settings
 from app.core.logging import get_logger
 from app.modules.agent.errors import AgentIntentUnavailable
+from app.modules.agent.routing import Decision, ToolCall, Turn
 from app.web.errors import RateLimited
 
 logger = get_logger(__name__)
@@ -27,6 +28,7 @@ MAX_ERROR_BODY_CHARS = 500
 STRUCTURED_TIMEOUT_SECONDS = 4.0
 STRUCTURED_MAX_OUTPUT_TOKENS = 2048
 STRUCTURED_ATTEMPTS = 2
+ROUTING_TIMEOUT_SECONDS = 8.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +49,78 @@ def _failure_detail(exc: BaseException) -> str | None:
     if not isinstance(exc, httpx.HTTPStatusError):
         return None
     return exc.response.text[:MAX_ERROR_BODY_CHARS] or None
+
+
+def _loads(raw: Any) -> dict[str, Any]:
+    if isinstance(raw, dict):
+        return raw
+    if not isinstance(raw, str) or not raw.strip():
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _gemini_turn(turn: Turn) -> dict[str, Any]:
+    if turn.role == "call":
+        return {
+            "role": "model",
+            "parts": [
+                {"functionCall": {"name": call.name, "args": call.args}} for call in turn.calls
+            ],
+        }
+    if turn.role == "observation":
+        return {
+            "role": "user",
+            "parts": [
+                {
+                    "functionResponse": {
+                        "name": turn.tool_name or "",
+                        "response": {"result": turn.text},
+                    }
+                }
+            ],
+        }
+    return {"role": "user", "parts": [{"text": turn.text}]}
+
+
+def _openai_turns(turns: list[Turn]) -> list[dict[str, Any]]:
+    """도구 호출마다 고유 id 를 붙인다 — OpenAI 호환은 응답을 id 로 짝짓는다."""
+    messages: list[dict[str, Any]] = []
+    pending: list[str] = []
+    for index, turn in enumerate(turns):
+        if turn.role == "user":
+            messages.append({"role": "user", "content": turn.text})
+        elif turn.role == "call":
+            pending = [f"c{index}_{position}" for position in range(len(turn.calls))]
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": pending[position],
+                            "type": "function",
+                            "function": {
+                                "name": call.name,
+                                "arguments": json.dumps(call.args, ensure_ascii=False),
+                            },
+                        }
+                        for position, call in enumerate(turn.calls)
+                    ],
+                }
+            )
+        else:
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": pending.pop(0) if pending else f"c{index}",
+                    "content": turn.text,
+                }
+            )
+    return messages
 
 
 class GeminiClient:
@@ -125,6 +199,39 @@ class GeminiClient:
             if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
                 raise RateLimited() from exc
             raise AgentIntentUnavailable() from exc
+
+    async def decide(
+        self,
+        *,
+        system: str,
+        turns: list[Turn],
+        tools: list[dict[str, Any]],
+        request_timeout: float = ROUTING_TIMEOUT_SECONDS,
+    ) -> Decision:
+        body = {
+            "systemInstruction": {"parts": [{"text": system}]},
+            "contents": [_gemini_turn(turn) for turn in turns],
+            "tools": [{"functionDeclarations": tools}],
+            "generationConfig": {
+                "temperature": 0.0,
+                "maxOutputTokens": STRUCTURED_MAX_OUTPUT_TOKENS,
+            },
+        }
+        try:
+            resp = await self._generate(body, request_timeout=request_timeout)
+            parts = resp.json()["candidates"][0]["content"].get("parts", [])
+        except (httpx.HTTPError, KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
+            logger.warning("agent.route.failed", error_type=type(exc).__name__)
+            if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
+                raise RateLimited() from exc
+            raise AgentIntentUnavailable() from exc
+        calls = [
+            ToolCall(name=call["name"], args=dict(call.get("args") or {}))
+            for part in parts
+            if isinstance(call := part.get("functionCall"), dict) and call.get("name")
+        ]
+        said = "".join(part["text"] for part in parts if isinstance(part.get("text"), str))
+        return Decision(calls=calls, text=said or None)
 
     async def stream_text(
         self, *, system: str, user_text: str, temperature: float = 0.4
@@ -249,6 +356,38 @@ class OpenAIChatClient:
         wait=wait_exponential(multiplier=0.5, max=4),
         reraise=True,
     )
+    async def decide(
+        self,
+        *,
+        system: str,
+        turns: list[Turn],
+        tools: list[dict[str, Any]],
+        request_timeout: float = ROUTING_TIMEOUT_SECONDS,
+    ) -> Decision:
+        body = {
+            "model": self._model,
+            "temperature": 0.0,
+            "max_tokens": STRUCTURED_MAX_OUTPUT_TOKENS,
+            "messages": [{"role": "system", "content": system}, *_openai_turns(turns)],
+            "tools": [{"type": "function", "function": tool} for tool in tools],
+        }
+        try:
+            resp = await self._post_json(body, request_timeout=request_timeout)
+            message = resp.json()["choices"][0]["message"]
+        except (httpx.HTTPError, KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
+            logger.warning("agent.route.failed", error_type=type(exc).__name__)
+            if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
+                raise RateLimited() from exc
+            raise AgentIntentUnavailable() from exc
+        calls: list[ToolCall] = []
+        for call in message.get("tool_calls") or []:
+            function = call.get("function") or {}
+            if not function.get("name"):
+                continue
+            calls.append(ToolCall(name=function["name"], args=_loads(function.get("arguments"))))
+        said = message.get("content")
+        return Decision(calls=calls, text=said if isinstance(said, str) and said else None)
+
     async def _post_json(self, body: dict[str, Any], *, request_timeout: float) -> httpx.Response:
         resp = await self._client.post("/chat/completions", json=body, timeout=request_timeout)
         resp.raise_for_status()
@@ -389,6 +528,31 @@ class StructuredClient(Protocol):
         response_schema: dict[str, Any],
         request_timeout: float = ...,
     ) -> Any: ...
+
+
+class RoutingClient(Protocol):
+    async def decide(
+        self,
+        *,
+        system: str,
+        turns: list[Turn],
+        tools: list[dict[str, Any]],
+        request_timeout: float = ...,
+    ) -> Decision: ...
+
+
+def get_routing_client() -> RoutingClient:
+    """구조화 출력과 같은 프로바이더를 쓴다 — 라우팅도 결정적 저온 호출이다."""
+    if settings.LLM_PROVIDER == "gemini":
+        return get_client()
+    client = get_writer_client()
+    if not isinstance(client, OpenAIChatClient):
+        raise AgentIntentUnavailable()
+    return client
+
+
+def routing_depends_on_gemini() -> bool:
+    return settings.LLM_PROVIDER == "gemini"
 
 
 def get_structured_client() -> StructuredClient:
