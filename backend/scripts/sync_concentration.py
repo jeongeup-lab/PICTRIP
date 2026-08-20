@@ -8,11 +8,17 @@ from datetime import datetime
 import httpx
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.db import async_session_factory
 from app.core.logging import get_logger
-from app.modules.spots.models import Sigungu, Spot, SpotConcentration
+from app.modules.spots.models import (
+    Sigungu,
+    Spot,
+    SpotConcentration,
+    SpotConcentrationDaily,
+)
 
 logger = get_logger(__name__)
 
@@ -78,6 +84,40 @@ def _collection_day_rate(rows: list[dict[str, str]]) -> dict[str, tuple[float, s
         if prev is None or ymd < prev[0]:
             best[name] = (ymd, rate)
     return {name: (rate, ymd) for name, (ymd, rate) in best.items()}
+
+
+async def persist_rows(session: AsyncSession, rows: list[dict[str, object]]) -> None:
+    """스냅샷과 원장에 함께 쓴다 — 스냅샷은 덮어써야 하고 원장은 쌓여야 한다."""
+    snapshot = pg_insert(SpotConcentration).values(rows)
+    await session.execute(
+        snapshot.on_conflict_do_update(
+            index_elements=[SpotConcentration.content_id],
+            set_={
+                "concentration_rate": snapshot.excluded.concentration_rate,
+                "base_ymd": snapshot.excluded.base_ymd,
+                "raw_name": snapshot.excluded.raw_name,
+                "signgu_cd": snapshot.excluded.signgu_cd,
+                "collected_at": datetime.now().astimezone(),
+            },
+        )
+    )
+
+    history = pg_insert(SpotConcentrationDaily).values(
+        [
+            {
+                "content_id": row["content_id"],
+                "base_ymd": row["base_ymd"],
+                "concentration_rate": row["concentration_rate"],
+            }
+            for row in rows
+        ]
+    )
+    await session.execute(
+        history.on_conflict_do_update(
+            index_elements=[SpotConcentrationDaily.content_id, SpotConcentrationDaily.base_ymd],
+            set_={"concentration_rate": history.excluded.concentration_rate},
+        )
+    )
 
 
 async def main() -> None:
@@ -162,18 +202,7 @@ async def main() -> None:
 
     if final_rows:
         async with async_session_factory() as session:
-            stmt = pg_insert(SpotConcentration).values(final_rows)
-            stmt = stmt.on_conflict_do_update(
-                index_elements=[SpotConcentration.content_id],
-                set_={
-                    "concentration_rate": stmt.excluded.concentration_rate,
-                    "base_ymd": stmt.excluded.base_ymd,
-                    "raw_name": stmt.excluded.raw_name,
-                    "signgu_cd": stmt.excluded.signgu_cd,
-                    "collected_at": datetime.now().astimezone(),
-                },
-            )
-            await session.execute(stmt)
+            await persist_rows(session, final_rows)
             await session.commit()
         totals["upserted"] = len(final_rows)
 

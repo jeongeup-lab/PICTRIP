@@ -79,6 +79,20 @@ class Spot(Base):
             postgresql_where=text("show_flag = 1"),
         ),
         Index(
+            "idx_spots_title_trgm",
+            "title",
+            postgresql_using="gin",
+            postgresql_ops={"title": "gin_trgm_ops"},
+            postgresql_where=text("show_flag = 1"),
+        ),
+        Index(
+            "idx_spots_addr1_trgm",
+            "addr1",
+            postgresql_using="gin",
+            postgresql_ops={"addr1": "gin_trgm_ops"},
+            postgresql_where=text("show_flag = 1"),
+        ),
+        Index(
             "idx_spots_active_region",
             "ldong_regn_cd",
             "ldong_signgu_cd",
@@ -219,6 +233,30 @@ class SpotConcentration(Base):
     base_ymd: Mapped[date] = mapped_column(Date, nullable=False)
     raw_name: Mapped[str] = mapped_column(String(255), nullable=False)
     signgu_cd: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    collected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class SpotConcentrationDaily(Base):
+    """일자별 원장. spot_concentration 은 최신값 캐시라 덮어쓰기로 추세가 사라진다."""
+
+    __tablename__ = "spot_concentration_daily"
+    __table_args__ = (
+        CheckConstraint(
+            "concentration_rate >= 0 AND concentration_rate <= 100",
+            name="ck_spot_concentration_daily_rate_range",
+        ),
+        Index("idx_spot_concentration_daily_ymd", "base_ymd"),
+    )
+
+    content_id: Mapped[str] = mapped_column(
+        String(32),
+        ForeignKey("spots.content_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    base_ymd: Mapped[date] = mapped_column(Date, primary_key=True)
+    concentration_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
     collected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
