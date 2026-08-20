@@ -139,4 +139,5 @@ CONCENTRATION = Tool(
     parameters=_ANCHOR_PARAMS,
     label=lambda _args: "혼잡도 조회",
     run=recoverable(_concentration),
+    carries_facts=True,
 )

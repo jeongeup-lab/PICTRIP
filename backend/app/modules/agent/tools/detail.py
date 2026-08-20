@@ -88,4 +88,5 @@ SPOT_DETAIL = Tool(
     },
     label=lambda _args: "상세 조회",
     run=recoverable(_spot_detail),
+    carries_facts=True,
 )
