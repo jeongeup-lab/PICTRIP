@@ -147,23 +147,6 @@ async def test_an_empty_trace_with_conditions_offers_them_for_release() -> None:
     assert response.refinements
 
 
-async def test_a_follow_up_with_context_stays_on_the_existing_router(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """루프는 context 를 인자로 못 받는다 — 넘기면 "그 주변" 이 전국을 뒤진다."""
-    from app.modules.agent.schemas import AskContext, AskContextSpot
-
-    _tools(monkeypatch)
-    marks = _seen(monkeypatch)
-
-    await _run(
-        question="그 주변 카페",
-        context=AskContext(spots=[AskContextSpot(contentId="1", title="감천문화마을")]),
-    )
-
-    assert marks == {"tools": False, "branches": True}
-
-
 async def test_a_relaxing_retry_drops_the_condition_it_released() -> None:
     """누적하면 지운 조건이 살아남아 "수족관 조건으로" 라는 거짓 문구가 붙는다."""
     intent = toolloop.intent_of(
@@ -232,3 +215,54 @@ def _row(content_id: str, title: str) -> Any:
         cpyrht_div_cd=None,
         concentration_rate=None,
     )
+
+
+async def test_a_follow_up_now_reaches_the_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.modules.agent.schemas import AskContext, AskContextSpot
+
+    _tools(monkeypatch)
+    marks = _seen(monkeypatch)
+
+    await _run(
+        question="그 주변 카페",
+        context=AskContext(spots=[AskContextSpot(contentId="126198", title="감천문화마을")]),
+    )
+
+    assert marks == {"tools": True, "branches": False}
+
+
+async def test_prior_results_carry_their_content_ids_into_the_prompt() -> None:
+    """이름만 주면 모델이 contentId 자리에 이름을 넣는다 — 실제로 그랬다."""
+    from app.modules.agent.schemas import AskContext, AskContextSpot
+
+    turns = toolloop.opening_turns(
+        "그 주변 카페",
+        AskContext(spots=[AskContextSpot(contentId="126198", title="감천문화마을")]),
+    )
+
+    assert len(turns) == 1
+    assert "감천문화마을(126198)" in turns[0].text
+    assert "이번 질문: 그 주변 카페" in turns[0].text
+
+
+async def test_the_focused_card_is_named_so_deixis_can_resolve() -> None:
+    from app.modules.agent.schemas import AskContext
+
+    turns = toolloop.opening_turns("여기 몇 시에 열어?", AskContext(focusContentId="126198"))
+
+    assert "보고 있는 카드: 126198" in turns[0].text
+
+
+async def test_a_first_turn_carries_no_context_preamble() -> None:
+    turns = toolloop.opening_turns("통영 카페", None)
+
+    assert [turn.text for turn in turns] == ["통영 카페"]
+
+
+async def test_prior_spots_are_capped() -> None:
+    from app.modules.agent.schemas import AskContext, AskContextSpot
+
+    spots = [AskContextSpot(contentId=str(i), title=f"곳{i}") for i in range(8)]
+    turns = toolloop.opening_turns("더 보여줘", AskContext(spots=spots))
+
+    assert turns[0].text.count("(") == toolloop.CONTEXT_SPOTS

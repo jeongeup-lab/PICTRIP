@@ -18,7 +18,14 @@ from app.core.logging import get_logger
 from app.modules.agent import llm
 from app.modules.agent.repositories import CandidateRow
 from app.modules.agent.routing import ToolCall, Turn
-from app.modules.agent.schemas import AnswerSegment, AskResponse, AskStep, Mood, QueryIntent
+from app.modules.agent.schemas import (
+    AnswerSegment,
+    AskContext,
+    AskResponse,
+    AskStep,
+    Mood,
+    QueryIntent,
+)
 from app.modules.agent.services import answer as answer_service
 from app.modules.agent.services import ask as ask_service
 from app.modules.agent.services import retrieve
@@ -39,7 +46,9 @@ SYSTEM = """너는 국내 여행지 검색 라우터다. 질문에 답하려면 
 
 - 결과가 0곳이면 관찰을 읽고 조건을 바꿔 다시 부른다. 같은 인자로 다시 부르지 않는다.
 - 필요한 만큼만 부른다. 충분하면 도구를 부르지 말고 끝낸다.
-- 국내 여행지와 무관한 질문이면 도구를 부르지 않는다."""
+- 국내 여행지와 무관한 질문이면 도구를 부르지 않는다.
+- "거기", "그 근처", "아까 그곳" 은 직전 결과를 가리킨다. 괄호 안 contentId 를
+  그대로 도구 인자로 쓴다. 이름을 contentId 자리에 넣지 않는다."""
 
 UNKNOWN_TOOL = "그런 도구는 없습니다."
 TIMED_OUT = "도구가 시간 안에 끝나지 않았습니다. 조건을 좁혀 다시 부르세요."
@@ -87,12 +96,33 @@ async def _run_one(ctx: ToolContext, call: ToolCall, trace: Trace) -> str:
     return result.observation
 
 
-async def route(ctx: ToolContext, question: str) -> Trace:
+CONTEXT_SPOTS = 8
+
+
+def opening_turns(question: str, context: AskContext | None) -> list[Turn]:
+    """직전 결과를 contentId 와 함께 준다 — 그래야 "그 근처" 가 도구 인자가 된다."""
+    lines: list[str] = []
+    if context is not None:
+        if context.intent is not None:
+            lines.append(f"직전 조건: {context.intent.model_dump_json(exclude_defaults=True)}")
+        if context.spots:
+            shown = " · ".join(
+                f"{spot.title}({spot.contentId})" for spot in context.spots[:CONTEXT_SPOTS]
+            )
+            lines.append(f"직전 결과: {shown}")
+        if context.focusContentId:
+            lines.append(f"사용자가 보고 있는 카드: {context.focusContentId}")
+    if not lines:
+        return [Turn(role="user", text=question)]
+    return [Turn(role="user", text="\n".join(lines) + f"\n\n이번 질문: {question}")]
+
+
+async def route(ctx: ToolContext, question: str, *, context: AskContext | None = None) -> Trace:
     """모델이 도구를 고르고, 코드가 상한을 건다."""
     trace = Trace()
     started = monotonic()
     deadline = started + TOTAL_BUDGET_SECONDS
-    turns: list[Turn] = [Turn(role="user", text=question)]
+    turns: list[Turn] = opening_turns(question, context)
     fired: set[str] = set()
     client = llm.get_routing_client()
     declared = schemas()
