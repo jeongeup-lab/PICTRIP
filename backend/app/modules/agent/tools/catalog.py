@@ -3,10 +3,18 @@ from __future__ import annotations
 from typing import Any
 
 from app.modules.agent.schemas import ToolName
+from app.modules.agent.tools.anchored import CONCENTRATION, NEARBY, RELATED
 from app.modules.agent.tools.base import Tool
 from app.modules.agent.tools.search import CATEGORY_SEARCH, PHOTO_MATCH, TITLE_SEARCH
 
-_TOOLS: tuple[Tool, ...] = (CATEGORY_SEARCH, TITLE_SEARCH, PHOTO_MATCH)
+_TOOLS: tuple[Tool, ...] = (
+    CATEGORY_SEARCH,
+    TITLE_SEARCH,
+    PHOTO_MATCH,
+    NEARBY,
+    RELATED,
+    CONCENTRATION,
+)
 
 CATALOG: dict[ToolName, Tool] = {tool.name: tool for tool in _TOOLS}
 
