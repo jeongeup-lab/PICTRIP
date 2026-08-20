@@ -47,7 +47,7 @@ async def _spot_detail(ctx: ToolContext, args: Mapping[str, Any]) -> ToolResult:
     rows = [briefs[content_id]] if content_id in briefs else []
 
     if row.detail_status in ("pending", "unavailable"):
-        return ToolResult(rows=rows, observation=f"{row.title}: {_STALE}")
+        return ToolResult(rows=[], anchors=rows, observation=f"{row.title}: {_STALE}")
 
     known = [
         f"{detail_service.FIELD_NOUNS[field]} {value}"
@@ -56,8 +56,10 @@ async def _spot_detail(ctx: ToolContext, args: Mapping[str, Any]) -> ToolResult:
     ]
     if not known:
         nouns = " · ".join(detail_service.FIELD_NOUNS[field] for field in fields)
-        return ToolResult(rows=rows, observation=f"{row.title}: {nouns} 자료가 없습니다.")
-    return ToolResult(rows=rows, observation=f"{row.title} — " + " · ".join(known))
+        return ToolResult(
+            rows=[], anchors=rows, observation=f"{row.title}: {nouns} 자료가 없습니다."
+        )
+    return ToolResult(rows=[], anchors=rows, observation=f"{row.title} — " + " · ".join(known))
 
 
 def _value(row: Any, field: DetailField) -> str | None:

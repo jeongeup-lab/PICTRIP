@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from redis.asyncio import Redis
@@ -39,6 +39,8 @@ class ToolResult:
 
     rows: list[CandidateRow]
     observation: str
+    anchors: list[CandidateRow] = field(default_factory=list)
+    """조회 대상 자체. 검색 결과가 아니라 다음 턴이 가리킬 기준점이다."""
 
 
 Run = Callable[["ToolContext", Mapping[str, Any]], Awaitable["ToolResult"]]

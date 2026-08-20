@@ -221,7 +221,7 @@ async def test_related_without_an_embedding_says_so(
     assert "임베딩" in result.observation
 
 
-async def test_concentration_reports_a_single_spot(
+async def test_concentration_reports_a_single_spot_without_counting_it_as_a_result(
     ctx: ToolContext, db_session: AsyncSession
 ) -> None:
     await _seed(db_session, "cn-1", title="혼잡도없는곳", addr1="경상남도 통영시 13")
@@ -229,7 +229,8 @@ async def test_concentration_reports_a_single_spot(
 
     result = await CATALOG["concentration"].run(ctx, {"contentId": "cn-1"})
 
-    assert [row.content_id for row in result.rows] == ["cn-1"]
+    assert result.rows == []
+    assert [row.content_id for row in result.anchors] == ["cn-1"]
     assert "혼잡도" in result.observation
 
 
