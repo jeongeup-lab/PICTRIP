@@ -44,6 +44,9 @@ class ToolResult:
     anchors: list[CandidateRow] = field(default_factory=list)
     """조회 대상 자체. 검색 결과가 아니라 다음 턴이 가리킬 기준점이다."""
 
+    fact: str | None = None
+    """카드만 보고는 복원할 수 없는 계산 결과. 작문 모델과 폴백 답변 양쪽에 실린다."""
+
 
 Run = Callable[["ToolContext", Mapping[str, Any]], Awaitable["ToolResult"]]
 

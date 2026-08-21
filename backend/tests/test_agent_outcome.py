@@ -107,3 +107,13 @@ def test_the_writer_is_told_what_actually_happened_only_when_it_must_explain_its
         assert situation is None
     else:
         assert situation is not None and expected in situation
+
+
+def test_the_writer_is_given_computed_facts_verbatim() -> None:
+    """카드 순서만 보고 일차 구분과 이동 거리를 다시 추측하면 답이 어긋난다."""
+    plan = "통영 2일 일정 — 1일차: 통영항 → 강구안 (이동 3km)"
+    outcome = outcome_service.SpotResults(response=_response(facts=[plan]))
+
+    situation = outcome_service.situation_of(outcome)
+
+    assert situation is not None and plan in situation

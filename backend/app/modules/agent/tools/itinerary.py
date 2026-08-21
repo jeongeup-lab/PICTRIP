@@ -83,6 +83,39 @@ def _crowd(args: Mapping[str, Any]) -> CrowdPreference:
     return cast(CrowdPreference, value) if value in ("quiet", "any", "popular") else "any"
 
 
+async def _sights(
+    ctx: ToolContext, keywords: list[str], prefixes: list[str], crowd: CrowdPreference
+) -> list[CandidateRow]:
+    codes = await retrieve.resolve_category_codes(ctx.session, keywords)
+    return await retrieve.search_candidates(
+        ctx.session,
+        repositories.CandidateQuery(
+            limit=retrieve.CANDIDATE_LIMIT, codes=codes or None, region_prefixes=prefixes
+        ),
+        preference=crowd,
+        near=False,
+    )
+
+
+def _meal_words(keywords: list[str]) -> list[str]:
+    return [word for word in keywords if retrieve.food_word([word]) is not None]
+
+
+def _nearest(leg: Sequence[CandidateRow], pool: Sequence[CandidateRow]) -> CandidateRow | None:
+    if not leg or not pool:
+        return None
+    head = leg[0]
+    return min(
+        pool,
+        key=lambda row: haversine_km(
+            cast(float, head.lat),
+            cast(float, head.lng),
+            cast(float, row.lat),
+            cast(float, row.lng),
+        ),
+    )
+
+
 async def _plan_itinerary(ctx: ToolContext, args: Mapping[str, Any]) -> ToolResult:
     hints = strings(args, "regions", limit=MAX_REGION_HINTS)
     if not hints:
@@ -92,33 +125,60 @@ async def _plan_itinerary(ctx: ToolContext, args: Mapping[str, Any]) -> ToolResu
     if not prefixes:
         return ToolResult(rows=[], observation=f"{hints[0]}: {_UNKNOWN}")
 
-    codes = await retrieve.resolve_category_codes(
-        ctx.session, strings(args, "categories", limit=MAX_KEYWORDS)
-    )
-    found = await retrieve.search_candidates(
-        ctx.session,
-        repositories.CandidateQuery(
-            limit=retrieve.CANDIDATE_LIMIT, codes=codes or None, region_prefixes=prefixes
-        ),
-        preference=_crowd(args),
-        near=False,
-    )
-    days = _days(args)
-    pool = _without_outliers(_placed(found))[: days * PER_DAY]
-    if not pool:
-        return ToolResult(rows=[], observation=f"{hints[0]}: {_EMPTY}")
+    keywords = strings(args, "categories", limit=MAX_KEYWORDS)
+    eating = _meal_words(keywords)
+    crowd = _crowd(args)
+    action = retrieve.food_word(eating[:1]) if eating else None
+    seeing = [word for word in keywords if word not in eating]
 
-    ordered = _chain(pool)
+    meals = (
+        await retrieve.search_food(
+            ctx.session, action=action, region_prefixes=prefixes, preference=crowd
+        )
+        if action is not None
+        else []
+    )
+    sights = await _sights(ctx, seeing, prefixes, crowd)
+
+    return _assemble(
+        hints[0],
+        sights=_without_outliers(_placed(sights)),
+        meals=_without_outliers(_placed(meals)),
+        days=_days(args),
+    )
+
+
+def _assemble(
+    region: str, *, sights: list[CandidateRow], meals: list[CandidateRow], days: int
+) -> ToolResult:
+    """맛집은 일정에 끼워 넣는 하루 한 끼다 — 볼거리를 대신하지 않는다.
+
+    볼거리가 아예 없는 지역에서만 맛집이 일정 자체가 된다.
+    """
+    if not sights:
+        sights, meals = meals, []
+    per_day = PER_DAY - 1 if meals else PER_DAY
+    ordered = _chain(sights[: days * per_day])
+    if not ordered:
+        return ToolResult(rows=[], observation=f"{region}: {_EMPTY}")
+
+    left = list(meals)
     lines: list[str] = []
+    plan: list[CandidateRow] = []
     for day in range(days):
-        leg = ordered[day * PER_DAY : (day + 1) * PER_DAY]
+        leg = ordered[day * per_day : (day + 1) * per_day]
         if not leg:
             break
+        meal = _nearest(leg, left)
+        if meal is not None:
+            left.remove(meal)
+            leg = _chain([*leg, meal])
+        plan.extend(leg)
         names = " → ".join(row.title for row in leg)
         lines.append(f"{day + 1}일차: {names} (이동 {round(_legs_km(leg))}km)")
-    return ToolResult(
-        rows=ordered, observation=f"{hints[0]} {len(lines)}일 일정 — " + " / ".join(lines)
-    )
+
+    plan_text = f"{region} {len(lines)}일 일정 — " + " / ".join(lines)
+    return ToolResult(rows=plan, observation=plan_text, fact=plan_text)
 
 
 PLAN_ITINERARY = Tool(

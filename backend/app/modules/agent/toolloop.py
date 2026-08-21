@@ -115,6 +115,8 @@ async def _run_one(ctx: ToolContext, call: ToolCall, trace: Trace) -> str:
     trace.finish(AskStep(tool=tool.name, label=label, badge=badge))
     if tool.carries_facts:
         trace.facts.append(result.observation)
+    elif result.fact:
+        trace.facts.append(result.fact)
     seen_anchor = {row.content_id for row in trace.anchors}
     trace.anchors.extend(row for row in result.anchors if row.content_id not in seen_anchor)
     if not tool.carries_facts:
@@ -353,6 +355,7 @@ def respond(trace: Trace, *, lat: float | None, lng: float | None) -> AskRespons
         spots=spots,
         totalCount=len(spots),
         intent=intent,
+        facts=list(trace.facts),
         tagBasis=answer_service.tag_basis(top, spots, near=near),
         refinements=suggest_service.derive(
             intent,

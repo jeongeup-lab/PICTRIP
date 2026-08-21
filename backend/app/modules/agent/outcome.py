@@ -120,9 +120,25 @@ def classify_error(exc: AppError, *, blank_answer: str) -> OutOfScope | Failed:
 
 
 def situation_of(outcome: TurnOutcome) -> str | None:
-    if isinstance(outcome, PartialResults):
-        return (
-            f"요청한 조건 중 {' · '.join(outcome.unmet)} 은(는) 적용하지 못한 채 결과를 냈다. "
-            "그 사실을 먼저 밝히고 결과를 준다"
-        )
-    return PROSE_SITUATIONS.get(type(outcome))
+    notes = [note for note in (_unmet_note(outcome), _fact_note(outcome)) if note]
+    return " ".join(notes) or PROSE_SITUATIONS.get(type(outcome))
+
+
+def _unmet_note(outcome: TurnOutcome) -> str | None:
+    if not isinstance(outcome, PartialResults):
+        return None
+    return (
+        f"요청한 조건 중 {' · '.join(outcome.unmet)} 은(는) 적용하지 못한 채 결과를 냈다. "
+        "그 사실을 먼저 밝히고 결과를 준다"
+    )
+
+
+def _fact_note(outcome: TurnOutcome) -> str | None:
+    """이미 계산해 둔 값을 카드 순서만 보고 다시 추측하지 않게 한다."""
+    if isinstance(outcome, OutOfScope | Failed):
+        return None
+    if not outcome.response.facts:
+        return None
+    return "이번 턴에 확정된 사실이다. 지어내지 말고 이 값을 그대로 옮겨 쓴다 — " + " ".join(
+        outcome.response.facts
+    )

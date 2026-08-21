@@ -229,6 +229,8 @@ class AskResponse(BaseModel):
     refinements: list[Suggestion]
     tagBasis: str | None = None
     unmet: list[str] = Field(default_factory=list)
+    facts: list[str] = Field(default_factory=list)
+    """카드만 보고는 복원할 수 없는 계산 결과. 작문 모델이 지어내지 않게 그대로 넘긴다."""
 
 
 class ChatStepEvent(BaseModel):
