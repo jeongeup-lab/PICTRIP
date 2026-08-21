@@ -276,6 +276,7 @@ async def test_catalog_covers_every_real_tool() -> None:
         "resolve_place",
         "spot_detail",
         "festival",
+        "compare_regions",
     }
 
 
@@ -317,3 +318,33 @@ async def test_a_title_passed_as_a_content_id_never_leaks_an_internal_error(
     assert result.rows == []
     assert "not found" not in result.observation
     assert "contentId" in result.observation
+
+
+async def test_compare_regions_needs_two_regions(ctx: ToolContext) -> None:
+    result = await CATALOG["compare_regions"].run(ctx, {"regions": ["부산"]})
+
+    assert result.rows == []
+    assert "둘 이상" in result.observation
+
+
+async def test_compare_regions_reports_each_side_separately(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """한쪽만 검색하면 "여수는 결과가 안 잡혀서" 로 끝난다 — 실제로 그랬다."""
+    result = await CATALOG["compare_regions"].run(ctx, {"regions": ["없는곳A", "없는곳B"]})
+
+    assert result.observation.count("|") == 1
+    assert "없는곳A" in result.observation
+    assert "없는곳B" in result.observation
+
+
+async def test_compare_regions_caps_how_many_it_compares(ctx: ToolContext) -> None:
+    many = [f"지역{i}" for i in range(6)]
+
+    result = await CATALOG["compare_regions"].run(ctx, {"regions": many})
+
+    assert result.observation.count("|") == 2
+
+
+async def test_compare_regions_labels_the_step_with_both_sides() -> None:
+    assert CATALOG["compare_regions"].label({"regions": ["부산", "여수"]}) == "부산 vs 여수 비교"
