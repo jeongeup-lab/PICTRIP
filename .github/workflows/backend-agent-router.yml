@@ -65,11 +65,16 @@ jobs:
           set -euo pipefail
           cid="$(docker ps -q --filter "publish=8000" | head -n1)"
           echo "=== 라우터 확인 (질문 한 건) ==="
-          body="$(curl -fsS --max-time 90 -X POST http://127.0.0.1:8000/v1/agent/chat \
+          # SSE 는 파일로 받는다 — 명령 치환은 스트림 끝을 기다리다 빈손이 되기 쉽다.
+          out="$(mktemp)"
+          curl -fsS -N --max-time 120 -X POST http://127.0.0.1:8000/v1/agent/chat \
             -H 'Content-Type: application/json' \
-            -d '{"clientRequestId":"router-check","message":"통영 바다 보이는 카페","history":[]}')"
-          echo "$body" | grep -oE '"label": "[^"]*"' | head -6
-          echo "$body" | grep -q '"answerText"' || { echo "답변이 오지 않았다"; exit 1; }
+            -d '{"clientRequestId":"router-check","message":"통영 바다 보이는 카페","history":[]}' \
+            -o "$out"
+          grep -oE '"label": "[^"]*"' "$out" | head -6
+          grep -q '"answerText"' "$out" || {
+            echo "답변이 오지 않았다 (받은 바이트: $(wc -c < "$out"))"; exit 1; }
+          rm -f "$out"
 
           routed="$(docker logs --since 3m "$cid" 2>&1 | grep -E 'agent.search.routed' | tail -1)"
           echo "${routed:-(라우팅 로그 없음)}"
