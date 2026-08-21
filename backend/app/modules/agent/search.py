@@ -47,7 +47,9 @@ async def run(
         question, image_bytes=image_bytes, intent=intent, anchor=anchor, context=context
     ):
         ctx = ToolContext(session=session, redis=redis, kto=kto, lat=lat, lng=lng)
-        trace = await toolloop.route(ctx, (question or "").strip(), context=context)
+        trace = await toolloop.route(
+            ctx, (question or "").strip(), context=context, emitter=emitter
+        )
         logger.info("agent.search.routed", router="tools", calls=trace.calls)
         return toolloop.respond(trace, lat=lat, lng=lng)
 
