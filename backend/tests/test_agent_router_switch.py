@@ -8,6 +8,7 @@ from app.config import Settings
 from app.modules.agent import search, toolloop
 from app.modules.agent.routing import ToolCall
 from app.modules.agent.schemas import AskAnchor, QueryIntent
+from app.modules.agent.tools import ToolContext
 
 pytestmark = pytest.mark.asyncio
 
@@ -77,7 +78,6 @@ async def test_the_flag_off_keeps_every_question_on_the_existing_router(
     [
         {"image_bytes": b"jpeg"},
         {"intent": QueryIntent()},
-        {"anchor": AskAnchor(action="nearby", contentId="1")},
         {"question": "   "},
         {"question": None},
     ],
@@ -288,3 +288,67 @@ async def test_a_looked_up_spot_is_not_counted_as_a_search_result() -> None:
 
     assert CATALOG["spot_detail"].carries_facts is True
     assert CATALOG["concentration"].carries_facts is True
+
+
+@pytest.mark.parametrize(
+    ("action", "tool", "extra"),
+    [
+        ("food", "nearby", {"kind": "food"}),
+        ("cafe", "nearby", {"kind": "cafe"}),
+        ("nearby", "nearby", {"kind": "nearby"}),
+        ("related", "related", {}),
+        ("crowd", "concentration", {}),
+    ],
+)
+async def test_a_card_tap_becomes_a_tool_call(action: str, tool: str, extra: Any) -> None:
+    """카드 탭은 판단이 아니라 사실이다 — 모델에게 물을 게 아니라 코드가 옮긴다."""
+    call = toolloop.anchor_call(AskAnchor(action=action, contentId="126198"))
+
+    assert call is not None
+    assert call.name == tool
+    assert call.args == {"contentId": "126198", **extra}
+
+
+async def test_an_anchor_without_a_content_id_stays_on_the_existing_router(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """좌표만 있는 앵커는 도구로 못 옮긴다 — 넘기면 조용히 빈손이 된다."""
+    _tools(monkeypatch)
+    marks = _seen(monkeypatch)
+
+    await _run(question="", anchor=AskAnchor(action="nearby"))
+
+    assert marks == {"tools": False, "branches": True}
+
+
+async def test_a_card_tap_reaches_the_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    _tools(monkeypatch)
+    marks = _seen(monkeypatch)
+
+    await _run(question="", anchor=AskAnchor(action="food", contentId="126198"))
+
+    assert marks == {"tools": True, "branches": False}
+
+
+async def test_the_opening_call_runs_before_the_model_decides(
+    db_session: Any, redis_client_fake: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """앵커를 관찰로 먼저 넣어야 모델이 그 위에서 이어간다."""
+    from app.modules.agent import toolloop as loop
+
+    asked: list[int] = []
+
+    class Counting:
+        async def decide(self, **kwargs: Any) -> Any:
+            asked.append(len(kwargs["turns"]))
+            from app.modules.agent.routing import Decision
+
+            return Decision(calls=[])
+
+    monkeypatch.setattr(loop.llm, "get_routing_client", lambda: Counting())
+
+    ctx = ToolContext(session=db_session, redis=redis_client_fake, kto=None)
+    trace = await loop.route(ctx, "", opening=ToolCall(name="related", args={"contentId": "nope"}))
+
+    assert trace.calls == 1
+    assert asked and asked[0] >= 3

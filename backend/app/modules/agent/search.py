@@ -47,8 +47,15 @@ async def run(
         question, image_bytes=image_bytes, intent=intent, anchor=anchor, context=context
     ):
         ctx = ToolContext(session=session, redis=redis, kto=kto, lat=lat, lng=lng)
+        asked = (question or "").strip() or (
+            toolloop.anchor_question(anchor) if anchor is not None else ""
+        )
         trace = await toolloop.route(
-            ctx, (question or "").strip(), context=context, emitter=emitter
+            ctx,
+            asked,
+            context=context,
+            emitter=emitter,
+            opening=toolloop.anchor_call(anchor) if anchor is not None else None,
         )
         logger.info("agent.search.routed", router="tools", calls=trace.calls)
         return toolloop.respond(trace, lat=lat, lng=lng)
@@ -78,9 +85,11 @@ def _takes_tools(
     anchor: AskAnchor | None,
     context: AskContext | None,
 ) -> bool:
-    """루프는 자유문 질문만 받는다 — 사진·앵커·칩 재생은 인자로 못 받는다."""
+    """루프는 자유문 질문과 카드 탭을 받는다 — 사진·칩 재생은 아직 기존 경로다."""
     if settings.AGENT_ROUTER != "tools":
         return False
-    if image_bytes or intent or anchor:
+    if image_bytes or intent:
         return False
+    if anchor is not None:
+        return toolloop.anchor_call(anchor) is not None
     return bool(question and question.strip())

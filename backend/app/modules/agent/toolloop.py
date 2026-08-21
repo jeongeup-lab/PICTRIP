@@ -21,11 +21,13 @@ from app.modules.agent.repositories import CandidateRow
 from app.modules.agent.routing import ToolCall, Turn
 from app.modules.agent.schemas import (
     AnswerSegment,
+    AskAnchor,
     AskContext,
     AskResponse,
     AskStep,
     Mood,
     QueryIntent,
+    ToolName,
 )
 from app.modules.agent.services import answer as answer_service
 from app.modules.agent.services import ask as ask_service
@@ -124,6 +126,37 @@ async def _run_one(ctx: ToolContext, call: ToolCall, trace: Trace) -> str:
 CONTEXT_SPOTS = 8
 
 
+ANCHOR_ASKS: dict[str, str] = {
+    "food": "그 근처 맛집을 알려줘.",
+    "cafe": "그 근처 카페를 알려줘.",
+    "nearby": "그 근처 볼거리를 알려줘.",
+    "related": "거기와 분위기가 닮은 곳을 알려줘.",
+    "crowd": "거기 지금 붐비는지 알려줘.",
+}
+
+ANCHOR_CALLS: dict[str, tuple[ToolName, dict[str, Any]]] = {
+    "food": ("nearby", {"kind": "food"}),
+    "cafe": ("nearby", {"kind": "cafe"}),
+    "nearby": ("nearby", {"kind": "nearby"}),
+    "related": ("related", {}),
+    "crowd": ("concentration", {}),
+}
+
+
+def anchor_question(anchor: AskAnchor) -> str:
+    """탭에는 문장이 없다 — 없이 두면 모델이 원하지도 않은 도구를 더 부른다."""
+    return ANCHOR_ASKS.get(anchor.action, "")
+
+
+def anchor_call(anchor: AskAnchor) -> ToolCall | None:
+    """카드 탭은 판단이 아니라 사실이다 — 모델에게 묻지 않고 코드가 도구로 옮긴다."""
+    mapped = ANCHOR_CALLS.get(anchor.action)
+    if mapped is None or anchor.contentId is None:
+        return None
+    name, extra = mapped
+    return ToolCall(name=name, args={"contentId": anchor.contentId, **extra})
+
+
 def opening_turns(question: str, context: AskContext | None) -> list[Turn]:
     """직전 결과를 contentId 와 함께 준다 — 그래야 "그 근처" 가 도구 인자가 된다."""
     lines: list[str] = []
@@ -148,6 +181,7 @@ async def route(
     *,
     context: AskContext | None = None,
     emitter: Emitter | None = None,
+    opening: ToolCall | None = None,
 ) -> Trace:
     """모델이 도구를 고르고, 코드가 상한을 건다."""
     trace = Trace(emitter=emitter)
@@ -155,6 +189,10 @@ async def route(
     deadline = started + TOTAL_BUDGET_SECONDS
     turns: list[Turn] = opening_turns(question, context)
     fired: set[str] = set()
+    if opening is not None:
+        turns.append(Turn(role="call", calls=[opening]))
+        observation = await _observe(ctx, opening, trace, fired)
+        turns.append(Turn(role="observation", text=observation, tool_name=opening.name))
     client = llm.get_routing_client()
     declared = schemas()
 
