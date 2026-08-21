@@ -140,7 +140,6 @@ export function ExploreDeck() {
       ) : null}
 
       <View style={[styles.top, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
-        <Text style={styles.wordmark}>탐색</Text>
         <Pressable
           testID="explore-grid-open"
           accessibilityRole="button"
@@ -199,15 +198,7 @@ const styles = StyleSheet.create({
     paddingBottom: 26,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-  },
-  wordmark: {
-    fontSize: 17,
-    fontWeight: "800",
-    letterSpacing: -0.4,
-    color: darkColors.onImage,
-    textShadowColor: "rgba(0,0,0,0.55)",
-    textShadowRadius: 8,
+    justifyContent: "flex-end",
   },
   dots: {
     position: "absolute",
