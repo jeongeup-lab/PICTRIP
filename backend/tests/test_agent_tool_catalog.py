@@ -280,6 +280,7 @@ async def test_catalog_covers_every_real_tool() -> None:
         "region_profile",
         "similar_region",
         "uploaded_photo",
+        "plan_itinerary",
     }
 
 
@@ -451,3 +452,61 @@ async def test_similar_region_finds_another_sido(
     assert "sr-b" in [row.content_id for row in result.rows], result.observation
     assert "sr-a" not in [row.content_id for row in result.rows]
     assert "부산" in result.observation
+
+
+async def _seed_at(
+    session: AsyncSession, content_id: str, *, title: str, lat: float, lng: float
+) -> None:
+    await session.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, addr1, first_image_url, "
+            "show_flag, lcls_systm1, mapx, mapy) "
+            "VALUES (:cid, 12, :t, '서울특별시 중구 9', 'http://kto/i.jpg', 1, 'NA', :x, :y)"
+        ),
+        {"cid": content_id, "t": title, "x": lng, "y": lat},
+    )
+
+
+async def test_plan_itinerary_needs_a_region(ctx: ToolContext) -> None:
+    result = await CATALOG["plan_itinerary"].run(ctx, {})
+
+    assert result.rows == []
+    assert "regions" in result.observation
+
+
+async def test_plan_itinerary_caps_the_days(ctx: ToolContext, db_session: AsyncSession) -> None:
+    for i in range(20):
+        await _seed_at(db_session, f"pi-{i}", title=f"곳{i}", lat=37.5 + i * 0.001, lng=127.0)
+    await db_session.flush()
+
+    result = await CATALOG["plan_itinerary"].run(ctx, {"regions": ["서울"], "days": 99})
+
+    assert result.observation.count("일차:") <= 4
+
+
+async def test_plan_itinerary_drops_a_spot_that_sits_far_from_the_cluster(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """좌표가 지역과 안 맞는 스팟이 실제로 있다 — 경주 황성공원이 춘천 좌표를 달고 있었다."""
+    for i in range(5):
+        await _seed_at(db_session, f"pc-{i}", title=f"가까운{i}", lat=37.56 + i * 0.002, lng=126.98)
+    await _seed_at(db_session, "pc-far", title="멀리떨어진곳", lat=35.8, lng=129.5)
+    await db_session.flush()
+
+    result = await CATALOG["plan_itinerary"].run(ctx, {"regions": ["서울"], "days": 2})
+
+    assert "멀리떨어진곳" not in result.observation
+
+
+async def test_plan_itinerary_orders_by_nearest_hop(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """되돌아가는 동선이면 일정이 아니라 목록이다. 시작점은 검색 순서가 정한다."""
+    for cid, lat in (("po-a", 37.50), ("po-b", 37.52), ("po-c", 37.54)):
+        await _seed_at(db_session, cid, title=cid, lat=lat, lng=127.0)
+    await db_session.flush()
+
+    result = await CATALOG["plan_itinerary"].run(ctx, {"regions": ["서울"], "days": 1})
+
+    ordered = [row.content_id for row in result.rows][:3]
+    assert ordered in (["po-a", "po-b", "po-c"], ["po-c", "po-b", "po-a"])

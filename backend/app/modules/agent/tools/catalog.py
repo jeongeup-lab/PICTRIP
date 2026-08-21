@@ -8,6 +8,7 @@ from app.modules.agent.tools.base import Tool
 from app.modules.agent.tools.compare import COMPARE_REGIONS
 from app.modules.agent.tools.detail import SPOT_DETAIL
 from app.modules.agent.tools.festival import FESTIVAL
+from app.modules.agent.tools.itinerary import PLAN_ITINERARY
 from app.modules.agent.tools.photo import UPLOADED_PHOTO
 from app.modules.agent.tools.profile import REGION_PROFILE
 from app.modules.agent.tools.resolve import RESOLVE_PLACE
@@ -19,6 +20,7 @@ _TOOLS: tuple[Tool, ...] = (
     TITLE_SEARCH,
     COMPARE_REGIONS,
     REGION_PROFILE,
+    PLAN_ITINERARY,
     SIMILAR_REGION,
     RESOLVE_PLACE,
     SPOT_DETAIL,
