@@ -40,6 +40,12 @@ jobs:
       - if: ${{ inputs.diagnose_only != true }}
         run: |
           set -euo pipefail
+          envfile=/opt/pictrip-api/.env
+          if [ -f "$envfile" ]; then
+            echo "=== .env 권한 ==="; ls -l "$envfile"
+            chmod 644 "$envfile"
+            echo "고친 뒤:"; ls -l "$envfile"
+          fi
           cd /opt/pictrip-api
           docker compose --env-file .deploy.env up -d
           for _ in $(seq 1 45); do
