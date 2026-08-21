@@ -28,6 +28,8 @@ class ToolContext:
     kto: KtoClient | None
     lat: float | None = None
     lng: float | None = None
+    image_bytes: bytes | None = None
+    image_mime: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

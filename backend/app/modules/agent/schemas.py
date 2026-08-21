@@ -47,6 +47,7 @@ ToolName = Literal[
     "compare_regions",
     "region_profile",
     "similar_region",
+    "uploaded_photo",
 ]
 
 

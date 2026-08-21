@@ -279,6 +279,7 @@ async def test_catalog_covers_every_real_tool() -> None:
         "compare_regions",
         "region_profile",
         "similar_region",
+        "uploaded_photo",
     }
 
 
