@@ -634,3 +634,37 @@ async def test_a_chip_on_an_itinerary_replans_instead_of_searching_the_country()
     assert replay.name == "plan_itinerary"
     assert replay.args["regions"] == ["통영"]
     assert replay.args["days"] == 3
+
+
+async def test_an_itinerary_stores_the_days_it_actually_used() -> None:
+    """원시 인자를 그대로 저장하면 기본값 2일 일정이 intent 에서 사라진다."""
+    call = ToolCall(name="plan_itinerary", args={"regions": ["통영"]})
+
+    assert toolloop.intent_of([call]).days == 2
+
+
+async def test_an_itinerary_offers_only_chips_it_can_honour() -> None:
+    """지역을 지우면 일정은 'regions 가 비었습니다' 로 끝난다."""
+    call = ToolCall(name="plan_itinerary", args={"regions": ["통영"]})
+    trace = toolloop.Trace(
+        rows=[
+            repositories.CandidateRow(
+                content_id=str(i),
+                title=f"장소{i}",
+                addr1="경상남도 통영시 1",
+                region_name="경상남도",
+                sigungu_name="통영시",
+                lat=34.85,
+                lng=128.43,
+                image_url=None,
+                cpyrht_div_cd=None,
+                concentration_rate=None,
+            )
+            for i in range(9)
+        ],
+        calls_made=[call],
+    )
+
+    response = toolloop.respond(trace, lat=37.5, lng=127.0)
+
+    assert [chip.label for chip in response.refinements] == ["사람 적은 곳만"]

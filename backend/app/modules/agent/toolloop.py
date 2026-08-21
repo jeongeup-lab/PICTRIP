@@ -25,6 +25,7 @@ from app.modules.agent.schemas import (
     AskContext,
     AskResponse,
     AskStep,
+    DropAxis,
     Mood,
     QueryIntent,
     ToolName,
@@ -34,6 +35,7 @@ from app.modules.agent.services import ask as ask_service
 from app.modules.agent.services import retrieve
 from app.modules.agent.services import suggest as suggest_service
 from app.modules.agent.tools import CATALOG, ToolContext, schemas
+from app.modules.agent.tools.itinerary import days_of
 
 logger = get_logger(__name__)
 
@@ -294,8 +296,16 @@ def intent_of(calls: list[ToolCall]) -> QueryIntent:
         ),
         indoorOnly=bool(args.get("indoor")),
         nearMe=bool(args.get("near")),
-        days=args.get("days") if last.name == "plan_itinerary" else None,
+        days=days_of(args) if last.name == "plan_itinerary" else None,
     )
+
+
+_PLAN_AXES: frozenset[DropAxis] = frozenset({"crowd"})
+
+
+def _axes(intent: QueryIntent) -> frozenset[DropAxis]:
+    """일정은 지역이 필수라 지역·실내·거리 칩이 결과를 못 만든다."""
+    return _PLAN_AXES if intent.days is not None else suggest_service.ALL_AXES
 
 
 def _fact_segments(trace: Trace) -> list[AnswerSegment]:
@@ -343,7 +353,7 @@ def respond(trace: Trace, *, lat: float | None, lng: float | None) -> AskRespons
             has_coords=lat is not None and lng is not None,
             region_hints=list(intent.regionHints),
             keywords=list(intent.categoryKeywords),
-            axes=suggest_service.ALL_AXES,
+            axes=_axes(intent),
         )
 
     top = trace.rows[: retrieve.RESULT_LIMIT]
@@ -367,7 +377,7 @@ def respond(trace: Trace, *, lat: float | None, lng: float | None) -> AskRespons
             intent,
             has_coords=lat is not None and lng is not None,
             result_count=len(spots),
-            axes=suggest_service.ALL_AXES,
+            axes=_axes(intent),
             indoor_available=any(row.indoor for row in trace.rows),
         ),
     )
