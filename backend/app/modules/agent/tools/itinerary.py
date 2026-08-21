@@ -115,9 +115,9 @@ def _slots(eating: list[str]) -> list[tuple[str, str, list[str]]]:
 
 async def _meals(
     ctx: ToolContext, eating: list[str], prefixes: list[str], crowd: CrowdPreference
-) -> tuple[list[list[CandidateRow]], list[str]]:
+) -> tuple[list[tuple[str, list[CandidateRow]]], list[str]]:
     """맛집과 카페는 풀이 달라 한 번에 못 뽑는다 — 요청한 종류마다 따로 돌려준다."""
-    pools: list[list[CandidateRow]] = []
+    pools: list[tuple[str, list[CandidateRow]]] = []
     missing: list[str] = []
     for word, action, dishes in _slots(eating):
         found = await retrieve.search_food(
@@ -129,7 +129,7 @@ async def _meals(
         )
         pool = _without_outliers(_placed(found))
         if pool:
-            pools.append(pool)
+            pools.append((word, pool))
         else:
             missing.append(word)
     return pools, missing
@@ -181,7 +181,7 @@ def _assemble(
     region: str,
     *,
     sights: list[CandidateRow],
-    meals: list[list[CandidateRow]],
+    meals: list[tuple[str, list[CandidateRow]]],
     missing: list[str],
     days: int,
 ) -> ToolResult:
@@ -190,21 +190,24 @@ def _assemble(
     볼거리가 아예 없는 지역에서만 맛집이 일정 자체가 된다.
     """
     if not sights:
-        sights, meals = ([row for pool in meals for row in pool], [])
-    per_day = max(PER_DAY - len(meals), 1)
+        sights, meals = ([row for _word, rows in meals for row in rows], [])
+    per_meal = min(len(meals), PER_DAY - 1)
+    per_day = PER_DAY - per_meal
     ordered = _chain(sights[: days * per_day])
     if not ordered:
         return ToolResult(rows=[], observation=f"{region}: {_EMPTY}")
 
-    left = [list(pool) for pool in meals]
+    left = [(word, list(rows)) for word, rows in meals]
     taken: set[str] = set()
+    short: dict[str, None] = {}
     lines: list[str] = []
     plan: list[CandidateRow] = []
     for day in range(days):
         leg = ordered[day * per_day : (day + 1) * per_day]
         if not leg:
             break
-        leg = _chain([*leg, *_one_of_each(leg, left, taken)])
+        turn = [left[(day * per_meal + slot) % len(left)] for slot in range(per_meal)]
+        leg = _chain([*leg, *_one_of_each(leg, turn, taken, short)])
         plan.extend(leg)
         names = " → ".join(row.title for row in leg)
         lines.append(f"{day + 1}일차: {names} (직선거리 {round(_legs_km(leg))}km)")
@@ -212,25 +215,31 @@ def _assemble(
     plan_text = f"{region} {len(lines)}일 일정 — " + " / ".join(lines)
     if len(lines) < days:
         plan_text += f" (요청한 {days}일을 채울 곳이 부족해 {len(lines)}일로 줄였습니다)"
-    if missing:
-        plan_text += f" ({' · '.join(missing)}: 그 지역에서 찾지 못해 일정에 넣지 못했습니다)"
+    unfilled = [*missing, *short]
+    if unfilled:
+        plan_text += f" ({' · '.join(unfilled)}: 그 지역에서 찾지 못해 일정에 다 넣지 못했습니다)"
     return ToolResult(rows=plan, observation=plan_text, fact=plan_text)
 
 
 def _one_of_each(
-    leg: Sequence[CandidateRow], pools: list[list[CandidateRow]], taken: set[str]
+    leg: Sequence[CandidateRow],
+    pools: Sequence[tuple[str, list[CandidateRow]]],
+    taken: set[str],
+    short: dict[str, None],
 ) -> list[CandidateRow]:
     """종류마다 하루 한 곳씩 — 거리만 보면 모든 날이 식당으로 채워진다.
 
     맛집 풀과 국밥 풀은 겹친다 — 이미 고른 곳은 모든 풀에서 뺀다.
     """
     picked: list[CandidateRow] = []
-    for pool in pools:
+    for word, pool in pools:
         chosen = _nearest(leg, [row for row in pool if row.content_id not in taken])
-        if chosen is not None:
-            pool.remove(chosen)
-            taken.add(chosen.content_id)
-            picked.append(chosen)
+        if chosen is None:
+            short[word] = None
+            continue
+        pool.remove(chosen)
+        taken.add(chosen.content_id)
+        picked.append(chosen)
     return picked
 
 
