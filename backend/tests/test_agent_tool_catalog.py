@@ -849,6 +849,22 @@ async def test_plan_itinerary_never_repeats_a_place_in_a_food_only_region(
     assert len(ids) == len(set(ids))
 
 
+async def test_plan_itinerary_keeps_food_kinds_apart_without_any_sights(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """볼거리가 없는 지역에서 음식을 한 목록으로 합치면 카페가 통째로 밀려난다."""
+    for i in range(6):
+        await _seed_food(db_session, f"pv-f{i}", title=f"밥집{i}", lat=37.5 + i * 0.001)
+    await _seed_cafe(db_session, "pv-c", title="찻집하나", lat=37.502)
+    await db_session.flush()
+
+    result = await CATALOG["plan_itinerary"].run(
+        ctx, {"regions": ["서울"], "days": 1, "categories": ["맛집", "카페"]}
+    )
+
+    assert "찻집하나" in result.observation
+
+
 async def test_plan_itinerary_says_when_a_sight_category_found_nothing(
     ctx: ToolContext, db_session: AsyncSession
 ) -> None:

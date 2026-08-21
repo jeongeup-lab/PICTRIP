@@ -207,11 +207,11 @@ def _assemble(
 ) -> ToolResult:
     """맛집은 일정에 끼워 넣는 한 끼다 — 볼거리를 대신하지 않는다.
 
-    볼거리가 아예 없는 지역에서만 맛집이 일정 자체가 된다.
+    볼거리가 아예 없는 지역에서만 첫 음식 풀이 일정의 뼈대가 되고, 나머지 종류는
+    그대로 하루 한 자리를 지킨다.
     """
-    if not sights:
-        merged = {row.content_id: row for _word, rows in meals for row in rows}
-        sights, meals = (list(merged.values()), [])
+    if not sights and meals:
+        sights, meals = (meals[0][1], meals[1:])
     per_meal = min(len(meals), PER_DAY - 1)
     per_day = PER_DAY - per_meal
     ordered = _chain(sights[: days * per_day])
@@ -219,7 +219,7 @@ def _assemble(
         return ToolResult(rows=[], observation=f"{region}: {_EMPTY}")
 
     left = [(word, list(rows)) for word, rows in meals]
-    taken: set[str] = set()
+    taken = {row.content_id for row in ordered}
     short: dict[str, None] = {}
     served: set[int] = set()
     lines: list[str] = []
