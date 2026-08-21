@@ -770,3 +770,39 @@ async def test_plan_itinerary_says_which_food_it_could_not_find(
     )
 
     assert "국밥" in result.observation.split("(")[-1]
+
+
+async def test_plan_itinerary_never_exceeds_the_daily_capacity(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """하루가 정원을 넘으면 카드 20개 밖 장소가 일정 문장에만 나온다."""
+    for i in range(9):
+        await _seed_at(db_session, f"pc2-{i}", title=f"볼거리{i}", lat=37.5 + i * 0.002, lng=127.0)
+    for i in range(4):
+        await _seed_food(db_session, f"pc2-f{i}", title=f"밥집{i}", lat=37.5 + i * 0.001)
+        await _seed_cafe(db_session, f"pc2-c{i}", title=f"찻집{i}", lat=37.5 + i * 0.001)
+    await _seed_food(db_session, "pc2-d", title="할매국밥", lat=37.502)
+    await db_session.flush()
+
+    result = await CATALOG["plan_itinerary"].run(
+        ctx, {"regions": ["서울"], "days": 2, "categories": ["맛집", "카페", "국밥"]}
+    )
+
+    for line in result.observation.split(" / "):
+        assert len(line.split(" → ")) <= 3
+
+
+async def test_plan_itinerary_reports_a_food_kind_it_ran_out_of(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """카페가 한 곳뿐인 2일 일정은 둘째 날 카페를 조용히 뺐다."""
+    for i in range(6):
+        await _seed_at(db_session, f"pe-{i}", title=f"볼거리{i}", lat=37.5 + i * 0.002, lng=127.0)
+    await _seed_cafe(db_session, "pe-cafe", title="찻집하나", lat=37.501)
+    await db_session.flush()
+
+    result = await CATALOG["plan_itinerary"].run(
+        ctx, {"regions": ["서울"], "days": 2, "categories": ["카페"]}
+    )
+
+    assert "카페" in result.observation.split("(")[-1]
