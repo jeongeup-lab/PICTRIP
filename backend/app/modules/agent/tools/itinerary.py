@@ -101,6 +101,22 @@ def _meal_words(keywords: list[str]) -> list[str]:
     return [word for word in keywords if retrieve.food_word([word]) is not None]
 
 
+async def _meals(
+    ctx: ToolContext, eating: list[str], prefixes: list[str], crowd: CrowdPreference
+) -> list[CandidateRow]:
+    """맛집과 카페는 풀이 달라 한 번에 못 뽑는다 — 요청한 종류를 모두 돈다."""
+    actions = dict.fromkeys(
+        action for word in eating if (action := retrieve.food_word([word])) is not None
+    )
+    rows: dict[str, CandidateRow] = {}
+    for action in actions:
+        found = await retrieve.search_food(
+            ctx.session, action=action, region_prefixes=prefixes, preference=crowd
+        )
+        rows.update({row.content_id: row for row in found})
+    return list(rows.values())
+
+
 def _nearest(leg: Sequence[CandidateRow], pool: Sequence[CandidateRow]) -> CandidateRow | None:
     if not leg or not pool:
         return None
@@ -121,27 +137,21 @@ async def _plan_itinerary(ctx: ToolContext, args: Mapping[str, Any]) -> ToolResu
     if not hints:
         return ToolResult(rows=[], observation="regions 가 비었습니다.")
 
-    prefixes = await retrieve.resolve_region_prefixes(ctx.session, hints=hints)
+    region = hints[0]
+    prefixes = await retrieve.resolve_region_prefixes(ctx.session, hints=[region])
     if not prefixes:
-        return ToolResult(rows=[], observation=f"{hints[0]}: {_UNKNOWN}")
+        return ToolResult(rows=[], observation=f"{region}: {_UNKNOWN}")
 
     keywords = strings(args, "categories", limit=MAX_KEYWORDS)
     eating = _meal_words(keywords)
     crowd = _crowd(args)
-    action = retrieve.food_word(eating[:1]) if eating else None
     seeing = [word for word in keywords if word not in eating]
 
-    meals = (
-        await retrieve.search_food(
-            ctx.session, action=action, region_prefixes=prefixes, preference=crowd
-        )
-        if action is not None
-        else []
-    )
+    meals = await _meals(ctx, eating, prefixes, crowd)
     sights = await _sights(ctx, seeing, prefixes, crowd)
 
     return _assemble(
-        hints[0],
+        region,
         sights=_without_outliers(_placed(sights)),
         meals=_without_outliers(_placed(meals)),
         days=_days(args),
@@ -193,7 +203,7 @@ PLAN_ITINERARY = Tool(
             "regions": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "일정을 짤 지역 하나. 예: ['통영'].",
+                "description": "일정을 짤 지역 하나. 여러 개를 줘도 첫 번째만 쓴다. 예: ['통영'].",
             },
             "days": {
                 "type": "integer",

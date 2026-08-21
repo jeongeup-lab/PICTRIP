@@ -164,6 +164,8 @@ def call_from_intent(intent: QueryIntent) -> ToolCall:
     if intent.festivalOnly:
         return ToolCall(name="festival", args={"regions": list(intent.regionHints)})
     args: dict[str, Any] = {}
+    if intent.days is not None:
+        args["days"] = intent.days
     if intent.regionHints:
         args["regions"] = list(intent.regionHints)
     if intent.categoryKeywords:
@@ -176,7 +178,8 @@ def call_from_intent(intent: QueryIntent) -> ToolCall:
         args["indoor"] = True
     if intent.nearMe:
         args["near"] = True
-    return ToolCall(name="category_search", args=args)
+    tool = "plan_itinerary" if intent.days is not None else "category_search"
+    return ToolCall(name=tool, args=args)
 
 
 def opening_turns(question: str, context: AskContext | None) -> list[Turn]:
@@ -265,7 +268,9 @@ async def _observe(ctx: ToolContext, call: ToolCall, trace: Trace, fired: set[st
     return await _run_one(ctx, call, trace)
 
 
-_SEARCHES = frozenset({"category_search", "title_search", "photo_match", "festival"})
+_SEARCHES = frozenset(
+    {"category_search", "title_search", "photo_match", "festival", "plan_itinerary"}
+)
 
 
 def intent_of(calls: list[ToolCall]) -> QueryIntent:
@@ -289,6 +294,7 @@ def intent_of(calls: list[ToolCall]) -> QueryIntent:
         ),
         indoorOnly=bool(args.get("indoor")),
         nearMe=bool(args.get("near")),
+        days=args.get("days") if last.name == "plan_itinerary" else None,
     )
 
 

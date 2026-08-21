@@ -6,7 +6,8 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.agent import repositories
+from app.modules.agent import repositories, toolloop
+from app.modules.agent.routing import ToolCall
 from app.modules.agent.services import retrieve
 from app.modules.agent.tools import CATALOG, ToolContext, schemas
 from app.modules.agent.tools.base import describe
@@ -569,3 +570,67 @@ async def test_plan_itinerary_hands_the_plan_to_the_answer(
     result = await CATALOG["plan_itinerary"].run(ctx, {"regions": ["서울"], "days": 2})
 
     assert result.fact == result.observation
+
+
+async def _seed_cafe(session: AsyncSession, content_id: str, *, title: str, lat: float) -> None:
+    await session.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, addr1, first_image_url, "
+            "show_flag, lcls_systm1, lcls_systm2, mapx, mapy) "
+            "VALUES (:cid, 39, :t, '서울특별시 중구 9', 'http://kto/i.jpg', 1, 'FD', 'FD02', "
+            "127.0, :y)"
+        ),
+        {"cid": content_id, "t": title, "y": lat},
+    )
+
+
+async def test_plan_itinerary_pulls_every_requested_food_kind(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """맛집과 카페는 풀이 달라 첫 종류만 뽑으면 나머지가 조용히 사라진다."""
+    for i in range(6):
+        await _seed_at(db_session, f"pk-{i}", title=f"볼거리{i}", lat=37.5 + i * 0.002, lng=127.0)
+    await _seed_food(db_session, "pk-food", title="밥집하나", lat=37.501)
+    await _seed_cafe(db_session, "pk-cafe", title="찻집하나", lat=37.503)
+    await db_session.flush()
+
+    result = await CATALOG["plan_itinerary"].run(
+        ctx, {"regions": ["서울"], "days": 2, "categories": ["맛집", "카페"]}
+    )
+
+    titles = {row.title for row in result.rows}
+    assert {"밥집하나", "찻집하나"} <= titles
+
+
+async def test_plan_itinerary_plans_the_first_region_only(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """두 지역을 한 군집으로 합치면 이상치 제거가 한 지역을 통째로 지운다."""
+    for i in range(6):
+        await _seed_at(db_session, f"pr-{i}", title=f"서울{i}", lat=37.5 + i * 0.002, lng=127.0)
+    await db_session.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, addr1, first_image_url, "
+            "show_flag, lcls_systm1, mapx, mapy) "
+            "VALUES ('pr-far', 12, '부산곳', '부산광역시 해운대구 1', 'http://kto/i.jpg', 1, "
+            "'NA', 129.16, 35.16)"
+        )
+    )
+    await db_session.flush()
+
+    result = await CATALOG["plan_itinerary"].run(ctx, {"regions": ["서울", "부산"], "days": 1})
+
+    assert "부산곳" not in result.observation
+
+
+async def test_a_chip_on_an_itinerary_replans_instead_of_searching_the_country() -> None:
+    """일정 조건이 intent 에 없으면 칩 한 번에 지역과 일수를 다 잃는다."""
+    call = ToolCall(name="plan_itinerary", args={"regions": ["통영"], "days": 3})
+
+    intent = toolloop.intent_of([call])
+    replay = toolloop.call_from_intent(intent)
+
+    assert intent.days == 3
+    assert replay.name == "plan_itinerary"
+    assert replay.args["regions"] == ["통영"]
+    assert replay.args["days"] == 3
