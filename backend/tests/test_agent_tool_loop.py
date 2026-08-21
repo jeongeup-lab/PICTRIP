@@ -119,8 +119,8 @@ async def test_a_hanging_tool_is_cut_off(ctx: ToolContext, monkeypatch: pytest.M
 
     trace = await loop.route(ctx, "아무거나")
 
-    assert trace.steps == []
     assert trace.calls == 1
+    assert [step.badge for step in trace.steps] == [loop.TIMED_OUT_BADGE]
 
 
 def _stub(tool: Any, run: Any) -> Any:
@@ -197,3 +197,27 @@ async def test_a_loop_without_an_emitter_still_records_steps(
     trace = await loop.route(ctx, "아무거나")
 
     assert len(trace.steps) == 1
+
+
+async def test_a_timed_out_tool_closes_its_step(
+    ctx: ToolContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """시작만 보내고 완료가 없으면 스피너가 영영 돈다."""
+    from app.modules.agent.emitter import Emitter
+
+    async def never(*_args: Any, **_kwargs: Any) -> Any:
+        await asyncio.sleep(30)
+
+    emitter = Emitter()
+    monkeypatch.setattr(loop, "PER_TOOL_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setitem(
+        loop.CATALOG, "category_search", _stub(loop.CATALOG["category_search"], never)
+    )
+    _wire(monkeypatch, ScriptedRouter(Decision(calls=[_call()])))
+
+    await loop.route(ctx, "아무거나", emitter=emitter)
+    emitter.close()
+
+    signals = [signal async for signal in emitter.drain()]
+    assert [signal.status for signal in signals] == ["run", "done"]
+    assert signals[1].badge == loop.TIMED_OUT_BADGE

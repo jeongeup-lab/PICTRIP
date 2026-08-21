@@ -53,6 +53,7 @@ SYSTEM = """너는 국내 여행지 검색 라우터다. 질문에 답하려면 
 
 UNKNOWN_TOOL = "그런 도구는 없습니다."
 TIMED_OUT = "도구가 시간 안에 끝나지 않았습니다. 조건을 좁혀 다시 부르세요."
+TIMED_OUT_BADGE = "시간 초과"
 REPEATED = "같은 도구를 같은 인자로 이미 불렀습니다. 조건을 바꾸세요."
 
 
@@ -105,6 +106,7 @@ async def _run_one(ctx: ToolContext, call: ToolCall, trace: Trace) -> str:
         result = await asyncio.wait_for(tool.run(ctx, call.args), PER_TOOL_TIMEOUT_SECONDS)
     except TimeoutError:
         logger.warning("agent.router.tool_timeout", tool=call.name)
+        trace.finish(AskStep(tool=tool.name, label=label, badge=TIMED_OUT_BADGE))
         return TIMED_OUT
 
     badge = "조회" if tool.carries_facts else f"{len(result.rows)}곳"
