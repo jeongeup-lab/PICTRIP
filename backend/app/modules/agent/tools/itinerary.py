@@ -71,7 +71,7 @@ def _legs_km(ordered: Sequence[CandidateRow]) -> float:
     )
 
 
-def _days(args: Mapping[str, Any]) -> int:
+def days_of(args: Mapping[str, Any]) -> int:
     raw = args.get("days")
     if not isinstance(raw, int) or raw < 1:
         return 2
@@ -154,7 +154,7 @@ async def _plan_itinerary(ctx: ToolContext, args: Mapping[str, Any]) -> ToolResu
         region,
         sights=_without_outliers(_placed(sights)),
         meals=_without_outliers(_placed(meals)),
-        days=_days(args),
+        days=days_of(args),
     )
 
 
@@ -207,6 +207,8 @@ PLAN_ITINERARY = Tool(
             },
             "days": {
                 "type": "integer",
+                "minimum": 1,
+                "maximum": MAX_DAYS,
                 "description": "일수. 2박3일이면 3. 비우면 2, 최대 4.",
             },
             "categories": {
