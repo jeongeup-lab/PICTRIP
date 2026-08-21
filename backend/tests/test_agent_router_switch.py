@@ -76,7 +76,6 @@ async def test_the_flag_off_keeps_every_question_on_the_existing_router(
 @pytest.mark.parametrize(
     "unsupported",
     [
-        {"intent": QueryIntent()},
         {"question": "   "},
         {"question": None},
     ],
@@ -364,7 +363,7 @@ async def test_a_photo_reaches_the_loop(monkeypatch: pytest.MonkeyPatch) -> None
 
 async def test_a_photo_opens_with_the_upload_tool() -> None:
     """첨부는 사실이다 — 무슨 도구를 부를지 모델에게 물을 게 아니다."""
-    call = search._opening(None, b"jpeg-bytes")
+    call = search._opening(None, b"jpeg-bytes", None, None)
 
     assert call is not None
     assert call.name == "uploaded_photo"
@@ -372,7 +371,7 @@ async def test_a_photo_opens_with_the_upload_tool() -> None:
 
 async def test_an_anchor_wins_over_a_photo() -> None:
     """탭은 명시적 요청이라 첨부보다 앞선다."""
-    call = search._opening(AskAnchor(action="food", contentId="1"), b"jpeg-bytes")
+    call = search._opening(AskAnchor(action="food", contentId="1"), b"jpeg-bytes", None, None)
 
     assert call is not None
     assert call.name == "nearby"
@@ -389,3 +388,70 @@ async def test_the_photo_tool_says_when_nothing_was_attached(
 
     assert result.rows == []
     assert "첨부하지 않았습니다" in result.observation
+
+
+async def test_a_chip_replay_reaches_the_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    _tools(monkeypatch)
+    marks = _seen(monkeypatch)
+
+    await _run(question="", intent=QueryIntent(regionHints=["통영"]))
+
+    assert marks == {"tools": True, "branches": False}
+
+
+async def test_a_chip_carries_the_patched_condition() -> None:
+    """칩은 조건 하나를 바꿔 같은 검색을 다시 도는 것이다."""
+    from app.modules.agent.schemas import RefinePatch
+
+    call = search._opening(
+        None,
+        None,
+        QueryIntent(regionHints=["통영"], categoryKeywords=["카페"]),
+        RefinePatch(crowdPreference="quiet"),
+    )
+
+    assert call is not None
+    assert call.name == "category_search"
+    assert call.args == {"regions": ["통영"], "categories": ["카페"], "crowd": "quiet"}
+
+
+async def test_a_dropped_axis_leaves_the_call() -> None:
+    """지역을 지운 칩이 지역을 그대로 실어 보내면 완화가 안 된다."""
+    from app.modules.agent.schemas import RefinePatch
+
+    call = search._opening(
+        None,
+        None,
+        QueryIntent(regionHints=["통영"], categoryKeywords=["카페"]),
+        RefinePatch(drop="region"),
+    )
+
+    assert call is not None
+    assert "regions" not in call.args
+    assert call.args["categories"] == ["카페"]
+
+
+async def test_a_festival_intent_replays_on_the_festival_tool() -> None:
+    call = search._opening(None, None, QueryIntent(festivalOnly=True, regionHints=["부산"]), None)
+
+    assert call is not None
+    assert call.name == "festival"
+
+
+async def test_intent_round_trips_through_a_call() -> None:
+    """intent_of 와 call_from_intent 가 서로의 역이 아니면 칩이 조건을 잃는다."""
+    original = QueryIntent(
+        regionHints=["통영"],
+        categoryKeywords=["카페"],
+        moodHints=["sea"],
+        crowdPreference="quiet",
+        indoorOnly=True,
+    )
+
+    restored = toolloop.intent_of([toolloop.call_from_intent(original)])
+
+    assert restored.regionHints == original.regionHints
+    assert restored.categoryKeywords == original.categoryKeywords
+    assert restored.moodHints == original.moodHints
+    assert restored.crowdPreference == original.crowdPreference
+    assert restored.indoorOnly is True

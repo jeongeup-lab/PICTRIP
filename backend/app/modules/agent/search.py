@@ -23,6 +23,7 @@ from app.modules.agent.schemas import (
     RefinePatch,
 )
 from app.modules.agent.services import ask as ask_service
+from app.modules.agent.services import refine as refine_service
 from app.modules.agent.tools import ToolContext
 
 logger = get_logger(__name__)
@@ -56,13 +57,13 @@ async def run(
             image_bytes=image_bytes,
             image_mime=image_mime,
         )
-        asked = (question or "").strip() or _implied_question(anchor, image_bytes)
+        asked = (question or "").strip() or _implied_question(anchor, image_bytes, intent)
         trace = await toolloop.route(
             ctx,
             asked,
             context=context,
             emitter=emitter,
-            opening=_opening(anchor, image_bytes),
+            opening=_opening(anchor, image_bytes, intent, patch),
         )
         logger.info("agent.search.routed", router="tools", calls=trace.calls)
         return toolloop.respond(trace, lat=lat, lng=lng)
@@ -84,18 +85,34 @@ async def run(
     )
 
 
-def _implied_question(anchor: AskAnchor | None, image_bytes: bytes | None) -> str:
+def _implied_question(
+    anchor: AskAnchor | None, image_bytes: bytes | None, intent: QueryIntent | None
+) -> str:
     if anchor is not None:
         return toolloop.anchor_question(anchor)
-    return "이 사진과 닮은 국내 여행지를 알려줘." if image_bytes else ""
+    if image_bytes:
+        return "이 사진과 닮은 국내 여행지를 알려줘."
+    if intent is None:
+        return ""
+    return (
+        "사용자가 조건을 바꿔 다시 찾아달라고 눌렀다. 바뀐 조건은 이미 첫 호출에 실려 있다. "
+        "결과가 있으면 그대로 끝내라."
+    )
 
 
-def _opening(anchor: AskAnchor | None, image_bytes: bytes | None) -> ToolCall | None:
-    """첨부와 탭은 사실이다 — 무슨 도구를 부를지 모델에게 묻지 않는다."""
+def _opening(
+    anchor: AskAnchor | None,
+    image_bytes: bytes | None,
+    intent: QueryIntent | None,
+    patch: RefinePatch | None,
+) -> ToolCall | None:
+    """첨부·탭·칩은 사실이다 — 무슨 도구를 부를지 모델에게 묻지 않는다."""
     if anchor is not None:
         return toolloop.anchor_call(anchor)
     if image_bytes:
         return ToolCall(name="uploaded_photo", args={})
+    if intent is not None:
+        return toolloop.call_from_intent(refine_service.apply_patch(intent, patch))
     return None
 
 
@@ -107,11 +124,9 @@ def _takes_tools(
     anchor: AskAnchor | None,
     context: AskContext | None,
 ) -> bool:
-    """루프는 자유문 질문·카드 탭·사진을 받는다 — 칩 재생만 아직 기존 경로다."""
+    """루프는 자유문 질문·카드 탭·사진·조건 칩을 받는다."""
     if settings.AGENT_ROUTER != "tools":
-        return False
-    if intent:
         return False
     if anchor is not None:
         return toolloop.anchor_call(anchor) is not None
-    return bool(image_bytes) or bool(question and question.strip())
+    return bool(intent) or bool(image_bytes) or bool(question and question.strip())

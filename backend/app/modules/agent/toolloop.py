@@ -157,6 +157,26 @@ def anchor_call(anchor: AskAnchor) -> ToolCall | None:
     return ToolCall(name=name, args={"contentId": anchor.contentId, **extra})
 
 
+def call_from_intent(intent: QueryIntent) -> ToolCall:
+    """intent_of 의 역방향. 칩은 조건을 하나 바꿔 같은 검색을 다시 돌리는 것이다."""
+    if intent.festivalOnly:
+        return ToolCall(name="festival", args={"regions": list(intent.regionHints)})
+    args: dict[str, Any] = {}
+    if intent.regionHints:
+        args["regions"] = list(intent.regionHints)
+    if intent.categoryKeywords:
+        args["categories"] = list(intent.categoryKeywords)
+    if intent.moodHints:
+        args["moods"] = list(intent.moodHints)
+    if intent.crowdPreference != "any":
+        args["crowd"] = intent.crowdPreference
+    if intent.indoorOnly:
+        args["indoor"] = True
+    if intent.nearMe:
+        args["near"] = True
+    return ToolCall(name="category_search", args=args)
+
+
 def opening_turns(question: str, context: AskContext | None) -> list[Turn]:
     """직전 결과를 contentId 와 함께 준다 — 그래야 "그 근처" 가 도구 인자가 된다."""
     lines: list[str] = []
