@@ -152,6 +152,7 @@ export default function HomeScreen() {
             subtitle={formatBaseDate(active.data?.baseDate)}
             items={shown}
             onOpenSpot={openSpot}
+            compact
           />
         ) : (
           <RankList
@@ -165,13 +166,16 @@ export default function HomeScreen() {
           />
         )}
 
-        <View style={styles.divider} />
-
-        <CurationSection
-          data={curation.data}
-          isLoading={curation.isLoading}
-          onOpenSpot={openSpot}
-        />
+        {curation.isLoading || curation.data?.items.length ? (
+          <>
+            <View style={styles.divider} />
+            <CurationSection
+              data={curation.data}
+              isLoading={curation.isLoading}
+              onOpenSpot={openSpot}
+            />
+          </>
+        ) : null}
 
         <View style={styles.divider} />
 

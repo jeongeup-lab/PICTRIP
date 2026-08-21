@@ -5,7 +5,9 @@ import type { Curation, HomeSpotCard } from "@/features/home/api";
 import { colors, radii, spacing } from "@/constants/theme";
 
 export const CARD_WIDTH = 248;
+export const RANK_CARD_WIDTH = 156;
 export const CARD_GAP = 12;
+export const HOT_RANKS = 3;
 
 const SKELETONS = [0, 1];
 
@@ -38,9 +40,19 @@ interface RailProps {
   subtitle: string | null;
   items: HomeSpotCard[];
   onOpenSpot: (contentId: string) => void;
+  compact?: boolean;
 }
 
-export function EditorialRail({ testID, kicker, title, subtitle, items, onOpenSpot }: RailProps) {
+export function EditorialRail({
+  testID,
+  kicker,
+  title,
+  subtitle,
+  items,
+  onOpenSpot,
+  compact = false,
+}: RailProps) {
+  const width = compact ? RANK_CARD_WIDTH : CARD_WIDTH;
   return (
     <View testID={testID}>
       <View style={styles.head}>
@@ -57,11 +69,17 @@ export function EditorialRail({ testID, kicker, title, subtitle, items, onOpenSp
         data={items}
         keyExtractor={(card) => card.contentId}
         showsHorizontalScrollIndicator={false}
-        snapToInterval={CARD_WIDTH + CARD_GAP}
+        snapToInterval={width + CARD_GAP}
         decelerationRate="fast"
         contentContainerStyle={styles.track}
         renderItem={({ item, index }) => (
-          <CurationCard card={item} index={index} onPress={() => onOpenSpot(item.contentId)} />
+          <CurationCard
+            card={item}
+            index={index}
+            width={width}
+            hot={compact}
+            onPress={() => onOpenSpot(item.contentId)}
+          />
         )}
       />
     </View>
@@ -71,10 +89,14 @@ export function EditorialRail({ testID, kicker, title, subtitle, items, onOpenSp
 function CurationCard({
   card,
   index,
+  width,
+  hot,
   onPress,
 }: {
   card: HomeSpotCard;
   index: number;
+  width: number;
+  hot: boolean;
   onPress: () => void;
 }) {
   return (
@@ -82,12 +104,16 @@ function CurationCard({
       testID="home-curation-card"
       accessibilityRole="button"
       accessibilityLabel={`${card.title} 상세보기`}
-      style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.card, { width }, pressed && styles.pressed]}
       onPress={onPress}
     >
       <View style={styles.imageSlot}>
-        <RemoteImage uri={card.imageUrl} style={styles.image} radius={16} />
-        <View style={styles.badge}>
+        <RemoteImage
+          uri={card.imageUrl}
+          style={{ width, height: Math.round(width * 1.25) }}
+          radius={16}
+        />
+        <View style={[styles.badge, hot && index < HOT_RANKS && styles.badgeHot]}>
           <Text style={styles.badgeText}>{index + 1}</Text>
         </View>
       </View>
@@ -143,9 +169,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
   },
-  card: { width: CARD_WIDTH },
+  card: {},
   imageSlot: { position: "relative" },
-  image: { width: CARD_WIDTH, height: Math.round(CARD_WIDTH * 1.25) },
   badge: {
     position: "absolute",
     top: 10,
@@ -158,6 +183,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: colors.control,
   },
+  badgeHot: { backgroundColor: colors.accent },
   badgeText: { fontSize: 11, fontWeight: "800", color: colors.onImage },
   cardTitle: {
     marginTop: 10,

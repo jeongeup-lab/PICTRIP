@@ -132,7 +132,15 @@ beforeEach(() => {
   mockLocation.mockReturnValue({ coords: COORDS, status: "granted", request });
   mockNearby.mockReturnValue(query([card("near-1")]));
   mockTrending.mockReturnValue(query([card("trend-1")]));
-  mockCuration.mockReturnValue({ data: undefined, isLoading: false });
+  mockCuration.mockReturnValue({
+    data: {
+      kicker: "THIS WEEK",
+      title: "이번 주 큐레이션",
+      subtitle: null,
+      items: [card("cur-1")],
+    },
+    isLoading: false,
+  });
   mockRegion.mockReturnValue({ data: { label: "광진구 화양동" } });
   mockRecommendations.mockReturnValue({ data: undefined, isLoading: false });
 });
@@ -177,6 +185,12 @@ describe("HomeScreen", () => {
     const r = await mount();
     expect(ranks(r).props.accessibilityHint).toBe("near-1");
     expect(r.root.findAllByProps({ testID: "curation" }).length).toBeGreaterThan(0);
+  });
+
+  it("hides the curation band when the week has nothing to show", async () => {
+    mockCuration.mockReturnValue({ data: undefined, isLoading: false });
+    const r = await mount();
+    expect(r.root.findAllByProps({ testID: "curation" })).toHaveLength(0);
   });
 
   it("swaps to the nationwide ranking when the header title is tapped", async () => {
