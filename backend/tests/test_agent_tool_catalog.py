@@ -277,6 +277,7 @@ async def test_catalog_covers_every_real_tool() -> None:
         "spot_detail",
         "festival",
         "compare_regions",
+        "region_profile",
     }
 
 
@@ -348,3 +349,35 @@ async def test_compare_regions_caps_how_many_it_compares(ctx: ToolContext) -> No
 
 async def test_compare_regions_labels_the_step_with_both_sides() -> None:
     assert CATALOG["compare_regions"].label({"regions": ["부산", "여수"]}) == "부산 vs 여수 비교"
+
+
+async def test_region_profile_needs_a_region(ctx: ToolContext) -> None:
+    result = await CATALOG["region_profile"].run(ctx, {})
+
+    assert result.rows == []
+    assert "regions" in result.observation
+
+
+async def test_region_profile_says_when_it_cannot_place_the_name(ctx: ToolContext) -> None:
+    """지역 해석 실패를 전국 요약으로 바꾸면 엉뚱한 도시를 설명한다."""
+    result = await CATALOG["region_profile"].run(ctx, {"regions": ["없는곳xyz"]})
+
+    assert result.rows == []
+    assert "지역으로 해석하지 못했습니다" in result.observation
+
+
+async def test_region_profile_caps_the_cards_it_returns(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """요약은 목록이 아니다 — 400곳을 카드로 쏟으면 답변이 검색처럼 보인다."""
+    for i in range(12):
+        await _seed(db_session, f"rp-{i}", title=f"곳{i}", addr1="서울특별시 중구 7")
+    await db_session.flush()
+
+    result = await CATALOG["region_profile"].run(ctx, {"regions": []})
+
+    assert result.rows == []
+
+
+async def test_region_profile_labels_the_step_with_the_place() -> None:
+    assert CATALOG["region_profile"].label({"regions": ["전주"]}) == "전주 살펴보기"
