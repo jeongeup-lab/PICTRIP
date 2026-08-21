@@ -11,12 +11,14 @@ from app.modules.agent.tools.festival import FESTIVAL
 from app.modules.agent.tools.profile import REGION_PROFILE
 from app.modules.agent.tools.resolve import RESOLVE_PLACE
 from app.modules.agent.tools.search import CATEGORY_SEARCH, PHOTO_MATCH, TITLE_SEARCH
+from app.modules.agent.tools.similar import SIMILAR_REGION
 
 _TOOLS: tuple[Tool, ...] = (
     CATEGORY_SEARCH,
     TITLE_SEARCH,
     COMPARE_REGIONS,
     REGION_PROFILE,
+    SIMILAR_REGION,
     RESOLVE_PLACE,
     SPOT_DETAIL,
     FESTIVAL,

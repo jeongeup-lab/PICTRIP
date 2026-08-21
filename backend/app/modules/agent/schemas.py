@@ -46,6 +46,7 @@ ToolName = Literal[
     "spot_detail",
     "compare_regions",
     "region_profile",
+    "similar_region",
 ]
 
 
