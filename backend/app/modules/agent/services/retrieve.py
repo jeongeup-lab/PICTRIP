@@ -235,9 +235,7 @@ async def resolve_region_scope(session: AsyncSession, *, hints: list[str]) -> Re
         (token, resolved) for token, resolved in sorted(mapping.items()) if resolved.narrowed
     ]
     return RegionScope(
-        prefixes=_drop_covered(
-            {prefix for resolved in mapping.values() for prefix in resolved.prefixes}
-        ),
+        prefixes=_expand_merged(_drop_covered({r.prefix for r in mapping.values()}), mapping),
         sido_prefixes=sorted(
             {
                 sido
@@ -249,6 +247,22 @@ async def resolve_region_scope(session: AsyncSession, *, hints: list[str]) -> Re
         narrowed_sidos=tuple(dict.fromkeys(resolved.sido for _, resolved in narrowed)),
         unmapped=tuple(dropped),
     )
+
+
+def _expand_merged(kept: list[str], mapping: dict[str, RegionPrefix]) -> list[str]:
+    """포함 관계를 먼저 정리하고 별칭을 편다.
+
+    거꾸로 하면 "전남광주통합특별시 여수시" 가 "전남광주통합특별시" 를 덮어
+    같이 물은 광주가 통째로 빠진다.
+    """
+    by_prefix = {resolved.prefix: resolved for resolved in mapping.values()}
+    out: list[str] = []
+    for prefix in kept:
+        resolved = by_prefix.get(prefix)
+        for expanded in resolved.prefixes if resolved else [prefix]:
+            if expanded not in out:
+                out.append(expanded)
+    return sorted(out)
 
 
 def _merged_of(sido: str) -> tuple[str, ...]:

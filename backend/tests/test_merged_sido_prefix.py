@@ -40,3 +40,30 @@ async def test_a_merged_region_hint_matches_the_address_actually_stored(
 
     assert "전남광주통합특별시 여수시" in prefixes
     assert "전라남도 여수시" in prefixes
+
+
+async def test_two_regions_do_not_swallow_each_others_aliases(
+    db_session: AsyncSession,
+) -> None:
+    """확장 뒤에 포함 관계를 정리하면 "…통합특별시 여수시" 가 광주 전체를 덮는다."""
+    known = await db_session.scalar(text("SELECT 1 FROM sigungus WHERE ldong_signgu_nm = '여수시'"))
+    if known is None:
+        pytest.skip("지역 코드 테이블이 비어 있는 환경")
+
+    prefixes = await retrieve.resolve_region_prefixes(db_session, hints=["광주", "여수"])
+
+    assert "전남광주통합특별시" in prefixes
+    assert "광주광역시" in prefixes
+    assert "전남광주통합특별시 여수시" in prefixes
+
+
+def test_expansion_happens_after_coverage_pruning() -> None:
+    mapping = {
+        "광주": RegionPrefix(prefix="광주광역시", sido="광주광역시"),
+        "여수": RegionPrefix(prefix="전라남도 여수시", sido="전라남도"),
+    }
+
+    expanded = retrieve._expand_merged(["광주광역시", "전라남도 여수시"], mapping)
+
+    assert "전남광주통합특별시" in expanded
+    assert "전남광주통합특별시 여수시" in expanded
