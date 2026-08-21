@@ -847,3 +847,18 @@ async def test_plan_itinerary_never_repeats_a_place_in_a_food_only_region(
 
     ids = [row.content_id for row in result.rows]
     assert len(ids) == len(set(ids))
+
+
+async def test_plan_itinerary_says_when_a_sight_category_found_nothing(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """박물관을 못 찾아 식당만 남은 일정을 성공으로 돌려주면 요청을 버린 것이다."""
+    await _seed_food(db_session, "pg-a", title="밥집하나", lat=37.501)
+    await _seed_food(db_session, "pg-b", title="밥집둘", lat=37.502)
+    await db_session.flush()
+
+    result = await CATALOG["plan_itinerary"].run(
+        ctx, {"regions": ["서울"], "days": 1, "categories": ["박물관", "맛집"]}
+    )
+
+    assert "박물관: 그 지역에서 찾지 못했습니다" in result.observation

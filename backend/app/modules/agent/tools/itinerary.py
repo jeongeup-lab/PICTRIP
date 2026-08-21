@@ -181,11 +181,14 @@ async def _plan_itinerary(ctx: ToolContext, args: Mapping[str, Any]) -> ToolResu
     seeing = [word for word in keywords if word not in eating]
 
     meals, missing = await _meals(ctx, eating, prefixes, crowd)
-    sights, unsupported = await _sights(ctx, seeing, prefixes, crowd)
+    found, unsupported = await _sights(ctx, seeing, prefixes, crowd)
+    sights = _without_outliers(_placed(found))
+    if not sights:
+        missing += [word for word in seeing if word not in unsupported]
 
     return _assemble(
         region,
-        sights=_without_outliers(_placed(sights)),
+        sights=sights,
         meals=meals,
         missing=missing,
         unsupported=unsupported,
