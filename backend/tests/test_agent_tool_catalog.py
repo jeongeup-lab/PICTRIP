@@ -720,3 +720,53 @@ async def test_plan_itinerary_says_when_it_could_not_fill_the_days(
     result = await CATALOG["plan_itinerary"].run(ctx, {"regions": ["서울"], "days": 4})
 
     assert "요청한 4일" in result.observation
+
+
+async def test_plan_itinerary_still_plans_with_three_food_kinds(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """음식 슬롯이 하루 정원을 넘으면 볼거리 자리가 0이 되어 일정이 통째로 비었다."""
+    for i in range(6):
+        await _seed_at(db_session, f"p3-{i}", title=f"볼거리{i}", lat=37.5 + i * 0.002, lng=127.0)
+    await _seed_food(db_session, "p3-food", title="밥집하나", lat=37.501)
+    await _seed_food(db_session, "p3-dish", title="할매국밥", lat=37.502)
+    await _seed_cafe(db_session, "p3-cafe", title="찻집하나", lat=37.503)
+    await db_session.flush()
+
+    result = await CATALOG["plan_itinerary"].run(
+        ctx, {"regions": ["서울"], "days": 2, "categories": ["맛집", "카페", "국밥"]}
+    )
+
+    assert result.observation.count("일차:") == 2
+
+
+async def test_plan_itinerary_never_books_one_place_twice(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """맛집 풀과 국밥 풀은 겹친다 — 같은 국밥집이 한 날에 두 번 들어갔다."""
+    for i in range(6):
+        await _seed_at(db_session, f"p2-{i}", title=f"볼거리{i}", lat=37.5 + i * 0.002, lng=127.0)
+    await _seed_food(db_session, "p2-only", title="할매국밥", lat=37.501)
+    await db_session.flush()
+
+    result = await CATALOG["plan_itinerary"].run(
+        ctx, {"regions": ["서울"], "days": 1, "categories": ["맛집", "국밥"]}
+    )
+
+    ids = [row.content_id for row in result.rows]
+    assert len(ids) == len(set(ids))
+
+
+async def test_plan_itinerary_says_which_food_it_could_not_find(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """국밥집이 없는데 관광지만 돌려주면 요청을 조용히 버린 것이다."""
+    for i in range(6):
+        await _seed_at(db_session, f"p1-{i}", title=f"볼거리{i}", lat=37.5 + i * 0.002, lng=127.0)
+    await db_session.flush()
+
+    result = await CATALOG["plan_itinerary"].run(
+        ctx, {"regions": ["서울"], "days": 1, "categories": ["국밥"]}
+    )
+
+    assert "국밥" in result.observation.split("(")[-1]

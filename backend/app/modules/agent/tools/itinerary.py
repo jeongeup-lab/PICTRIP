@@ -101,24 +101,25 @@ def _meal_words(keywords: list[str]) -> list[str]:
     return [word for word in keywords if retrieve.food_word([word]) is not None]
 
 
-def _slots(eating: list[str]) -> list[tuple[str, list[str]]]:
+def _slots(eating: list[str]) -> list[tuple[str, str, list[str]]]:
     """구체 음식은 각자 풀을 갖는다 — 제목 조건이 AND 라 '국밥 초밥' 은 교집합이 빈다."""
-    slots: dict[tuple[str, str], tuple[str, list[str]]] = {}
+    slots: dict[tuple[str, str], tuple[str, str, list[str]]] = {}
     for word in eating:
         action = retrieve.food_word([word])
         if action is None:
             continue
         dishes = retrieve.dish_search_terms(word) if action == "food" else []
-        slots.setdefault((action, dishes[0] if dishes else ""), (action, dishes))
+        slots.setdefault((action, dishes[0] if dishes else ""), (word, action, dishes))
     return list(slots.values())
 
 
 async def _meals(
     ctx: ToolContext, eating: list[str], prefixes: list[str], crowd: CrowdPreference
-) -> list[list[CandidateRow]]:
+) -> tuple[list[list[CandidateRow]], list[str]]:
     """맛집과 카페는 풀이 달라 한 번에 못 뽑는다 — 요청한 종류마다 따로 돌려준다."""
     pools: list[list[CandidateRow]] = []
-    for action, dishes in _slots(eating):
+    missing: list[str] = []
+    for word, action, dishes in _slots(eating):
         found = await retrieve.search_food(
             ctx.session,
             action=action,
@@ -126,8 +127,12 @@ async def _meals(
             preference=crowd,
             title_terms=dishes or None,
         )
-        pools.append(_without_outliers(_placed(found)))
-    return [pool for pool in pools if pool]
+        pool = _without_outliers(_placed(found))
+        if pool:
+            pools.append(pool)
+        else:
+            missing.append(word)
+    return pools, missing
 
 
 def _nearest(leg: Sequence[CandidateRow], pool: Sequence[CandidateRow]) -> CandidateRow | None:
@@ -160,19 +165,25 @@ async def _plan_itinerary(ctx: ToolContext, args: Mapping[str, Any]) -> ToolResu
     crowd = _crowd(args)
     seeing = [word for word in keywords if word not in eating]
 
-    meals = await _meals(ctx, eating, prefixes, crowd)
+    meals, missing = await _meals(ctx, eating, prefixes, crowd)
     sights = await _sights(ctx, seeing, prefixes, crowd)
 
     return _assemble(
         region,
         sights=_without_outliers(_placed(sights)),
         meals=meals,
+        missing=missing,
         days=days_of(args),
     )
 
 
 def _assemble(
-    region: str, *, sights: list[CandidateRow], meals: list[list[CandidateRow]], days: int
+    region: str,
+    *,
+    sights: list[CandidateRow],
+    meals: list[list[CandidateRow]],
+    missing: list[str],
+    days: int,
 ) -> ToolResult:
     """맛집은 일정에 끼워 넣는 한 끼다 — 볼거리를 대신하지 않는다.
 
@@ -180,19 +191,20 @@ def _assemble(
     """
     if not sights:
         sights, meals = ([row for pool in meals for row in pool], [])
-    per_day = PER_DAY - len(meals) if meals else PER_DAY
-    ordered = _chain(sights[: days * max(per_day, 1)])
+    per_day = max(PER_DAY - len(meals), 1)
+    ordered = _chain(sights[: days * per_day])
     if not ordered:
         return ToolResult(rows=[], observation=f"{region}: {_EMPTY}")
 
     left = [list(pool) for pool in meals]
+    taken: set[str] = set()
     lines: list[str] = []
     plan: list[CandidateRow] = []
     for day in range(days):
         leg = ordered[day * per_day : (day + 1) * per_day]
         if not leg:
             break
-        leg = _chain([*leg, *_one_of_each(leg, left)])
+        leg = _chain([*leg, *_one_of_each(leg, left, taken)])
         plan.extend(leg)
         names = " → ".join(row.title for row in leg)
         lines.append(f"{day + 1}일차: {names} (직선거리 {round(_legs_km(leg))}km)")
@@ -200,18 +212,24 @@ def _assemble(
     plan_text = f"{region} {len(lines)}일 일정 — " + " / ".join(lines)
     if len(lines) < days:
         plan_text += f" (요청한 {days}일을 채울 곳이 부족해 {len(lines)}일로 줄였습니다)"
+    if missing:
+        plan_text += f" ({' · '.join(missing)}: 그 지역에서 찾지 못해 일정에 넣지 못했습니다)"
     return ToolResult(rows=plan, observation=plan_text, fact=plan_text)
 
 
 def _one_of_each(
-    leg: Sequence[CandidateRow], pools: list[list[CandidateRow]]
+    leg: Sequence[CandidateRow], pools: list[list[CandidateRow]], taken: set[str]
 ) -> list[CandidateRow]:
-    """종류마다 하루 한 곳씩 — 거리만 보면 모든 날이 식당으로 채워진다."""
+    """종류마다 하루 한 곳씩 — 거리만 보면 모든 날이 식당으로 채워진다.
+
+    맛집 풀과 국밥 풀은 겹친다 — 이미 고른 곳은 모든 풀에서 뺀다.
+    """
     picked: list[CandidateRow] = []
     for pool in pools:
-        chosen = _nearest(leg, pool)
+        chosen = _nearest(leg, [row for row in pool if row.content_id not in taken])
         if chosen is not None:
             pool.remove(chosen)
+            taken.add(chosen.content_id)
             picked.append(chosen)
     return picked
 
