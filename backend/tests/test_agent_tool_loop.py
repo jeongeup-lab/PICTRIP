@@ -169,3 +169,31 @@ async def test_unrecoverable_tool_errors_stop_the_turn(
 
     with pytest.raises(AgentFestivalUnavailable):
         await loop.route(ctx, "지금 열리는 축제")
+
+
+async def test_steps_stream_while_the_loop_runs(
+    ctx: ToolContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """끝나고 한꺼번에 내면 사용자는 그동안 빈 화면을 본다 — 실측 7.9초."""
+    from app.modules.agent.emitter import Emitter
+
+    emitter = Emitter()
+    _wire(monkeypatch, ScriptedRouter(Decision(calls=[_call(regions=[])])))
+
+    trace = await loop.route(ctx, "아무거나", emitter=emitter)
+    emitter.close()
+
+    signals = [signal async for signal in emitter.drain()]
+    assert [signal.status for signal in signals] == ["run", "done"]
+    assert signals[0].badge is None
+    assert signals[1].badge == f"{len(trace.rows)}곳"
+
+
+async def test_a_loop_without_an_emitter_still_records_steps(
+    ctx: ToolContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _wire(monkeypatch, ScriptedRouter(Decision(calls=[_call(regions=[])])))
+
+    trace = await loop.route(ctx, "아무거나")
+
+    assert len(trace.steps) == 1

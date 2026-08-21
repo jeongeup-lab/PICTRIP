@@ -16,6 +16,7 @@ from typing import Any, get_args
 
 from app.core.logging import get_logger
 from app.modules.agent import llm
+from app.modules.agent.emitter import Emitter, StepSignal
 from app.modules.agent.repositories import CandidateRow
 from app.modules.agent.routing import ToolCall, Turn
 from app.modules.agent.schemas import (
@@ -64,6 +65,24 @@ class Trace:
     calls_made: list[ToolCall] = field(default_factory=list)
     facts: list[str] = field(default_factory=list)
     anchors: list[CandidateRow] = field(default_factory=list)
+    emitter: Emitter | None = None
+
+    def begin(self, label: str) -> None:
+        """도구를 부르기 전에 알린다 — 끝나고 한꺼번에 내면 화면이 그동안 빈다."""
+        if self.emitter is not None:
+            self.emitter.send(
+                StepSignal(index=len(self.steps), label=label, badge=None, status="run")
+            )
+
+    def finish(self, step: AskStep) -> None:
+        self.steps.append(step)
+        if self.emitter is not None:
+            self.emitter.send(
+                StepSignal(
+                    index=len(self.steps) - 1, label=step.label, badge=step.badge, status="done"
+                )
+            )
+
     said: str = ask_service.BLANK_ANSWER
     calls: int = 0
     rounds: int = 0
@@ -80,15 +99,16 @@ async def _run_one(ctx: ToolContext, call: ToolCall, trace: Trace) -> str:
     tool = next((known for name, known in CATALOG.items() if name == call.name), None)
     if tool is None:
         return UNKNOWN_TOOL
+    label: str = tool.label(call.args)
+    trace.begin(label)
     try:
         result = await asyncio.wait_for(tool.run(ctx, call.args), PER_TOOL_TIMEOUT_SECONDS)
     except TimeoutError:
         logger.warning("agent.router.tool_timeout", tool=call.name)
         return TIMED_OUT
 
-    label: str = tool.label(call.args)
     badge = "조회" if tool.carries_facts else f"{len(result.rows)}곳"
-    trace.steps.append(AskStep(tool=tool.name, label=label, badge=badge))
+    trace.finish(AskStep(tool=tool.name, label=label, badge=badge))
     if tool.carries_facts:
         trace.facts.append(result.observation)
     seen_anchor = {row.content_id for row in trace.anchors}
@@ -120,9 +140,15 @@ def opening_turns(question: str, context: AskContext | None) -> list[Turn]:
     return [Turn(role="user", text="\n".join(lines) + f"\n\n이번 질문: {question}")]
 
 
-async def route(ctx: ToolContext, question: str, *, context: AskContext | None = None) -> Trace:
+async def route(
+    ctx: ToolContext,
+    question: str,
+    *,
+    context: AskContext | None = None,
+    emitter: Emitter | None = None,
+) -> Trace:
     """모델이 도구를 고르고, 코드가 상한을 건다."""
-    trace = Trace()
+    trace = Trace(emitter=emitter)
     started = monotonic()
     deadline = started + TOTAL_BUDGET_SECONDS
     turns: list[Turn] = opening_turns(question, context)
