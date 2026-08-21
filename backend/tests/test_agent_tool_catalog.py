@@ -510,3 +510,62 @@ async def test_plan_itinerary_orders_by_nearest_hop(
 
     ordered = [row.content_id for row in result.rows][:3]
     assert ordered in (["po-a", "po-b", "po-c"], ["po-c", "po-b", "po-a"])
+
+
+async def _seed_food(session: AsyncSession, content_id: str, *, title: str, lat: float) -> None:
+    await session.execute(
+        text(
+            "INSERT INTO spots (content_id, content_type_id, title, addr1, first_image_url, "
+            "show_flag, lcls_systm1, lcls_systm2, mapx, mapy) "
+            "VALUES (:cid, 39, :t, '서울특별시 중구 9', 'http://kto/i.jpg', 1, 'FD', 'FD01', "
+            "127.0, :y)"
+        ),
+        {"cid": content_id, "t": title, "y": lat},
+    )
+
+
+async def test_plan_itinerary_keeps_restaurants_out_of_the_travel_pool(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """기본 여행지 풀은 FD 를 제외한다 — 맛집 일정이 조용히 0곳이 되면 안 된다."""
+    for i in range(6):
+        await _seed_food(db_session, f"pf-{i}", title=f"밥집{i}", lat=37.5 + i * 0.002)
+    await db_session.flush()
+
+    result = await CATALOG["plan_itinerary"].run(
+        ctx, {"regions": ["서울"], "days": 1, "categories": ["맛집"]}
+    )
+
+    assert result.rows
+    assert "밥집" in result.observation
+
+
+async def test_plan_itinerary_puts_one_meal_in_each_day(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    for i in range(8):
+        await _seed_at(db_session, f"pm-{i}", title=f"볼거리{i}", lat=37.5 + i * 0.002, lng=127.0)
+    for i in range(3):
+        await _seed_food(db_session, f"pmf-{i}", title=f"밥집{i}", lat=37.5 + i * 0.002)
+    await db_session.flush()
+
+    result = await CATALOG["plan_itinerary"].run(
+        ctx, {"regions": ["서울"], "days": 2, "categories": ["관광지", "맛집"]}
+    )
+
+    for line in result.observation.split(" / "):
+        assert sum(name.startswith("밥집") for name in line.split(" → ")) <= 1
+    assert result.observation.count("밥집") == 2
+
+
+async def test_plan_itinerary_hands_the_plan_to_the_answer(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """카드 순서만으로는 일차 구분과 이동 거리를 복원할 수 없다."""
+    for i in range(6):
+        await _seed_at(db_session, f"pw-{i}", title=f"곳{i}", lat=37.5 + i * 0.002, lng=127.0)
+    await db_session.flush()
+
+    result = await CATALOG["plan_itinerary"].run(ctx, {"regions": ["서울"], "days": 2})
+
+    assert result.fact == result.observation
