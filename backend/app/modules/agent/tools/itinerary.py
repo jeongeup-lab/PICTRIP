@@ -207,7 +207,8 @@ def _assemble(
     볼거리가 아예 없는 지역에서만 맛집이 일정 자체가 된다.
     """
     if not sights:
-        sights, meals = ([row for _word, rows in meals for row in rows], [])
+        merged = {row.content_id: row for _word, rows in meals for row in rows}
+        sights, meals = (list(merged.values()), [])
     per_meal = min(len(meals), PER_DAY - 1)
     per_day = PER_DAY - per_meal
     ordered = _chain(sights[: days * per_day])
@@ -217,24 +218,31 @@ def _assemble(
     left = [(word, list(rows)) for word, rows in meals]
     taken: set[str] = set()
     short: dict[str, None] = {}
+    served: set[int] = set()
     lines: list[str] = []
     plan: list[CandidateRow] = []
     for day in range(days):
         leg = ordered[day * per_day : (day + 1) * per_day]
         if not leg:
             break
-        turn = [left[(day * per_meal + slot) % len(left)] for slot in range(per_meal)]
-        leg = _chain([*leg, *_one_of_each(leg, turn, taken, short)])
+        picks = [(day * per_meal + slot) % len(left) for slot in range(per_meal)]
+        served.update(picks)
+        leg = _chain([*leg, *_one_of_each(leg, [left[index] for index in picks], taken, short)])
         plan.extend(leg)
         names = " → ".join(row.title for row in leg)
         lines.append(f"{day + 1}일차: {names} (직선거리 {round(_legs_km(leg))}km)")
 
+    for index, (word, _rows) in enumerate(left):
+        if index not in served:
+            short[word] = None
+
     plan_text = f"{region} {len(lines)}일 일정 — " + " / ".join(lines)
     if len(lines) < days:
         plan_text += f" (요청한 {days}일을 채울 곳이 부족해 {len(lines)}일로 줄였습니다)"
-    unfilled = [*missing, *short]
-    if unfilled:
-        plan_text += f" ({' · '.join(unfilled)}: 그 지역에서 찾지 못해 일정에 다 넣지 못했습니다)"
+    if missing:
+        plan_text += f" ({' · '.join(missing)}: 그 지역에서 찾지 못했습니다)"
+    if short:
+        plan_text += f" ({' · '.join(short)}: 하루 자리가 모자라 일정에 다 넣지 못했습니다)"
     if unsupported:
         plan_text += f" ({' · '.join(unsupported)}: 일정에 넣을 수 있는 종류가 아닙니다)"
     return ToolResult(rows=plan, observation=plan_text, fact=plan_text)

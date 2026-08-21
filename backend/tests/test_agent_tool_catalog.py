@@ -769,7 +769,7 @@ async def test_plan_itinerary_says_which_food_it_could_not_find(
         ctx, {"regions": ["서울"], "days": 1, "categories": ["국밥"]}
     )
 
-    assert "국밥" in result.observation.split("(")[-1]
+    assert "국밥: 그 지역에서 찾지 못했습니다" in result.observation
 
 
 async def test_plan_itinerary_never_exceeds_the_daily_capacity(
@@ -805,7 +805,7 @@ async def test_plan_itinerary_reports_a_food_kind_it_ran_out_of(
         ctx, {"regions": ["서울"], "days": 2, "categories": ["카페"]}
     )
 
-    assert "카페" in result.observation.split("(")[-1]
+    assert "카페: 하루 자리가 모자라" in result.observation
 
 
 async def test_plan_itinerary_marks_shopping_codes_as_outside_the_travel_pool() -> None:
@@ -813,3 +813,37 @@ async def test_plan_itinerary_marks_shopping_codes_as_outside_the_travel_pool() 
     assert itinerary._outside_pool(["SH01", "SH02"])
     assert itinerary._outside_pool(["LS03"])
     assert not itinerary._outside_pool(["NA01", "SH01"])
+
+
+async def test_plan_itinerary_reports_a_food_kind_it_never_got_to(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """1일 일정에 음식 세 종류면 셋째는 후보가 있어도 자리를 못 받는다."""
+    for i in range(6):
+        await _seed_at(db_session, f"pn-{i}", title=f"볼거리{i}", lat=37.5 + i * 0.002, lng=127.0)
+    await _seed_food(db_session, "pn-f", title="밥집하나", lat=37.501)
+    await _seed_food(db_session, "pn-d", title="할매국밥", lat=37.502)
+    await _seed_cafe(db_session, "pn-c", title="찻집하나", lat=37.503)
+    await db_session.flush()
+
+    result = await CATALOG["plan_itinerary"].run(
+        ctx, {"regions": ["서울"], "days": 1, "categories": ["맛집", "카페", "국밥"]}
+    )
+
+    assert "하루 자리가 모자라" in result.observation
+
+
+async def test_plan_itinerary_never_repeats_a_place_in_a_food_only_region(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """볼거리가 없는 지역에서는 맛집 풀과 국밥 풀이 그대로 겹쳐 들어갔다."""
+    await _seed_food(db_session, "pz-a", title="할매국밥", lat=37.501)
+    await _seed_food(db_session, "pz-b", title="옆집국밥", lat=37.502)
+    await db_session.flush()
+
+    result = await CATALOG["plan_itinerary"].run(
+        ctx, {"regions": ["서울"], "days": 1, "categories": ["맛집", "국밥"]}
+    )
+
+    ids = [row.content_id for row in result.rows]
+    assert len(ids) == len(set(ids))
