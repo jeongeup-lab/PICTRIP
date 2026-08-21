@@ -60,8 +60,19 @@ jobs:
           set -euo pipefail
           cid="$(docker ps -q --filter "publish=8000" | head -n1)"
           echo "=== 라우터 확인 (질문 한 건) ==="
-          curl -fsS --max-time 60 -X POST http://127.0.0.1:8000/v1/agent/chat \
+          body="$(curl -fsS --max-time 90 -X POST http://127.0.0.1:8000/v1/agent/chat \
             -H 'Content-Type: application/json' \
-            -d '{"clientRequestId":"router-check","message":"통영 바다 보이는 카페","history":[]}' \
-            | grep -oE '"label": "[^"]*"' | head -6 || true
-          docker logs --since 2m "$cid" 2>&1 | grep -E 'agent.search.routed' | tail -3 || echo "(라우팅 로그 없음)"
+            -d '{"clientRequestId":"router-check","message":"통영 바다 보이는 카페","history":[]}')"
+          echo "$body" | grep -oE '"label": "[^"]*"' | head -6
+          echo "$body" | grep -q '"answerText"' || { echo "답변이 오지 않았다"; exit 1; }
+
+          routed="$(docker logs --since 3m "$cid" 2>&1 | grep -E 'agent.search.routed' | tail -1)"
+          echo "${routed:-(라우팅 로그 없음)}"
+          if [ "$ROUTER" = "tools" ]; then
+            echo "$routed" | grep -q 'router=tools' || {
+              echo "플래그가 실제 요청에 안 먹었다 — .env 는 바뀌었는데 경로가 그대로다"; exit 1; }
+          elif [ -n "$routed" ]; then
+            echo "$routed" | grep -q 'router=tools' && {
+              echo "branches 로 되돌렸는데 여전히 tools 를 탄다"; exit 1; }
+          fi
+          echo "라우터=$ROUTER 확인"
