@@ -101,22 +101,30 @@ def _meal_words(keywords: list[str]) -> list[str]:
     return [word for word in keywords if retrieve.food_word([word]) is not None]
 
 
+def _slots(eating: list[str]) -> list[tuple[str, list[str]]]:
+    """구체 음식은 각자 풀을 갖는다 — 제목 조건이 AND 라 '국밥 초밥' 은 교집합이 빈다."""
+    slots: dict[tuple[str, str], tuple[str, list[str]]] = {}
+    for word in eating:
+        action = retrieve.food_word([word])
+        if action is None:
+            continue
+        dishes = retrieve.dish_search_terms(word) if action == "food" else []
+        slots.setdefault((action, dishes[0] if dishes else ""), (action, dishes))
+    return list(slots.values())
+
+
 async def _meals(
     ctx: ToolContext, eating: list[str], prefixes: list[str], crowd: CrowdPreference
 ) -> list[list[CandidateRow]]:
     """맛집과 카페는 풀이 달라 한 번에 못 뽑는다 — 요청한 종류마다 따로 돌려준다."""
-    actions = dict.fromkeys(
-        action for word in eating if (action := retrieve.food_word([word])) is not None
-    )
-    dishes = retrieve.dish_search_terms(" ".join(eating))
     pools: list[list[CandidateRow]] = []
-    for action in actions:
+    for action, dishes in _slots(eating):
         found = await retrieve.search_food(
             ctx.session,
             action=action,
             region_prefixes=prefixes,
             preference=crowd,
-            title_terms=dishes if action == "food" else None,
+            title_terms=dishes or None,
         )
         pools.append(_without_outliers(_placed(found)))
     return [pool for pool in pools if pool]
@@ -187,9 +195,11 @@ def _assemble(
         leg = _chain([*leg, *_one_of_each(leg, left)])
         plan.extend(leg)
         names = " → ".join(row.title for row in leg)
-        lines.append(f"{day + 1}일차: {names} (이동 {round(_legs_km(leg))}km)")
+        lines.append(f"{day + 1}일차: {names} (직선거리 {round(_legs_km(leg))}km)")
 
     plan_text = f"{region} {len(lines)}일 일정 — " + " / ".join(lines)
+    if len(lines) < days:
+        plan_text += f" (요청한 {days}일을 채울 곳이 부족해 {len(lines)}일로 줄였습니다)"
     return ToolResult(rows=plan, observation=plan_text, fact=plan_text)
 
 
