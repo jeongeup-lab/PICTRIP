@@ -577,29 +577,32 @@ async def _seed_cafe(session: AsyncSession, content_id: str, *, title: str, lat:
         text(
             "INSERT INTO spots (content_id, content_type_id, title, addr1, first_image_url, "
             "show_flag, lcls_systm1, lcls_systm2, mapx, mapy) "
-            "VALUES (:cid, 39, :t, '서울특별시 중구 9', 'http://kto/i.jpg', 1, 'FD', 'FD02', "
+            "VALUES (:cid, 39, :t, '서울특별시 중구 9', 'http://kto/i.jpg', 1, 'FD', 'FD05', "
             "127.0, :y)"
         ),
         {"cid": content_id, "t": title, "y": lat},
     )
 
 
-async def test_plan_itinerary_pulls_every_requested_food_kind(
+async def test_plan_itinerary_gives_every_requested_food_kind_a_slot(
     ctx: ToolContext, db_session: AsyncSession
 ) -> None:
-    """맛집과 카페는 풀이 달라 첫 종류만 뽑으면 나머지가 조용히 사라진다."""
+    """거리만 보고 고르면 가까운 식당이 모든 날을 채우고 카페가 사라진다."""
     for i in range(6):
         await _seed_at(db_session, f"pk-{i}", title=f"볼거리{i}", lat=37.5 + i * 0.002, lng=127.0)
-    await _seed_food(db_session, "pk-food", title="밥집하나", lat=37.501)
-    await _seed_cafe(db_session, "pk-cafe", title="찻집하나", lat=37.503)
+    for i in range(4):
+        await _seed_food(db_session, f"pk-food-{i}", title=f"밥집{i}", lat=37.5 + i * 0.001)
+        await _seed_cafe(db_session, f"pk-cafe-{i}", title=f"찻집{i}", lat=37.5 + i * 0.001)
     await db_session.flush()
 
     result = await CATALOG["plan_itinerary"].run(
         ctx, {"regions": ["서울"], "days": 2, "categories": ["맛집", "카페"]}
     )
 
-    titles = {row.title for row in result.rows}
-    assert {"밥집하나", "찻집하나"} <= titles
+    for line in result.observation.split(" / "):
+        names = line.split(" → ")
+        assert any(name.startswith("밥집") for name in names)
+        assert any(name.startswith("찻집") for name in names)
 
 
 async def test_plan_itinerary_plans_the_first_region_only(
@@ -668,3 +671,21 @@ async def test_an_itinerary_offers_only_chips_it_can_honour() -> None:
     response = toolloop.respond(trace, lat=37.5, lng=127.0)
 
     assert [chip.label for chip in response.refinements] == ["사람 적은 곳만"]
+
+
+async def test_plan_itinerary_keeps_the_dish_the_user_named(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """'부산 국밥 2일' 이 아무 식당이나 내놓으면 요청을 버린 것이다."""
+    for i in range(6):
+        await _seed_at(db_session, f"pd-{i}", title=f"볼거리{i}", lat=37.5 + i * 0.002, lng=127.0)
+    await _seed_food(db_session, "pd-hit", title="할매국밥", lat=37.501)
+    await _seed_food(db_session, "pd-miss", title="파스타집", lat=37.502)
+    await db_session.flush()
+
+    result = await CATALOG["plan_itinerary"].run(
+        ctx, {"regions": ["서울"], "days": 1, "categories": ["국밥"]}
+    )
+
+    assert "할매국밥" in result.observation
+    assert "파스타집" not in result.observation
