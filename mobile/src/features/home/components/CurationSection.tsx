@@ -16,23 +16,45 @@ interface Props {
 }
 
 export function CurationSection({ data, isLoading, onOpenSpot }: Props) {
-  if (isLoading) return <CurationSkeleton />;
+  if (isLoading) return <EditorialRailSkeleton testID="home-curation-skeleton" />;
   if (!data || data.items.length === 0) return null;
 
   return (
-    <View testID="home-curation">
+    <EditorialRail
+      testID="home-curation"
+      kicker={data.kicker}
+      title={data.title}
+      subtitle={data.subtitle}
+      items={data.items}
+      onOpenSpot={onOpenSpot}
+    />
+  );
+}
+
+interface RailProps {
+  testID: string;
+  kicker: string;
+  title: string;
+  subtitle: string | null;
+  items: HomeSpotCard[];
+  onOpenSpot: (contentId: string) => void;
+}
+
+export function EditorialRail({ testID, kicker, title, subtitle, items, onOpenSpot }: RailProps) {
+  return (
+    <View testID={testID}>
       <View style={styles.head}>
         <View style={styles.kick}>
-          <Text style={styles.kickText}>{data.kicker}</Text>
+          <Text style={styles.kickText}>{kicker}</Text>
           <View style={styles.kickRule} />
         </View>
-        <Text style={styles.title}>{data.title}</Text>
-        <Text style={styles.subtitle}>{data.subtitle}</Text>
+        <Text style={styles.title}>{title}</Text>
+        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       </View>
 
       <FlatList
         horizontal
-        data={data.items}
+        data={items}
         keyExtractor={(card) => card.contentId}
         showsHorizontalScrollIndicator={false}
         snapToInterval={CARD_WIDTH + CARD_GAP}
@@ -79,9 +101,9 @@ function CurationCard({
   );
 }
 
-function CurationSkeleton() {
+export function EditorialRailSkeleton({ testID }: { testID: string }) {
   return (
-    <View testID="home-curation-skeleton" pointerEvents="none">
+    <View testID={testID} pointerEvents="none">
       <View style={styles.head}>
         <Skeleton width={110} height={12} radius={6} />
         <View style={styles.skeletonGap} />

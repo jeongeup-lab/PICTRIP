@@ -1,6 +1,6 @@
 import renderer, { act } from "react-test-renderer";
 import { ScrollView, Text } from "react-native";
-import HomeScreen from "@/app/(tabs)/index";
+import HomeScreen, { RANK_LIMIT } from "@/app/(tabs)/index";
 import { useHomeLocation } from "@/features/home/hooks/use-home-location";
 import {
   useCuration,
@@ -39,27 +39,31 @@ jest.mock("@/features/channels/components/ChannelChips", () => {
       }),
   };
 });
-jest.mock("@/features/home/components/NearbyMapCard", () => {
-  const React = require("react");
-  const { View } = require("react-native");
-  return {
-    NearbyMapCard: ({ title, cards }: { title: string; cards: { contentId: string }[] }) =>
-      React.createElement(View, {
-        testID: "map-card",
-        accessibilityLabel: title,
-        accessibilityHint: cards.map((c) => c.contentId).join(","),
-      }),
-  };
-});
 jest.mock("@/features/home/components/CurationSection", () => {
   const React = require("react");
-  const { Pressable } = require("react-native");
+  const { Pressable, View } = require("react-native");
   return {
     CurationSection: ({ onOpenSpot }: { onOpenSpot: (id: string) => void }) =>
       React.createElement(Pressable, {
         testID: "curation",
         onPress: () => onOpenSpot("cur-1"),
       }),
+    EditorialRail: ({
+      testID,
+      title,
+      items,
+    }: {
+      testID: string;
+      title: string;
+      items: { contentId: string }[];
+    }) =>
+      React.createElement(View, {
+        testID,
+        accessibilityLabel: title,
+        accessibilityHint: items.map((c) => c.contentId).join(","),
+      }),
+    EditorialRailSkeleton: ({ testID }: { testID: string }) =>
+      React.createElement(View, { testID }),
   };
 });
 jest.mock("@/features/home/components/RankList", () => {
@@ -148,7 +152,8 @@ async function mount() {
   return mounted!;
 }
 
-const ranks = (r: renderer.ReactTestRenderer) => r.root.findByProps({ testID: "rank-list" });
+const ranks = (r: renderer.ReactTestRenderer) =>
+  r.root.findAll((n) => n.props?.testID === "home-rank-rail" && !!n.props?.accessibilityLabel)[0];
 const texts = (r: renderer.ReactTestRenderer) =>
   r.root
     .findAllByType(Text)
@@ -156,10 +161,10 @@ const texts = (r: renderer.ReactTestRenderer) =>
     .filter((c): c is string => typeof c === "string");
 
 describe("HomeScreen", () => {
-  it("leads with the map instead of a wordmark", async () => {
+  it("leads with the ranking rail instead of a wordmark", async () => {
     const r = await mount();
     expect(r.root.findAllByProps({ children: "PICTRIP" })).toHaveLength(0);
-    expect(r.root.findAllByProps({ testID: "map-card" }).length).toBeGreaterThan(0);
+    expect(r.root.findAllByProps({ testID: "home-rank-rail" }).length).toBeGreaterThan(0);
   });
 
   it("names today and the resolved region in the header", async () => {
@@ -168,10 +173,10 @@ describe("HomeScreen", () => {
     expect(texts(r)).toContain("오늘, 이 근처");
   });
 
-  it("feeds the map the same cards as the ranking", async () => {
+  it("puts the ranking above the weekly curation", async () => {
     const r = await mount();
-    expect(r.root.findByProps({ testID: "map-card" }).props.accessibilityHint).toBe("near-1");
     expect(ranks(r).props.accessibilityHint).toBe("near-1");
+    expect(r.root.findAllByProps({ testID: "curation" }).length).toBeGreaterThan(0);
   });
 
   it("swaps to the nationwide ranking when the header title is tapped", async () => {
@@ -191,10 +196,10 @@ describe("HomeScreen", () => {
     expect(ranks(r).props.accessibilityHint).toBe("trend-1");
   });
 
-  it("keeps showing the nearby ranking while it is still loading", async () => {
+  it("shows a rail skeleton while the ranking is still loading", async () => {
     mockNearby.mockReturnValue(query([], { isLoading: true }));
     const r = await mount();
-    expect(ranks(r).props.accessibilityLabel).toBe("주변 인기 순위");
+    expect(r.root.findAllByProps({ testID: "home-rank-skeleton" }).length).toBeGreaterThan(0);
   });
 
   it("prompts for location when permission is missing", async () => {
@@ -207,14 +212,10 @@ describe("HomeScreen", () => {
     expect(request).toHaveBeenCalled();
   });
 
-  it("collapses the ranking past the seventh place and expands on demand", async () => {
-    mockNearby.mockReturnValue(query(Array.from({ length: 10 }, (_, i) => card(`n${i}`))));
+  it("caps the ranking rail so the home page stays short", async () => {
+    mockNearby.mockReturnValue(query(Array.from({ length: 18 }, (_, i) => card(`n${i}`))));
     const r = await mount();
-    expect(ranks(r).props.accessibilityHint.split(",")).toHaveLength(7);
-    await act(async () => {
-      r.root.findByProps({ testID: "home-rank-expand" }).props.onPress();
-    });
-    expect(ranks(r).props.accessibilityHint.split(",")).toHaveLength(10);
+    expect(ranks(r).props.accessibilityHint.split(",")).toHaveLength(RANK_LIMIT);
   });
 
   it("keeps the channel viewer reachable from the chip rail", async () => {
