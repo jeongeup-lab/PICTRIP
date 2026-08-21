@@ -1,0 +1,157 @@
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from itertools import pairwise
+from typing import Any, cast
+
+from app.modules.agent import repositories
+from app.modules.agent.repositories import CandidateRow
+from app.modules.agent.schemas import MAX_KEYWORDS, MAX_REGION_HINTS, CrowdPreference
+from app.modules.agent.services import retrieve
+from app.modules.agent.services.geo import haversine_km
+from app.modules.agent.tools.base import Tool, ToolContext, ToolResult, recoverable, strings
+
+MAX_DAYS = 4
+PER_DAY = 3
+_UNKNOWN = "그 이름을 지역으로 해석하지 못했습니다. 시도·시군구 이름으로 다시 부르세요."
+_EMPTY = "그 지역에는 일정에 넣을 곳이 없습니다."
+
+
+OUTLIER_KM = 60
+
+
+def _placed(rows: Sequence[CandidateRow]) -> list[CandidateRow]:
+    return [row for row in rows if row.lat is not None and row.lng is not None]
+
+
+def _without_outliers(rows: list[CandidateRow]) -> list[CandidateRow]:
+    """무리에서 멀리 떨어진 곳을 떤다.
+
+    좌표가 지역과 안 맞는 스팟이 실제로 있다 — 경주 황성공원이 춘천 좌표를 달고
+    있어 2일차 이동거리가 319km 로 나왔다.
+    """
+    if len(rows) < 3:
+        return rows
+    lat = sorted(cast(float, row.lat) for row in rows)[len(rows) // 2]
+    lng = sorted(cast(float, row.lng) for row in rows)[len(rows) // 2]
+    kept = [
+        row
+        for row in rows
+        if haversine_km(lat, lng, cast(float, row.lat), cast(float, row.lng)) <= OUTLIER_KM
+    ]
+    return kept or rows
+
+
+def _chain(rows: list[CandidateRow]) -> list[CandidateRow]:
+    """가장 가까운 곳을 이어 붙인다 — 최적 경로가 아니라 되돌아가지 않는 동선이다."""
+    if not rows:
+        return []
+    remaining = list(rows)
+    ordered = [remaining.pop(0)]
+    while remaining:
+        last = ordered[-1]
+        nearest = min(
+            remaining,
+            key=lambda row: haversine_km(
+                cast(float, last.lat),
+                cast(float, last.lng),
+                cast(float, row.lat),
+                cast(float, row.lng),
+            ),
+        )
+        remaining.remove(nearest)
+        ordered.append(nearest)
+    return ordered
+
+
+def _legs_km(ordered: Sequence[CandidateRow]) -> float:
+    return sum(
+        haversine_km(cast(float, a.lat), cast(float, a.lng), cast(float, b.lat), cast(float, b.lng))
+        for a, b in pairwise(ordered)
+    )
+
+
+def _days(args: Mapping[str, Any]) -> int:
+    raw = args.get("days")
+    if not isinstance(raw, int) or raw < 1:
+        return 2
+    return min(raw, MAX_DAYS)
+
+
+def _crowd(args: Mapping[str, Any]) -> CrowdPreference:
+    value = args.get("crowd")
+    return cast(CrowdPreference, value) if value in ("quiet", "any", "popular") else "any"
+
+
+async def _plan_itinerary(ctx: ToolContext, args: Mapping[str, Any]) -> ToolResult:
+    hints = strings(args, "regions", limit=MAX_REGION_HINTS)
+    if not hints:
+        return ToolResult(rows=[], observation="regions 가 비었습니다.")
+
+    prefixes = await retrieve.resolve_region_prefixes(ctx.session, hints=hints)
+    if not prefixes:
+        return ToolResult(rows=[], observation=f"{hints[0]}: {_UNKNOWN}")
+
+    codes = await retrieve.resolve_category_codes(
+        ctx.session, strings(args, "categories", limit=MAX_KEYWORDS)
+    )
+    found = await retrieve.search_candidates(
+        ctx.session,
+        repositories.CandidateQuery(
+            limit=retrieve.CANDIDATE_LIMIT, codes=codes or None, region_prefixes=prefixes
+        ),
+        preference=_crowd(args),
+        near=False,
+    )
+    days = _days(args)
+    pool = _without_outliers(_placed(found))[: days * PER_DAY]
+    if not pool:
+        return ToolResult(rows=[], observation=f"{hints[0]}: {_EMPTY}")
+
+    ordered = _chain(pool)
+    lines: list[str] = []
+    for day in range(days):
+        leg = ordered[day * PER_DAY : (day + 1) * PER_DAY]
+        if not leg:
+            break
+        names = " → ".join(row.title for row in leg)
+        lines.append(f"{day + 1}일차: {names} (이동 {round(_legs_km(leg))}km)")
+    return ToolResult(
+        rows=ordered, observation=f"{hints[0]} {len(lines)}일 일정 — " + " / ".join(lines)
+    )
+
+
+PLAN_ITINERARY = Tool(
+    name="plan_itinerary",
+    description=(
+        "지역과 일수를 받아 일자별 동선을 짠다. '통영 2박3일 짜줘' 같은 질문에 쓴다. "
+        "가까운 곳끼리 묶어 되돌아가지 않게 잇는다. 단순 목록을 원하면 category_search 를 쓴다."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "regions": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "일정을 짤 지역 하나. 예: ['통영'].",
+            },
+            "days": {
+                "type": "integer",
+                "description": "일수. 2박3일이면 3. 비우면 2, 최대 4.",
+            },
+            "categories": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "넣고 싶은 장소 종류. 비우면 전체.",
+            },
+            "crowd": {
+                "type": "string",
+                "enum": ["quiet", "any", "popular"],
+                "description": "혼잡도 선호.",
+            },
+        },
+        "required": ["regions"],
+    },
+    label=lambda args: f"{(strings(args, 'regions', limit=1) or ['지역'])[0]} 일정 짜기",
+    run=recoverable(_plan_itinerary),
+)
