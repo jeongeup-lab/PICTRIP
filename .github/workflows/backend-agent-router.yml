@@ -35,11 +35,16 @@ jobs:
           before="$(grep -E '^AGENT_ROUTER=' "$envfile" || echo '(unset — 기본 branches)')"
           echo "before: $before"
 
+          # 파일을 갈아끼우지 않고 제자리에서 고친다 — 새 파일은 소유자·권한이
+          # 러너 것이 되어 컨테이너 사용자가 못 읽는다(실측: PermissionError).
+          before_perm="$(stat -c '%a %U:%G' "$envfile")"
           tmp="$(mktemp)"
           grep -vE '^AGENT_ROUTER=' "$envfile" > "$tmp"
           echo "AGENT_ROUTER=$ROUTER" >> "$tmp"
-          install -m 600 "$tmp" "$envfile"
+          cat "$tmp" > "$envfile"
           rm -f "$tmp"
+          [ "$(stat -c '%a %U:%G' "$envfile")" = "$before_perm" ] || {
+            echo "권한이 바뀌었다: $before_perm -> $(stat -c '%a %U:%G' "$envfile")"; exit 1; }
           echo "after:  $(grep -E '^AGENT_ROUTER=' "$envfile")"
 
       - run: |
