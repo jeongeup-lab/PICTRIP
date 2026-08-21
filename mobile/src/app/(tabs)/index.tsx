@@ -5,8 +5,11 @@ import { router, useScrollToTop } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { ChannelChips } from "@/features/channels/components/ChannelChips";
 import { AiSection } from "@/features/home/components/AiSection";
-import { CurationSection } from "@/features/home/components/CurationSection";
-import { NearbyMapCard } from "@/features/home/components/NearbyMapCard";
+import {
+  CurationSection,
+  EditorialRail,
+  EditorialRailSkeleton,
+} from "@/features/home/components/CurationSection";
 import { RankList } from "@/features/home/components/RankList";
 import { useHomeLocation } from "@/features/home/hooks/use-home-location";
 import { formatBaseDate } from "@/features/home/lib/base-date";
@@ -24,7 +27,8 @@ import { prefetchSpot } from "@/features/spots/queries";
 import { queryClient } from "@/lib/query-client";
 import { colors, spacing } from "@/constants/theme";
 
-export const COLLAPSED_RANKS = 7;
+export const RANK_LIMIT = 10;
+const RANK_KICKER = "NOW TRENDING";
 export const LOCATION_CTA = "위치를 켜면 지금 주변 인기 장소를 보여드려요";
 
 type HomeScope = "nearby" | "national";
@@ -34,7 +38,6 @@ export default function HomeScreen() {
   useScrollToTop(listRef);
 
   const [scope, setScope] = useState<HomeScope>("nearby");
-  const [expanded, setExpanded] = useState(false);
   const { coords, status, request } = useHomeLocation();
   const displayName = useAuthStore((s) => s.user?.displayName ?? null);
 
@@ -51,7 +54,7 @@ export default function HomeScreen() {
   const active = showNational ? national : nearby;
   const waitingForFix = !showNational && !coords;
   const cards = useMemo(() => active.data?.items ?? [], [active.data]);
-  const shown = expanded ? cards : cards.slice(0, COLLAPSED_RANKS);
+  const shown = cards.slice(0, RANK_LIMIT);
   const regionLabel = region.data?.label ?? null;
   const effectiveScope: HomeScope = showNational ? "national" : "nearby";
 
@@ -83,7 +86,6 @@ export default function HomeScreen() {
 
   const toggleScope = useCallback(() => {
     setScope((current) => (current === "nearby" ? "national" : "nearby"));
-    setExpanded(false);
     if (effectiveScope === "national" && !coords) void request();
   }, [effectiveScope, coords, request]);
 
@@ -140,46 +142,36 @@ export default function HomeScreen() {
           </Pressable>
         ) : null}
 
-        <NearbyMapCard
-          title={`${effectiveScope === "nearby" ? "내 주변" : "전국 인기"} ${cards.length}곳`}
-          cards={cards}
-          origin={coords}
-          onOpenSpot={openSpot}
-        />
+        {active.isLoading || waitingForFix ? (
+          <EditorialRailSkeleton testID="home-rank-skeleton" />
+        ) : cards.length > 0 ? (
+          <EditorialRail
+            testID="home-rank-rail"
+            kicker={RANK_KICKER}
+            title={effectiveScope === "nearby" ? "주변 인기 순위" : "전국 인기 순위"}
+            subtitle={formatBaseDate(active.data?.baseDate)}
+            items={shown}
+            onOpenSpot={openSpot}
+          />
+        ) : (
+          <RankList
+            title={effectiveScope === "nearby" ? "주변 인기 순위" : "전국 인기 순위"}
+            note={null}
+            cards={shown}
+            isLoading={false}
+            isError={active.isError}
+            onRetry={() => void active.refetch()}
+            onOpenSpot={openSpot}
+          />
+        )}
 
-        <View style={styles.gap} />
+        <View style={styles.divider} />
 
         <CurationSection
           data={curation.data}
           isLoading={curation.isLoading}
           onOpenSpot={openSpot}
         />
-
-        <View style={styles.divider} />
-
-        <RankList
-          title={effectiveScope === "nearby" ? "주변 인기 순위" : "전국 인기 순위"}
-          note={cards.length > 0 ? formatBaseDate(active.data?.baseDate) : null}
-          cards={shown}
-          isLoading={active.isLoading || waitingForFix}
-          isError={active.isError}
-          onRetry={() => void active.refetch()}
-          onOpenSpot={openSpot}
-        />
-
-        {cards.length > COLLAPSED_RANKS ? (
-          <Pressable
-            testID="home-rank-expand"
-            accessibilityRole="button"
-            onPress={() => setExpanded((v) => !v)}
-            style={styles.expand}
-          >
-            <Text style={styles.expandText}>
-              {expanded ? "접기" : `${COLLAPSED_RANKS + 1}~${cards.length}위 더보기`}
-            </Text>
-            <Icon name={expanded ? "chevron-up" : "chevron-down"} size={16} color={colors.sec} />
-          </Pressable>
-        ) : null}
 
         <View style={styles.divider} />
 
