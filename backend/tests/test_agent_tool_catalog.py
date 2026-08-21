@@ -278,6 +278,7 @@ async def test_catalog_covers_every_real_tool() -> None:
         "festival",
         "compare_regions",
         "region_profile",
+        "similar_region",
     }
 
 
@@ -381,3 +382,71 @@ async def test_region_profile_caps_the_cards_it_returns(
 
 async def test_region_profile_labels_the_step_with_the_place() -> None:
     assert CATALOG["region_profile"].label({"regions": ["전주"]}) == "전주 살펴보기"
+
+
+async def _seed_embedded(
+    session: AsyncSession, content_id: str, *, title: str, addr1: str, tilt: float
+) -> None:
+    await _seed(session, content_id, title=title, addr1=addr1)
+    vector = "[" + ",".join(f"{tilt if i == 0 else 0.1:.4f}" for i in range(512)) + "]"
+    await session.execute(
+        text(
+            "INSERT INTO spot_embeddings (content_id, image_url, embedding) "
+            "VALUES (:cid, 'http://kto/i.jpg', CAST(:v AS halfvec(512)))"
+        ),
+        {"cid": content_id, "v": vector},
+    )
+
+
+async def test_similar_region_needs_a_region(ctx: ToolContext) -> None:
+    result = await CATALOG["similar_region"].run(ctx, {})
+
+    assert result.rows == []
+    assert "regions" in result.observation
+
+
+async def test_similar_region_says_when_the_place_has_no_embeddings(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """씨앗을 혼잡도로 고르면 임베딩 없는 곳이 잡힌다 — 실제로 그랬다."""
+    await _seed(db_session, "sr-noemb", title="임베딩없음", addr1="서울특별시 중구 21")
+    await db_session.flush()
+
+    result = await CATALOG["similar_region"].run(ctx, {"regions": ["서울"]})
+
+    assert result.rows == []
+    assert "임베딩" in result.observation
+
+
+async def test_similar_region_excludes_the_source_region(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """같은 지역을 돌려주면 "닮은 다른 지역" 이 아니라 그냥 검색이다."""
+    await _seed_embedded(db_session, "sr-src", title="기준지", addr1="서울특별시 중구 22", tilt=0.9)
+    await _seed_embedded(
+        db_session, "sr-same", title="같은지역", addr1="서울특별시 중구 23", tilt=0.9
+    )
+    await db_session.flush()
+
+    result = await CATALOG["similar_region"].run(ctx, {"regions": ["서울"]})
+
+    assert [row.content_id for row in result.rows] == []
+
+
+async def test_similar_region_finds_another_sido(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    await _seed_embedded(db_session, "sr-a", title="서울기준", addr1="서울특별시 중구 31", tilt=0.9)
+    await _seed_embedded(
+        db_session, "sr-b", title="부산닮은곳", addr1="부산광역시 해운대구 1", tilt=0.9
+    )
+    await _seed_embedded(
+        db_session, "sr-c", title="제주먼곳", addr1="제주특별자치도 제주시 1", tilt=-0.9
+    )
+    await db_session.flush()
+
+    result = await CATALOG["similar_region"].run(ctx, {"regions": ["서울"]})
+
+    assert "sr-b" in [row.content_id for row in result.rows], result.observation
+    assert "sr-a" not in [row.content_id for row in result.rows]
+    assert "부산" in result.observation

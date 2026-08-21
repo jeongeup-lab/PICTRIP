@@ -96,6 +96,28 @@ async def match_spots_by_vector(
 _SPOT_EMBEDDING_SQL = "SELECT embedding::text FROM spot_embeddings WHERE content_id = :cid"
 
 
+_EMBEDDED_IN_REGION_SQL = """
+    SELECT s.content_id
+    FROM spots s
+    JOIN spot_embeddings e ON e.content_id = s.content_id AND e.image_url = s.first_image_url
+    WHERE s.show_flag = 1
+      AND s.addr1 LIKE ANY(CAST(:prefixes AS text[]))
+    ORDER BY s.content_id
+    LIMIT :lim
+"""
+
+
+async def embedded_spot_ids(
+    session: AsyncSession, *, region_prefixes: list[str], limit: int
+) -> list[str]:
+    """임베딩이 있는 것만 고른다 — 혼잡도 상위와 임베딩 보유는 무관하다."""
+    rows = await session.execute(
+        text(_EMBEDDED_IN_REGION_SQL),
+        {"prefixes": [f"{prefix}%" for prefix in region_prefixes], "lim": limit},
+    )
+    return [row.content_id for row in rows]
+
+
 async def load_spot_embedding(session: AsyncSession, content_id: str) -> list[float] | None:
     result = await session.execute(text(_SPOT_EMBEDDING_SQL), {"cid": content_id})
     raw = result.scalar_one_or_none()
