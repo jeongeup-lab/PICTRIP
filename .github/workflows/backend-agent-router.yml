@@ -76,7 +76,9 @@ jobs:
             echo "답변이 오지 않았다 (받은 바이트: $(wc -c < "$out"))"; exit 1; }
           rm -f "$out"
 
-          routed="$(docker logs --since 3m "$cid" 2>&1 | grep -E 'agent.search.routed' | tail -1)"
+          # grep 이 0건이면 1 로 끝나고 set -e 가 여기서 스크립트를 죽인다.
+          # branches 일 때는 이 로그가 아예 안 찍히는 게 정상이다.
+          routed="$(docker logs --since 3m "$cid" 2>&1 | grep -E 'agent.search.routed' | tail -1 || true)"
           echo "${routed:-(라우팅 로그 없음)}"
           if [ "$ROUTER" = "tools" ]; then
             echo "$routed" | grep -q 'router=tools' || {
