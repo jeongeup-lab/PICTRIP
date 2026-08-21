@@ -76,7 +76,6 @@ async def test_the_flag_off_keeps_every_question_on_the_existing_router(
 @pytest.mark.parametrize(
     "unsupported",
     [
-        {"image_bytes": b"jpeg"},
         {"intent": QueryIntent()},
         {"question": "   "},
         {"question": None},
@@ -352,3 +351,41 @@ async def test_the_opening_call_runs_before_the_model_decides(
 
     assert trace.calls == 1
     assert asked and asked[0] >= 3
+
+
+async def test_a_photo_reaches_the_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    _tools(monkeypatch)
+    marks = _seen(monkeypatch)
+
+    await _run(question="", image_bytes=b"jpeg-bytes", image_mime="image/jpeg")
+
+    assert marks == {"tools": True, "branches": False}
+
+
+async def test_a_photo_opens_with_the_upload_tool() -> None:
+    """첨부는 사실이다 — 무슨 도구를 부를지 모델에게 물을 게 아니다."""
+    call = search._opening(None, b"jpeg-bytes")
+
+    assert call is not None
+    assert call.name == "uploaded_photo"
+
+
+async def test_an_anchor_wins_over_a_photo() -> None:
+    """탭은 명시적 요청이라 첨부보다 앞선다."""
+    call = search._opening(AskAnchor(action="food", contentId="1"), b"jpeg-bytes")
+
+    assert call is not None
+    assert call.name == "nearby"
+
+
+async def test_the_photo_tool_says_when_nothing_was_attached(
+    db_session: Any, redis_client_fake: Any
+) -> None:
+    """모델이 사진 없이 부르면 예외가 아니라 관찰로 되돌린다."""
+    from app.modules.agent.tools import CATALOG
+
+    ctx = ToolContext(session=db_session, redis=redis_client_fake, kto=None)
+    result = await CATALOG["uploaded_photo"].run(ctx, {})
+
+    assert result.rows == []
+    assert "첨부하지 않았습니다" in result.observation
