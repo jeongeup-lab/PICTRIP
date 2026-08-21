@@ -5,6 +5,7 @@ from typing import Any
 from app.modules.agent.schemas import ToolName
 from app.modules.agent.tools.anchored import CONCENTRATION, NEARBY, RELATED
 from app.modules.agent.tools.base import Tool
+from app.modules.agent.tools.compare import COMPARE_REGIONS
 from app.modules.agent.tools.detail import SPOT_DETAIL
 from app.modules.agent.tools.festival import FESTIVAL
 from app.modules.agent.tools.resolve import RESOLVE_PLACE
@@ -13,6 +14,7 @@ from app.modules.agent.tools.search import CATEGORY_SEARCH, PHOTO_MATCH, TITLE_S
 _TOOLS: tuple[Tool, ...] = (
     CATEGORY_SEARCH,
     TITLE_SEARCH,
+    COMPARE_REGIONS,
     RESOLVE_PLACE,
     SPOT_DETAIL,
     FESTIVAL,
