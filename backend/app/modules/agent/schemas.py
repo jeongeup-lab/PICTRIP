@@ -94,6 +94,8 @@ class QueryIntent(BaseModel):
     indoorOnly: bool = False
     nearMe: bool = False
     outOfScope: bool = False
+    days: int | None = Field(None, ge=1, le=7)
+    """일정 턴임을 남긴다 — 없으면 칩 한 번에 일정이 전국 검색으로 무너진다."""
     subQuestions: list[IntentText] = Field(default_factory=list, max_length=MAX_SUB_QUESTIONS)
 
 
