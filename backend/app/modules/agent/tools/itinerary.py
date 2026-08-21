@@ -83,11 +83,21 @@ def _crowd(args: Mapping[str, Any]) -> CrowdPreference:
     return cast(CrowdPreference, value) if value in ("quiet", "any", "popular") else "any"
 
 
+OUTSIDE_TRAVEL_POOL = ("LS", "SH")
+
+
 async def _sights(
     ctx: ToolContext, keywords: list[str], prefixes: list[str], crowd: CrowdPreference
-) -> list[CandidateRow]:
-    codes = await retrieve.resolve_category_codes(ctx.session, keywords)
-    return await retrieve.search_candidates(
+) -> tuple[list[CandidateRow], list[str]]:
+    """레포츠·쇼핑은 여행지 풀 밖이라 코드만 걸면 후보가 0곳이 된다."""
+    usable: list[str] = []
+    dropped: list[str] = []
+    for word in keywords:
+        codes = await retrieve.resolve_category_codes(ctx.session, [word])
+        target = dropped if codes and _outside_pool(codes) else usable
+        target.append(word)
+    codes = await retrieve.resolve_category_codes(ctx.session, usable)
+    rows = await retrieve.search_candidates(
         ctx.session,
         repositories.CandidateQuery(
             limit=retrieve.CANDIDATE_LIMIT, codes=codes or None, region_prefixes=prefixes
@@ -95,6 +105,11 @@ async def _sights(
         preference=crowd,
         near=False,
     )
+    return rows, dropped
+
+
+def _outside_pool(codes: list[str]) -> bool:
+    return all(code.startswith(OUTSIDE_TRAVEL_POOL) for code in codes)
 
 
 def _meal_words(keywords: list[str]) -> list[str]:
@@ -166,13 +181,14 @@ async def _plan_itinerary(ctx: ToolContext, args: Mapping[str, Any]) -> ToolResu
     seeing = [word for word in keywords if word not in eating]
 
     meals, missing = await _meals(ctx, eating, prefixes, crowd)
-    sights = await _sights(ctx, seeing, prefixes, crowd)
+    sights, unsupported = await _sights(ctx, seeing, prefixes, crowd)
 
     return _assemble(
         region,
         sights=_without_outliers(_placed(sights)),
         meals=meals,
         missing=missing,
+        unsupported=unsupported,
         days=days_of(args),
     )
 
@@ -183,6 +199,7 @@ def _assemble(
     sights: list[CandidateRow],
     meals: list[tuple[str, list[CandidateRow]]],
     missing: list[str],
+    unsupported: list[str],
     days: int,
 ) -> ToolResult:
     """맛집은 일정에 끼워 넣는 한 끼다 — 볼거리를 대신하지 않는다.
@@ -218,6 +235,8 @@ def _assemble(
     unfilled = [*missing, *short]
     if unfilled:
         plan_text += f" ({' · '.join(unfilled)}: 그 지역에서 찾지 못해 일정에 다 넣지 못했습니다)"
+    if unsupported:
+        plan_text += f" ({' · '.join(unsupported)}: 일정에 넣을 수 있는 종류가 아닙니다)"
     return ToolResult(rows=plan, observation=plan_text, fact=plan_text)
 
 
@@ -266,7 +285,10 @@ PLAN_ITINERARY = Tool(
             "categories": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "넣고 싶은 장소 종류. 비우면 전체.",
+                "description": (
+                    "넣고 싶은 장소 종류. 비우면 전체. "
+                    "관광지와 음식점만 넣을 수 있고 숙소·쇼핑·레포츠는 다루지 않는다."
+                ),
             },
             "crowd": {
                 "type": "string",

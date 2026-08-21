@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.agent import repositories, toolloop
 from app.modules.agent.routing import ToolCall
 from app.modules.agent.services import retrieve
-from app.modules.agent.tools import CATALOG, ToolContext, schemas
+from app.modules.agent.tools import CATALOG, ToolContext, itinerary, schemas
 from app.modules.agent.tools.base import describe
 
 pytestmark = pytest.mark.asyncio
@@ -806,3 +806,10 @@ async def test_plan_itinerary_reports_a_food_kind_it_ran_out_of(
     )
 
     assert "카페" in result.observation.split("(")[-1]
+
+
+async def test_plan_itinerary_marks_shopping_codes_as_outside_the_travel_pool() -> None:
+    """여행지 풀은 LS·SH 를 제외한다 — 코드만 걸면 쇼핑 일정이 조용히 0곳이 된다."""
+    assert itinerary._outside_pool(["SH01", "SH02"])
+    assert itinerary._outside_pool(["LS03"])
+    assert not itinerary._outside_pool(["NA01", "SH01"])
