@@ -689,3 +689,34 @@ async def test_plan_itinerary_keeps_the_dish_the_user_named(
 
     assert "할매국밥" in result.observation
     assert "파스타집" not in result.observation
+
+
+async def test_plan_itinerary_pools_each_named_dish_apart(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """제목 조건이 AND 라 한 풀에 두 음식명을 넣으면 교집합이 비어 둘 다 사라진다."""
+    for i in range(6):
+        await _seed_at(db_session, f"pp-{i}", title=f"볼거리{i}", lat=37.5 + i * 0.002, lng=127.0)
+    await _seed_food(db_session, "pp-a", title="할매국밥", lat=37.501)
+    await _seed_food(db_session, "pp-b", title="초밥명가", lat=37.502)
+    await db_session.flush()
+
+    result = await CATALOG["plan_itinerary"].run(
+        ctx, {"regions": ["서울"], "days": 1, "categories": ["국밥", "초밥"]}
+    )
+
+    assert "할매국밥" in result.observation
+    assert "초밥명가" in result.observation
+
+
+async def test_plan_itinerary_says_when_it_could_not_fill_the_days(
+    ctx: ToolContext, db_session: AsyncSession
+) -> None:
+    """4일을 요청했는데 1일을 조용히 돌려주면 못 채운 사실이 사라진다."""
+    for i in range(3):
+        await _seed_at(db_session, f"ps-{i}", title=f"드문곳{i}", lat=37.5 + i * 0.002, lng=127.0)
+    await db_session.flush()
+
+    result = await CATALOG["plan_itinerary"].run(ctx, {"regions": ["서울"], "days": 4})
+
+    assert "요청한 4일" in result.observation
