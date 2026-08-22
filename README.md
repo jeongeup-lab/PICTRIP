@@ -10,7 +10,7 @@
 - 해외 명소 2,347곳 (Wikidata · Wikimedia Commons)
 - 매칭은 CLIP ViT-B/32 이미지 임베딩의 코사인 거리 ANN — 유사도 수치는 노출하지
   않는다(코사인 거리의 % 환산은 사용자를 오도한다)
-- 여행 탭은 대화형 에이전트: Gemini가 의도를 뽑고 답변을 쓰되, **검색 자체는
+- 여행 탭은 대화형 에이전트: LLM(`LLM_PROVIDER`, 현재 DeepSeek)이 의도를 뽑고 답변을 쓰되, **검색 자체는
   결정적 SQL/pgvector**다
 
 ## 화면
@@ -55,7 +55,7 @@ CT110=PostgreSQL+pgvector · CT111=pipeline · CT112=api+Redis · CT113=모니�
 ```bash
 cd backend
 uv sync
-cp ../.env.example .env          # KTO·Kakao·Gemini 키를 채운다
+cp ../.env.example .env          # KTO·Kakao·DeepSeek 키를 채운다
 uv run alembic upgrade head
 uv run uvicorn app.main:app --reload
 ```

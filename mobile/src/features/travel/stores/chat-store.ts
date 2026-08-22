@@ -49,7 +49,7 @@ export interface ChatTurn {
 }
 
 export const HISTORY_LIMIT = 8;
-export const HISTORY_TEXT_LIMIT = 300;
+export const HISTORY_TEXT_LIMIT = 160;
 export const HISTORY_SPOT_ID_LIMIT = 8;
 
 export function historyOf(turns: ChatTurn[]): ChatHistoryItem[] {

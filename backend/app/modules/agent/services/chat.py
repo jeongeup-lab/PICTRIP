@@ -42,7 +42,9 @@ BLOG_CALL_TIMEOUT_SECONDS = 1.8
 WRITER_IDLE_TIMEOUT_SECONDS = 15.0
 GROUNDED_SPOT_LIMIT = 3
 GROUNDED_POST_LIMIT = 6
-HISTORY_TAIL = 4
+# 라이터는 도구 결과로 산문을 쓴다 — 후속 질문의 문맥은 context.intent/spots 가 이미 나른다.
+# 이력은 직전 한 턴(user+assistant)이면 충분하고, 국외로 나가는 자유 입력을 그만큼 줄인다.
+HISTORY_TAIL = 2
 TOPIC_WORD_LIMIT = 4
 BRACKETED = re.compile("[\\[(\uff08\u3010][^\\])\uff09\u3011]*[\\])\uff09\u3011]")
 QUESTION_TAIL = re.compile(

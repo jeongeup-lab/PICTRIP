@@ -57,8 +57,8 @@
 
 ## `POST /agent/chat`
 
-여행 탭의 대화 진입점 ([ADR 0020](../adr/0020-travel-tab-chat-first-llm-writer.md)).
-검색은 `/agent/ask`와 같은 결정적 파이프라인이고, **답변 산문만 Gemini Flash가
+여행 탭의 대화 진입점 (결정 기록 — `docs/decisions.md`).
+검색은 `/agent/ask`와 같은 결정적 파이프라인이고, **답변 산문만 LLM(`LLM_PROVIDER`, 현재 DeepSeek)이
 스트리밍**으로 쓴다. 근거는 네이버 블로그 검색(≤4콜, 콜당 2.5s, 실패 무해)으로
 보강한다. 사진이 붙으면 multipart(`photo` 필드, `/agent/ask`와 동일 규칙),
 아니면 JSON. rate-limit 10/분/IP.
@@ -85,9 +85,9 @@ AppError/JSend(422 등)로 나간다.
 나는 경로는 내부 영문 문구 대신 `BLANK_ANSWER` 안내를 보낸다. 라이터가 15초 무응답이거나
 예외를 내면 `error` 이벤트 후 종료하고, 클라이언트는 같은 입력으로 재시도한다.
 
-**LLM이 흔들려도 턴은 끝난다.** Gemini 의도 추출이 실패하면(429·타임아웃)
+**LLM이 흔들려도 턴은 끝난다.** LLM 의도 추출이 실패하면(429·타임아웃)
 사전·규칙 기반 폴백 의도로 **검색을 계속하고**, 그 턴의 `intent` 스텝 badge 가
-`Gemini` 대신 `사전 매칭`으로 내려간다. 라이터가 실패하면 `ask` 가 만든 결정적
+`사전 매칭` 으로 내려간다. 라이터가 실패하면 `ask` 가 만든 결정적
 문장을 `delta` 로 흘리고 정상 `done` 한다 — 카드·출처는 그대로다. 둘 다 비어야
 `error` 를 낸다. 429 원문 같은 내부 문구는 사용자 답변으로 나가지 않는다.
 
@@ -98,9 +98,9 @@ AppError/JSend(422 등)로 나간다.
 ## `POST /agent/ask`
 
 구 여행 탭의 질의 표면. 자유문·사진·직전 턴의 의도를 한 요청으로 받아 한 번에
-응답한다(스트리밍 없음 — [ADR 0009](../adr/0009-travel-tab-conversational-agent.md)).
+응답한다(스트리밍 없음 — `docs/decisions.md`).
 신규 JS는 `/agent/chat`을 쓰고, 이 엔드포인트는 **구 OTA 클라이언트가 남아 있는
-동안만** 존치한다 ([ADR 0020](../adr/0020-travel-tab-chat-first-llm-writer.md)).
+동안만** 존치한다 (결정 기록 — `docs/decisions.md`).
 사진이 붙으면 `multipart/form-data`, 아니면 JSON. rate-limit 20/분/IP.
 
 **요청** — `question` · `photo` · `intent` · `anchor` **넷 중 하나 이상**이
@@ -110,15 +110,15 @@ AppError/JSend(422 등)로 나간다.
 |---|---|---|
 | `question` | string | 자유문. 사진에 덧붙이면 지역·근처 조건으로 함께 적용된다 |
 | `photo` | file | multipart 전용. 임베딩 후 즉시 폐기, **디스크에 닿지 않는다**(아래) |
-| `intent` | `QueryIntent` | 직전 응답의 `intent`를 되돌려 보내는 refine 경로. **있으면 Gemini를 호출하지 않는다** |
+| `intent` | `QueryIntent` | 직전 응답의 `intent`를 되돌려 보내는 refine 경로. **있으면 LLM 을 호출하지 않는다** |
 | `patch` | `RefinePatch` | `intent` 위에 덮어쓸 축. `{crowdPreference?, indoorOnly?, nearMe?, drop?}` |
-| `anchor` | `{contentId, action}` | 카드 선택 후속 경로. `action` = `food`·`cafe`·`nearby`(앵커 좌표 반경 3km 결정적 조회, 거리순) · `crowd`(혼잡도 답변 전용 턴). **있으면 question/intent를 무시**하고 Gemini를 호출하지 않는다. 사진과 함께 오면 `VALIDATION_FAILED` |
+| `anchor` | `{contentId, action}` | 카드 선택 후속 경로. `action` = `food`·`cafe`·`nearby`(앵커 좌표 반경 3km 결정적 조회, 거리순) · `crowd`(혼잡도 답변 전용 턴). **있으면 question/intent를 무시**하고 LLM 을 호출하지 않는다. 사진과 함께 오면 `VALIDATION_FAILED` |
 | `lat` / `lng` | float | 거리 정렬·`내 근처` 의도에만 사용 |
 | `region` | string | 폐기된 조건 시트의 잔재. OTA 전 구 앱만 보내고, 지역 조건으로만 옮겨 태운다(아래) |
 
 multipart에서 `intent`/`patch`/`anchor`는 **JSON 문자열 필드**로 온다 (파싱
 실패 시 `VALIDATION_FAILED`). 정형 조건 시트(`region`/`when`/`who`)는 폐기됐다
-([ADR 0010](../adr/0010-travel-tab-drops-condition-sheet.md)).
+(결정 기록 — `docs/decisions.md`).
 
 **구 앱 `region` 호환 셈(OTA 롤아웃까지만).** 백엔드는 dev 머지 즉시 배포되고
 모바일 OTA는 뒤따라 도착한다. 그 사이 구 앱은 조건 시트의 `region`을 계속 보내는데,
@@ -139,7 +139,7 @@ crowdPreference, festivalOnly, indoorOnly, nearMe, outOfScope}`. 배열은 전�
 `drop` 축은 `crowd`·`indoor`·`near`·`region`·`category`이고, 해당 축의 intent
 필드를 기본값으로 되돌린다(`category`는 `categoryKeywords`+`moodHints` 둘 다).
 
-Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `outOfScope`가
+LLM(현재 DeepSeek)은 `question` → 구조화 의도 추출에만 쓴다. 의도에 `outOfScope`가
 서면("파리 가볼 만한 곳") 검색을 돌리지 않고 `AGENT_OUT_OF_SCOPE`로 끊는다 —
 빈 의도로 전국 검색이 돌아 엉뚱한 국내 스팟을 추천하는 일이 없도록. 단 사진
 질의는 예외로, 해외 사진 → 국내 매칭이 제품의 본래 동작이라 그대로 진행한다.
@@ -148,7 +148,7 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 
 | 필드 | 타입 | 비고 |
 |---|---|---|
-| `steps[]` | `{tool, label, badge}` | 서버가 **실제로 실행한** 툴 순서. `badge`는 그 단계 후 잔여 건수(`128곳`) 또는 근거 표시(`Gemini` · `pgvector`) |
+| `steps[]` | `{tool, label, badge}` | 서버가 **실제로 실행한** 툴 순서. `badge`는 그 단계 후 잔여 건수(`128곳`) 또는 상태 표시(`사전 매칭` · `시간 초과`) |
 | `answer[]` | `{text, emphasis}` | 문장 조각. `emphasis=true`는 `accentText` 800으로 렌더 (HTML을 보내지 않는다) |
 | `context.focusContentId` | 캐러셀에서 보고 있는 카드. 자유문에 함께 실린다 — `detail` 턴의 1순위 대상이다 |
 | `spots[]` | `{contentId, title, regionLabel, imageUrl, tag, lat, lng, categoryGroup, hasCrowd}` | 상위 20곳 — 여행 탭 캐러셀이 전부 그린다. `tag`는 카드 좌상단 배지(`하위 8%` · `4.2km` · `유사도 86%`). `categoryGroup`은 `lcls_systm*`에서 파생한 지도 핀 글리프 키(`food`·`cafe`·`attraction`·`leisure`·`shopping`, 없으면 `null`). 여행 후보 풀은 전시·공연장(`VE06`·`VE07`)을 담지만 지도 탭 필터용 `derive_category`는 그 둘을 빼므로, 에이전트는 `repositories.category_group`으로 되메워 `실내만` 결과의 핀이 통째로 흰 점이 되지 않게 한다. `anchor.action=crowd`는 빈 배열 |
@@ -158,13 +158,13 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 | `suggestions[]` | `string[]` | `patch.drop`이 없는 `refinements[]`의 `label`만 **같은 순서**로 담은 목록. OTA 이전 구버전 앱과의 하위호환 전용이고 새 클라이언트는 `refinements`를 읽는다 |
 
 `imageUrl`은 서명된 `img.pictrip.org` 프록시 URL — 클라이언트는 변형 없이 그대로
-쓴다(`cpyrhtDivCd=Type3` 무변형, [ADR 0005](../adr/0005-kto-image-policy.md)).
+쓴다(`cpyrhtDivCd=Type3` 무변형, `docs/decisions.md`).
 
 **`answer[]` 는 구체적 사실이 먼저, 조건·개수가 뒤다.** 문장은 LLM 이 아니라
 `agent/services/ask.py` 의 결정적 템플릿이 짓는다(`_lead_sentence` +
 `_scope_sentence`). 앱의 결과 패널이 **첫 문장만** 접어 보여주므로 그 한 줄이
 개수가 아니라 사실을 들어야 한다
-([ADR 0017](../adr/0017-travel-tab-drops-the-sheet-for-a-map-carousel.md)).
+(결정 기록 — `docs/decisions.md`).
 
 | 경로 | 첫 문장 | 뒤따르는 문장 |
 |---|---|---|
@@ -192,7 +192,7 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 
 | tool | 구현 | 하는 일 |
 |---|---|---|
-| `intent` | `agent/services/intent.py` | Gemini Flash 자유문 → 구조화 의도 |
+| `intent` | `agent/toolloop.py` | LLM 자유문 → 구조화 의도 (전용 `intent.py` 는 없다) |
 | `photo_match` | `agent/services/photo.py` | CLIP 임베딩 → pgvector 유사도 (지역 조건은 SQL에 포함) |
 | `resolve_place` | `agent/services/resolve.py` | 장소명 → KTO 스팟 (질문이 특정 장소를 지목할 때) |
 | `category_search` | `agent/repositories.py` + `lcls_systm_codes` | 카테고리 키워드 → lcls 코드 → 스팟 조회 |
@@ -208,7 +208,7 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 `VE06`~`VE11`을 전부 뺀 채로 남아 있다. `indoorOnly`는 카테고리 코드를 대체하지
 않고 **코드 절로 AND** 한다 — 중분류 `VE06`·`VE07` 또는 소분류
 `VE020400`(수족관)·`VE120300`(기타문화시설). 이름 ILIKE 매칭은 쓰지 않는다
-([ADR 0010](../adr/0010-travel-tab-drops-condition-sheet.md)). 실내 ∩ 카테고리
+(결정 기록 — `docs/decisions.md`). 실내 ∩ 카테고리
 코드가 0건이면 `실내로만 다시 조회` 단계로 **카테고리 코드를 버리고** 실내 절만
 남겨 다시 조회한다 — 실내를 포기하지는 않는다.
 
@@ -247,7 +247,7 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 그런 턴에서는 `concentration` step 자체를 넣지 않는다 — 잔여 건수가 그대로인
 `혼잡도로 추림` 배지는 하지 않은 일을 했다고 말하는 것이다.
 
-**사진 질의도 덧붙인 말을 읽는다.** 사진 + 텍스트면 CLIP 임베딩과 Gemini 의도
+**사진 질의도 덧붙인 말을 읽는다.** 사진 + 텍스트면 CLIP 임베딩과 LLM 의도
 추출을 **동시에** 돌리고(지연은 둘 중 큰 쪽), 그 다음 지역 조건을 **벡터 SQL 안에**
 넣어 검색한다 — 전역 상위 12개를 뽑고 나서 지역으로 거르면 13위 밖의 그 지역
 후보를 아예 못 본다. 의도 추출이 실패해도 사진 결과는 그대로 내려간다(best-effort).
@@ -258,8 +258,8 @@ Gemini Flash는 `question` → 구조화 의도 추출에만 쓴다. 의도에 `
 전체 집합** 기준으로 계산한다 — 잘린 400개 안의 상대 순위가 아니다.
 
 **의도 추출이 먼저 고르는 것은 조건이 아니라 `task` 다.** `search`(기본) ·
-`detail` · `smalltalk` · `unsupported` 네 가지이며 같은 Gemini 호출 한 번에서
-나온다 — 라우팅용 왕복을 따로 두지 않는다([ADR 0014](../adr/0014-travel-tab-answers-not-only-searches.md)).
+`detail` · `smalltalk` · `unsupported` 네 가지이며 같은 LLM 호출 한 번에서
+나온다 — 라우팅용 왕복을 따로 두지 않는다(결정 기록 — `docs/decisions.md`).
 `detail` 이면 `targetPlace` 와 `detailFields`(`hours`·`closed`·`parking`·
 `contact`·`fee`·`overview`)가 함께 온다. `search` 가 아니면 조건 필드는 비운다.
 
@@ -356,7 +356,7 @@ KTO 라이브 조회 1회가 붙는데, 이는 **상세 화면을 여는 것과 
 (장소명만 있는 질의)은 기존 문구를 그대로 쓴다.
 
 **후속 칩은 문장이 아니라 intent를 되돌려 보낸다.** 응답의 `intent`에 `patch`를
-얹어 다시 보내면 서버가 `apply_patch` 후 곧장 조회한다 — Gemini 왕복이 없다.
+얹어 다시 보내면 서버가 `apply_patch` 후 곧장 조회한다 — LLM 왕복이 없다.
 `refinements`는 **이미 켜진 축을 빼고** 만들어 "눌렀는데 그대로"를 없앤다:
 `crowdPreference=any`면 `사람 적은 곳만`, `quiet`면 `유명한 곳으로`,
 `indoorOnly=false`면 `실내만`, 좌표가 있고 `nearMe=false`면 `가까운 순으로`.
@@ -384,7 +384,7 @@ KTO 라이브 조회 1회가 붙는데, 이는 **상세 화면을 여는 것과 
 앱은 라벨을 자유문 질문으로 되쏘는 기존 동작을 이어간다.
 
 **`suggestions`는 `drop` 칩을 뺀다.** `사람 적은 곳만`·`실내만`은 자유문으로
-되쏴도 Gemini가 혼잡도·실내 의도를 다시 뽑아내 직전 턴의 문맥만 잃는다.
+되쏴도 LLM 이 혼잡도·실내 의도를 다시 뽑아내 직전 턴의 문맥만 잃는다.
 `지역 넓히기`는 풀 축이 `patch.drop`에만 있어 자유문으로는 빈 의도가 되고,
 구버전 앱이 보고 있던 지역·카테고리·사진 문맥을 통째로 버린 전국 결과가
 돌아온다. 그래서 레거시 투영은 `patch.drop`이 있는 칩을 **구조로**
@@ -506,7 +506,7 @@ TTL 48h이며 **신선도는 TTL이 아니라 저장된 날짜로 판정한다**
 | `KTO_API_UNAVAILABLE` | 502 | KTO 무응답 → 부분 degrade |
 | `OAUTH_PROVIDER_UNAVAILABLE` / `OAUTH_ID_TOKEN_INVALID` | 502 / 401 | 소셜 공급자 장애 / id_token 무효 |
 | `ADMIN_UNAUTHORIZED` · `ADMIN_HISTORY_NOT_FOUND` · `ADMIN_TRIGGER_FAILED` · `ADMIN_VALIDATION` | 401·404·502·422 | 어드민 전용 |
-| `AGENT_INTENT_UNAVAILABLE` | 502 | Gemini Flash 무응답 → 재시도 칩 |
+| `AGENT_INTENT_UNAVAILABLE` | 502 | LLM 무응답 → 재시도 칩 |
 | `AGENT_NO_RESULTS` | 422 | 지목한 장소를 못 찾음 · 앵커 반경에 아무것도 없음 · 축제 0건. **조건 때문에 0곳인 경우는 에러가 아니라 200이다** |
 | `AGENT_OUT_OF_SCOPE` | 422 | 해외 여행지 질의 → 국내만 가능 안내 |
 | `AGENT_FESTIVAL_UNAVAILABLE` | 502 | KTO `searchFestival2` 무응답 |
