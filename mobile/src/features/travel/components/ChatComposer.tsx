@@ -4,13 +4,10 @@ import { Image } from "expo-image";
 import { Icon } from "@/components/Icon";
 import { PHOTO_PICK_FAILED, PHOTO_SHOOT_FAILED } from "@/features/travel/lib/agent-errors";
 import { pickTravelPhoto, shootTravelPhoto } from "@/features/travel/usecases/pick-travel-photo";
-import type { FocusedSpot } from "@/features/travel/lib/anchor-actions";
 import type { PhotoUpload } from "@/features/travel/api";
 import { colors, radii, spacing } from "@/constants/theme";
 
 export const ASK_PLACEHOLDER = "PICTRIP에게 물어보세요";
-export const SUBJECT_SUFFIX = "에 대해 묻는 중";
-export const SUBJECT_CLEAR_LABEL = "이 여행지에 대해 묻기 해제";
 export const STREAMING_PLACEHOLDER = "답변을 만드는 중…";
 export const ATTACH_HEADLINE = "이 사진 같은 분위기로 찾아요";
 export const ATTACH_NOTICE = "사진은 저장하지 않아요";
@@ -19,19 +16,13 @@ export const ATTACH_PICK_LABEL = "앨범에서 선택";
 export const ATTACH_CANCEL_LABEL = "취소";
 export const MAX_MESSAGE_CHARS = 500;
 
-export function askPlaceholder(subject: FocusedSpot | null): string {
-  return subject ? `${subject.title}에 대해 물어보세요` : ASK_PLACEHOLDER;
-}
-
 interface Props {
   streaming: boolean;
-  subject: FocusedSpot | null;
   onSend: (text: string, photo: PhotoUpload | null) => void;
   onNotice: (message: string) => void;
-  onClearSubject: () => void;
 }
 
-export function ChatComposer({ streaming, subject, onSend, onNotice, onClearSubject }: Props) {
+export function ChatComposer({ streaming, onSend, onNotice }: Props) {
   const [draft, setDraft] = useState("");
   const [photo, setPhoto] = useState<PhotoUpload | null>(null);
 
@@ -97,34 +88,13 @@ export function ChatComposer({ streaming, subject, onSend, onNotice, onClearSubj
         </View>
       ) : null}
 
-      {subject && !photo ? (
-        <View testID="travel-subject" style={styles.subject}>
-          <View style={styles.subjectBadge}>
-            <Text style={styles.subjectBadgeText}>{subject.index + 1}</Text>
-          </View>
-          <Text style={styles.subjectText} numberOfLines={1}>
-            {subject.title}
-            <Text style={styles.subjectSuffix}>{SUBJECT_SUFFIX}</Text>
-          </Text>
-          <Pressable
-            testID="travel-subject-clear"
-            accessibilityRole="button"
-            accessibilityLabel={SUBJECT_CLEAR_LABEL}
-            hitSlop={8}
-            onPress={onClearSubject}
-          >
-            <Icon name="close" size={13} color={colors.ter} strokeWidth={2} />
-          </Pressable>
-        </View>
-      ) : null}
-
       <View style={styles.field}>
         <TextInput
           testID="travel-input"
           style={styles.input}
           value={draft}
           onChangeText={setDraft}
-          placeholder={streaming ? STREAMING_PLACEHOLDER : askPlaceholder(subject)}
+          placeholder={streaming ? STREAMING_PLACEHOLDER : ASK_PLACEHOLDER}
           placeholderTextColor={colors.ter}
           returnKeyType="send"
           submitBehavior="blurAndSubmit"
@@ -178,38 +148,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,59,83,0.32)",
     backgroundColor: colors.accentFill,
   },
-  subject: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    alignSelf: "flex-start",
-    maxWidth: "100%",
-    height: 30,
-    marginBottom: 9,
-    paddingLeft: 7,
-    paddingRight: 9,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: colors.glassBorder,
-    backgroundColor: colors.fill,
-  },
-  subjectBadge: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.accent,
-  },
-  subjectBadgeText: { fontSize: 10, fontWeight: "800", color: colors.onImage },
-  subjectText: {
-    flexShrink: 1,
-    fontSize: 12,
-    fontWeight: "600",
-    letterSpacing: -0.2,
-    color: colors.ink,
-  },
-  subjectSuffix: { fontWeight: "500", color: colors.ter },
   attachThumb: { width: 46, height: 46, borderRadius: 11 },
   attachCopy: { flex: 1 },
   attachTitle: { fontSize: 13.5, fontWeight: "700", letterSpacing: -0.2, color: colors.ink },

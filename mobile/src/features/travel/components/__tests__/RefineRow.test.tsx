@@ -3,7 +3,7 @@ import { Text } from "react-native";
 import renderer, { act } from "react-test-renderer";
 
 import type { Suggestion } from "@/features/travel/api";
-import { RefineRow } from "@/features/travel/components/RefineRow";
+import { RefineRow, RETRY_LEAD } from "@/features/travel/components/RefineRow";
 
 const loosen: Suggestion = { label: "실내 빼기", patch: { drop: "indoor" } };
 const tighten: Suggestion = { label: "한적한 곳으로", patch: { crowdPreference: "quiet" } };
@@ -23,10 +23,10 @@ function labels(tree: renderer.ReactTestRenderer): string[] {
     .filter((child): child is string => typeof child === "string");
 }
 
-it("조건을 푸는 제안만 칩으로 남긴다", () => {
+it("조건을 푸는 제안만 칩으로 남기고 무엇을 하는 줄인지 밝힌다", () => {
   const tree = draw(<RefineRow refinements={[loosen, tighten]} onRefine={jest.fn()} />);
 
-  expect(labels(tree)).toEqual(["실내 빼기"]);
+  expect(labels(tree)).toEqual([RETRY_LEAD, "실내 빼기"]);
 });
 
 it("칩을 누르면 그 축을 빼는 patch 가 나간다", () => {

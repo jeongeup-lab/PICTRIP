@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Icon } from "@/components/Icon";
 import { AnchorRow } from "@/features/travel/components/AnchorRow";
@@ -70,7 +70,7 @@ export function AssistantTurn({
   const reportFocus = useCallback(
     (index: number) => {
       const spot = turn.spots[index];
-      onFocusSpot(spot ? { contentId: spot.contentId, title: spot.title, index } : null);
+      onFocusSpot(spot ? { contentId: spot.contentId, title: spot.title } : null);
     },
     [onFocusSpot, turn.spots],
   );
@@ -83,10 +83,6 @@ export function AssistantTurn({
     },
     [latest, reportFocus],
   );
-
-  useEffect(() => {
-    if (latest) reportFocus(focusedAt);
-  }, [latest, focusedAt, reportFocus]);
 
   const streaming = turn.status === "streaming";
   const showAnchors = latest && !streaming && focused !== null;
@@ -139,11 +135,7 @@ export function AssistantTurn({
           index={focusedAt}
           title={focused.title}
           onAnchor={(action, label) =>
-            onAnchor(
-              { contentId: focused.contentId, title: focused.title, index: focusedAt },
-              action,
-              label,
-            )
+            onAnchor({ contentId: focused.contentId, title: focused.title }, action, label)
           }
         />
       ) : null}

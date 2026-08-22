@@ -5,8 +5,6 @@ import { colors, radii, spacing } from "@/constants/theme";
 import { ANCHOR_CHOICES } from "@/features/travel/lib/anchor-actions";
 import type { AnchorAction } from "@/features/travel/api";
 
-export const ABOUT_SUFFIX = "에 대해";
-
 interface Props {
   index: number;
   title: string;
@@ -20,10 +18,9 @@ export const AnchorRow = memo(function AnchorRow({ index, title, onAnchor }: Pro
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{index + 1}</Text>
         </View>
-        <Text style={styles.title} numberOfLines={1}>
+        <Text testID="travel-anchor-title" style={styles.title} numberOfLines={1}>
           {title}
         </Text>
-        <Text style={styles.about}>{ABOUT_SUFFIX}</Text>
       </View>
 
       <ScrollView
@@ -73,7 +70,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
     color: colors.ink,
   },
-  about: { fontSize: 12, fontWeight: "600", letterSpacing: -0.2, color: colors.ter },
   chips: { flexDirection: "row", gap: 6, paddingHorizontal: spacing.md },
   chip: {
     paddingVertical: 6,
