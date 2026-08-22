@@ -4,7 +4,7 @@ import { router, useScrollToTop } from "expo-router";
 import { AppBar } from "@/components/AppBar";
 import { Icon } from "@/components/Icon";
 import { ChannelStories } from "@/features/channels/components/ChannelStories";
-import { AiSection } from "@/features/home/components/AiSection";
+import { AI_GRID_SIZE, AiSection } from "@/features/home/components/AiSection";
 import {
   CurationSection,
   EditorialRail,
@@ -18,6 +18,7 @@ import {
   useCuration,
   useNearby,
   useRecommendations,
+  useTastePicks,
   useRegionLabel,
   useTrending,
 } from "@/features/home/queries";
@@ -47,6 +48,7 @@ export default function HomeScreen() {
   const national = useTrending();
   const curation = useCuration();
   const recommendations = useRecommendations(coords);
+  const tastePicks = useTastePicks(AI_GRID_SIZE);
 
   const locationDenied = status === "denied" || status === "undetermined";
   const nearbyIsEmpty =
@@ -178,7 +180,8 @@ export default function HomeScreen() {
         <AiSection
           displayName={displayName}
           data={recommendations.data}
-          isLoading={recommendations.isLoading}
+          fallbackCards={tastePicks.data?.items ?? []}
+          isLoading={recommendations.isLoading || tastePicks.isLoading}
           isError={recommendations.isError}
           onRetry={() => void recommendations.refetch()}
         />

@@ -1,32 +1,27 @@
 import renderer, { act } from "react-test-renderer";
-import { router } from "expo-router";
-import { PrimaryButton } from "@/components/PrimaryButton";
-import { AiSection } from "@/features/home/components/AiSection";
-import { useAuthGate } from "@/features/auth/hooks/use-auth-gate";
+import { Text } from "react-native";
+import { AiSection, FALLBACK_CAPTION, tasteCaption } from "@/features/home/components/AiSection";
 import type { HomeSpotCard, Recommendations } from "@/features/home/api";
 
-jest.mock("expo-router", () => ({ router: { push: jest.fn() } }));
-jest.mock("@/features/auth/hooks/use-auth-gate", () => ({ useAuthGate: jest.fn() }));
+const mockShown: string[][] = [];
+
 jest.mock("@/features/home/components/SpotGrid", () => {
   const React = require("react");
   const { View } = require("react-native");
   return {
-    SpotGrid: ({ cards }: { cards: HomeSpotCard[] }) =>
-      React.createElement(
-        View,
-        { testID: "spot-grid" },
-        cards.map((c) =>
-          React.createElement(View, {
-            key: c.contentId,
-            testID: "grid-item",
-          }),
-        ),
-      ),
+    GridSkeleton: () => React.createElement(View, { testID: "grid-skeleton" }),
+    SpotGrid: ({ cards }: { cards: HomeSpotCard[] }) => {
+      mockShown.push(cards.map((c) => c.contentId));
+      return React.createElement(View, { testID: "spot-grid" });
+    },
   };
 });
 
-const mockGate = useAuthGate as jest.Mock;
-let gate: jest.Mock;
+const shown = () => mockShown[mockShown.length - 1] ?? [];
+
+beforeEach(() => {
+  mockShown.length = 0;
+});
 
 const card = (over: Partial<HomeSpotCard> = {}): HomeSpotCard => ({
   contentId: "c1",
@@ -51,12 +46,11 @@ const recommendations = (over: Partial<Recommendations> = {}): Recommendations =
   ...over,
 });
 
-beforeEach(() => {
-  gate = jest.fn(async () => true);
-  mockGate.mockReturnValue(gate);
-});
-
-afterEach(() => jest.clearAllMocks());
+const texts = (r: renderer.ReactTestRenderer) =>
+  r.root
+    .findAllByType(Text)
+    .flatMap((n) => (Array.isArray(n.props.children) ? n.props.children : [n.props.children]))
+    .filter((c): c is string => typeof c === "string");
 
 async function mount(props: Partial<Parameters<typeof AiSection>[0]> = {}) {
   let tree: renderer.ReactTestRenderer;
@@ -65,6 +59,7 @@ async function mount(props: Partial<Parameters<typeof AiSection>[0]> = {}) {
       <AiSection
         displayName="Leesinseong"
         data={recommendations()}
+        fallbackCards={[]}
         isLoading={false}
         isError={false}
         onRetry={jest.fn()}
@@ -75,81 +70,54 @@ async function mount(props: Partial<Parameters<typeof AiSection>[0]> = {}) {
   return tree!;
 }
 
-const json = (r: renderer.ReactTestRenderer) => JSON.stringify(r.toJSON());
-
 describe("AiSection", () => {
   it("greets the signed-in user by name", async () => {
     const r = await mount();
-    expect(json(r)).toContain("Leesinseong");
-    expect(json(r)).toContain("님을 위한 AI 추천 장소");
+    expect(texts(r)).toContain("Leesinseong");
   });
 
   it("falls back to a neutral name for a guest", async () => {
-    const r = await mount({ displayName: null, data: undefined });
-    expect(json(r)).toContain("여행자");
+    const r = await mount({ displayName: null });
+    expect(texts(r)).toContain("여행자");
   });
 
-  it("renders the recommendation grid without saved-similarity copy", async () => {
-    const r = await mount();
-    expect(r.root.findAllByProps({ testID: "grid-item" }).length).toBeGreaterThan(0);
-    expect(json(r)).not.toContain("저장한 장소와 닮은 곳을 골랐어요.");
-    expect(json(r)).not.toContain("비슷한 곳");
+  it("names the scrap count behind a ready recommendation", async () => {
+    const r = await mount({ data: recommendations({ savedCount: 7 }) });
+    expect(texts(r)).toContain(tasteCaption(7));
+    expect(shown()).toEqual(["c1"]);
   });
 
-  it("shows the taste CTA instead of a grid before the minimum saves", async () => {
-    const r = await mount({ data: recommendations({ ready: false, savedCount: 1, items: [] }) });
+  it("shows random picks instead of an empty grid before the minimum saves", async () => {
+    const r = await mount({
+      data: recommendations({ ready: false, savedCount: 1, items: [] }),
+      fallbackCards: [card({ contentId: "f1" }), card({ contentId: "f2" })],
+    });
+    expect(texts(r)).toContain(FALLBACK_CAPTION);
+    expect(shown()).toEqual(["f1", "f2"]);
+  });
+
+  it("admits the fallback when the backend reports ready but sends nothing", async () => {
+    const r = await mount({
+      data: recommendations({ ready: true, items: [] }),
+      fallbackCards: [card({ contentId: "f1" })],
+    });
+    expect(texts(r)).toContain(FALLBACK_CAPTION);
+  });
+
+  it("caps the grid so the home page stays short", async () => {
+    const many = Array.from({ length: 9 }, (_, i) => card({ contentId: `c${i}` }));
+    await mount({ data: recommendations({ items: many }) });
+    expect(shown()).toHaveLength(4);
+  });
+
+  it("offers a retry when the request failed", async () => {
+    const r = await mount({ isError: true, onRetry: jest.fn() });
+    expect(r.root.findAllByProps({ testID: "home-ai-retry" }).length).toBeGreaterThan(0);
     expect(r.root.findAllByProps({ testID: "spot-grid" })).toHaveLength(0);
-    expect(r.root.findAllByProps({ testID: "home-taste-cta" }).length).toBeGreaterThan(0);
   });
 
-  it("provides the taste CTA as its only shared primary action", async () => {
-    const r = await mount({ data: recommendations({ ready: false, savedCount: 1, items: [] }) });
-    const buttons = r.root.findAllByType(PrimaryButton);
-    expect(buttons).toHaveLength(1);
-    expect(buttons[0].findByProps({ testID: "home-taste-cta" }).props.onPress).toEqual(
-      expect.any(Function),
-    );
-  });
-
-  it("keeps the CTA free of remaining-count and how-it-works copy", async () => {
-    const r = await mount({ data: recommendations({ ready: false, savedCount: 1, items: [] }) });
-    expect(json(r)).not.toContain("추천이 시작돼요");
-    expect(json(r)).not.toContain("추천해 드려요");
-    expect(json(r)).toContain("취향 카드로 시작하기");
-    expect(json(r)).toContain("카드 고르러 가기");
-  });
-
-  it("offers a retry instead of the taste CTA when the request failed", async () => {
-    const onRetry = jest.fn();
-    const r = await mount({ data: undefined, isError: true, onRetry });
+  it("keeps a taste picker out of the home screen", async () => {
+    const r = await mount({ data: recommendations({ ready: false, items: [] }) });
     expect(r.root.findAllByProps({ testID: "home-taste-cta" })).toHaveLength(0);
-    await act(async () => {
-      r.root.findByProps({ testID: "home-ai-retry" }).props.onPress();
-    });
-    expect(onRetry).toHaveBeenCalled();
-  });
-
-  it("shows the CTA when the backend reports ready but sends nothing", async () => {
-    const r = await mount({ data: recommendations({ items: [] }) });
-    expect(r.root.findAllByProps({ testID: "spot-grid" })).toHaveLength(0);
-    expect(r.root.findAllByProps({ testID: "home-taste-cta" }).length).toBeGreaterThan(0);
-  });
-
-  it("opens the taste picker once the auth gate passes", async () => {
-    const r = await mount({ data: recommendations({ ready: false, savedCount: 0, items: [] }) });
-    await act(async () => {
-      r.root.findByProps({ testID: "home-taste-cta" }).props.onPress();
-    });
-    expect(gate).toHaveBeenCalledWith("save");
-    expect(router.push).toHaveBeenCalledWith("/taste");
-  });
-
-  it("does not open the picker when the user declines to sign in", async () => {
-    gate.mockResolvedValue(false);
-    const r = await mount({ data: recommendations({ ready: false, savedCount: 0, items: [] }) });
-    await act(async () => {
-      r.root.findByProps({ testID: "home-taste-cta" }).props.onPress();
-    });
-    expect(router.push).not.toHaveBeenCalled();
   });
 });

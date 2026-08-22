@@ -1,33 +1,38 @@
 import { StyleSheet, Text, View } from "react-native";
-import { router } from "expo-router";
-import { Icon } from "@/components/Icon";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SectionHead } from "@/features/home/components/SectionHead";
 import { GridSkeleton, SpotGrid } from "@/features/home/components/SpotGrid";
 import { categorySubtitle } from "@/features/home/lib/card-subtitle";
-import type { Recommendations } from "@/features/home/api";
-import { useAuthGate } from "@/features/auth/hooks/use-auth-gate";
-import { colors, radii, spacing } from "@/constants/theme";
+import type { HomeSpotCard, Recommendations } from "@/features/home/api";
+import { colors, spacing } from "@/constants/theme";
+
+export const AI_KICKER = "FOR YOU";
+export const AI_GRID_SIZE = 4;
+export const FALLBACK_CAPTION = "아직 취향을 몰라 무작위로 골랐어요";
+
+export function tasteCaption(savedCount: number): string {
+  return `스크랩 ${savedCount}곳에서 읽은 취향`;
+}
 
 interface Props {
   displayName: string | null;
   data: Recommendations | undefined;
+  fallbackCards: HomeSpotCard[];
   isLoading: boolean;
   isError: boolean;
   onRetry: () => void;
 }
 
-const AI_KICKER = "FOR YOU";
-
-export function AiSection({ displayName, data, isLoading, isError, onRetry }: Props) {
-  const requireAuth = useAuthGate();
+export function AiSection({
+  displayName,
+  data,
+  fallbackCards,
+  isLoading,
+  isError,
+  onRetry,
+}: Props) {
   const ready = data?.ready === true && data.items.length > 0;
-
-  const openPicker = () => {
-    void (async () => {
-      if (await requireAuth("save")) router.push("/taste");
-    })();
-  };
+  const cards = ready ? data.items : fallbackCards;
 
   return (
     <View style={styles.section}>
@@ -35,6 +40,7 @@ export function AiSection({ displayName, data, isLoading, isError, onRetry }: Pr
         kicker={AI_KICKER}
         title="님을 위한 AI 추천 장소"
         highlight={displayName ?? "여행자"}
+        caption={ready ? tasteCaption(data.savedCount) : FALLBACK_CAPTION}
       />
       {isLoading ? (
         <GridSkeleton />
@@ -43,52 +49,15 @@ export function AiSection({ displayName, data, isLoading, isError, onRetry }: Pr
           <Text style={styles.errorText}>추천을 불러오지 못했어요.</Text>
           <PrimaryButton testID="home-ai-retry" label="다시 시도" onPress={onRetry} />
         </View>
-      ) : ready ? (
-        <SpotGrid cards={data.items} subtitleOf={categorySubtitle} />
       ) : (
-        <EmptyState onPress={openPicker} />
+        <SpotGrid cards={cards.slice(0, AI_GRID_SIZE)} subtitleOf={categorySubtitle} />
       )}
-    </View>
-  );
-}
-
-function EmptyState({ onPress }: { onPress: () => void }) {
-  return (
-    <View style={styles.empty}>
-      <View style={styles.emptyIcon}>
-        <Icon name="sparkle" size={26} color={colors.accentText} />
-      </View>
-      <Text style={styles.emptyTitle}>취향 카드로 시작하기</Text>
-      <View style={styles.emptyAction}>
-        <PrimaryButton testID="home-taste-cta" label="카드 고르러 가기" onPress={onPress} />
-      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   section: { paddingTop: spacing.sm },
-  empty: {
-    marginHorizontal: spacing.lg,
-    padding: spacing.lg,
-    borderRadius: radii.lg,
-    alignItems: "center",
-    gap: spacing.sm,
-    backgroundColor: colors.inset,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  emptyIcon: {
-    width: spacing.xxl + spacing.xl,
-    height: spacing.xxl + spacing.xl,
-    borderRadius: radii.pill,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.accentFill,
-    marginBottom: spacing.xs,
-  },
-  emptyTitle: { fontSize: 16, fontWeight: "800", letterSpacing: -0.3, color: colors.ink },
-  emptyAction: { alignSelf: "stretch", marginTop: spacing.xs },
   error: { alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg },
   errorText: { fontSize: 14, color: colors.sec },
 });
