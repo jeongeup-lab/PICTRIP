@@ -64,6 +64,8 @@ jobs:
       contents: read
 
   heartbeat:
+    permissions:
+      actions: read
     needs: [embed, warm]
     if: always()
     runs-on: [self-hosted, ct111]
@@ -74,3 +76,10 @@ jobs:
           url: ${{ secrets.KUMA_PUSH_PIPELINE_MONTHLY }}
           status: ${{ (needs.embed.result == 'success' && needs.warm.result == 'success') && 'up' || 'down' }}
           msg: "monthly embed=${{ needs.embed.result }} warm=${{ needs.warm.result }}"
+      - uses: ./.github/actions/discord
+        with:
+          url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          dag: pipeline-monthly
+          workflow-file: pipeline-monthly.yml
+          always: "true"
+          token: ${{ secrets.GITHUB_TOKEN }}

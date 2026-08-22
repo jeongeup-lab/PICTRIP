@@ -119,6 +119,8 @@ jobs:
   # 나이만 보고 임베딩 커버리지를 안 본다. 둘이 빠져 있던 동안 embed 가 죽어도
   # Kuma 는 초록이었다.
   heartbeat:
+    permissions:
+      actions: read
     needs: [warm, detail-prewarm, embed, concentration, freshness]
     if: always()
     runs-on: [self-hosted, ct111]
@@ -130,3 +132,10 @@ jobs:
           # skipped(상류 실패로 안 돈 경우)도 down 이다 — success 만 up.
           status: ${{ (needs.warm.result == 'success' && needs['detail-prewarm'].result == 'success' && needs.embed.result == 'success' && needs.concentration.result == 'success' && needs.freshness.result == 'success') && 'up' || 'down' }}
           msg: "daily warm=${{ needs.warm.result }} prewarm=${{ needs['detail-prewarm'].result }} embed=${{ needs.embed.result }} cnctr=${{ needs.concentration.result }} fresh=${{ needs.freshness.result }}"
+      - uses: ./.github/actions/discord
+        with:
+          url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          dag: pipeline-daily
+          workflow-file: pipeline-daily.yml
+          always: "false"
+          token: ${{ secrets.GITHUB_TOKEN }}

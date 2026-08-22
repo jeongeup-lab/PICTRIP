@@ -115,6 +115,8 @@ jobs:
           module: scripts.compute_visual
 
   heartbeat:
+    permissions:
+      actions: read
     needs: [embed-repair, gallery-repair, signals]
     if: always()
     runs-on: [self-hosted, ct111]
@@ -125,3 +127,10 @@ jobs:
           url: ${{ secrets.KUMA_PUSH_PIPELINE_WEEKLY }}
           status: ${{ (needs['embed-repair'].result == 'success' && needs['gallery-repair'].result == 'success' && needs.signals.result == 'success') && 'up' || 'down' }}
           msg: "weekly embed=${{ needs['embed-repair'].result }} gallery=${{ needs['gallery-repair'].result }} signals=${{ needs.signals.result }}"
+      - uses: ./.github/actions/discord
+        with:
+          url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          dag: pipeline-weekly
+          workflow-file: pipeline-weekly.yml
+          always: "true"
+          token: ${{ secrets.GITHUB_TOKEN }}
