@@ -28,15 +28,19 @@ const where = document.getElementById("where");
 const who = document.getElementById("who");
 const multi = document.getElementById("multi");
 const jump = document.getElementById("jump");
+const jumpDown = document.getElementById("jumpdown");
 const inspector = document.getElementById("inspector");
 const stats = document.getElementById("stats");
 const sent = document.getElementById("sent");
+const tip = document.getElementById("tip");
 
 let history = [];
 let lastIntent = null;
 let lastSpots = [];
 let focused = null;
 let busy = false;
+let pinned = true;
+let abort = null;
 let minted = { seed: "", token: "" };
 
 const el = (tag, cls, text) => {
@@ -46,31 +50,80 @@ const el = (tag, cls, text) => {
   return node;
 };
 
-const toBottom = () => thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" });
+function nudge() {
+  if (pinned) thread.scrollTop = thread.scrollHeight;
+}
 
-function speak(text, streaming) {
-  const node = el("div", "say");
-  for (const part of String(text).split(/(\*\*[^*]+\*\*|\[\d+\])/g)) {
+thread.addEventListener("scroll", () => {
+  pinned = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 80;
+  jumpDown.classList.toggle("show", !pinned && busy);
+});
+
+jumpDown.addEventListener("click", () => {
+  pinned = true;
+  jumpDown.classList.remove("show");
+  thread.scrollTop = thread.scrollHeight;
+});
+
+function fillLine(node, text, trailing) {
+  node.replaceChildren();
+  for (const part of text.split(/(\*\*[^*]+\*\*|\[\d+\])/g)) {
     if (/^\*\*[^*]+\*\*$/.test(part)) {
       node.appendChild(el("b", null, part.slice(2, -2)));
     } else if (/^\[\d+\]$/.test(part)) {
-      const mark = el("span", "cite", part.slice(1, -1));
+      const mark = el("button", "cite", part.slice(1, -1));
+      mark.type = "button";
       mark.dataset.at = part.slice(1, -1);
       node.appendChild(mark);
     } else if (part) {
       node.appendChild(document.createTextNode(part));
     }
   }
-  if (streaming) node.appendChild(el("span", "caret"));
-  return node;
+  if (trailing) node.appendChild(el("span", "caret"));
 }
 
-function litCites(turn) {
-  for (const mark of turn.querySelectorAll(".cite")) {
+function paintSay(view, text, streaming) {
+  const lines = text.split("\n");
+  view.lines ??= [];
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!view.lines[i]) {
+      view.lines[i] = el("div", "line");
+      view.say.appendChild(view.lines[i]);
+    }
+    const isLast = i === lines.length - 1;
+    if (isLast || !view.lines[i].dataset.set) {
+      fillLine(view.lines[i], lines[i], streaming && isLast);
+      if (!isLast) view.lines[i].dataset.set = "1";
+    }
+  }
+  wireCites(view.turn);
+}
+
+function wireCites(turn) {
+  for (const mark of turn.querySelectorAll(".cite:not([data-wired])")) {
+    mark.dataset.wired = "1";
     const at = Number(mark.dataset.at) - 1;
-    mark.onmouseenter = () => turn.querySelectorAll(".src")[at]?.classList.add("lit");
-    mark.onmouseleave = () => turn.querySelectorAll(".src")[at]?.classList.remove("lit");
-    mark.onclick = () => turn.querySelectorAll(".src")[at]?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    const card = () => turn.querySelectorAll(".src")[at];
+    mark.addEventListener("mouseenter", () => {
+      const target = card();
+      if (!target) return;
+      target.classList.add("lit");
+      const rect = mark.getBoundingClientRect();
+      tip.replaceChildren(
+        el("b", null, target.querySelector(".name").textContent),
+        el("span", null, target.querySelector(".where").textContent),
+      );
+      tip.style.display = "block";
+      tip.style.left = `${Math.min(rect.left, window.innerWidth - 260)}px`;
+      tip.style.top = `${rect.bottom + 6}px`;
+    });
+    mark.addEventListener("mouseleave", () => {
+      card()?.classList.remove("lit");
+      tip.style.display = "none";
+    });
+    mark.addEventListener("click", () =>
+      card()?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" }),
+    );
   }
 }
 
@@ -149,34 +202,39 @@ function open(title, replay) {
   dot.onclick = () => turn.scrollIntoView({ behavior: "smooth", block: "start" });
   jump.appendChild(dot);
 
-  toBottom();
-  return { turn, steps, say };
+  pinned = true;
+  nudge();
+  return { turn, steps, say, lines: [] };
 }
 
 function paintSteps(box, list) {
   box.replaceChildren();
   for (const step of list) {
-    const row = el("div", `step${step.status === "run" ? " run" : ""}`);
-    row.appendChild(el("i"));
+    const row = el("div", `step${step.status === "run" ? " run" : ""}${step.failed ? " fail" : ""}`);
+    row.appendChild(el("span", "mark"));
     row.appendChild(el("span", null, step.label));
-    if (step.badge) row.appendChild(el("em", null, step.badge));
+    if (step.badge) row.appendChild(el("span", "count", step.badge));
+    if (step.took != null) row.appendChild(el("span", "took", tookOf(step.took)));
     box.appendChild(row);
   }
 }
 
+function tookOf(ms) {
+  return ms < 950 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`;
+}
+
+
 function paintCards(turn, spots) {
-  turn.querySelector(".sources")?.previousElementSibling?.classList.contains("label") &&
-    turn.querySelector(".sources").previousElementSibling.remove();
+  turn.querySelector(".label")?.remove();
   turn.querySelector(".sources")?.remove();
   turn.querySelector(".follow.anchors")?.remove();
   if (!spots.length) return;
 
-  const head = el("div", "label", `근거 ${spots.length}곳`);
+  const head = el("div", "label", `근거 ${spots.length}곳 — 누르면 그 곳 기준으로 다시 물어봅니다`);
   const rail = el("div", "sources");
   spots.forEach((spot, index) => {
     const card = el("button", "src");
     card.type = "button";
-    card.style.animationDelay = `${Math.min(index, 8) * 45}ms`;
     if (spot.imageUrl) {
       const frame = el("figure");
       const img = el("img");
@@ -210,7 +268,7 @@ function choose(turn, spot, node) {
     bar.appendChild(chip);
   }
   turn.appendChild(bar);
-  toBottom();
+  nudge();
 }
 
 function paintChips(turn, refinements) {
@@ -230,13 +288,13 @@ function paintRefs(turn, items) {
   turn.querySelector(".refs")?.remove();
   if (!items?.length) return;
   const bar = el("div", "refs");
-  bar.appendChild(el("span", "refs-tag", "블로그"));
+  bar.appendChild(el("span", "tag", "블로그"));
   for (const item of items.slice(0, 5)) {
-    const shown = item.title.length > 26 ? `${item.title.slice(0, 26)}…` : item.title;
+    const shown = item.title.length > 24 ? `${item.title.slice(0, 24)}…` : item.title;
     if (item.url) {
       const link = el("a", null, shown);
-      link.title = item.title;
       link.href = item.url;
+      link.title = item.title;
       link.target = "_blank";
       link.rel = "noreferrer";
       bar.appendChild(link);
@@ -245,6 +303,21 @@ function paintRefs(turn, items) {
     }
   }
   turn.appendChild(bar);
+}
+
+function paintTail(turn, text, took) {
+  turn.querySelector(".tail")?.remove();
+  const bar = el("div", "tail");
+  if (took != null) bar.appendChild(el("span", "took", tookOf(took)));
+  const copy = el("button", "mini", "복사");
+  copy.type = "button";
+  copy.onclick = async () => {
+    await navigator.clipboard.writeText(text);
+    copy.textContent = "복사됨";
+    setTimeout(() => (copy.textContent = "복사"), 1400);
+  };
+  bar.appendChild(copy);
+  turn.querySelector(".say").after(bar);
 }
 
 function blame(turn, code, message) {
@@ -256,12 +329,28 @@ function blame(turn, code, message) {
 
 function lock(on) {
   busy = on;
-  go.disabled = on;
+  go.classList.toggle("stop", on);
+  go.title = on ? "중단" : "보내기";
+  go.replaceChildren(iconOf(on ? "stop" : "send"));
+  if (!on) jumpDown.classList.remove("show");
+}
+
+function iconOf(kind) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", kind === "stop" ? "M7 7h10v10H7z" : "M5 12h14M13 6l6 6-6 6");
+  svg.appendChild(path);
+  return svg;
 }
 
 async function send({ message, intent, patch, title, file }) {
-  if (busy) return;
+  if (busy) {
+    abort?.abort();
+    return;
+  }
   lock(true);
+  abort = new AbortController();
   const shown = title || message || "사진으로 찾기";
   const view = open(shown, Boolean(title));
   const payload = payloadOf({ message, intent, patch });
@@ -281,12 +370,13 @@ async function send({ message, intent, patch, title, file }) {
         if (value == null) continue;
         body.append(key, typeof value === "object" ? JSON.stringify(value) : String(value));
       }
-      init = { method: "POST", headers, body };
+      init = { method: "POST", headers, body, signal: abort.signal };
     } else {
       init = {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal: abort.signal,
       };
     }
 
@@ -298,10 +388,12 @@ async function send({ message, intent, patch, title, file }) {
     }
     await drain(res, view, shown, started);
   } catch (error) {
-    blame(view.turn, "CONSOLE", error.message);
+    if (error.name === "AbortError") blame(view.turn, "STOPPED", "중단했습니다.");
+    else blame(view.turn, "CONSOLE", error.message);
   } finally {
     lock(false);
-    toBottom();
+    abort = null;
+    nudge();
   }
 }
 
@@ -312,6 +404,13 @@ async function drain(res, view, shown, started) {
   let buffer = "";
   let text = "";
   let done = null;
+  let queued = false;
+
+  const flush = () => {
+    queued = false;
+    paintSay(view, text, true);
+    nudge();
+  };
 
   for (;;) {
     const chunk = await reader.read();
@@ -338,18 +437,26 @@ async function drain(res, view, shown, started) {
 
       if (name === "step") {
         const at = steps.findIndex((s) => s.index === data.index);
-        if (at < 0) steps.push(data);
-        else steps[at] = data;
+        const now = performance.now();
+        if (at < 0) {
+          steps.push({ ...data, at: now });
+        } else {
+          const failed = (data.badge || "").includes("시간 초과");
+          steps[at] = { ...steps[at], ...data, failed, took: now - steps[at].at };
+        }
         paintSteps(view.steps, steps);
+        nudge();
       } else if (name === "delta") {
         text += data.text;
-        const next = speak(text, true);
-        view.say.replaceWith(next);
-        view.say = next;
+        if (!queued) {
+          queued = true;
+          requestAnimationFrame(flush);
+        }
       } else if (name === "cards") {
         lastSpots = data.spots || [];
         paintCards(view.turn, lastSpots);
         paintChips(view.turn, data.refinements);
+        nudge();
       } else if (name === "sources") {
         paintRefs(view.turn, data.items);
       } else if (name === "done") {
@@ -357,25 +464,24 @@ async function drain(res, view, shown, started) {
       } else if (name === "error") {
         blame(view.turn, data.code, data.message);
       }
-      toBottom();
     }
   }
 
   if (!done) return;
-  const final = speak(done.answerText, false);
-  view.say.replaceWith(final);
-  view.say = final;
+  view.lines = [];
+  view.say.replaceChildren();
+  paintSay(view, done.answerText, false);
   lastSpots = done.spots || [];
   lastIntent = done.intent || null;
   focused = null;
   paintCards(view.turn, lastSpots);
+  paintTail(view.turn, done.answerText, performance.now() - started);
   paintChips(view.turn, done.refinements);
   paintRefs(view.turn, done.sources);
-  litCites(view.turn);
   report([
     ["결과", `${done.spots.length}곳 · 전체 ${done.totalCount}`],
     ["소요", `${Math.round(performance.now() - started)}ms`],
-    ["도구", (view.turn.querySelectorAll(".step").length || 0) + "회"],
+    ["도구", `${steps.length}회`],
     ["intent", JSON.stringify(trim(done.intent))],
     ["trace", done.traceId || "–"],
   ]);
@@ -409,14 +515,13 @@ async function anchor(target, title) {
     }
     const data = envelope.data;
     paintSteps(view.steps, (data.steps || []).map((step, index) => ({ ...step, index, status: "done" })));
-    const said = speak((data.answer || []).map((seg) => seg.text).join(""), false);
-    view.say.replaceWith(said);
-    view.say = said;
+    const said = (data.answer || []).map((seg) => seg.text).join("");
+    paintSay(view, said, false);
     lastSpots = data.spots || [];
     lastIntent = data.intent || null;
     paintCards(view.turn, lastSpots);
+    paintTail(view.turn, said, performance.now() - started);
     paintChips(view.turn, data.refinements);
-    litCites(view.turn);
     report([
       ["결과", `${lastSpots.length}곳 · 전체 ${data.totalCount}`],
       ["소요", `${Math.round(performance.now() - started)}ms`],
@@ -426,12 +531,16 @@ async function anchor(target, title) {
     blame(view.turn, "CONSOLE", error.message);
   } finally {
     lock(false);
-    toBottom();
+    nudge();
   }
 }
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();
+  if (busy) {
+    abort?.abort();
+    return;
+  }
   const message = ask.value.trim();
   const file = photo.files?.[0] || null;
   if (!message && !file) return;
@@ -445,7 +554,7 @@ form.addEventListener("submit", (event) => {
 
 ask.addEventListener("input", () => {
   ask.style.height = "auto";
-  ask.style.height = `${Math.min(ask.scrollHeight, 148)}px`;
+  ask.style.height = `${Math.min(ask.scrollHeight, 140)}px`;
 });
 
 ask.addEventListener("keydown", (event) => {
@@ -459,7 +568,6 @@ photo.addEventListener("change", () => {
   const file = photo.files?.[0];
   clip.classList.toggle("on", Boolean(file));
   clipName.textContent = file ? file.name : "";
-  clipName.className = file ? "attached" : "";
 });
 
 document.getElementById("fresh").addEventListener("click", () => location.reload());
@@ -480,8 +588,6 @@ for (const seed of SEEDS) {
 fetch("/admin/api/agent/router")
   .then((res) => res.json())
   .then((body) => {
-    const pill = document.getElementById("router");
-    pill.replaceChildren(document.createTextNode("router "));
-    pill.appendChild(el("b", null, body.data.router));
+    document.getElementById("router").textContent = `router ${body.data.router}`;
   })
   .catch(() => {});

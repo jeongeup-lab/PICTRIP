@@ -22,10 +22,11 @@
 
 <main class="stage">
   <div class="thread" id="thread">
+    <button class="jumpdown" id="jumpdown" type="button">아래에 새 내용</button>
     <div class="col">
       <section class="opening" id="opening">
-        <h1>어디로 갈지<br />물어보세요. <em>여행 탭과 같은 문</em>으로 갑니다.</h1>
-        <p>앱이 쓰는 그 엔드포인트 그대로입니다. 카드를 누르면 근처를 다시 묻고, 조건 칩은 같은 검색을 조건 하나만 바꿔 다시 돌립니다.</p>
+        <h1>여행 탭과 같은 문으로 물어봅니다.</h1>
+        <p>앱이 쓰는 엔드포인트 그대로입니다. 도구가 무엇을 몇 초 걸려 몇 곳 찾았는지, 답변의 어느 문장이 어느 장소를 말하는지 그대로 보입니다.</p>
         <div class="seeds" id="seeds"></div>
       </section>
     </div>
@@ -66,6 +67,8 @@
     </form>
   </div>
 </main>
+
+<div class="tip" id="tip" style="display:none"></div>
 
 <aside class="inspector" id="inspector">
   <h3>마지막 턴</h3>
