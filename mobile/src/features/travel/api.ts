@@ -1,4 +1,5 @@
 import { fetch as expoFetch } from "expo/fetch";
+import { File } from "expo-file-system";
 import { API_BASE } from "@/constants/env";
 import { AppError } from "@/lib/app-error";
 import { envelopeToError } from "@/lib/jsend";
@@ -167,7 +168,7 @@ function chatBody(input: ChatInput): Record<string, unknown> {
 
 function chatForm(input: ChatInput, photo: PhotoUpload): FormData {
   const form = new FormData();
-  form.append("photo", photo as unknown as Blob);
+  form.append("photo", new File(photo.uri) as unknown as Blob);
   if (input.message) form.append("message", input.message);
   if (input.coords) {
     form.append("lat", String(input.coords.lat));

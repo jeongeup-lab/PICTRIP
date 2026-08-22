@@ -15,6 +15,24 @@ logger = get_logger(__name__)
 MATCH_LIMIT = 12
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 ALLOWED_IMAGE_MIMES = {"image/jpeg", "image/png", "image/webp", "image/heic"}
+HEIF_BRANDS = frozenset({b"heic", b"heix", b"heim", b"heis", b"hevc", b"hevx", b"mif1", b"msf1"})
+
+
+def sniff_image_mime(payload: bytes) -> str | None:
+    """바이트가 정본이다 — 클라이언트가 보내는 content-type 은 비어 올 수 있다.
+
+    expo/fetch 는 파일 파트의 MIME 을 파일시스템에서 읽어 붙이는데, 그 값이
+    빈 문자열이면 멀쩡한 사진이 ImageInvalid 로 튕긴다.
+    """
+    if payload.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if payload.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if payload[:4] == b"RIFF" and payload[8:12] == b"WEBP":
+        return "image/webp"
+    if payload[4:8] == b"ftyp" and payload[8:12] in HEIF_BRANDS:
+        return "image/heic"
+    return None
 
 
 async def embed_photo(*, image_bytes: bytes, image_mime: str | None) -> list[float]:

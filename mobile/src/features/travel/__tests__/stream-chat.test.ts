@@ -4,6 +4,7 @@ import { AppError } from "@/lib/app-error";
 jest.mock("expo/fetch", () => ({ fetch: jest.fn() }));
 
 const { fetch: fetchMock } = jest.requireMock("expo/fetch") as { fetch: jest.Mock };
+const { File: fileMock } = jest.requireMock("expo-file-system") as { File: jest.Mock };
 
 const encoder = new TextEncoder();
 
@@ -27,6 +28,7 @@ function okResponse(chunks: string[]) {
 
 beforeEach(() => {
   fetchMock.mockReset();
+  fileMock.mockClear();
 });
 
 describe("streamChat 요청", () => {
@@ -69,6 +71,15 @@ describe("streamChat 요청", () => {
     expect(init.body.has("message")).toBe(false);
     expect(init.body.get("lat")).toBe("37.5");
     expect((init.headers as Record<string, string>)["Content-Type"]).toBeUndefined();
+  });
+
+  it("photo 파트는 uri 객체가 아니라 파일에서 읽는다", async () => {
+    fetchMock.mockResolvedValueOnce(okResponse([]));
+    const photo = { uri: "file:///a.jpg", name: "a.jpg", type: "image/jpeg" };
+
+    await streamChat({ message: null, photo, history: [] }, {});
+
+    expect(fileMock).toHaveBeenCalledWith("file:///a.jpg");
   });
 });
 

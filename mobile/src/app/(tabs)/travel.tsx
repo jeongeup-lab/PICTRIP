@@ -102,14 +102,14 @@ export default function TravelScreen() {
       const label = refineQuestion(patch);
       const seed: ChatRequestSeed = {
         message: null,
-        photo: null,
+        photo: previous.request.photo,
         context: contextFrom(previous, null),
         intent: previous.intent,
         patch,
         history: historyOf(state.turns),
       };
       const id = state.nextTurnId();
-      state.begin({ id, question: label, photoUri: null, request: seed });
+      state.begin({ id, question: label, photoUri: previous.photoUri, request: seed });
       focusedIdRef.current = null;
       run(id, seed);
     },

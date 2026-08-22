@@ -91,7 +91,15 @@ def _opening(
     if anchor is not None:
         return toolloop.anchor_call(anchor)
     if image_bytes:
-        return ToolCall(name="uploaded_photo", args={})
+        return _photo_call(intent, patch)
     if intent is not None:
         return toolloop.call_from_intent(refine_service.apply_patch(intent, patch))
     return None
+
+
+def _photo_call(intent: QueryIntent | None, patch: RefinePatch | None) -> ToolCall:
+    """사진 턴의 칩은 사진을 버리지 않는다 — 조건만 바꿔 같은 사진으로 다시 찾는다."""
+    if intent is None:
+        return ToolCall(name="uploaded_photo", args={})
+    regions = refine_service.apply_patch(intent, patch).regionHints
+    return ToolCall(name="uploaded_photo", args={"regions": list(regions)} if regions else {})
