@@ -949,3 +949,10 @@ async def test_abroad_refuses_a_domestic_place(ctx: ToolContext, db_session: Asy
 
     assert result.rows == []
     assert "국내 지역입니다" in result.observation
+
+
+async def test_a_region_only_turn_still_says_where_it_looked() -> None:
+    """지역 도구만 돈 턴에서 intent 가 비면 답이 '조건에 맞는 곳' 으로 끝난다."""
+    call = ToolCall(name="region_profile", args={"regions": ["부산"]})
+
+    assert toolloop.intent_of([call]).regionHints == ["부산"]
