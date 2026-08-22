@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type {
+  AskAnchor,
   AskContext,
   ChatCardsEvent,
   ChatDoneEvent,
@@ -28,6 +29,7 @@ export interface ChatRequestSeed {
   context: AskContext | null;
   intent: QueryIntent | null;
   patch: RefinePatch | null;
+  anchor: AskAnchor | null;
   history: ChatHistoryItem[];
 }
 
@@ -41,7 +43,6 @@ export interface ChatTurn {
   text: string;
   spots: TravelSpot[];
   tagBasis: string | null;
-  applied: string[];
   refinements: Suggestion[];
   sources: SourceItem[];
   intent: QueryIntent | null;
@@ -103,7 +104,6 @@ function freshBody(): Pick<
   | "text"
   | "spots"
   | "tagBasis"
-  | "applied"
   | "refinements"
   | "sources"
   | "intent"
@@ -115,7 +115,6 @@ function freshBody(): Pick<
     text: "",
     spots: [],
     tagBasis: null,
-    applied: [],
     refinements: [],
     sources: [],
     intent: null,
@@ -182,7 +181,6 @@ export const useChat = create<ChatState>((set, get) => ({
             turns: patchTurn(s.turns, id, {
               spots: event.spots,
               tagBasis: event.tagBasis ?? null,
-              applied: event.applied ?? [],
               refinements: event.refinements ?? [],
             }),
           }
@@ -205,7 +203,6 @@ export const useChat = create<ChatState>((set, get) => ({
                     spots: done.spots,
                     sources: done.sources,
                     intent: done.intent,
-                    applied: done.applied ?? turn.applied,
                     refinements: done.refinements ?? turn.refinements,
                     steps: turn.steps.map((step) => ({ ...step, status: "done" })),
                   }

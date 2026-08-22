@@ -1,16 +1,15 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Icon } from "@/components/Icon";
-import { KakaoWebMap } from "@/features/map/components/KakaoWebMap";
+import { AnchorRow } from "@/features/travel/components/AnchorRow";
 import { RichAnswerText } from "@/features/travel/components/RichAnswerText";
 import { SourcesSheet, KIND_ICONS } from "@/features/travel/components/SourcesSheet";
-import { ConditionRow } from "@/features/travel/components/ConditionRow";
+import { RefineRow } from "@/features/travel/components/RefineRow";
 import { SpotCarousel } from "@/features/travel/components/SpotCarousel";
 import { StepSpinner } from "@/features/travel/components/StepSpinner";
 import { agentErrorMessageForCode } from "@/features/travel/lib/agent-errors";
-import { coordsOf } from "@/features/travel/lib/distance";
-import { bounds, center, pinsFrom, placed } from "@/features/travel/lib/spot-geo";
-import type { RefinePatch, TravelSpot } from "@/features/travel/api";
+import type { FocusedSpot } from "@/features/travel/lib/anchor-actions";
+import type { AnchorAction, RefinePatch, TravelSpot } from "@/features/travel/api";
 import type { ChatTurn } from "@/features/travel/stores/chat-store";
 import type { LatLng } from "@/features/map/lib/geo";
 import { colors, radii, spacing } from "@/constants/theme";
@@ -20,8 +19,6 @@ export const RETRY_LABEL = "다시 시도";
 export const SOURCES_LABEL = "소스";
 export const THINKING_LABEL = "답변을 준비하는 중";
 
-const MAP_PAD = 36;
-
 interface Props {
   turn: ChatTurn;
   latest: boolean;
@@ -30,8 +27,9 @@ interface Props {
   onDetail: (spot: TravelSpot) => void;
   onSaveToggle: (saved: boolean) => void;
   onNotice: (message: string) => void;
-  onFocusSpot: (contentId: string | null) => void;
+  onFocusSpot: (focus: FocusedSpot | null) => void;
   onRefine: (patch: RefinePatch) => void;
+  onAnchor: (focus: FocusedSpot, action: AnchorAction, label: string) => void;
 }
 
 function StepRow({ label, badge, done }: { label: string; badge: string | null; done: boolean }) {
@@ -60,43 +58,38 @@ export function AssistantTurn({
   onNotice,
   onFocusSpot,
   onRefine,
+  onAnchor,
 }: Props) {
   const [focusedAt, setFocusedAt] = useState(0);
   const [scrollToAt, setScrollToAt] = useState<number | null>(null);
   const [sourcesOpen, setSourcesOpen] = useState(false);
 
-  const mapSpots = useMemo(() => placed(turn.spots), [turn.spots]);
-  const pins = useMemo(() => pinsFrom(mapSpots), [mapSpots]);
   const visibleSources = turn.sources.filter((source) => source.kind === "naver_blog");
-  const fit = useMemo(() => {
-    const box = bounds(mapSpots);
-    if (!box) return null;
-    return { ...box, pad: { top: MAP_PAD, right: MAP_PAD, bottom: MAP_PAD, left: MAP_PAD } };
-  }, [mapSpots]);
-
   const focused = turn.spots[focusedAt] ?? null;
-  const mapCenter = focused ? (coordsOf(focused) ?? center(mapSpots)) : center(mapSpots);
+
+  const reportFocus = useCallback(
+    (index: number) => {
+      const spot = turn.spots[index];
+      onFocusSpot(spot ? { contentId: spot.contentId, title: spot.title, index } : null);
+    },
+    [onFocusSpot, turn.spots],
+  );
 
   const focusSpotAt = useCallback(
     (index: number, scroll: boolean) => {
       setFocusedAt(index);
       setScrollToAt(scroll ? index : null);
-      if (latest) onFocusSpot(turn.spots[index]?.contentId ?? null);
+      if (latest) reportFocus(index);
     },
-    [latest, onFocusSpot, turn.spots],
+    [latest, reportFocus],
   );
 
-  const onPinTap = useCallback(
-    (contentId: string) => {
-      const at = turn.spots.findIndex((spot) => spot.contentId === contentId);
-      if (at < 0) return;
-      focusSpotAt(at, true);
-    },
-    [turn.spots, focusSpotAt],
-  );
+  useEffect(() => {
+    if (latest) reportFocus(focusedAt);
+  }, [latest, focusedAt, reportFocus]);
 
   const streaming = turn.status === "streaming";
-  const showMap = latest && pins.length > 0;
+  const showAnchors = latest && !streaming && focused !== null;
 
   return (
     <View style={styles.root}>
@@ -125,8 +118,6 @@ export function AssistantTurn({
         </View>
       ) : null}
 
-      <ConditionRow applied={turn.applied} refinements={turn.refinements} onRefine={onRefine} />
-
       {turn.spots.length > 0 ? (
         <View testID="travel-carousel-slot" style={styles.carouselSlot}>
           <SpotCarousel
@@ -143,18 +134,21 @@ export function AssistantTurn({
         </View>
       ) : null}
 
-      {showMap ? (
-        <View testID="travel-turn-map" style={styles.mapCard}>
-          <KakaoWebMap
-            center={mapCenter}
-            fit={fit}
-            pins={pins}
-            anchorId={focused?.contentId ?? null}
-            userLocation={origin}
-            onPinTap={onPinTap}
-          />
-        </View>
+      {showAnchors && focused ? (
+        <AnchorRow
+          index={focusedAt}
+          title={focused.title}
+          onAnchor={(action, label) =>
+            onAnchor(
+              { contentId: focused.contentId, title: focused.title, index: focusedAt },
+              action,
+              label,
+            )
+          }
+        />
       ) : null}
+
+      <RefineRow refinements={turn.refinements} onRefine={onRefine} />
 
       {visibleSources.length > 0 ? (
         <Pressable
@@ -224,14 +218,6 @@ const styles = StyleSheet.create({
   stepBadge: { fontSize: 11.5, fontWeight: "700", letterSpacing: -0.2, color: colors.ter },
   copy: { paddingHorizontal: spacing.md },
   carouselSlot: { marginTop: 2 },
-  mapCard: {
-    height: 190,
-    marginHorizontal: spacing.md,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: colors.glassBorder,
-    overflow: "hidden",
-  },
   sourcesRow: {
     flexDirection: "row",
     alignItems: "center",

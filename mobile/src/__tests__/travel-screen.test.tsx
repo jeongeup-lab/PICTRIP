@@ -1,5 +1,5 @@
 import renderer, { act } from "react-test-renderer";
-import { ActionSheetIOS, FlatList } from "react-native";
+import { ActionSheetIOS } from "react-native";
 import TravelScreen, { NEW_CHAT_LABEL, WORDMARK } from "@/app/(tabs)/travel";
 import {
   streamChat,
@@ -11,7 +11,6 @@ import {
 import { FAIL_TITLE } from "@/features/travel/components/AssistantTurn";
 import { ASK_PLACEHOLDER, STREAMING_PLACEHOLDER } from "@/features/travel/components/ChatComposer";
 import { SpotCarousel } from "@/features/travel/components/SpotCarousel";
-import { KakaoWebMap } from "@/features/map/components/KakaoWebMap";
 import { PHOTO_ONLY_QUESTION } from "@/features/travel/lib/question";
 import { useChat } from "@/features/travel/stores/chat-store";
 import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
@@ -196,7 +195,7 @@ describe("TravelScreen 워드마크와 전송", () => {
     await finishLast();
 
     expect(input(tree).props.editable).toBe(true);
-    expect(input(tree).props.placeholder).toBe(ASK_PLACEHOLDER);
+    expect(input(tree).props.placeholder).toBe("무릉계곡에 대해 물어보세요");
   });
 
   it("delta가 오는 대로 본문이 자란다", async () => {
@@ -242,12 +241,12 @@ describe("TravelScreen 완료 턴", () => {
     expect(rendered(tree)).toContain("무릉계곡");
   });
 
-  it("좌표가 있는 최신 턴에만 인라인 지도가 선다", async () => {
+  it("앵커 줄은 카드가 있는 최신 턴에만 선다", async () => {
     const tree = await mount();
     await send(tree, "제주 계곡");
     await finishLast();
 
-    expect(tree.root.findAllByProps({ testID: "travel-turn-map" }).length).toBeGreaterThan(0);
+    expect(tree.root.findAllByProps({ testID: "travel-anchor-row" }).length).toBeGreaterThan(0);
 
     await send(tree, "서울은?");
     await act(async () => {
@@ -255,7 +254,7 @@ describe("TravelScreen 완료 턴", () => {
       streams[1].end();
     });
 
-    expect(tree.root.findAllByProps({ testID: "travel-turn-map" })).toHaveLength(0);
+    expect(tree.root.findAllByProps({ testID: "travel-anchor-row" })).toHaveLength(0);
   });
 
   it("카드 상세 탭은 스팟 상세로 간다", async () => {
@@ -371,20 +370,59 @@ describe("TravelScreen 사진 첨부", () => {
   });
 });
 
-describe("TravelScreen 핀 탭", () => {
-  it("핀 탭은 그 카드로 캐러셀을 포커스한다", async () => {
-    jest.spyOn(FlatList.prototype, "scrollToOffset").mockImplementation(() => {});
+describe("TravelScreen 초점 카드", () => {
+  async function focusSecondCard(tree: renderer.ReactTestRenderer) {
+    const carousel = tree.root.findByType(SpotCarousel);
+    await act(async () => carousel.props.onFocusChange(1));
+  }
+
+  it("초점 카드 이름이 입력창 위 알약과 플레이스홀더에 선다", async () => {
     const tree = await mount();
     await send(tree, "제주 계곡");
     await finishLast();
 
-    const map = tree.root.findByType(KakaoWebMap);
-    await act(async () => map.props.onPinTap("126509"));
+    expect(rendered(tree)).toContain("무릉계곡");
+    expect(input(tree).props.placeholder).toBe("무릉계곡에 대해 물어보세요");
 
-    const carousel = tree.root.findByType(SpotCarousel);
-    expect(carousel.props.focusedIndex).toBe(1);
-    expect(carousel.props.scrollToIndex).toBe(1);
-    expect(map.props.anchorId).toBe("126509");
+    await focusSecondCard(tree);
+
+    expect(input(tree).props.placeholder).toBe("천지연에 대해 물어보세요");
+  });
+
+  it("초점을 풀면 일반 질문으로 돌아간다", async () => {
+    const tree = await mount();
+    await send(tree, "제주 계곡");
+    await finishLast();
+
+    await press(tree, "travel-subject-clear");
+
+    expect(tree.root.findAllByProps({ testID: "travel-subject" })).toHaveLength(0);
+    expect(input(tree).props.placeholder).toBe(ASK_PLACEHOLDER);
+  });
+
+  it("타이핑한 질문에는 초점 카드가 맥락으로 실린다", async () => {
+    const tree = await mount();
+    await send(tree, "제주 계곡");
+    await finishLast();
+    await focusSecondCard(tree);
+
+    await send(tree, "여기 주차돼?");
+
+    expect(streams[1].input.context?.focusContentId).toBe("126509");
+    expect(streams[1].input.anchor).toBeNull();
+  });
+
+  it("앵커 칩은 그 카드를 향한 새 턴을 연다", async () => {
+    const tree = await mount();
+    await send(tree, "제주 계곡");
+    await finishLast();
+    await focusSecondCard(tree);
+
+    await press(tree, "travel-anchor-food");
+
+    expect(streams[1].input.anchor).toEqual({ contentId: "126509", action: "food" });
+    expect(streams[1].input.message).toBeNull();
+    expect(rendered(tree)).toContain("천지연 근처 맛집");
   });
 });
 

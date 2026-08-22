@@ -404,6 +404,7 @@ async def _search(
             context=payload.context,
             intent=payload.intent,
             patch=payload.patch,
+            anchor=payload.anchor,
             emitter=emitter,
             user_id=user_id,
         )
