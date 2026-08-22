@@ -44,6 +44,7 @@ async def run(
     anchor: AskAnchor | None = None,
     context: AskContext | None = None,
     emitter: Emitter | None = None,
+    user_id: int | None = None,
 ) -> AskResponse:
     if _takes_tools(
         question, image_bytes=image_bytes, intent=intent, anchor=anchor, context=context
@@ -56,6 +57,7 @@ async def run(
             lng=lng,
             image_bytes=image_bytes,
             image_mime=image_mime,
+            user_id=user_id,
         )
         asked = (question or "").strip() or _implied_question(anchor, image_bytes, intent)
         trace = await toolloop.route(

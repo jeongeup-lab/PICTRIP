@@ -16,6 +16,7 @@ from app.modules.agent import search
 from app.modules.agent.schemas import AskRequest, ChatRequest
 from app.modules.agent.services import chat as chat_service
 from app.modules.agent.services.photo import MAX_IMAGE_BYTES
+from app.security.jwt import OptionalUserId
 from app.web.envelope import ok
 from app.web.errors import ImageInvalid, ValidationFailed
 from app.web.ratelimit import rate_limit
@@ -36,7 +37,7 @@ router = APIRouter(tags=["AGT · travel agent"])
     dependencies=[Depends(rate_limit(bucket="agent_ask", limit=20, window_seconds=60))],
 )
 async def agent_ask(
-    request: Request, session: DbSession, redis: RedisDep, kto: KtoDep
+    request: Request, session: DbSession, redis: RedisDep, kto: KtoDep, user_id: OptionalUserId
 ) -> dict[str, Any]:
     payload, image_bytes, image_mime = await _read_payload(request)
     result = await search.run(
@@ -52,6 +53,7 @@ async def agent_ask(
         patch=payload.patch,
         anchor=payload.anchor,
         context=payload.context,
+        user_id=user_id,
     )
     return ok(result)
 
@@ -62,7 +64,7 @@ async def agent_ask(
     dependencies=[Depends(rate_limit(bucket="agent_chat", limit=10, window_seconds=60))],
 )
 async def agent_chat(
-    request: Request, session: DbSession, redis: RedisDep, kto: KtoDep
+    request: Request, session: DbSession, redis: RedisDep, kto: KtoDep, user_id: OptionalUserId
 ) -> StreamingResponse:
     fields, image_bytes, image_mime = await _read_fields(request)
     payload = _parse(fields, ChatRequest, label="chat")
@@ -74,6 +76,7 @@ async def agent_chat(
             payload=payload,
             image_bytes=image_bytes,
             image_mime=image_mime,
+            user_id=user_id,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},

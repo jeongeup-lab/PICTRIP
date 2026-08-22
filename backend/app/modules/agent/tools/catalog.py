@@ -12,6 +12,7 @@ from app.modules.agent.tools.itinerary import PLAN_ITINERARY
 from app.modules.agent.tools.photo import UPLOADED_PHOTO
 from app.modules.agent.tools.profile import REGION_PROFILE
 from app.modules.agent.tools.resolve import RESOLVE_PLACE
+from app.modules.agent.tools.saved import FROM_SAVED
 from app.modules.agent.tools.search import CATEGORY_SEARCH, PHOTO_MATCH, TITLE_SEARCH
 from app.modules.agent.tools.similar import SIMILAR_REGION
 
@@ -22,6 +23,7 @@ _TOOLS: tuple[Tool, ...] = (
     REGION_PROFILE,
     PLAN_ITINERARY,
     SIMILAR_REGION,
+    FROM_SAVED,
     RESOLVE_PLACE,
     SPOT_DETAIL,
     FESTIVAL,

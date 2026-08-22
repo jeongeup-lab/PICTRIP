@@ -30,6 +30,7 @@ class ToolContext:
     lng: float | None = None
     image_bytes: bytes | None = None
     image_mime: str | None = None
+    user_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

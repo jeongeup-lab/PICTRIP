@@ -49,6 +49,7 @@ ToolName = Literal[
     "similar_region",
     "uploaded_photo",
     "plan_itinerary",
+    "from_saved",
 ]
 
 

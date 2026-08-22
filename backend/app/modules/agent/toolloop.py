@@ -327,6 +327,7 @@ def _facts_response(trace: Trace, intent: QueryIntent) -> AskResponse:
         spots=spots,
         totalCount=len(spots),
         intent=intent,
+        facts=list(trace.facts),
         refinements=[],
     )
 
