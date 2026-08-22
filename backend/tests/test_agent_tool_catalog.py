@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from itertools import pairwise
 
 import pytest
 from sqlalchemy import text
@@ -517,7 +518,23 @@ async def test_plan_itinerary_orders_by_nearest_hop(
     result = await CATALOG["plan_itinerary"].run(ctx, {"regions": ["서울"], "days": 1})
 
     ordered = [row.content_id for row in result.rows][:3]
-    assert ordered in (["po-a", "po-b", "po-c"], ["po-c", "po-b", "po-a"])
+    assert sorted(ordered) == ["po-a", "po-b", "po-c"]
+    _assert_nearest_hop_chain(ordered, {"po-a": 37.50, "po-b": 37.52, "po-c": 37.54})
+
+
+def _assert_nearest_hop_chain(ordered: list[str], lats: dict[str, float]) -> None:
+    """시작점은 검색 순서가 정한다 — 끝점이라는 보장이 없다.
+
+    가운데에서 시작해도 매 걸음이 가장 가까운 미방문 지점이면 되돌아가는 동선이 아니다.
+    순서를 통째로 못 박으면 검색이 어느 행을 먼저 주느냐에 따라 흔들린다.
+    """
+    remaining = set(ordered[1:])
+    for current, following in pairwise(ordered):
+        nearest = min(abs(lats[candidate] - lats[current]) for candidate in remaining)
+        assert abs(lats[following] - lats[current]) == pytest.approx(nearest), (
+            f"{current} 다음이 가장 가까운 지점이 아니다: {following}"
+        )
+        remaining.discard(following)
 
 
 async def _seed_food(session: AsyncSession, content_id: str, *, title: str, lat: float) -> None:
