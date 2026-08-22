@@ -13,7 +13,7 @@ from app.modules.agent.tools.photo import UPLOADED_PHOTO
 from app.modules.agent.tools.profile import REGION_PROFILE
 from app.modules.agent.tools.resolve import RESOLVE_PLACE
 from app.modules.agent.tools.saved import FROM_SAVED
-from app.modules.agent.tools.scope import ABROAD
+from app.modules.agent.tools.scope import ABROAD, UNSUPPORTED
 from app.modules.agent.tools.search import CATEGORY_SEARCH, PHOTO_MATCH, TITLE_SEARCH
 from app.modules.agent.tools.similar import SIMILAR_REGION
 
@@ -34,6 +34,7 @@ _TOOLS: tuple[Tool, ...] = (
     RELATED,
     CONCENTRATION,
     ABROAD,
+    UNSUPPORTED,
 )
 
 CATALOG: dict[ToolName, Tool] = {tool.name: tool for tool in _TOOLS}

@@ -138,10 +138,11 @@ async def test_food_categories_use_the_food_pool(
 
     from app.modules.agent.services import retrieve
 
+    placed = ToolContext(session=db_session, redis=ctx.redis, kto=None, lat=37.0, lng=127.0)
     original = retrieve.search_food
     retrieve.search_food = spy
     try:
-        await CATALOG["category_search"].run(ctx, {"categories": ["카페"], "regions": []})
+        await CATALOG["category_search"].run(placed, {"categories": ["카페"], "near": True})
     finally:
         retrieve.search_food = original
 
@@ -287,6 +288,7 @@ async def test_catalog_covers_every_real_tool() -> None:
         "plan_itinerary",
         "from_saved",
         "abroad",
+        "unsupported",
     }
 
 
@@ -956,3 +958,26 @@ async def test_a_region_only_turn_still_says_where_it_looked() -> None:
     call = ToolCall(name="region_profile", args={"regions": ["부산"]})
 
     assert toolloop.intent_of([call]).regionHints == ["부산"]
+
+
+async def test_food_search_needs_a_place(ctx: ToolContext) -> None:
+    """'분위기 좋은 커피숍' 에 전국 카페 20곳은 답이 아니다."""
+    result = await CATALOG["category_search"].run(ctx, {"categories": ["카페"]})
+
+    assert result.rows == []
+    assert result.stop is True
+    assert result.fact is not None and "어느 지역" in result.fact
+
+
+async def test_resolve_place_refuses_a_name_without_letters(ctx: ToolContext) -> None:
+    """'12345' 를 장소로 해석해 상세까지 조회했다."""
+    result = await CATALOG["resolve_place"].run(ctx, {"names": ["12345"]})
+
+    assert result.rows == []
+    assert result.stop is True
+
+
+async def test_unsupported_raises_so_the_app_can_say_it_cannot(ctx: ToolContext) -> None:
+    """길찾기·날씨에 지역 관광지를 대신 던지면 무엇이 거절됐는지 모른다."""
+    with pytest.raises(AgentOutOfScope):
+        await CATALOG["unsupported"].run(ctx, {})

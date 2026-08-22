@@ -17,6 +17,7 @@ from app.modules.agent.tools.base import (
 
 _PLACE_TYPES: tuple[PlaceType, ...] = ("attraction", "restaurant", "cafe", "hotel", "region")
 _NOT_FOUND = "그 이름으로 국내 관광지를 찾지 못했습니다. 일반 검색으로 넘어가세요."
+_NOT_A_NAME = "장소 이름이 아닙니다. 숫자나 기호만으로는 장소를 찾을 수 없습니다."
 
 
 def _extracted(args: Mapping[str, Any]) -> list[ExtractedPlace]:
@@ -33,10 +34,17 @@ def _extracted(args: Mapping[str, Any]) -> list[ExtractedPlace]:
     ]
 
 
+def _nameless(places: list[ExtractedPlace]) -> bool:
+    """'12345' 를 장소로 해석해 상세까지 조회했다 — 이름에 글자가 하나는 있어야 한다."""
+    return all(not any(char.isalpha() for char in place.name) for place in places)
+
+
 async def _resolve_place(ctx: ToolContext, args: Mapping[str, Any]) -> ToolResult:
     places = _extracted(args)
     if not places:
         return ToolResult(rows=[], observation="names 가 비었습니다.")
+    if _nameless(places):
+        return ToolResult(rows=[], observation=_NOT_A_NAME, stop=True)
 
     resolved = await resolve_service.resolve_places(ctx.session, ctx.kto, places)
     content_ids = [
