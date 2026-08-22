@@ -16,7 +16,7 @@ from app.config import settings
 from app.core.redis import get_redis
 from app.kto.client import get_kto
 from app.main import app
-from app.modules.feed.services import home
+from app.modules.feed.services import curation
 from app.security.jwt import create_access_token
 
 LAT, LNG = 35.15, 129.05
@@ -109,13 +109,25 @@ async def _seed_spot(
     )
 
 
-async def _seed_ridge_code(session: AsyncSession) -> None:
+async def _seed_program_region(session: AsyncSession) -> str:
+    program = curation.PROGRAMS[0]
     await session.execute(
         text(
-            "INSERT INTO lcls_systm_codes (lcls_systm3_cd, lcls_systm3_nm) "
-            "VALUES ('NA010200', :nm) ON CONFLICT DO NOTHING"
+            "INSERT INTO sigungus (ldong_signgu_cd, ldong_regn_cd, ldong_signgu_nm) "
+            "VALUES ('26999', '26', :n) ON CONFLICT DO NOTHING"
         ),
-        {"nm": home.CURATION_CATEGORIES[0]},
+        {"n": program.sigungu},
+    )
+    return "26999"
+
+
+async def _seed_food(session: AsyncSession, cid: str, *, cafe: bool = False) -> None:
+    await session.execute(
+        text(
+            "UPDATE spots SET lcls_systm1 = 'FD', lcls_systm2 = :l2, lcls_systm3 = NULL "
+            "WHERE content_id = :cid"
+        ),
+        {"cid": cid, "l2": "FD05" if cafe else "FD01"},
     )
 
 
@@ -457,39 +469,76 @@ async def test_nearby_cards_carry_coordinates_for_the_home_map(
     assert card["lng"] == pytest.approx(LNG + 0.002, abs=1e-6)
 
 
-async def test_curation_picks_the_edition_category_and_names_both_ends(
+async def test_curation_lays_the_region_out_as_a_course(
     client: AsyncClient, seeded: AsyncSession
 ) -> None:
     await _seed_region(seeded)
-    await _seed_ridge_code(seeded)
-    await _seed_spot(seeded, "ridge-top", lcls3="NA010200", signgu="26380", title="지리산 천왕봉")
-    await _seed_spot(seeded, "ridge-low", lcls3="NA010200", signgu="26440", title="윗세오름")
-    await _seed_spot(seeded, "not-a-ridge", signgu="26380")
-    await _seed_rate(seeded, "ridge-top", "90.00")
-    await _seed_rate(seeded, "ridge-low", "20.00")
+    sg = await _seed_program_region(seeded)
+    for cid, score in (("see-1", 0.9), ("see-2", 0.8), ("see-3", 0.1)):
+        await _seed_spot(seeded, cid, signgu=sg, title=f"명소 {cid}")
+        await _seed_visual(seeded, cid, score=score)
+    for cid, score in (("eat-1", 0.9), ("eat-2", 0.8), ("eat-3", 0.1)):
+        await _seed_spot(seeded, cid, signgu=sg, title=f"맛집 {cid}")
+        await _seed_food(seeded, cid)
+        await _seed_visual(seeded, cid, score=score)
+    for cid, score in (("cup-1", 0.9), ("cup-2", 0.8), ("cup-3", 0.1)):
+        await _seed_spot(seeded, cid, signgu=sg, title=f"카페 {cid}")
+        await _seed_food(seeded, cid, cafe=True)
+        await _seed_visual(seeded, cid, score=score)
     await seeded.commit()
 
     res = await client.get("/v1/home/curation")
     assert res.status_code == 200
     body = res.json()["data"]
-    ids = [i["contentId"] for i in body["items"]]
-    assert ids == ["ridge-top", "ridge-low"]
-    assert "not-a-ridge" not in ids
-    assert body["kicker"] == home.CURATION_KICKER
-    assert body["title"] == home.CURATION_TITLE
-    assert body["subtitle"].startswith("윗세오름에서 지리산 천왕봉까지 두 곳.")
+    program = curation.PROGRAMS[0]
+
+    assert [i["contentId"] for i in body["items"]] == [
+        "see-1",
+        "see-2",
+        "eat-1",
+        "eat-2",
+        "cup-1",
+        "cup-2",
+    ]
+    assert body["kicker"] == curation.KICKER
+    assert body["title"] == program.title
+    assert body["subtitle"] == f"{program.sigungu} 6곳. {program.lead}"
 
 
-async def test_curation_drops_the_names_when_it_cannot_name_both_ends(
+async def test_curation_skips_spots_outside_the_programmed_region(
     client: AsyncClient, seeded: AsyncSession
 ) -> None:
     await _seed_region(seeded)
-    await _seed_ridge_code(seeded)
-    await _seed_spot(seeded, "ridge-only", lcls3="NA010200", title="천황산")
+    sg = await _seed_program_region(seeded)
+    await _seed_spot(seeded, "inside", signgu=sg, title="안쪽")
+    await _seed_visual(seeded, "inside", score=0.5)
+    await _seed_spot(seeded, "outside", signgu="26380", title="바깥")
+    await _seed_visual(seeded, "outside", score=0.9)
     await seeded.commit()
 
     res = await client.get("/v1/home/curation")
-    assert res.status_code == 200
+    ids = [i["contentId"] for i in res.json()["data"]["items"]]
+    assert ids == ["inside"]
+
+
+async def test_curation_reports_what_it_actually_found(
+    client: AsyncClient, seeded: AsyncSession
+) -> None:
+    await _seed_region(seeded)
+    sg = await _seed_program_region(seeded)
+    await _seed_spot(seeded, "lonely", signgu=sg, title="한 곳뿐")
+    await _seed_visual(seeded, "lonely", score=0.5)
+    await seeded.commit()
+
+    res = await client.get("/v1/home/curation")
     body = res.json()["data"]
+    program = curation.PROGRAMS[0]
     assert len(body["items"]) == 1
-    assert body["subtitle"] == home.CURATION_FALLBACK_SUBTITLE
+    assert body["subtitle"] == f"{program.sigungu} 1곳. {program.lead}"
+
+
+def test_every_program_asks_for_six_places() -> None:
+    for program in curation.PROGRAMS:
+        assert program.size == 6, program.sigungu
+        assert program.sigungu.strip() == program.sigungu
+        assert program.title and program.lead
