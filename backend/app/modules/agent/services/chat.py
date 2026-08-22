@@ -31,7 +31,6 @@ from app.modules.agent.schemas import (
     SourceItem,
 )
 from app.modules.agent.services import answer as writer_answer
-from app.modules.agent.services import ask as ask_service
 from app.modules.agent.services import suggest as suggest_service
 from app.modules.agent.services import writer
 from app.web.errors import AppError
@@ -128,7 +127,7 @@ async def events(
         result = await searching
     except AppError as exc:
         logger.info("agent.chat.ask_failed", code=exc.code)
-        refusal = outcome_service.classify_error(exc, blank_answer=ask_service.BLANK_ANSWER)
+        refusal = outcome_service.classify_error(exc, blank_answer=writer_answer.BLANK_ANSWER)
         async for event in _canned(refusal.message, intent=QueryIntent(), spots=[]):
             yield event
         return
@@ -155,7 +154,7 @@ async def events(
 
     if isinstance(outcome, (outcome_service.Smalltalk, outcome_service.OutOfScope)):
         async for event in _canned(
-            _deterministic_answer(result) or ask_service.BLANK_ANSWER,
+            _deterministic_answer(result) or writer_answer.BLANK_ANSWER,
             intent=result.intent,
             spots=[],
         ):
@@ -171,7 +170,7 @@ async def events(
         and _llm_is_down(result)
     ):
         logger.warning("agent.chat.writer_skipped", results=len(result.spots))
-        rescue = _deterministic_answer(result) or ask_service.NO_AXIS_ANSWER
+        rescue = _deterministic_answer(result) or writer_answer.NO_AXIS_ANSWER
         yield "delta", ChatDeltaEvent(text=rescue)
         yield "sources", ChatSourcesEvent(items=sources)
         yield (
@@ -375,7 +374,7 @@ def _sources(posts: list[naver.NaverBlogPost]) -> list[SourceItem]:
 
 
 def _llm_is_down(result: AskResponse) -> bool:
-    return any(step.badge == ask_service.INTENT_FALLBACK_BADGE for step in result.steps)
+    return any(step.badge == writer_answer.INTENT_FALLBACK_BADGE for step in result.steps)
 
 
 async def _search(

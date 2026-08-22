@@ -45,16 +45,6 @@ async def test_console_page_loads_after_login(client: AsyncClient) -> None:
     assert "에이전트 콘솔" in resp.text
 
 
-async def test_console_reports_the_router_in_use(client: AsyncClient) -> None:
-    """구 라우터로 재고 있는 줄 모르면 측정이 통째로 어긋난다."""
-    await _login(client)
-
-    resp = await client.get("/admin/api/agent/router")
-
-    assert resp.status_code == 200
-    assert resp.json()["data"]["router"] in ("branches", "tools")
-
-
 async def test_console_mints_a_token_for_the_asked_user(client: AsyncClient) -> None:
     """저장 기준 추천은 로그인한 사용자로만 볼 수 있다."""
     await _login(client)

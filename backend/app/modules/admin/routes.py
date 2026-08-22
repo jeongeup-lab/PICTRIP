@@ -7,7 +7,6 @@ from typing import Annotated, Any
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, Query, Request
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
-from app.config import settings
 from app.core.db import DbSession
 from app.core.redis import RedisDep
 from app.modules.admin import services
@@ -103,11 +102,6 @@ async def admin_console(request: Request) -> Response:
     if not _logged_in(request):
         return RedirectResponse("/admin/login", status_code=303)
     return _page("console.html")
-
-
-@router.get("/api/agent/router")
-async def api_agent_router(_: AdminAuth) -> dict[str, Any]:
-    return ok({"router": settings.AGENT_ROUTER})
 
 
 @router.get("/api/agent/token")

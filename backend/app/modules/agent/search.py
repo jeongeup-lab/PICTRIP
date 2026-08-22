@@ -1,4 +1,4 @@
-"""검색 진입점. 어느 라우터를 태울지 여기서만 고른다.
+"""검색 진입점.
 
 services/ 바깥에 둔다 — toolloop 과 같은 이유로, services/ 안에 넣으면
 services -> toolloop -> services 가 된다.
@@ -9,7 +9,6 @@ from __future__ import annotations
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.core.logging import get_logger
 from app.kto.client import KtoClient
 from app.modules.agent import toolloop
@@ -22,7 +21,6 @@ from app.modules.agent.schemas import (
     QueryIntent,
     RefinePatch,
 )
-from app.modules.agent.services import ask as ask_service
 from app.modules.agent.services import refine as refine_service
 from app.modules.agent.tools import ToolContext
 
@@ -46,45 +44,26 @@ async def run(
     emitter: Emitter | None = None,
     user_id: int | None = None,
 ) -> AskResponse:
-    if _takes_tools(
-        question, image_bytes=image_bytes, intent=intent, anchor=anchor, context=context
-    ):
-        ctx = ToolContext(
-            session=session,
-            redis=redis,
-            kto=kto,
-            lat=lat,
-            lng=lng,
-            image_bytes=image_bytes,
-            image_mime=image_mime,
-            user_id=user_id,
-        )
-        asked = (question or "").strip() or _implied_question(anchor, image_bytes, intent)
-        trace = await toolloop.route(
-            ctx,
-            asked,
-            context=context,
-            emitter=emitter,
-            opening=_opening(anchor, image_bytes, intent, patch),
-        )
-        logger.info("agent.search.routed", router="tools", calls=trace.calls)
-        return toolloop.respond(trace, lat=lat, lng=lng)
-
-    return await ask_service.ask(
-        session,
-        redis,
-        kto,
-        question=question,
+    ctx = ToolContext(
+        session=session,
+        redis=redis,
+        kto=kto,
         lat=lat,
         lng=lng,
         image_bytes=image_bytes,
         image_mime=image_mime,
-        intent=intent,
-        patch=patch,
-        anchor=anchor,
+        user_id=user_id,
+    )
+    asked = (question or "").strip() or _implied_question(anchor, image_bytes, intent)
+    trace = await toolloop.route(
+        ctx,
+        asked,
         context=context,
         emitter=emitter,
+        opening=_opening(anchor, image_bytes, intent, patch),
     )
+    logger.info("agent.search.routed", calls=trace.calls, stopped=trace.stopped)
+    return toolloop.respond(trace, lat=lat, lng=lng)
 
 
 def _implied_question(
@@ -116,19 +95,3 @@ def _opening(
     if intent is not None:
         return toolloop.call_from_intent(refine_service.apply_patch(intent, patch))
     return None
-
-
-def _takes_tools(
-    question: str | None,
-    *,
-    image_bytes: bytes | None,
-    intent: QueryIntent | None,
-    anchor: AskAnchor | None,
-    context: AskContext | None,
-) -> bool:
-    """루프는 자유문 질문·카드 탭·사진·조건 칩을 받는다."""
-    if settings.AGENT_ROUTER != "tools":
-        return False
-    if anchor is not None:
-        return toolloop.anchor_call(anchor) is not None
-    return bool(intent) or bool(image_bytes) or bool(question and question.strip())

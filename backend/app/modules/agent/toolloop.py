@@ -32,7 +32,6 @@ from app.modules.agent.schemas import (
     ToolName,
 )
 from app.modules.agent.services import answer as answer_service
-from app.modules.agent.services import ask as ask_service
 from app.modules.agent.services import retrieve
 from app.modules.agent.services import suggest as suggest_service
 from app.modules.agent.tools import CATALOG, ToolContext, schemas
@@ -378,7 +377,7 @@ def respond(trace: Trace, *, lat: float | None, lng: float | None) -> AskRespons
     near = intent.nearMe and lat is not None and lng is not None
     if not trace.calls_made:
         return answer_service.talk_response(
-            trace.steps, QueryIntent(task="smalltalk"), ask_service.BLANK_ANSWER
+            trace.steps, QueryIntent(task="smalltalk"), answer_service.BLANK_ANSWER
         )
     if trace.facts and not trace.rows:
         return _facts_response(trace, intent)

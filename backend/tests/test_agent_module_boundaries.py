@@ -36,12 +36,7 @@ def test_agent_services_do_not_reach_into_each_others_privates() -> None:
     assert leaks == [], "공개 이름으로 올리거나 같은 파일로 옮길 것:\n  " + "\n  ".join(leaks)
 
 
-def test_every_agent_service_module_is_importable_by_name() -> None:
-    """서비스 파일 이름이 HTTP 라우터와 겹치지 않는지 지킨다.
-
-    `services/routes.py` 는 검색 갈래 디스패처였는데 모든 모듈에서 `routes.py`
-    가 HTTP 라우터라 읽는 이를 매번 헷갈리게 했다. `branches.py` 로 고쳤다.
-    """
+def test_no_service_module_is_named_like_an_http_router() -> None:
+    """모든 모듈에서 routes.py 는 HTTP 라우터다 — services 안에 두면 읽는 이가 헷갈린다."""
     names = {path.stem for path in SERVICES.glob("*.py")}
     assert "routes" not in names
-    assert "branches" in names
