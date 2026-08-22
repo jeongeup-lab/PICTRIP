@@ -67,10 +67,17 @@ async def stream(
     payload: ChatRequest,
     image_bytes: bytes | None,
     image_mime: str | None,
+    user_id: int | None = None,
 ) -> AsyncIterator[str]:
     sequence = 0
     async for name, event in events(
-        session, redis, kto, payload=payload, image_bytes=image_bytes, image_mime=image_mime
+        session,
+        redis,
+        kto,
+        payload=payload,
+        image_bytes=image_bytes,
+        image_mime=image_mime,
+        user_id=user_id,
     ):
         yield encode(name, event, request_id=payload.clientRequestId, sequence=sequence)
         sequence += 1
@@ -84,6 +91,7 @@ async def events(
     payload: ChatRequest,
     image_bytes: bytes | None,
     image_mime: str | None,
+    user_id: int | None = None,
 ) -> AsyncIterator[tuple[str, BaseModel]]:
     emitter = Emitter()
     searching = asyncio.create_task(
@@ -95,6 +103,7 @@ async def events(
             image_bytes=image_bytes,
             image_mime=image_mime,
             emitter=emitter,
+            user_id=user_id,
         )
     )
     streamed = 0
@@ -378,6 +387,7 @@ async def _search(
     image_bytes: bytes | None,
     image_mime: str | None,
     emitter: Emitter,
+    user_id: int | None = None,
 ) -> AskResponse:
     """검색을 돌리고, 어떻게 끝나든 스텝 스트림을 닫는다."""
     try:
@@ -394,6 +404,7 @@ async def _search(
             intent=payload.intent,
             patch=payload.patch,
             emitter=emitter,
+            user_id=user_id,
         )
     finally:
         emitter.close()

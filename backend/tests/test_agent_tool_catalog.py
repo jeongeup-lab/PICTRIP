@@ -282,6 +282,7 @@ async def test_catalog_covers_every_real_tool() -> None:
         "similar_region",
         "uploaded_photo",
         "plan_itinerary",
+        "from_saved",
     }
 
 

@@ -93,6 +93,67 @@ async def match_spots_by_vector(
     ]
 
 
+_CENTROID_MATCH_SQL = """
+WITH centroid AS (
+    SELECT AVG(embedding::vector(512))::halfvec(512) AS vec
+    FROM spot_embeddings
+    WHERE content_id = ANY(CAST(:seed_ids AS text[]))
+)
+SELECT spots.content_id,
+       spots.title,
+       c.lcls_systm3_nm AS category,
+       spots.addr1,
+       spots.mapy AS lat,
+       spots.mapx AS lng,
+       spots.first_image_url AS image_url,
+       spots.cpyrht_div_cd,
+       (se.embedding <=> (SELECT vec FROM centroid))::float AS distance
+FROM spot_embeddings se
+JOIN spots ON spots.content_id = se.content_id
+          AND spots.show_flag = 1
+          AND spots.first_image_url IS NOT NULL
+          AND spots.first_image_url <> ''
+          AND ({attraction})
+LEFT JOIN lcls_systm_codes c ON c.lcls_systm3_cd = spots.lcls_systm3
+WHERE se.content_id <> ALL (CAST(:seed_ids AS text[]))
+  AND (SELECT vec FROM centroid) IS NOT NULL
+  {region_clause}
+ORDER BY se.embedding <=> (SELECT vec FROM centroid)
+LIMIT :lim
+"""
+
+
+async def match_spots_by_centroid(
+    session: AsyncSession,
+    seed_ids: list[str],
+    *,
+    limit: int,
+    region_prefixes: list[str] | None = None,
+) -> list[VectorMatchRow]:
+    """저장한 곳들의 평균 벡터로 찾는다. halfvec 은 AVG 가 NULL 이라 vector 로 올렸다 되돌린다."""
+    params: dict[str, object] = {"seed_ids": seed_ids, "lim": limit}
+    region_clause = ""
+    if region_prefixes:
+        region_clause = _REGION_CLAUSE
+        params["region_patterns"] = [f"{prefix}%" for prefix in region_prefixes]
+    sql = _CENTROID_MATCH_SQL.format(attraction=travel_category_sql(), region_clause=region_clause)
+    result = await session.execute(text(sql), params)
+    return [
+        VectorMatchRow(
+            content_id=row.content_id,
+            title=row.title or "",
+            category=row.category,
+            addr1=row.addr1,
+            lat=float(row.lat) if row.lat is not None else None,
+            lng=float(row.lng) if row.lng is not None else None,
+            image_url=row.image_url,
+            cpyrht_div_cd=row.cpyrht_div_cd,
+            distance=float(row.distance),
+        )
+        for row in result
+    ]
+
+
 _SPOT_EMBEDDING_SQL = "SELECT embedding::text FROM spot_embeddings WHERE content_id = :cid"
 
 
