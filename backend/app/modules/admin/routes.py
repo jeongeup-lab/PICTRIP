@@ -7,11 +7,13 @@ from typing import Annotated, Any
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, Query, Request
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
+from app.config import settings
 from app.core.db import DbSession
 from app.core.redis import RedisDep
 from app.modules.admin import services
 from app.modules.admin.schemas import OverseasVisibilityUpdate
 from app.modules.admin.security import SESSION_KEY, AdminAuth, authenticate
+from app.security.jwt import create_access_token
 from app.web.envelope import ok
 from app.web.ratelimit import rate_limit
 
@@ -94,6 +96,24 @@ async def admin_overseas(request: Request) -> Response:
     if not _logged_in(request):
         return RedirectResponse("/admin/login", status_code=303)
     return _page("overseas.html")
+
+
+@router.get("/agent")
+async def admin_agent(request: Request) -> Response:
+    if not _logged_in(request):
+        return RedirectResponse("/admin/login", status_code=303)
+    return _page("agent.html")
+
+
+@router.get("/api/agent/router")
+async def api_agent_router(_: AdminAuth) -> dict[str, Any]:
+    return ok({"router": settings.AGENT_ROUTER})
+
+
+@router.get("/api/agent/token")
+async def api_agent_token(_: AdminAuth, user_id: Annotated[int, Query(ge=1)]) -> dict[str, Any]:
+    """콘솔에서 저장 기준 추천을 보려면 그 사용자로 로그인한 토큰이 필요하다."""
+    return ok({"token": create_access_token(user_id=user_id)})
 
 
 @router.get("/api/collection")
