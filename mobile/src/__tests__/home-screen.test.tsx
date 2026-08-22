@@ -6,6 +6,7 @@ import {
   useCuration,
   useNearby,
   useRecommendations,
+  useTastePicks,
   useRegionLabel,
   useTrending,
 } from "@/features/home/queries";
@@ -27,6 +28,7 @@ jest.mock("@/features/home/queries", () => ({
   useCuration: jest.fn(),
   useRegionLabel: jest.fn(),
   useRecommendations: jest.fn(),
+  useTastePicks: jest.fn(),
 }));
 jest.mock("@/features/channels/components/ChannelStories", () => {
   const React = require("react");
@@ -93,6 +95,7 @@ const mockTrending = useTrending as jest.Mock;
 const mockCuration = useCuration as jest.Mock;
 const mockRegion = useRegionLabel as jest.Mock;
 const mockRecommendations = useRecommendations as jest.Mock;
+const mockTastePicks = useTastePicks as jest.Mock;
 const { router } = jest.requireMock("expo-router") as { router: { push: jest.Mock } };
 
 const COORDS = { lat: 37.54, lng: 127.07 };
@@ -143,6 +146,7 @@ beforeEach(() => {
   });
   mockRegion.mockReturnValue({ data: { label: "광진구 화양동" } });
   mockRecommendations.mockReturnValue({ data: undefined, isLoading: false });
+  mockTastePicks.mockReturnValue({ data: undefined, isLoading: false });
 });
 
 let mounted: renderer.ReactTestRenderer | null = null;

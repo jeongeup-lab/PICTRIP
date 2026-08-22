@@ -1,6 +1,7 @@
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { RemoteImage } from "@/components/RemoteImage";
 import { Skeleton } from "@/components/Skeleton";
+import { SaveButton } from "@/features/saved/components/SaveButton";
 import type { Curation, HomeSpotCard } from "@/features/home/api";
 import { SectionKicker } from "@/features/home/components/SectionKicker";
 import { colors, radii, spacing } from "@/constants/theme";
@@ -114,6 +115,13 @@ function CurationCard({
         <View style={[styles.badge, hot && index < HOT_RANKS && styles.badgeHot]}>
           <Text style={styles.badgeText}>{index + 1}</Text>
         </View>
+        <SaveButton
+          testID="rail-save-button"
+          contentId={card.contentId}
+          size={18}
+          color={colors.onImage}
+          style={styles.save}
+        />
       </View>
       <Text style={styles.cardTitle} numberOfLines={1}>
         {card.title}
@@ -166,6 +174,17 @@ const styles = StyleSheet.create({
   },
   card: {},
   imageSlot: { position: "relative" },
+  save: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 30,
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radii.pill,
+    backgroundColor: colors.control,
+  },
   badge: {
     position: "absolute",
     top: 10,
