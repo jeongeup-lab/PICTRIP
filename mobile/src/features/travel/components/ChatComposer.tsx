@@ -2,12 +2,14 @@ import { useCallback, useState } from "react";
 import { ActionSheetIOS, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
 import { Icon } from "@/components/Icon";
+import { AI_TRANSFER } from "@/features/consent/lib/ai-transfer";
 import { PHOTO_PICK_FAILED, PHOTO_SHOOT_FAILED } from "@/features/travel/lib/agent-errors";
 import { pickTravelPhoto, shootTravelPhoto } from "@/features/travel/usecases/pick-travel-photo";
 import type { PhotoUpload } from "@/features/travel/api";
 import { colors, radii, spacing } from "@/constants/theme";
 
 export const ASK_PLACEHOLDER = "PICTRIP에게 물어보세요";
+export const AI_OFF_PLACEHOLDER = "사진으로 찾아볼까요?";
 export const STREAMING_PLACEHOLDER = "답변을 만드는 중…";
 export const ATTACH_HEADLINE = "이 사진 같은 분위기로 찾아요";
 export const ATTACH_NOTICE = "사진은 저장하지 않아요";
@@ -18,23 +20,26 @@ export const MAX_MESSAGE_CHARS = 500;
 
 interface Props {
   streaming: boolean;
+  aiOff?: boolean;
   onSend: (text: string, photo: PhotoUpload | null) => void;
   onNotice: (message: string) => void;
+  onTurnAiOn?: () => void;
 }
 
-export function ChatComposer({ streaming, onSend, onNotice }: Props) {
+export function ChatComposer({ streaming, aiOff = false, onSend, onNotice, onTurnAiOn }: Props) {
   const [draft, setDraft] = useState("");
   const [photo, setPhoto] = useState<PhotoUpload | null>(null);
 
-  const ready = !streaming && (draft.trim().length > 0 || photo !== null);
+  const ready = !streaming && (aiOff ? photo !== null : draft.trim().length > 0 || photo !== null);
 
   const submit = useCallback(() => {
     if (streaming) return;
+    if (aiOff && photo === null) return;
     if (draft.trim().length === 0 && photo === null) return;
-    onSend(draft, photo);
+    onSend(aiOff ? "" : draft, photo);
     setDraft("");
     setPhoto(null);
-  }, [streaming, draft, photo, onSend]);
+  }, [streaming, aiOff, draft, photo, onSend]);
 
   const attachFromAlbum = useCallback(async () => {
     try {
@@ -69,6 +74,21 @@ export function ChatComposer({ streaming, onSend, onNotice }: Props) {
 
   return (
     <View style={styles.root} pointerEvents="box-none">
+      {aiOff ? (
+        <View style={styles.aiOff} testID="travel-ai-off">
+          <Icon name="info" size={15} color={colors.sec} strokeWidth={1.9} />
+          <Text style={styles.aiOffText}>{AI_TRANSFER.offNotice}</Text>
+          <Pressable
+            testID="travel-ai-off-enable"
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={onTurnAiOn}
+          >
+            <Text style={styles.aiOffAction}>{AI_TRANSFER.offAction}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       {photo ? (
         <View style={styles.attach} testID="travel-attach-banner">
           <Image source={{ uri: photo.uri }} style={styles.attachThumb} contentFit="cover" />
@@ -94,12 +114,14 @@ export function ChatComposer({ streaming, onSend, onNotice }: Props) {
           style={styles.input}
           value={draft}
           onChangeText={setDraft}
-          placeholder={streaming ? STREAMING_PLACEHOLDER : ASK_PLACEHOLDER}
+          placeholder={
+            streaming ? STREAMING_PLACEHOLDER : aiOff ? AI_OFF_PLACEHOLDER : ASK_PLACEHOLDER
+          }
           placeholderTextColor={colors.ter}
           returnKeyType="send"
           submitBehavior="blurAndSubmit"
           onSubmitEditing={submit}
-          editable={!streaming}
+          editable={!streaming && !aiOff}
           maxLength={MAX_MESSAGE_CHARS}
           multiline
         />
@@ -136,6 +158,20 @@ export function ChatComposer({ streaming, onSend, onNotice }: Props) {
 
 const styles = StyleSheet.create({
   root: { paddingHorizontal: spacing.md, paddingBottom: 12 },
+  aiOff: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 9,
+    paddingVertical: 9,
+    paddingHorizontal: 11,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.fill,
+  },
+  aiOffText: { flex: 1, fontSize: 12.5, lineHeight: 18, letterSpacing: -0.2, color: colors.sec },
+  aiOffAction: { fontSize: 12.5, fontWeight: "700", letterSpacing: -0.2, color: colors.accentText },
   attach: {
     flexDirection: "row",
     alignItems: "center",

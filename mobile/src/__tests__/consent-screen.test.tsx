@@ -1,5 +1,5 @@
 import renderer, { act } from "react-test-renderer";
-import { Text } from "react-native";
+import { Switch, Text } from "react-native";
 import ConsentScreen from "@/app/consent";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import type { User } from "@/lib/api-types";
@@ -19,6 +19,15 @@ jest.mock("@/features/consent/queries", () => ({
 jest.mock("expo-location", () => ({
   getForegroundPermissionsAsync: jest.fn(async () => ({ granted: true })),
 }));
+jest.mock("@/lib/storage", () => ({
+  getAiOptOut: jest.fn(async () => false),
+  setAiOptOut: jest.fn(async () => {}),
+}));
+
+const storageMock = jest.requireMock("@/lib/storage") as {
+  getAiOptOut: jest.Mock;
+  setAiOptOut: jest.Mock;
+};
 
 const useConsentsMock = jest.requireMock<{ useConsents: jest.Mock }>(
   "@/features/consent/queries",
@@ -36,6 +45,7 @@ const USER: User = {
 let holder: renderer.ReactTestRenderer | null = null;
 
 beforeEach(() => {
+  storageMock.getAiOptOut.mockResolvedValue(false);
   useAuthStore.setState({ user: USER, isAuthenticated: true, accessToken: "token" });
   useConsentsMock.mockReturnValue({
     data: {
@@ -128,5 +138,43 @@ describe("ConsentScreen", () => {
       .join("|");
     expect(shown).toContain("로그인이 필요해요");
     expect(shown).not.toContain("[필수] 약관·개인정보 수집·이용");
+  });
+
+  it("keeps the AI transfer row visible for guests — the agent answers without a login", async () => {
+    await act(async () => {
+      useAuthStore.setState({ user: null, isAuthenticated: false, accessToken: null });
+    });
+    const tree: { tree: renderer.ReactTestRenderer | null } = { tree: null };
+    await act(async () => {
+      tree.tree = renderer.create(<ConsentScreen />);
+    });
+    if (tree.tree === null) throw new Error("screen did not mount");
+    holder = tree.tree;
+
+    const row = tree.tree.root.findByProps({ testID: "consent-ai" });
+    expect(row.findAllByType(Text).map((node) => node.props.children)).toContain("사용 중");
+    expect(tree.tree.root.findByProps({ testID: "consent-ai-switch" }).props.value).toBe(true);
+  });
+
+  it("stores the opt-out when the switch is turned off", async () => {
+    const tree: { tree: renderer.ReactTestRenderer | null } = { tree: null };
+    await act(async () => {
+      tree.tree = renderer.create(<ConsentScreen />);
+    });
+    if (tree.tree === null) throw new Error("screen did not mount");
+    holder = tree.tree;
+
+    const toggle = tree.tree.root.findByType(Switch);
+    await act(async () => {
+      toggle.props.onValueChange(false);
+    });
+
+    expect(storageMock.setAiOptOut).toHaveBeenCalledWith(true);
+    expect(
+      tree.tree.root
+        .findByProps({ testID: "consent-ai" })
+        .findAllByType(Text)
+        .map((node) => node.props.children),
+    ).toContain("끔");
   });
 });

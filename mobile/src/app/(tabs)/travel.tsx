@@ -7,14 +7,13 @@ import { AppBar, WORDMARK } from "@/components/AppBar";
 import { Icon } from "@/components/Icon";
 import { Toast } from "@/components/Toast";
 import { AssistantTurn } from "@/features/travel/components/AssistantTurn";
-import { AiConsentSheet } from "@/features/travel/components/AiConsentSheet";
 import { ChatComposer } from "@/features/travel/components/ChatComposer";
 import { UserBubble } from "@/features/travel/components/UserBubble";
 import { WelcomeBubble } from "@/features/travel/components/WelcomeBubble";
-import { useAiConsent } from "@/features/travel/hooks/use-ai-consent";
+import { useAiOptOut } from "@/features/consent/hooks/use-ai-opt-out";
 import { useKeyboardHeight } from "@/features/travel/hooks/use-keyboard-height";
 import { useNearbyCoords } from "@/features/travel/hooks/use-nearby-coords";
-import { AI_CONSENT } from "@/features/travel/lib/ai-consent";
+import { AI_TRANSFER } from "@/features/consent/lib/ai-transfer";
 import { contextFrom } from "@/features/travel/lib/conversation-context";
 import { composeQuestion } from "@/features/travel/lib/question";
 import {
@@ -116,9 +115,7 @@ export default function TravelScreen() {
     [run],
   );
 
-  const { granted: aiGranted, grant: grantAi } = useAiConsent();
-  const [askingConsent, setAskingConsent] = useState(false);
-  const pendingRef = useRef<{ text: string; photo: PhotoUpload | null } | null>(null);
+  const { optedOut: aiOff, change: changeAiOptOut } = useAiOptOut();
 
   const dispatch = useCallback(
     (text: string, photo: PhotoUpload | null) => {
@@ -145,30 +142,18 @@ export default function TravelScreen() {
 
   const submit = useCallback(
     (text: string, photo: PhotoUpload | null) => {
-      if (text.trim().length > 0 && !aiGranted) {
-        pendingRef.current = { text, photo };
-        setAskingConsent(true);
+      if (aiOff && text.trim().length > 0) {
+        setToast(AI_TRANSFER.offToast);
         return;
       }
       dispatch(text, photo);
     },
-    [aiGranted, dispatch],
+    [aiOff, dispatch],
   );
 
-  const onAgreeAi = useCallback(() => {
-    void grantAi().then(() => {
-      setAskingConsent(false);
-      const pending = pendingRef.current;
-      pendingRef.current = null;
-      if (pending) dispatch(pending.text, pending.photo);
-    });
-  }, [grantAi, dispatch]);
-
-  const onDeclineAi = useCallback(() => {
-    pendingRef.current = null;
-    setAskingConsent(false);
-    setToast(AI_CONSENT.declined);
-  }, []);
+  const turnAiOn = useCallback(() => {
+    void changeAiOptOut(false);
+  }, [changeAiOptOut]);
 
   const onRetry = useCallback(() => {
     const state = useChat.getState();
@@ -260,10 +245,14 @@ export default function TravelScreen() {
       />
 
       <View style={{ paddingBottom: bottomPad }}>
-        <ChatComposer streaming={streaming} onSend={submit} onNotice={setToast} />
+        <ChatComposer
+          streaming={streaming}
+          aiOff={aiOff}
+          onSend={submit}
+          onNotice={setToast}
+          onTurnAiOn={turnAiOn}
+        />
       </View>
-
-      <AiConsentSheet visible={askingConsent} onAgree={onAgreeAi} onDecline={onDeclineAi} />
 
       <Toast
         testID="travel-toast"
