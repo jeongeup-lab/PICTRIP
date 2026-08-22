@@ -8,6 +8,9 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.agent import toolloop
+from app.modules.agent.repositories import CandidateRow
+from app.modules.agent.routing import ToolCall
 from app.modules.agent.tools import CATALOG, ToolContext
 from app.security.jwt import _signing_key, get_optional_user_id
 
@@ -137,3 +140,51 @@ async def test_optional_auth_treats_an_expired_token_as_anonymous() -> None:
     )
 
     assert await get_optional_user_id(f"Bearer {expired}") is None
+
+
+async def test_from_saved_offers_no_chip_that_would_drop_the_saved_basis(
+    db_session: AsyncSession, redis_client_fake
+) -> None:
+    """저장 기준은 intent 에 없다 — 칩을 누르면 전국 category_search 가 된다."""
+    call = ToolCall(name="from_saved", args={})
+    trace = toolloop.Trace(rows=list(_rows()), calls_made=[call])
+
+    response = toolloop.respond(trace, lat=None, lng=None)
+
+    assert response.refinements == []
+
+
+async def test_from_saved_does_not_widen_an_unknown_region_to_the_whole_country(
+    db_session: AsyncSession, redis_client_fake
+) -> None:
+    """지역을 못 알아들었는데 전국 결과를 주면 요청을 버린 것이다."""
+    user_id = await _user(db_session)
+    for index in range(3):
+        await _spot(db_session, f"fs-u{index}", title=f"저장{index}", vec=_vec(1.0, 0.0))
+        await _save(db_session, user_id=user_id, cid=f"fs-u{index}")
+    await _spot(db_session, "fs-elsewhere", title="다른곳", vec=_vec(0.99, 0.1))
+    await db_session.flush()
+    ctx = ToolContext(session=db_session, redis=redis_client_fake, kto=None, user_id=user_id)
+
+    result = await CATALOG["from_saved"].run(ctx, {"regions": ["없는지역이름"]})
+
+    assert result.rows == []
+    assert "해석하지 못했습니다" in result.observation
+
+
+def _rows() -> list[CandidateRow]:
+    return [
+        CandidateRow(
+            content_id=str(index),
+            title=f"장소{index}",
+            addr1="경상남도 통영시 1",
+            region_name="경상남도",
+            sigungu_name="통영시",
+            lat=34.85,
+            lng=128.43,
+            image_url=None,
+            cpyrht_div_cd=None,
+            concentration_rate=None,
+        )
+        for index in range(5)
+    ]
