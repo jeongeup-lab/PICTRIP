@@ -42,7 +42,7 @@ export function SectionHead({ kicker, title, highlight, caption, note }: Props) 
 }
 
 const styles = StyleSheet.create({
-  head: { paddingHorizontal: spacing.lg, paddingTop: spacing.xl, paddingBottom: spacing.md },
+  head: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
   row: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 8 },
   titleRow: { flex: 1, flexDirection: "row", alignItems: "baseline", minWidth: 0 },
   title: { fontSize: 20, fontWeight: "800", letterSpacing: -0.6, color: colors.ink },

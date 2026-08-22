@@ -4,7 +4,7 @@ import { prefetchChannelCards, useChannels, useSeenChannels } from "@/features/c
 import type { ChannelCoords, ChannelKey, ChannelMeta } from "@/features/channels/api";
 import { colors, radii, spacing } from "@/constants/theme";
 
-const RING = 56;
+const RING = 64;
 const THUMB = RING - 4;
 
 interface Props {
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
   },
   label: {
     maxWidth: RING,
-    fontSize: 9.5,
+    fontSize: 10.5,
     fontWeight: "800",
     letterSpacing: 0,
     color: colors.ter,

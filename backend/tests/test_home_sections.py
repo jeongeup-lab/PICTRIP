@@ -502,7 +502,7 @@ async def test_curation_lays_the_region_out_as_a_course(
     ]
     assert body["kicker"] == curation.KICKER
     assert body["title"] == program.title
-    assert body["subtitle"] == f"{program.sigungu} 6곳. {program.lead}"
+    assert body["subtitle"] == program.lead
 
 
 async def test_curation_skips_spots_outside_the_programmed_region(
@@ -534,7 +534,7 @@ async def test_curation_reports_what_it_actually_found(
     body = res.json()["data"]
     program = curation.PROGRAMS[0]
     assert len(body["items"]) == 1
-    assert body["subtitle"] == f"{program.sigungu} 1곳. {program.lead}"
+    assert body["subtitle"] == program.lead
 
 
 def test_every_program_asks_for_six_places() -> None:

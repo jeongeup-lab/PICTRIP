@@ -1,6 +1,6 @@
 import renderer, { act } from "react-test-renderer";
 import { Text } from "react-native";
-import { AiSection, FALLBACK_CAPTION, tasteCaption } from "@/features/home/components/AiSection";
+import { AiSection, FALLBACK_CAPTION } from "@/features/home/components/AiSection";
 import type { HomeSpotCard, Recommendations } from "@/features/home/api";
 
 const mockShown: string[][] = [];
@@ -81,9 +81,10 @@ describe("AiSection", () => {
     expect(texts(r)).toContain("여행자");
   });
 
-  it("names the scrap count behind a ready recommendation", async () => {
+  it("drops the caption once the recommendation is real", async () => {
     const r = await mount({ data: recommendations({ savedCount: 7 }) });
-    expect(texts(r)).toContain(tasteCaption(7));
+    expect(texts(r)).not.toContain(FALLBACK_CAPTION);
+    expect(texts(r).some((t) => t.includes("스크랩"))).toBe(false);
     expect(shown()).toEqual(["c1"]);
   });
 

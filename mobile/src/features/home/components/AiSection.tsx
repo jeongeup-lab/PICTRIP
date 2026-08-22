@@ -10,10 +10,6 @@ export const AI_KICKER = "FOR YOU";
 export const AI_GRID_SIZE = 4;
 export const FALLBACK_CAPTION = "아직 취향을 몰라 무작위로 골랐어요";
 
-export function tasteCaption(savedCount: number): string {
-  return `스크랩 ${savedCount}곳에서 읽은 취향`;
-}
-
 interface Props {
   displayName: string | null;
   data: Recommendations | undefined;
@@ -40,7 +36,7 @@ export function AiSection({
         kicker={AI_KICKER}
         title="님을 위한 AI 추천 장소"
         highlight={displayName ?? "여행자"}
-        caption={ready ? tasteCaption(data.savedCount) : FALLBACK_CAPTION}
+        caption={ready ? null : FALLBACK_CAPTION}
       />
       {isLoading ? (
         <GridSkeleton />
@@ -57,7 +53,7 @@ export function AiSection({
 }
 
 const styles = StyleSheet.create({
-  section: { paddingTop: spacing.sm },
+  section: {},
   error: { alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg },
   errorText: { fontSize: 14, color: colors.sec },
 });
