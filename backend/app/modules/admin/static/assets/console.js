@@ -16,6 +16,8 @@ const ANCHORS = [
   ["crowd", "지금 붐비나"],
 ];
 
+const TOKEN_REUSE_MS = 10 * 60 * 1000;
+
 const thread = document.getElementById("thread");
 const opening = document.getElementById("opening");
 const form = document.getElementById("form");
@@ -41,7 +43,7 @@ let focused = null;
 let busy = false;
 let pinned = true;
 let abort = null;
-let minted = { seed: "", token: "" };
+let minted = { seed: "", token: "", until: 0 };
 
 const el = (tag, cls, text) => {
   const node = document.createElement(tag);
@@ -131,10 +133,10 @@ async function bearer() {
   const raw = who.value.trim();
   if (!raw) return null;
   if (!/^\d+$/.test(raw)) return raw;
-  if (minted.seed === raw) return minted.token;
+  if (minted.seed === raw && Date.now() < minted.until) return minted.token;
   const res = await fetch(`/admin/api/agent/token?user_id=${raw}`);
   if (!res.ok) throw new Error("토큰을 발급하지 못했습니다.");
-  minted = { seed: raw, token: (await res.json()).data.token };
+  minted = { seed: raw, token: (await res.json()).data.token, until: Date.now() + TOKEN_REUSE_MS };
   return minted.token;
 }
 
@@ -144,11 +146,11 @@ function coords() {
   return { lat, lng };
 }
 
-function context() {
+function context(withFocus = true) {
   if (!lastSpots.length && !lastIntent) return null;
   const box = { spots: lastSpots.slice(0, 8).map((s) => ({ contentId: s.contentId, title: s.title })) };
   if (lastIntent) box.intent = lastIntent;
-  if (focused) box.focusContentId = focused;
+  if (withFocus && focused) box.focusContentId = focused;
   return box;
 }
 
@@ -157,7 +159,7 @@ function payloadOf({ message, intent, patch }) {
   if (message) out.message = message;
   Object.assign(out, coords() || {});
   out.clientTime = new Date().toISOString();
-  const box = context();
+  const box = context(patch == null);
   if (box) out.context = box;
   if (intent) out.intent = intent;
   if (patch) out.patch = patch;
@@ -249,7 +251,12 @@ function paintCards(turn, spots) {
     body.appendChild(el("div", "name", spot.title));
     body.appendChild(el("div", "where", spot.regionLabel || ""));
     card.appendChild(body);
-    card.onclick = () => choose(turn, spot, card);
+    if (spot.saveable === false) {
+      card.classList.add("flat");
+      card.title = "카카오 전용 카드라 그 곳 기준으로 다시 물어볼 수 없습니다.";
+    } else {
+      card.onclick = () => choose(turn, spot, card);
+    }
     rail.appendChild(card);
   });
   turn.querySelector(".steps").after(head, rail);
