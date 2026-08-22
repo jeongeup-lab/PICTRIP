@@ -24,6 +24,16 @@ _KEY_EXPR = (
     " / 4294967296.0, 1e-9), 1.0 / ln(fame_score + 2))"
 )
 
+_LIVE_MATCH_JOIN_SQL = f"""
+    JOIN spots ON spots.content_id = m.content_id
+              AND spots.show_flag = 1
+              AND spots.first_image_url IS NOT NULL
+              AND spots.first_image_url <> ''
+              AND ({_CATEGORY_SQL})
+    JOIN spot_embeddings e ON e.content_id = spots.content_id
+                          AND e.image_url = spots.first_image_url
+"""
+
 _PAGE_SQL = f"""
 WITH scored AS (
     SELECT id, name_ko, country_code, country_name_ko, description_ko,
@@ -34,10 +44,11 @@ WITH scored AS (
       AND embedding IS NOT NULL
       AND (
           NOT EXISTS (SELECT 1 FROM overseas_spot_matches)
-          OR EXISTS (
-              SELECT 1 FROM overseas_spot_matches m
-              WHERE m.overseas_id = overseas_spots.id AND m.rank = 3
-          )
+          OR (
+              SELECT count(*) FROM overseas_spot_matches m
+              {_LIVE_MATCH_JOIN_SQL}
+              WHERE m.overseas_id = overseas_spots.id
+          ) >= 3
       )
 )
 SELECT * FROM scored
@@ -183,37 +194,79 @@ async def load_matches(session: AsyncSession, overseas_ids: list[int]) -> dict[i
     return grouped
 
 
-async def collect_match_targets(session: AsyncSession, *, only_missing: bool = False) -> list[int]:
-    missing_only = (
-        " AND NOT EXISTS (SELECT 1 FROM overseas_spot_matches m WHERE m.overseas_id = id)"
-        if only_missing
-        else ""
-    )
-    result = await session.execute(
-        text(f"SELECT id FROM overseas_spots WHERE embedding IS NOT NULL{missing_only} ORDER BY id")
-    )
-    return [int(row.id) for row in result]
+_REBUILD_SQL = f"""
+INSERT INTO overseas_spot_matches (overseas_id, rank, content_id, distance)
+SELECT o.id, ranked.rank, ranked.content_id, ranked.distance
+FROM overseas_spots o
+CROSS JOIN LATERAL (
+    SELECT content_id, distance,
+           row_number() OVER (ORDER BY distance, content_id) AS rank
+    FROM (
+        SELECT DISTINCT ON (content_id) content_id, distance
+        FROM (
+            (SELECT se.content_id, (se.embedding <=> o.embedding)::float AS distance
+             FROM spot_embeddings se
+             JOIN spots ON spots.content_id = se.content_id
+                       AND spots.first_image_url = se.image_url
+                       AND spots.show_flag = 1
+                       AND spots.first_image_url IS NOT NULL
+                       AND spots.first_image_url <> ''
+                       AND ({_CATEGORY_SQL})
+             ORDER BY se.embedding <=> o.embedding
+             LIMIT (:candidates)::int)
+            UNION ALL
+            (SELECT ge.content_id, (ge.embedding <=> o.embedding)::float
+             FROM spot_embeddings_gallery ge
+             JOIN spots ON spots.content_id = ge.content_id
+                       AND spots.first_image_url = ge.image_url
+                       AND spots.show_flag = 1
+                       AND spots.first_image_url IS NOT NULL
+                       AND spots.first_image_url <> ''
+                       AND ({_CATEGORY_SQL})
+             ORDER BY ge.embedding <=> o.embedding
+             LIMIT (:candidates)::int)
+        ) candidates
+        ORDER BY content_id, distance
+    ) deduped
+    WHERE distance <= (:distance_max)::double precision
+    ORDER BY distance, content_id
+    LIMIT 3
+) ranked
+WHERE o.embedding IS NOT NULL
+"""
 
 
-async def replace_matches(
-    session: AsyncSession, overseas_id: int, ranked: list[tuple[str, float]]
-) -> None:
+async def rebuild_matches(
+    session: AsyncSession, *, candidates: int, distance_max: float
+) -> dict[str, int]:
+    """DELETE + INSERT 를 한 트랜잭션에 묶는다 — 중간 상태가 보이면 피드가 말라붙는다.
+
+    TRUNCATE 가 아닌 DELETE 인 이유는 락이다. TRUNCATE 의 ACCESS EXCLUSIVE 는
+    읽는 쪽을 막지만 DELETE 는 MVCC 스냅샷으로 지나가게 둔다.
+    """
+    await session.execute(text("DELETE FROM overseas_spot_matches"))
     await session.execute(
-        text("DELETE FROM overseas_spot_matches WHERE overseas_id = :oid"),
-        {"oid": overseas_id},
+        text(_REBUILD_SQL), {"candidates": candidates, "distance_max": distance_max}
     )
-    if not ranked:
-        return
-    await session.execute(
-        text(
-            "INSERT INTO overseas_spot_matches (overseas_id, rank, content_id, distance) "
-            "VALUES (:oid, :rank, :cid, :dist)"
-        ),
-        [
-            {"oid": overseas_id, "rank": rank, "cid": content_id, "dist": distance}
-            for rank, (content_id, distance) in enumerate(ranked, start=1)
-        ],
-    )
+    row = (
+        await session.execute(
+            text(
+                "SELECT count(*) AS targets, "
+                "count(*) FILTER (WHERE m.full3) AS matched "
+                "FROM overseas_spots o "
+                "LEFT JOIN LATERAL ("
+                "SELECT count(*) = 3 AS full3 FROM overseas_spot_matches m "
+                "WHERE m.overseas_id = o.id"
+                ") m ON true "
+                "WHERE o.embedding IS NOT NULL"
+            )
+        )
+    ).one()
+    return {
+        "targets": int(row.targets),
+        "matched": int(row.matched or 0),
+        "empty": int(row.targets) - int(row.matched or 0),
+    }
 
 
 async def fetch_posts_page(

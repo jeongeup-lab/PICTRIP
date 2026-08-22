@@ -196,6 +196,30 @@ async def test_precompute_counts_empty_results(db_session, seeded_matching_far):
     counters = await matching.precompute_matches(db_session)
     assert counters["targets"] >= 1
     assert counters["empty"] >= 1
+    assert counters["targets"] == counters["matched"] + counters["empty"]
+
+
+async def test_precompute_is_atomic(db_session, seeded_matching, monkeypatch):
+    """중간 커밋이 보이면 _PAGE_SQL 의 빈-테이블 예외가 풀려 피드가 말라붙는다."""
+    original = matching.repositories.rebuild_matches
+
+    async def fail_after_write(session, **kwargs):
+        await original(session, **kwargs)
+        raise ConnectionError("killed mid-rebuild")
+
+    monkeypatch.setattr(matching.repositories, "rebuild_matches", fail_after_write)
+    before = (
+        await db_session.execute(text("SELECT count(*) FROM overseas_spot_matches"))
+    ).scalar_one()
+
+    with pytest.raises(ConnectionError):
+        await matching.precompute_matches(db_session)
+    await db_session.rollback()
+
+    after = (
+        await db_session.execute(text("SELECT count(*) FROM overseas_spot_matches"))
+    ).scalar_one()
+    assert after == before
 
 
 async def test_match_drops_when_source_image_moves(client, db_session, seeded_matching):

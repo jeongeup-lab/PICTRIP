@@ -127,19 +127,30 @@ async def test_feed_inlines_matches(client, seeded):
         )
 
 
-async def test_feed_drops_match_whose_image_moved(client, db_session, seeded):
-    """이미지가 바뀐 스팟은 더 이상 그 사진으로 닮은 곳이 아니다."""
+async def test_feed_drops_posts_whose_match_image_moved(client, db_session, seeded):
+    """이미지가 바뀐 스팟은 그 사진으로 닮은 곳이 아니다 — 3칸이 깨진 게시물은 빠진다.
+
+    사전계산 행은 그대로인데 라이브 조인만 탈락하는 구간이 실제로 존재한다
+    (일일 동기화가 스팟을 숨기거나 대표사진을 바꾼 뒤 재계산 전). 후보 선정도
+    같은 조인을 써야 "매칭 3곳 인라인"이 계약으로 유지된다.
+    """
     await db_session.execute(
         text("UPDATE spots SET first_image_url = 'http://kto/moved.jpg' WHERE content_id = 'fp_a'")
     )
     await db_session.commit()
 
-    res = await client.get("/v1/explore", params={"limit": 3})
-    items = res.json()["data"]["items"]
+    res = await client.get("/v1/explore", params={"limit": 10})
 
-    assert items
-    for item in items:
-        assert "fp_a" not in {m["contentId"] for m in item["matches"]}
+    assert res.json()["data"]["items"] == []
+
+
+async def test_feed_only_serves_posts_with_three_live_matches(client, db_session, seeded):
+    await db_session.execute(text("UPDATE spots SET show_flag = 0 WHERE content_id = 'fp_c'"))
+    await db_session.commit()
+
+    res = await client.get("/v1/explore", params={"limit": 10})
+
+    assert res.json()["data"]["items"] == []
 
 
 async def test_feed_cursor_no_duplicates_same_seed(client, seeded):
