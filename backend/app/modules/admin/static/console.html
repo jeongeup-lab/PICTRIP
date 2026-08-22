@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PICTRIP · 에이전트 콘솔</title>
+<link rel="stylesheet" href="/admin/assets/console.css" />
+</head>
+<body>
+
+<nav class="rail">
+  <a class="rail-mark" href="/admin" title="어드민으로">P</a>
+  <button class="rail-btn" id="fresh" type="button" title="새 대화">
+    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+  </button>
+  <div class="rail-jump" id="jump"></div>
+  <div class="rail-router" id="router">router …</div>
+  <button class="rail-btn" id="peek" type="button" title="요청 들여다보기">
+    <svg viewBox="0 0 24 24"><path d="M4 17V7M9 17V4M14 17v-6M19 17v-9"/></svg>
+  </button>
+</nav>
+
+<main class="stage">
+  <div class="thread" id="thread">
+    <div class="col">
+      <section class="opening" id="opening">
+        <h1>어디로 갈지<br />물어보세요. <em>여행 탭과 같은 문</em>으로 갑니다.</h1>
+        <p>앱이 쓰는 그 엔드포인트 그대로입니다. 카드를 누르면 근처를 다시 묻고, 조건 칩은 같은 검색을 조건 하나만 바꿔 다시 돌립니다.</p>
+        <div class="seeds" id="seeds"></div>
+      </section>
+    </div>
+  </div>
+
+  <div class="composer">
+    <form class="box" id="form">
+      <div class="box-row">
+        <label class="clip" id="clip" title="사진으로 찾기">
+          <input type="file" id="photo" accept="image/*" hidden />
+          <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.6"/><path d="m21 16-5-5L5 20"/></svg>
+        </label>
+        <textarea class="ask" id="ask" rows="1" placeholder="통영 2박3일 일정 짜줘" autocomplete="off"></textarea>
+        <button class="go" id="go" type="submit" title="보내기">
+          <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+      </div>
+      <div class="box-foot">
+        <label title="lat·lng 를 함께 보냅니다">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <select id="where">
+            <option value="">위치 없음</option>
+            <option value="37.5665,126.9780">서울시청</option>
+            <option value="35.1796,129.0756">부산역</option>
+            <option value="34.8544,128.4331">통영항</option>
+            <option value="33.4996,126.5312">제주시청</option>
+          </select>
+        </label>
+        <label title="이 user id 로 토큰을 발급해 붙입니다">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+          <input type="text" id="who" placeholder="익명" autocomplete="off" />
+        </label>
+        <label title="직전 턴들을 history 로 함께 보냅니다">
+          <input type="checkbox" id="multi" checked /> 멀티턴
+        </label>
+        <span id="clipname"></span>
+      </div>
+    </form>
+  </div>
+</main>
+
+<aside class="inspector" id="inspector">
+  <h3>마지막 턴</h3>
+  <div id="stats"></div>
+  <h3 style="margin-top:22px">보낸 본문</h3>
+  <pre class="blob" id="sent">–</pre>
+</aside>
+
+<script src="/admin/assets/console.js"></script>
+</body>
+</html>
