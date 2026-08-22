@@ -24,6 +24,7 @@
 | 10 | 2026-08-19 | **문서는 5개 · ADR 은 이 표로 접는다** | 아래 상세 | `docs/` |
 | 11 | 2026-08-19 | **KTO 상세 3콜은 독립 정산 · 프리워밍은 라이브 몫을 남긴다** | `detailCommon2` 일일 쿼터는 실측 ~600콜인데 프리워밍이 04:37 KST 에 전부 태웠다(written=599·kto_failed=200). 게다가 `gather` 가 그 429 하나로 성공한 `detailImage2`·`detailIntro2` 까지 버려 상세 화면이 통째로 비었다 | `app/modules/spots/services/detail.py` · `prewarm_job.py` |
 | 12 | 2026-08-19 | **대화 이력은 참고 자료 — 넘치면 잘라 쓰고 턴을 거절하지 않는다** | 20장을 돌려준 턴이 다음 턴의 `spotIds`(상한 8)를 넘겨 `VALIDATION_FAILED` 로 죽었고, 재시도는 같은 시드를 재생해 영구 실패했다. 구 `v*` 빌드는 OTA 를 못 받으므로 관용은 서버 쪽에 있어야 한다 | `app/modules/agent/schemas.py` · `travel/stores/chat-store.ts` |
+| 13 | 2026-08-22 | **홈 첫 화면은 지도가 아니라 인기 순위 레일** | 지도를 상단에 두는 안을 먼저 만들어 보고 뒤집었다 — 미니맵은 세로 206px 를 먹으면서 "어디로 갈지" 를 못 좁힌다. 순위·큐레이션이 같은 `EditorialRail` 껍데기를 쓰고 순위만 `compact`(카드 156) 로 좁혀 한 화면에서 훑게 한다 | `mobile/src/app/(tabs)/index.tsx` · `home/components/CurationSection.tsx` |
 
 ## 상세
 
