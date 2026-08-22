@@ -97,6 +97,24 @@ def test_recovered_only_when_green() -> None:
     assert payload["embeds"][0]["title"] == "d  FAILED"
 
 
+def test_network_error_never_escapes() -> None:
+    """알림 인프라 장애로 DAG 가 가짜 실패하면 안 된다 — Codex 리뷰 #329.
+
+    127.0.0.1:9 는 즉시 connection refused 라 밖으로 나가지 않는다.
+    """
+    assert notify.fetch_or_none("http://127.0.0.1:9/nope", "t") is None
+
+
+def test_previous_run_lookup_failure_is_not_a_recovery() -> None:
+    """조회에 실패했는데 복구로 읽으면 가짜 RECOVERED 가 나간다."""
+    original = notify.fetch_or_none
+    notify.fetch_or_none = lambda *_args, **_kwargs: None
+    try:
+        assert notify.previous_run_failed("o/r", "w.yml", 1, "t") is False
+    finally:
+        notify.fetch_or_none = original
+
+
 def main() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for test in tests:
