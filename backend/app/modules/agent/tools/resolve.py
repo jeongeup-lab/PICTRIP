@@ -34,16 +34,17 @@ def _extracted(args: Mapping[str, Any]) -> list[ExtractedPlace]:
     ]
 
 
-def _nameless(places: list[ExtractedPlace]) -> bool:
+def _named(places: list[ExtractedPlace]) -> list[ExtractedPlace]:
     """'12345' 를 장소로 해석해 상세까지 조회했다 — 이름에 글자가 하나는 있어야 한다."""
-    return all(not any(char.isalpha() for char in place.name) for place in places)
+    return [place for place in places if any(char.isalpha() for char in place.name)]
 
 
 async def _resolve_place(ctx: ToolContext, args: Mapping[str, Any]) -> ToolResult:
     places = _extracted(args)
     if not places:
         return ToolResult(rows=[], observation="names 가 비었습니다.")
-    if _nameless(places):
+    places = _named(places)
+    if not places:
         return ToolResult(rows=[], observation=_NOT_A_NAME, stop=True)
 
     resolved = await resolve_service.resolve_places(ctx.session, ctx.kto, places)

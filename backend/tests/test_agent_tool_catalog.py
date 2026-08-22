@@ -981,3 +981,10 @@ async def test_unsupported_raises_so_the_app_can_say_it_cannot(ctx: ToolContext)
     """길찾기·날씨에 지역 관광지를 대신 던지면 무엇이 거절됐는지 모른다."""
     with pytest.raises(AgentOutOfScope):
         await CATALOG["unsupported"].run(ctx, {})
+
+
+async def test_resolve_place_drops_only_the_nameless_ones(ctx: ToolContext) -> None:
+    """정상 이름 하나가 섞이면 숫자도 함께 외부 검색으로 나갔다."""
+    result = await CATALOG["resolve_place"].run(ctx, {"names": ["경복궁", "12345"]})
+
+    assert "12345" not in result.observation
