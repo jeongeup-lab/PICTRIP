@@ -115,7 +115,7 @@ JOIN spots ON spots.content_id = se.content_id
           AND spots.first_image_url <> ''
           AND ({attraction})
 LEFT JOIN lcls_systm_codes c ON c.lcls_systm3_cd = spots.lcls_systm3
-WHERE se.content_id <> ALL (CAST(:seed_ids AS text[]))
+WHERE se.content_id <> ALL (CAST(:excluded AS text[]))
   AND (SELECT vec FROM centroid) IS NOT NULL
   {region_clause}
 ORDER BY se.embedding <=> (SELECT vec FROM centroid)
@@ -123,15 +123,29 @@ LIMIT :lim
 """
 
 
+_SAVED_IDS_SQL = "SELECT content_id FROM user_saved_spots WHERE user_id = :uid"
+
+
+async def saved_content_ids(session: AsyncSession, user_id: int) -> list[str]:
+    """추천에서 뺄 목록은 시드 한도와 무관하다 — 31번째로 저장한 곳도 이미 저장한 곳이다."""
+    rows = await session.execute(text(_SAVED_IDS_SQL), {"uid": user_id})
+    return [row.content_id for row in rows]
+
+
 async def match_spots_by_centroid(
     session: AsyncSession,
     seed_ids: list[str],
     *,
     limit: int,
+    exclude_ids: list[str] | None = None,
     region_prefixes: list[str] | None = None,
 ) -> list[VectorMatchRow]:
     """저장한 곳들의 평균 벡터로 찾는다. halfvec 은 AVG 가 NULL 이라 vector 로 올렸다 되돌린다."""
-    params: dict[str, object] = {"seed_ids": seed_ids, "lim": limit}
+    params: dict[str, object] = {
+        "seed_ids": seed_ids,
+        "excluded": exclude_ids if exclude_ids else seed_ids,
+        "lim": limit,
+    }
     region_clause = ""
     if region_prefixes:
         region_clause = _REGION_CLAUSE

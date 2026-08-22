@@ -28,6 +28,7 @@ _TOO_FEW = (
 )
 _TOO_FEW_FACT = "저장한 곳이 {count}곳이에요. {need}곳 이상 저장하면 취향을 읽어 추천할 수 있어요."
 _NO_MATCH = "저장한 곳과 닮은 곳을 찾지 못했습니다."
+_UNKNOWN_REGION = "그 이름을 지역으로 해석하지 못했습니다. 시도·시군구 이름으로 다시 부르세요."
 
 
 async def _from_saved(ctx: ToolContext, args: Mapping[str, Any]) -> ToolResult:
@@ -48,12 +49,18 @@ async def _from_saved(ctx: ToolContext, args: Mapping[str, Any]) -> ToolResult:
         )
 
     hints = strings(args, "regions", limit=MAX_REGION_HINTS)
-    prefixes = await retrieve.resolve_region_prefixes(ctx.session, hints=hints) if hints else []
+    prefixes: list[str] | None = None
+    if hints:
+        prefixes = await retrieve.resolve_region_prefixes(ctx.session, hints=hints)
+        if not prefixes:
+            return ToolResult(rows=[], observation=f"{hints[0]}: {_UNKNOWN_REGION}")
+
     matches = await repositories.match_spots_by_centroid(
         ctx.session,
         seed_ids,
+        exclude_ids=await repositories.saved_content_ids(ctx.session, ctx.user_id),
         limit=SHOWN,
-        region_prefixes=prefixes or None,
+        region_prefixes=prefixes,
     )
     if not matches:
         return ToolResult(rows=[], observation=_NO_MATCH)

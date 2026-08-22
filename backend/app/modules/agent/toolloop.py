@@ -301,10 +301,17 @@ def intent_of(calls: list[ToolCall]) -> QueryIntent:
 
 
 _PLAN_AXES: frozenset[DropAxis] = frozenset({"crowd"})
+_NO_AXES: frozenset[DropAxis] = frozenset()
 
 
-def _axes(intent: QueryIntent) -> frozenset[DropAxis]:
-    """일정은 지역이 필수라 지역·실내·거리 칩이 결과를 못 만든다."""
+def _axes(trace: Trace, intent: QueryIntent) -> frozenset[DropAxis]:
+    """칩은 같은 검색을 조건 하나 바꿔 다시 도는 것이다.
+
+    저장 기준은 그 조건이 intent 에 없어 재생이 전국 검색이 되고, 일정은 지역이
+    필수라 지역·실내·거리 칩이 결과를 못 만든다.
+    """
+    if trace.calls_made and trace.calls_made[-1].name == "from_saved":
+        return _NO_AXES
     return _PLAN_AXES if intent.days is not None else suggest_service.ALL_AXES
 
 
@@ -354,7 +361,7 @@ def respond(trace: Trace, *, lat: float | None, lng: float | None) -> AskRespons
             has_coords=lat is not None and lng is not None,
             region_hints=list(intent.regionHints),
             keywords=list(intent.categoryKeywords),
-            axes=_axes(intent),
+            axes=_axes(trace, intent),
         )
 
     top = trace.rows[: retrieve.RESULT_LIMIT]
@@ -378,7 +385,7 @@ def respond(trace: Trace, *, lat: float | None, lng: float | None) -> AskRespons
             intent,
             has_coords=lat is not None and lng is not None,
             result_count=len(spots),
-            axes=_axes(intent),
+            axes=_axes(trace, intent),
             indoor_available=any(row.indoor for row in trace.rows),
         ),
     )
