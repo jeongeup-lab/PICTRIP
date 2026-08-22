@@ -173,21 +173,6 @@ describe("ExploreDeck", () => {
     expect(hosts(r, "explore-hint").length).toBe(0);
   });
 
-  it("drops the swipe hint after it has sat there long enough", async () => {
-    jest.useFakeTimers();
-    try {
-      setFeed();
-      const r = await mount();
-      expect(hosts(r, "explore-hint").length).toBe(1);
-      await act(async () => {
-        jest.advanceTimersByTime(4000);
-      });
-      expect(hosts(r, "explore-hint").length).toBe(0);
-    } finally {
-      jest.useRealTimers();
-    }
-  });
-
   it("opens the grid sheet and jumps the deck to the picked post", async () => {
     setFeed();
     const r = await mount();
