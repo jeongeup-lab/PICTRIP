@@ -591,15 +591,3 @@ read-only 집계 + 해외 게시물 숨김 토글만 — 회원 관리·콘텐�
 | api 컨테이너 셸 | `pct exec 112 -- docker exec -it <api-host-api-1> sh` |
 | 디스크 풀 복구 | `pct exec 112 -- docker builder prune -af && docker image prune -af` |
 
-### 여행 탭 라우터 전환
-
-`AGENT_ROUTER` 는 CT112 `.env` 에 있고 `Settings` 가 import 시점에 읽으므로 재기동이
-필요하다. SSH 없이 러너 경유로 돌린다 — 켜는 것도 되돌리는 것도 한 번이다.
-
-```bash
-gh workflow run backend-agent-router.yml -f router=tools      # 도구 호출 루프
-gh workflow run backend-agent-router.yml -f router=branches   # 기존 결정적 라우팅
-```
-
-`branches`(기본)는 `ask.py` 의 결정적 분기, `tools` 는 모델이 도구를 고르는 루프다.
-사진·앵커·조건 완화 칩은 `tools` 에서도 기존 경로를 탄다 — 루프가 그 인자를 받지 못한다.
