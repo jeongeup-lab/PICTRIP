@@ -37,7 +37,7 @@ _COURSE = (
 PROGRAMS = (
     Program(
         sigungu="정읍시",
-        title="정읍을 소개합니다",
+        title="정읍을 골랐어요...",
         lead="제가 직접 골랐어요.",
         slots=_COURSE,
     ),
