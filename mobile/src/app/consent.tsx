@@ -9,7 +9,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { useAuthStore } from "@/features/auth/stores/auth-store";
 import { useConsents } from "@/features/consent/queries";
 import { useLocationConsentSync } from "@/features/consent/hooks/use-location-consent-sync";
-import { useAiOptOut } from "@/features/consent/hooks/use-ai-opt-out";
+import { useAiTransferConsent } from "@/features/consent/hooks/use-ai-transfer-consent";
 import { AI_TRANSFER } from "@/features/consent/lib/ai-transfer";
 import { colors, spacing } from "@/constants/theme";
 
@@ -17,7 +17,7 @@ export default function ConsentScreen() {
   const insets = useSafeAreaInsets();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const { data, isLoading, isError, refetch } = useConsents();
-  const { optedOut: aiOff, change: changeAiOptOut } = useAiOptOut();
+  const { granted: aiGranted, decide: decideAi } = useAiTransferConsent();
   useLocationConsentSync(data);
 
   const aiRow = (
@@ -26,14 +26,14 @@ export default function ConsentScreen() {
         title={AI_TRANSFER.rowTitle}
         titleLines={2}
         sub={AI_TRANSFER.rowSub}
-        value={aiOff ? AI_TRANSFER.rowOff : AI_TRANSFER.rowOn}
-        tone={aiOff ? "off" : "on"}
+        value={aiGranted ? AI_TRANSFER.rowOn : AI_TRANSFER.rowOff}
+        tone={aiGranted ? "on" : "off"}
         right={
           <Switch
             testID="consent-ai-switch"
             accessibilityLabel={AI_TRANSFER.rowTitle}
-            value={!aiOff}
-            onValueChange={(next) => void changeAiOptOut(!next)}
+            value={aiGranted}
+            onValueChange={(next) => void decideAi(next)}
             trackColor={{ false: colors.fillStrong, true: colors.accent }}
           />
         }

@@ -15,7 +15,8 @@
 | POST | `/auth/logout` | 멱등 로그아웃 (jti denylist) | — |
 | GET | `/users/me` | 내 프로필 | JWT |
 | DELETE | `/users/me` | 탈퇴 (익명화·OAuth 해제·토큰 폐기) | JWT |
-| GET / PUT | `/users/me/consents` | 동의 상태 조회/upsert | JWT |
+| GET / PUT | `/users/me/consents` | 동의 상태 조회/upsert (위치·약관) | JWT |
+| PUT | `/users/me/consents/ai-transfer` | 국외 이전 동의 기록·철회 (`{granted, version}`). 위치 PUT 이 화면 포커스마다 전체를 덮어쓰므로 경로를 따로 둔다 | JWT |
 | GET | `/users/me/saved` | 저장 목록 (커서) | JWT |
 | POST / DELETE | `/users/me/saved/{contentId}` | 저장/해제 (멱등) | JWT |
 | GET | `/spots/{contentId}` | 스팟 상세 (KTO lazy fetch, 7일 캐시) | — |

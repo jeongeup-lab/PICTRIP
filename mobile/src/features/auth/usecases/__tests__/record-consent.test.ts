@@ -19,6 +19,9 @@ describe("recordConsentSnapshot", () => {
       locationConsent: true,
       termsVersion: "2026-06-22",
       consentedAt: "2026-06-22T00:00:00Z",
+      aiTransferConsent: false,
+      aiTransferVersion: null,
+      aiTransferConsentedAt: null,
     });
 
     await recordConsentSnapshot();

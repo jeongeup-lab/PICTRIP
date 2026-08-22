@@ -11,6 +11,7 @@ from app.modules.users import apple_tokens
 from app.modules.users import repositories as repo
 from app.modules.users.oidc import verify_oauth_id_token
 from app.modules.users.schemas import (
+    AiTransferConsentIn,
     ConsentIn,
     ConsentOut,
     ConsentState,
@@ -126,6 +127,26 @@ async def put_consents(session: AsyncSession, user_id: int, body: ConsentIn) -> 
     )
 
 
+async def put_ai_transfer_consent(
+    session: AsyncSession, user_id: int, body: AiTransferConsentIn
+) -> ConsentState:
+    row = await repo.upsert_ai_transfer_consent(
+        session,
+        user_id=user_id,
+        granted=body.granted,
+        version=body.version,
+    )
+    await session.commit()
+    return ConsentState(
+        locationConsent=row.location_consent,
+        termsVersion=row.terms_version,
+        consentedAt=row.consented_at,
+        aiTransferConsent=row.ai_transfer_consent,
+        aiTransferVersion=row.ai_transfer_version,
+        aiTransferConsentedAt=row.ai_transfer_consented_at,
+    )
+
+
 async def get_consents(session: AsyncSession, user_id: int) -> ConsentState:
     row = await repo.get_consent(session, user_id)
     if row is None:
@@ -134,6 +155,9 @@ async def get_consents(session: AsyncSession, user_id: int) -> ConsentState:
         locationConsent=row.location_consent,
         termsVersion=row.terms_version,
         consentedAt=row.consented_at,
+        aiTransferConsent=row.ai_transfer_consent,
+        aiTransferVersion=row.ai_transfer_version,
+        aiTransferConsentedAt=row.ai_transfer_consented_at,
     )
 
 

@@ -101,9 +101,16 @@ class UserConsent(Base):
     )
     location_consent: Mapped[bool] = mapped_column(Boolean, server_default=false(), nullable=False)
     photo_consent: Mapped[bool] = mapped_column(Boolean, server_default=false(), nullable=False)
-    terms_version: Mapped[str] = mapped_column(String(16), nullable=False)
+    terms_version: Mapped[str | None] = mapped_column(String(16), nullable=True)
     consented_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    ai_transfer_consent: Mapped[bool] = mapped_column(
+        Boolean, server_default=false(), nullable=False
+    )
+    ai_transfer_version: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    ai_transfer_consented_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     user: Mapped[User] = relationship(back_populates="consent")

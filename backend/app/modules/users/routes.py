@@ -11,6 +11,7 @@ from app.modules.spots import services as spots_services
 from app.modules.spots.schemas import SpotCard
 from app.modules.users import services
 from app.modules.users.schemas import (
+    AiTransferConsentIn,
     ConsentIn,
     DeleteAccountBody,
     LogoutBody,
@@ -114,6 +115,20 @@ async def put_consents(
 ) -> dict[str, Any]:
     consent = await services.put_consents(session, user_id, body)
     return ok(consent.model_dump())
+
+
+@router.put(
+    "/users/me/consents/ai-transfer",
+    status_code=status.HTTP_200_OK,
+    summary="Record or withdraw consent to send questions abroad (DeepSeek)",
+)
+async def put_ai_transfer_consent(
+    body: AiTransferConsentIn,
+    user_id: CurrentUserId,
+    session: DbSession,
+) -> dict[str, Any]:
+    state = await services.put_ai_transfer_consent(session, user_id, body)
+    return ok(state.model_dump())
 
 
 @router.get(
