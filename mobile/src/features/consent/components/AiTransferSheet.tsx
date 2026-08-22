@@ -1,6 +1,8 @@
 import { Modal, Pressable, View, Text, StyleSheet, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icon";
+import { ConsentDetail } from "@/features/consent/components/ConsentDetail";
+import { ConsentRow } from "@/features/consent/components/ConsentRow";
 import { AI_TRANSFER } from "@/features/consent/lib/ai-transfer";
 import { legalUrl } from "@/features/legal/constants";
 import { colors, radii, spacing } from "@/constants/theme";
@@ -30,20 +32,16 @@ export function AiTransferSheet({ visible, onAgree, onDecline }: Props) {
             {AI_TRANSFER.sheetBody}
           </Text>
 
-          <View style={styles.table}>
-            {AI_TRANSFER.items.map((item, index) => (
-              <View
-                key={item.key}
-                style={[styles.row, index > 0 && styles.rowDivided]}
-                testID={`ai-transfer-${item.key}`}
-              >
-                <Text style={styles.rowKey}>{item.label}</Text>
-                <Text lineBreakStrategyIOS="hangul-word" style={styles.rowValue}>
-                  {item.value}
-                </Text>
-              </View>
-            ))}
+          <View style={styles.rowSlot}>
+            <ConsentRow
+              required={false}
+              label={AI_TRANSFER.rowLabel}
+              checked={false}
+              highlighted
+              testID="ai-transfer-row"
+            />
           </View>
+          <ConsentDetail />
 
           <Text lineBreakStrategyIOS="hangul-word" style={styles.note}>
             {AI_TRANSFER.note}
@@ -108,25 +106,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
   },
   body: { marginTop: 6, fontSize: 13, lineHeight: 19, letterSpacing: -0.2, color: colors.sec },
-  table: {
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: radii.lg,
-    overflow: "hidden",
-  },
-  row: { flexDirection: "row", gap: 10, paddingVertical: 9, paddingHorizontal: 11 },
-  rowDivided: { borderTopWidth: 1, borderTopColor: colors.line },
-  rowKey: { width: 62, fontSize: 11.5, lineHeight: 17, fontWeight: "700", color: colors.ter },
-  rowValue: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 12.5,
-    lineHeight: 17,
-    fontWeight: "500",
-    letterSpacing: -0.2,
-    color: colors.ink,
-  },
+  rowSlot: { marginTop: 12, marginHorizontal: -spacing.md },
   note: { marginTop: 10, fontSize: 12, lineHeight: 18, color: colors.sec },
   policy: {
     marginTop: 9,

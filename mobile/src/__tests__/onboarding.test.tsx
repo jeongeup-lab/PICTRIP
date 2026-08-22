@@ -13,7 +13,13 @@ jest.mock("react-native-safe-area-context", () => {
   };
 });
 jest.mock("expo-router", () => ({ router: { replace: jest.fn() } }));
-jest.mock("@/lib/storage", () => ({ setOnboardingSeen: jest.fn() }));
+jest.mock("@/lib/storage", () => ({
+  setOnboardingSeen: jest.fn(),
+  getAiTransferConsent: jest.fn(async () => false),
+  setAiTransferConsent: jest.fn(async () => {}),
+}));
+jest.mock("@/features/consent/api", () => ({ putAiTransferConsent: jest.fn(async () => ({})) }));
+jest.mock("@/features/consent/queries", () => ({ useConsents: () => ({ data: undefined }) }));
 jest.mock("@/features/map/usecases/request-location", () => ({
   getPermissionStatus: jest.fn().mockResolvedValue("denied"),
   requestPermission: jest.fn().mockResolvedValue("denied"),
@@ -80,7 +86,12 @@ describe("Onboarding access notice", () => {
     act(() => node.props.onPress());
   };
 
-  it("routes every tour exit into the access notice instead of finishing", async () => {
+  const acceptTerms = (t: renderer.ReactTestRenderer) => {
+    act(() => t.root.findAll((n) => n.props?.testID === "terms-agree-all")[0].props.onPress());
+    act(() => t.root.findAll((n) => n.props?.testID === "terms-cta")[0].props.onPress());
+  };
+
+  it("routes every tour exit into the terms list before the access notice", async () => {
     await act(async () => {
       tree = renderer.create(<Onboarding />);
     });
@@ -89,8 +100,37 @@ describe("Onboarding access notice", () => {
 
     pressLabel(tree!, "건너뛰기");
 
+    expect(texts(tree!).join("\n")).toContain("약관에 동의해 주세요");
+    expect(texts(tree!).join("\n")).not.toContain("필수적 접근 권한");
+
+    acceptTerms(tree!);
+
     expect(texts(tree!).join("\n")).toContain("필수적 접근 권한");
     expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("does not let the required rows be skipped", async () => {
+    await act(async () => {
+      tree = renderer.create(<Onboarding />);
+    });
+    pressLabel(tree!, "건너뛰기");
+
+    const cta = tree!.root.findAll((n) => n.props?.testID === "terms-cta")[0];
+    expect(cta.props.accessibilityState?.disabled ?? cta.props.disabled).toBe(true);
+  });
+
+  it("records the cross-border choice made in the list", async () => {
+    const storage = jest.requireMock("@/lib/storage") as { setAiTransferConsent: jest.Mock };
+    await act(async () => {
+      tree = renderer.create(<Onboarding />);
+    });
+    pressLabel(tree!, "건너뛰기");
+
+    await act(async () => {
+      acceptTerms(tree!);
+    });
+
+    expect(storage.setAiTransferConsent).toHaveBeenCalledWith(true);
   });
 
   it("asks for location permission once when it was never decided", async () => {
@@ -104,6 +144,7 @@ describe("Onboarding access notice", () => {
       tree = renderer.create(<Onboarding />);
     });
     pressLabel(tree!, "건너뛰기");
+    acceptTerms(tree!);
     await act(async () => {
       tree!.root.findAll((n) => n.props?.testID === "access-confirm")[0].props.onPress();
     });

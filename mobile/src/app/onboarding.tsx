@@ -17,6 +17,9 @@ import { SlideChat } from "@/components/onboarding/SlideChat";
 import { SlideHome } from "@/components/onboarding/SlideHome";
 import { SlideMatch } from "@/components/onboarding/SlideMatch";
 import { AccessNotice } from "@/features/consent/components/AccessNotice";
+import { TermsAgreement } from "@/features/consent/components/TermsAgreement";
+import { useAiTransferConsent } from "@/features/consent/hooks/use-ai-transfer-consent";
+import type { ConsentChoices } from "@/features/consent/lib/terms-items";
 import { colors, spacing, radii } from "@/constants/theme";
 
 const SLIDES = [
@@ -47,18 +50,24 @@ export default function Onboarding() {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(0);
-  const [phase, setPhase] = useState<"tour" | "access">("tour");
+  const [phase, setPhase] = useState<"tour" | "terms" | "access">("tour");
   const scrollRef = useRef<ScrollView>(null);
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     setIndex(Math.round(e.nativeEvent.contentOffset.x / width));
   };
 
-  const showAccess = () => setPhase("access");
+  const showTerms = () => setPhase("terms");
+  const { decide: decideAi } = useAiTransferConsent();
+
+  const onTermsDone = (choices: ConsentChoices) => {
+    void decideAi(choices.ai);
+    setPhase("access");
+  };
 
   const next = () => {
     if (index >= SLIDES.length - 1) {
-      showAccess();
+      showTerms();
       return;
     }
     scrollRef.current?.scrollTo({ x: (index + 1) * width, animated: true });
@@ -81,7 +90,7 @@ export default function Onboarding() {
         <>
           <Pressable
             style={[styles.skip, { top: insets.top + spacing.lg }]}
-            onPress={showAccess}
+            onPress={showTerms}
             hitSlop={8}
           >
             <Text style={styles.skipText}>건너뛰기</Text>
@@ -118,12 +127,14 @@ export default function Onboarding() {
               <Text style={styles.ctaLabel}>{lastSlide ? "시작하기" : "다음"}</Text>
             </Pressable>
             {lastSlide ? (
-              <Pressable onPress={showAccess} hitSlop={8}>
+              <Pressable onPress={showTerms} hitSlop={8}>
                 <Text style={styles.aux}>로그인 없이 둘러보기</Text>
               </Pressable>
             ) : null}
           </View>
         </>
+      ) : phase === "terms" ? (
+        <TermsAgreement onDone={onTermsDone} />
       ) : (
         <AccessNotice onConfirm={() => void finish()} />
       )}
