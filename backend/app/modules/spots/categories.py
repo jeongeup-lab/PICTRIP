@@ -91,6 +91,13 @@ def travel_category_predicate() -> ColumnElement[bool]:
     )
 
 
+def in_travel_pool(code: str) -> bool:
+    """여행지 풀은 숙박·레포츠·쇼핑을 뺀다 — 코드가 풀려도 결과가 0곳인 종류가 있다."""
+    if code.startswith(("HS", "NA", "EX")):
+        return True
+    return code.startswith("VE") and not code.startswith(_TRAVEL_VE_EXCLUDE)
+
+
 def travel_category_sql() -> str:
     return _predicate_sql(travel_category_predicate())
 

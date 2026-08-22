@@ -52,6 +52,8 @@ SYSTEM = """너는 국내 여행지 검색 라우터다. 질문에 답하려면 
 - 결과가 0곳이면 관찰을 읽고 조건을 바꿔 다시 부른다. 같은 인자로 다시 부르지 않는다.
 - 필요한 만큼만 부른다. 충분하면 도구를 부르지 말고 끝낸다.
 - 국내 여행지와 무관한 질문이면 도구를 부르지 않는다.
+- 사용자가 말하지 않은 지역·종류를 인자로 지어내지 않는다. "어디 갈까", "좋아 그럼"
+  처럼 조건이 하나도 없으면 도구를 부르지 말고 끝낸다 — 무엇을 찾는지 되물어야 한다.
 - "거기", "그 근처", "아까 그곳" 은 직전 결과를 가리킨다. 괄호 안 contentId 를
   그대로 도구 인자로 쓴다. 이름을 contentId 자리에 넣지 않는다."""
 
@@ -59,6 +61,7 @@ UNKNOWN_TOOL = "그런 도구는 없습니다."
 TIMED_OUT = "도구가 시간 안에 끝나지 않았습니다. 조건을 좁혀 다시 부르세요."
 TIMED_OUT_BADGE = "시간 초과"
 REPEATED = "같은 도구를 같은 인자로 이미 불렀습니다. 조건을 바꾸세요."
+HALTED = "이 턴은 이미 끝났습니다. 더 부르지 말고 앞선 관찰대로 답하세요."
 
 
 @dataclass(slots=True)
@@ -88,9 +91,9 @@ class Trace:
                 )
             )
 
-    said: str = ask_service.BLANK_ANSWER
     calls: int = 0
     rounds: int = 0
+    halt: bool = False
     stopped: str = "done"
     elapsed: float = 0.0
 
@@ -119,6 +122,8 @@ async def _run_one(ctx: ToolContext, call: ToolCall, trace: Trace) -> str:
         trace.facts.append(result.observation)
     elif result.fact:
         trace.facts.append(result.fact)
+    if result.stop:
+        trace.halt = True
     seen_anchor = {row.content_id for row in trace.anchors}
     trace.anchors.extend(row for row in result.anchors if row.content_id not in seen_anchor)
     if not tool.carries_facts:
@@ -233,8 +238,6 @@ async def route(
 
         decision = await client.decide(system=SYSTEM, turns=turns, tools=declared)
         if decision.done:
-            if decision.text:
-                trace.said = decision.text
             break
 
         picked = decision.calls[:MAX_CALLS_PER_ROUND]
@@ -244,6 +247,10 @@ async def route(
         for call in picked:
             observation = await _observe(ctx, call, trace, fired)
             turns.append(Turn(role="observation", text=observation, tool_name=call.name))
+
+        if trace.halt:
+            trace.stopped = "halted"
+            break
 
     trace.elapsed = monotonic() - started
     logger.info(
@@ -259,6 +266,8 @@ async def route(
 
 async def _observe(ctx: ToolContext, call: ToolCall, trace: Trace, fired: set[str]) -> str:
     """도구는 한 세션을 공유하므로 순차로만 돈다 — asyncpg 는 동시 사용을 거부한다."""
+    if trace.halt:
+        return HALTED
     if trace.calls >= MAX_TOOL_CALLS:
         return REPEATED
     mark = fingerprint(call)
@@ -351,7 +360,9 @@ def respond(trace: Trace, *, lat: float | None, lng: float | None) -> AskRespons
     intent = intent_of(trace.calls_made)
     near = intent.nearMe and lat is not None and lng is not None
     if not trace.calls_made:
-        return answer_service.talk_response(trace.steps, QueryIntent(task="smalltalk"), trace.said)
+        return answer_service.talk_response(
+            trace.steps, QueryIntent(task="smalltalk"), ask_service.BLANK_ANSWER
+        )
     if trace.facts and not trace.rows:
         return _facts_response(trace, intent)
     if not trace.rows:

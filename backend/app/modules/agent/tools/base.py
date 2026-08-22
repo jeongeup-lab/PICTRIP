@@ -48,6 +48,9 @@ class ToolResult:
     fact: str | None = None
     """카드만 보고는 복원할 수 없는 계산 결과. 작문 모델과 폴백 답변 양쪽에 실린다."""
 
+    stop: bool = False
+    """조건을 바꿔도 답이 안 나오는 턴. 관찰로 부탁해도 모델은 지역만 남겨 다시 부른다."""
+
 
 Run = Callable[["ToolContext", Mapping[str, Any]], Awaitable["ToolResult"]]
 

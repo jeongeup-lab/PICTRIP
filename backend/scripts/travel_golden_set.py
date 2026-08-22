@@ -86,15 +86,8 @@ def case(cid: str, group: str, label: str, payload: dict[str, Any], **kw: Any) -
 
 
 def talk(cid: str, label: str, question: str, **kw: Any) -> Case:
-    return case(
-        cid,
-        "A 조건 없음",
-        label,
-        ask(question),
-        forbid_tools=SEARCH_TOOLS,
-        expect_spots="none",
-        **kw,
-    )
+    """도구를 부르는지가 아니라 결과가 안 나가는지를 잰다 — 라우터는 불러 보고 판단한다."""
+    return case(cid, "A 조건 없음", label, ask(question), expect_spots="none", **kw)
 
 
 def find(cid: str, label: str, question: str, **kw: Any) -> Case:
@@ -118,15 +111,8 @@ def detail(
 
 
 def cannot(cid: str, label: str, question: str, **kw: Any) -> Case:
-    return case(
-        cid,
-        "E 범위 밖",
-        label,
-        ask(question),
-        forbid_tools=SEARCH_TOOLS,
-        expect_spots="none",
-        **kw,
-    )
+    """앱이 못 다루는 요구다. 도구를 불러 확인했더라도 결과가 나가면 안 된다."""
+    return case(cid, "E 범위 밖", label, ask(question), expect_spots="none", **kw)
 
 
 def edge(cid: str, label: str, question: str, **kw: Any) -> Case:
