@@ -465,13 +465,13 @@ describe("TravelScreen 국외 이전 동의", () => {
     }
   });
 
-  it("법인명과 이전 국가는 동의 버튼과 같은 화면에 남는다", async () => {
+  it("이전받는 자와 국가는 동의 버튼과 같은 화면에 남는다", async () => {
     const tree = await mount();
 
     await send(tree, "제주 조용한 바다");
 
     const shown = rendered(tree);
-    expect(shown).toContain("항저우 딥시크 인공지능 기초기술연구");
+    expect(shown).toContain("DeepSeek");
     expect(shown).toContain("중국");
     expect(tree.root.findByProps({ testID: "ai-transfer-agree" })).toBeTruthy();
   });
@@ -509,6 +509,6 @@ describe("TravelScreen 국외 이전 동의", () => {
     await press(tree, "travel-send");
 
     expect(streams[0].input.message).toBeNull();
-    expect(rendered(tree)).not.toContain("항저우 딥시크");
+    expect(rendered(tree)).not.toContain("DeepSeek · 중국");
   });
 });
