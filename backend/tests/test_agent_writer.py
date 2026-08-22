@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 
-from app.modules.agent.schemas import AgentSpotCard, QueryIntent
-from app.modules.agent.services import writer
+from app.modules.agent.schemas import AgentSpotCard, ChatHistoryItem, QueryIntent
+from app.modules.agent.services import chat, writer
 
 
 def card(content_id: str, title: str) -> AgentSpotCard:
@@ -61,3 +61,40 @@ def test_the_stream_is_passed_through_untouched_so_deltas_match_the_final_text()
     """
     assert not hasattr(writer, "parse_stream")
     assert not hasattr(writer, "WriterCards")
+
+
+def test_only_the_previous_turn_reaches_the_prompt() -> None:
+    """자유 입력은 국외로 나간다 — 라이터가 실제로 쓰는 만큼만 싣는다."""
+    history = [
+        ChatHistoryItem(role="user", text="아주 오래된 질문"),
+        ChatHistoryItem(role="assistant", text="아주 오래된 답변"),
+        ChatHistoryItem(role="user", text="직전 질문"),
+        ChatHistoryItem(role="assistant", text="직전 답변"),
+    ]
+
+    _system, user_text = writer.build_prompt(
+        question="제주 박물관",
+        intent=QueryIntent(regionHints=["제주"]),
+        spots=[card("1", "국립제주박물관")],
+        blog_posts=[],
+        client_time=None,
+        history=history[-chat.HISTORY_TAIL :],
+    )
+
+    assert "직전 질문" in user_text
+    assert "아주 오래된 질문" not in user_text
+
+
+def test_spot_ids_never_reach_the_prompt() -> None:
+    """관광지 식별자는 서버가 문맥을 풀 때만 쓴다 — 국외로 보낼 이유가 없다."""
+    _system, user_text = writer.build_prompt(
+        question="제주 박물관",
+        intent=QueryIntent(regionHints=["제주"]),
+        spots=[card("1", "국립제주박물관")],
+        blog_posts=[],
+        client_time=None,
+        history=[ChatHistoryItem(role="assistant", text="답변", spotIds=["126508", "126509"])],
+    )
+
+    assert "126508" not in user_text
+    assert "spotIds" not in user_text
