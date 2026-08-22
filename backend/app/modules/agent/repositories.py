@@ -179,6 +179,21 @@ async def embedded_spot_ids(
     return [row.content_id for row in rows]
 
 
+_EMBEDDED_AMONG_SQL = """
+    SELECT content_id FROM spot_embeddings
+    WHERE content_id = ANY(CAST(:ids AS text[]))
+"""
+
+
+async def embedded_ids_among(session: AsyncSession, content_ids: list[str]) -> list[str]:
+    """임베딩 없는 스팟은 centroid 에서 조용히 빠진다 — 세기 전에 걸러야 한다."""
+    if not content_ids:
+        return []
+    rows = await session.execute(text(_EMBEDDED_AMONG_SQL), {"ids": content_ids})
+    found = {row.content_id for row in rows}
+    return [content_id for content_id in content_ids if content_id in found]
+
+
 async def load_spot_embedding(session: AsyncSession, content_id: str) -> list[float] | None:
     result = await session.execute(text(_SPOT_EMBEDDING_SQL), {"cid": content_id})
     raw = result.scalar_one_or_none()

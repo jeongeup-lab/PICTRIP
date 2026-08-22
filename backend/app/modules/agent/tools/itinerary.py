@@ -14,6 +14,8 @@ from app.modules.agent.tools.base import Tool, ToolContext, ToolResult, recovera
 MAX_DAYS = 4
 PER_DAY = 3
 _UNKNOWN = "그 이름을 지역으로 해석하지 못했습니다. 시도·시군구 이름으로 다시 부르세요."
+_NEEDS_REGION = "어느 지역으로 갈지 알려주시면 일정을 짜드릴게요."
+_UNKNOWN_FACT = "{region} 이(가) 어디인지 못 알아들었어요. 시나 군 이름으로 알려주세요."
 _EMPTY = "그 지역에는 일정에 넣을 곳이 없습니다."
 
 
@@ -168,12 +170,16 @@ def _nearest(leg: Sequence[CandidateRow], pool: Sequence[CandidateRow]) -> Candi
 async def _plan_itinerary(ctx: ToolContext, args: Mapping[str, Any]) -> ToolResult:
     hints = strings(args, "regions", limit=MAX_REGION_HINTS)
     if not hints:
-        return ToolResult(rows=[], observation="regions 가 비었습니다.")
+        return ToolResult(rows=[], observation="regions 가 비었습니다.", fact=_NEEDS_REGION)
 
     region = hints[0]
     prefixes = await retrieve.resolve_region_prefixes(ctx.session, hints=[region])
     if not prefixes:
-        return ToolResult(rows=[], observation=f"{region}: {_UNKNOWN}")
+        return ToolResult(
+            rows=[],
+            observation=f"{region}: {_UNKNOWN}",
+            fact=_UNKNOWN_FACT.format(region=region),
+        )
 
     keywords = strings(args, "categories", limit=MAX_KEYWORDS)
     eating = _meal_words(keywords)
