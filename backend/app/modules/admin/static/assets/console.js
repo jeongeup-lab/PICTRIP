@@ -591,10 +591,3 @@ for (const seed of SEEDS) {
   chip.onclick = () => send({ message: seed });
   seedBar.appendChild(chip);
 }
-
-fetch("/admin/api/agent/router")
-  .then((res) => res.json())
-  .then((body) => {
-    document.getElementById("router").textContent = `router ${body.data.router}`;
-  })
-  .catch(() => {});

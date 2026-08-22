@@ -97,13 +97,6 @@ button { font: inherit; }
 }
 .rail-dot:hover, .rail-dot.on { background: var(--dim); }
 
-.rail-router {
-  font-family: var(--mono);
-  font-size: 9px;
-  color: var(--faint);
-  writing-mode: vertical-rl;
-  letter-spacing: 0.04em;
-}
 
 .stage {
   margin-left: var(--rail);
