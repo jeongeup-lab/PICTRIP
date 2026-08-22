@@ -16,7 +16,7 @@ interface Props {
 
 export function PostSlide({ post, width, height, onOpenSpot }: Props) {
   const [creditOpen, setCreditOpen] = useState(false);
-  const matches = post.matches;
+  const matches = post.matches ?? [];
   const credit = [post.imageAuthor?.replace(/^Author:\s*/, ""), post.imageLicense]
     .filter(Boolean)
     .join(" · ");

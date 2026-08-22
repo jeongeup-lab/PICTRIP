@@ -19,7 +19,7 @@ export type OverseasPost = {
   imageLicense: string | null;
   imageLicenseUrl: string | null;
   imageSourceUrl: string;
-  matches: MatchCard[];
+  matches?: MatchCard[];
 };
 
 export type PostsPage = {

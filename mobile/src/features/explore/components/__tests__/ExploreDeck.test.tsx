@@ -151,6 +151,25 @@ describe("ExploreDeck", () => {
     expect(pressables(r, "explore-match-c1").length).toBeGreaterThan(0);
   });
 
+  it("survives a feed page served before the backend inlines matches", async () => {
+    setFeed();
+    (useExploreFeed as jest.Mock).mockReturnValue({
+      ...(useExploreFeed as jest.Mock)(),
+      data: {
+        pages: [
+          {
+            seed: "seed-abc",
+            items: posts(3).map(({ matches: _matches, ...rest }) => rest),
+            nextCursor: null,
+            hasMore: false,
+          },
+        ],
+      },
+    });
+    const r = await mount();
+    expect(hosts(r, "explore-match-empty").length).toBeGreaterThan(0);
+  });
+
   it("drops the swipe hint once the user has swiped twice", async () => {
     setFeed();
     const r = await mount();
