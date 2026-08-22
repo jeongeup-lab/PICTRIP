@@ -30,4 +30,4 @@ class AgentWriterUnavailable(AppError):
 class AgentOutOfScope(AppError):
     code = "AGENT_OUT_OF_SCOPE"
     http_status = 422
-    message = "국내 여행지만 찾을 수 있어요. 가고 싶은 국내 지역이나 분위기로 물어봐 주세요."
+    message = "그건 제가 도와드릴 수 없어요. 국내 여행지를 지역이나 분위기로 물어봐 주세요."

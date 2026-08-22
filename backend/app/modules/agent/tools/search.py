@@ -31,6 +31,11 @@ _NO_AXIS = (
     "사용자에게 어디를 갈지 혹은 무엇을 찾는지 먼저 물으세요."
 )
 _NO_AXIS_FACT = "어디로 갈지 아니면 무엇을 찾는지 한 가지만 알려주시면 바로 찾아볼게요."
+_FOOD_NEEDS_PLACE = (
+    "먹을 곳은 전국에서 고르면 의미가 없습니다. 지역을 받아 다시 부르거나, "
+    "어느 동네에서 찾을지 사용자에게 물으세요."
+)
+_FOOD_NEEDS_PLACE_FACT = "어느 지역에서 찾을지 알려주시면 그 동네로 골라드릴게요."
 _UNREADABLE = (
     "'{words}' 는 이 앱이 다루지 않는 종류입니다. 조건을 바꿔 다시 부르지 마세요 — "
     "지역만 남겨 부르면 엉뚱한 관광지가 나옵니다. 그 종류는 다루지 않는다고 답하고 끝내세요."
@@ -95,6 +100,10 @@ async def _category_search(ctx: ToolContext, args: Mapping[str, Any]) -> ToolRes
         )
     if not (readable or prefixes or near or args.get("indoor") or _crowd(args) != "any"):
         return ToolResult(rows=[], observation=_NO_AXIS, fact=_NO_AXIS_FACT, stop=True)
+    if eating is not None and not (prefixes or near):
+        return ToolResult(
+            rows=[], observation=_FOOD_NEEDS_PLACE, fact=_FOOD_NEEDS_PLACE_FACT, stop=True
+        )
     if eating is not None:
         rows = await retrieve.search_food(
             ctx.session,

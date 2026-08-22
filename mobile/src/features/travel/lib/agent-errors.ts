@@ -5,7 +5,7 @@ const MESSAGES: Partial<Record<ErrorCode, string>> = {
   AGENT_INTENT_UNAVAILABLE: "지금은 질문을 이해하지 못했어요. 잠시 후 다시 시도해 주세요.",
   AGENT_NO_RESULTS: "조건에 맞는 곳을 찾지 못했어요. 조건을 조금 넓혀서 다시 물어봐 주세요.",
   AGENT_OUT_OF_SCOPE:
-    "국내 여행지만 찾을 수 있어요. 가고 싶은 국내 지역이나 분위기로 물어봐 주세요.",
+    "그건 제가 도와드릴 수 없어요. 국내 여행지를 지역이나 분위기로 물어봐 주세요.",
   IMAGE_INVALID: "이 사진은 읽을 수 없어요. 다른 사진으로 시도해 주세요.",
   VALIDATION_FAILED: "요청을 처리하지 못했어요. 질문을 조금 바꿔서 다시 물어봐 주세요.",
   RATE_LIMITED: "요청이 너무 잦아요. 잠시 후 다시 시도해 주세요.",

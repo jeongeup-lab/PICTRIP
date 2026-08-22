@@ -51,6 +51,7 @@ ToolName = Literal[
     "plan_itinerary",
     "from_saved",
     "abroad",
+    "unsupported",
 ]
 
 
