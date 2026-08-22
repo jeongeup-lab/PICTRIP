@@ -16,7 +16,7 @@ export const AI_TRANSFER = {
     {
       key: "who",
       label: "받는 곳",
-      value: "항저우 딥시크 인공지능 기초기술연구 · 중국",
+      value: "DeepSeek · 중국",
     },
     {
       key: "what",
