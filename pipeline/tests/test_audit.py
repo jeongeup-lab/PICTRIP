@@ -1,6 +1,11 @@
 import pytest
 
-from pictrip_data.sync.audit import ensure_table, last_success_watermark, record_run
+from pictrip_data.sync.audit import (
+    ensure_table,
+    format_counters,
+    last_success_watermark,
+    record_run,
+)
 
 
 def _latest(conn):
@@ -41,3 +46,11 @@ def test_last_success_watermark_round_trip(db_conn):
     with record_run(db_conn, "daily") as c:
         c["watermark_to"] = wm
     assert last_success_watermark(db_conn) == wm
+
+
+def test_format_counters_drops_none_and_keeps_zero():
+    line = format_counters(
+        "sync-daily",
+        {"api_calls": 2, "fetched": 0, "watermark_from": None, "watermark_to": "20260822000000"},
+    )
+    assert line == "[sync-daily] api_calls=2 fetched=0 watermark_to=20260822000000"

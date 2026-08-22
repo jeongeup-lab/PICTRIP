@@ -8,6 +8,7 @@ from pictrip_data.kto.client import KtoServiceError, _body
 from pictrip_data.sync.audit import ensure_table
 from pictrip_data.sync.daily import (
     PartialFullSync,
+    TruncatedPageLoop,
     WatermarkTooOld,
     _run,
     sync_daily,
@@ -21,19 +22,62 @@ ITEMS = FIXTURE["response"]["body"]["items"]["item"]
 
 
 class FakeClient:
-    def __init__(self, pages):
+    """실제 API 처럼 totalCount 를 모든 페이지에서 같은 값으로 준다.
+
+    total 을 따로 넘기면 "totalCount 는 큰데 items 가 먼저 끊기는" 잘린 응답이 된다.
+    """
+
+    def __init__(self, pages, total=None):
         self.pages = pages
+        self.total = total if total is not None else sum(len(i) for i, _ in pages.values())
         self.calls = []
 
     def area_based_sync_list(self, *, page, rows=100, modifiedtime=None):
         self.calls.append((page, modifiedtime))
-        return self.pages.get(page, ([], 2))
+        items, _ = self.pages.get(page, ([], 0))
+        return items, self.total
 
 
 def test_watermark_param_slices_date():
     assert watermark_param("20260627043000") == "20260627"
     assert watermark_param(None) is None
     assert watermark_param("") is None
+
+
+def test_truncated_page_loop_stops_before_the_watermark_advances(seed_refs):
+    conn = seed_refs
+    ensure_table(conn)
+    client = FakeClient({1: (ITEMS, 130)}, total=130)
+
+    with pytest.raises(TruncatedPageLoop):
+        _run("incremental", ["20260701"], client, conn, watermark_from="20260630000000")
+
+    cur = conn.cursor()
+    cur.execute("SELECT status, watermark_to FROM sync_runs ORDER BY id DESC LIMIT 1")
+    status, watermark_to = cur.fetchone()
+    assert status == "error"
+    assert watermark_to is None
+
+
+def test_total_count_stops_the_loop_without_an_extra_empty_page(seed_refs):
+    conn = seed_refs
+    ensure_table(conn)
+    client = FakeClient({1: (ITEMS, 2)})
+    _run("incremental", ["20260701"], client, conn)
+
+    assert client.calls == [(1, "20260701")]
+
+
+def test_paging_continues_until_total_count_is_reached(seed_refs):
+    conn = seed_refs
+    ensure_table(conn)
+    client = FakeClient({1: (ITEMS[:1], 2), 2: (ITEMS[1:], 2)})
+    _run("incremental", ["20260701"], client, conn)
+
+    assert [page for page, _mt in client.calls] == [1, 2]
+    cur = conn.cursor()
+    cur.execute("SELECT status, fetched FROM sync_runs ORDER BY id DESC LIMIT 1")
+    assert cur.fetchone() == ("success", 2)
 
 
 def test_sync_daily_pages_until_empty_and_records(seed_refs):

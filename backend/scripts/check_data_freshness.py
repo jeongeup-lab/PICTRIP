@@ -39,8 +39,10 @@ CHECKS: tuple[Check, ...] = (
     Check(
         "overseas_spots.updated_at",
         "SELECT min(updated_at) FROM overseas_spots",
-        24 * 70,
-        "월간 DAG 는 Kuma 하트비트 상한(24일)을 넘어 push 모니터를 못 붙인다",
+        24 * 45,
+        "월간 DAG 는 Kuma 하트비트 상한(24일)을 넘어 push 모니터를 못 붙인다 — "
+        "이 체크가 유일한 감시다. 70일이면 월간을 두 번 걸러먹어야 울려서 "
+        "2026-08-18 타임아웃·08-20 skip_etl 을 못 잡았다. 45일이면 한 번에 운다",
     ),
 )
 
