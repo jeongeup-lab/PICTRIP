@@ -36,13 +36,13 @@ jest.mock("@/features/saved/hooks/use-save-optimistic", () => ({
 }));
 jest.mock("@/features/spots/queries", () => ({ prefetchSpot: jest.fn() }));
 jest.mock("@/lib/storage", () => ({
-  getAiConsent: jest.fn(async () => true),
-  setAiConsent: jest.fn(async () => {}),
+  getAiOptOut: jest.fn(async () => false),
+  setAiOptOut: jest.fn(async () => {}),
 }));
 
 const storageMock = jest.requireMock("@/lib/storage") as {
-  getAiConsent: jest.Mock;
-  setAiConsent: jest.Mock;
+  getAiOptOut: jest.Mock;
+  setAiOptOut: jest.Mock;
 };
 const streamChatMock = streamChat as jest.Mock;
 const useNearbyCoordsMock = useNearbyCoords as jest.Mock;
@@ -386,42 +386,18 @@ describe("TravelScreen 핀 탭", () => {
   });
 });
 
-describe("TravelScreen Gemini 동의", () => {
-  beforeEach(() => storageMock.getAiConsent.mockResolvedValue(false));
-  afterEach(() => storageMock.getAiConsent.mockResolvedValue(true));
+describe("TravelScreen AI 질문 끄기", () => {
+  beforeEach(() => storageMock.getAiOptOut.mockResolvedValue(true));
+  afterEach(() => storageMock.getAiOptOut.mockResolvedValue(false));
 
-  it("동의 전에는 질문을 보내지 않고 시트를 띄운다", async () => {
+  it("꺼져 있으면 안내를 띄우고 입력을 잠근다", async () => {
     const tree = await mount();
 
-    await send(tree, "제주 조용한 바다");
-
-    expect(streamChatMock).not.toHaveBeenCalled();
-    expect(rendered(tree)).toContain("Google Gemini");
+    expect(tree.root.findByProps({ testID: "travel-ai-off" })).toBeTruthy();
+    expect(tree.root.findByProps({ testID: "travel-input" }).props.editable).toBe(false);
   });
 
-  it("동의하면 기억하고 보류한 질문을 그대로 보낸다", async () => {
-    const tree = await mount();
-    await send(tree, "제주 조용한 바다");
-
-    await press(tree, "ai-consent-agree");
-
-    expect(storageMock.setAiConsent).toHaveBeenCalledTimes(1);
-    expect(streamChatMock).toHaveBeenCalledTimes(1);
-    expect((streamChatMock.mock.calls[0][0] as ChatInput).message).toBe("제주 조용한 바다");
-  });
-
-  it("거절하면 질문을 버리고 이유를 알린다", async () => {
-    const tree = await mount();
-    await send(tree, "제주 조용한 바다");
-
-    await press(tree, "ai-consent-decline");
-
-    expect(streamChatMock).not.toHaveBeenCalled();
-    expect(storageMock.setAiConsent).not.toHaveBeenCalled();
-    expect(rendered(tree)).toContain("동의하지 않아 질문을 보내지 않았어요");
-  });
-
-  it("사진만 보낼 때는 동의를 묻지 않는다", async () => {
+  it("꺼져 있어도 사진만으로는 보낸다", async () => {
     pickTravelPhoto.mockResolvedValueOnce(PHOTO);
     jest
       .spyOn(ActionSheetIOS, "showActionSheetWithOptions")
@@ -432,6 +408,14 @@ describe("TravelScreen Gemini 동의", () => {
     await press(tree, "travel-send");
 
     expect(streams[0].input.message).toBeNull();
-    expect(rendered(tree)).not.toContain("Google Gemini");
+  });
+
+  it("켜기를 누르면 저장하고 입력이 풀린다", async () => {
+    const tree = await mount();
+
+    await press(tree, "travel-ai-off-enable");
+
+    expect(storageMock.setAiOptOut).toHaveBeenCalledWith(false);
+    expect(tree.root.findByProps({ testID: "travel-input" }).props.editable).toBe(true);
   });
 });

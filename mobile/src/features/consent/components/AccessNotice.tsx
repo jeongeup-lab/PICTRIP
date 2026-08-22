@@ -1,6 +1,7 @@
 import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 import { Icon, type IconName } from "@/components/Icon";
+import { AI_TRANSFER } from "@/features/consent/lib/ai-transfer";
 import { colors, themeName } from "@/constants/theme";
 
 const OPTIONAL_ACCESS: { key: string; icon: IconName; label: string; why: string }[] = [
@@ -21,6 +22,7 @@ const OPTIONAL_ACCESS: { key: string; icon: IconName; label: string; why: string
 const NOTES = [
   "선택적 접근 권한은 해당 기능을 처음 쓸 때 물어보며, 미동의해도 나머지 서비스는 그대로 이용할 수 있어요.",
   "[설정 > PICTRIP > 권한]에서 언제든 바꿀 수 있어요.",
+  AI_TRANSFER.onboardingNote,
 ];
 
 const dark = themeName === "dark";

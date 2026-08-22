@@ -25,6 +25,7 @@
 | 11 | 2026-08-19 | **KTO 상세 3콜은 독립 정산 · 프리워밍은 라이브 몫을 남긴다** | `detailCommon2` 일일 쿼터는 실측 ~600콜인데 프리워밍이 04:37 KST 에 전부 태웠다(written=599·kto_failed=200). 게다가 `gather` 가 그 429 하나로 성공한 `detailImage2`·`detailIntro2` 까지 버려 상세 화면이 통째로 비었다 | `app/modules/spots/services/detail.py` · `prewarm_job.py` |
 | 12 | 2026-08-19 | **대화 이력은 참고 자료 — 넘치면 잘라 쓰고 턴을 거절하지 않는다** | 20장을 돌려준 턴이 다음 턴의 `spotIds`(상한 8)를 넘겨 `VALIDATION_FAILED` 로 죽었고, 재시도는 같은 시드를 재생해 영구 실패했다. 구 `v*` 빌드는 OTA 를 못 받으므로 관용은 서버 쪽에 있어야 한다 | `app/modules/agent/schemas.py` · `travel/stores/chat-store.ts` |
 | 13 | 2026-08-22 | **홈 첫 화면은 지도가 아니라 인기 순위 레일** | 지도를 상단에 두는 안을 먼저 만들어 보고 뒤집었다 — 미니맵은 세로 206px 를 먹으면서 "어디로 갈지" 를 못 좁힌다. 순위·큐레이션이 같은 `EditorialRail` 껍데기를 쓰고 순위만 `compact`(카드 156) 로 좁혀 한 화면에서 훑게 한다 | `mobile/src/app/(tabs)/index.tsx` · `home/components/CurationSection.tsx` |
+| 15 | 2026-08-22 | **AI 국외 이전은 동의가 아니라 처리방침 공개로 간다** | 처리방침 제6조가 이미 공개 경로(법 제28조의8 제1항 제3호)를 택했는데 앱은 별도 동의 시트를 또 받고 있었다 — 근거가 이중이다. 게다가 그 동의는 SecureStore 로컬에만 남아 증빙이 없고, `/agent/chat` 은 `OptionalUserId` 라 비로그인도 쓴다. 실측상 LLM 으로 가는 건 질문·대화이력·직전조건뿐이고 사진·좌표·계정은 안 간다 | `web/legal/privacy.html` 제6조 · `features/consent/hooks/use-ai-opt-out.ts` |
 | 14 | 2026-08-22 | **큐레이션은 지역 하나를 코스로 묶고 미감으로 고른다** | 혼잡도는 명소 전용 지표였다 — 전국 커버리지가 attraction 17.7%, cafe 0.3%, **food 0%** 라 맛집·카페는 사실상 `content_id` 순으로 뽑히고 있었다. 세 버킷을 모두 덮는 신호는 `spot_visual.aesthetic_score` 뿐이고, 큐레이션은 랭킹이 아니라 편성이라 "몰리는 곳"보다 "보여줄 곳"이 맞다. 혼잡도는 `NOW TRENDING` 레일이 이미 담당한다 | `feed/services/curation.py` · `_CURATION_SLOT_SQL` |
 
 ## 상세
