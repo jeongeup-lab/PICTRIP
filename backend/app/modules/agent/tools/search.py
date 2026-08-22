@@ -22,9 +22,20 @@ from app.modules.agent.tools.base import (
     recoverable,
     strings,
 )
+from app.modules.spots.categories import in_travel_pool
 
 _NO_MATCH = EMPTY
 _SCENES = sorted(scene_service.SCENE_PROMPTS)
+_NO_AXIS = (
+    "지역·종류·분위기 중 하나도 없어 전국을 통째로 훑게 됩니다. 다시 부르지 말고 "
+    "사용자에게 어디를 갈지 혹은 무엇을 찾는지 먼저 물으세요."
+)
+_NO_AXIS_FACT = "어디로 갈지 아니면 무엇을 찾는지 한 가지만 알려주시면 바로 찾아볼게요."
+_UNREADABLE = (
+    "'{words}' 는 이 앱이 다루지 않는 종류입니다. 조건을 바꿔 다시 부르지 마세요 — "
+    "지역만 남겨 부르면 엉뚱한 관광지가 나옵니다. 그 종류는 다루지 않는다고 답하고 끝내세요."
+)
+_UNREADABLE_FACT = "'{words}' 는 제가 찾아드릴 수 있는 종류가 아니에요."
 
 
 def _unknown_region(hints: list[str]) -> str:
@@ -73,6 +84,17 @@ async def _category_search(ctx: ToolContext, args: Mapping[str, Any]) -> ToolRes
     codes = await retrieve.resolve_category_codes(ctx.session, keywords)
     mood_ids = await repositories.find_mood_ids(ctx.session, _moods(args))
     eating = retrieve.food_action(codes) or retrieve.food_word(keywords)
+    readable = bool(mood_ids or eating or any(in_travel_pool(code) for code in codes))
+    if keywords and not readable:
+        words = " · ".join(keywords)
+        return ToolResult(
+            rows=[],
+            observation=_UNREADABLE.format(words=words),
+            fact=_UNREADABLE_FACT.format(words=words),
+            stop=True,
+        )
+    if not (readable or prefixes or near or args.get("indoor") or _crowd(args) != "any"):
+        return ToolResult(rows=[], observation=_NO_AXIS, fact=_NO_AXIS_FACT, stop=True)
     if eating is not None:
         rows = await retrieve.search_food(
             ctx.session,

@@ -160,12 +160,12 @@ async def test_a_relaxing_retry_drops_the_condition_it_released() -> None:
 
 async def test_a_turn_with_no_tool_call_is_smalltalk_not_a_search_failure() -> None:
     """기존 경로는 "안녕" 을 smalltalk 로 답한다 — AGENT_NO_RESULTS 가 되면 안 된다."""
-    trace = toolloop.Trace(said="반가워요. 어디로 갈까요?")
+    trace = toolloop.Trace()
 
     response = toolloop.respond(trace, lat=None, lng=None)
 
     assert response.spots == []
-    assert "반가워요" in "".join(segment.text for segment in response.answer)
+    assert "어디로 갈지" in "".join(segment.text for segment in response.answer)
 
 
 async def test_looked_up_facts_survive_into_the_answer() -> None:

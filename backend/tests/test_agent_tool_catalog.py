@@ -11,6 +11,7 @@ from app.modules.agent.routing import ToolCall
 from app.modules.agent.services import retrieve
 from app.modules.agent.tools import CATALOG, ToolContext, itinerary, schemas
 from app.modules.agent.tools.base import describe
+from app.modules.spots import categories
 
 pytestmark = pytest.mark.asyncio
 
@@ -49,14 +50,15 @@ async def test_category_search_matches_the_service_it_wraps(
     await _seed(db_session, "tc-2", title="서울 어딘가", addr1="서울특별시 중구 1")
     await db_session.flush()
 
+    placed = ToolContext(session=db_session, redis=ctx.redis, kto=None, lat=37.0, lng=127.0)
     expected = await retrieve.search_candidates(
         db_session,
-        repositories.CandidateQuery(limit=retrieve.CANDIDATE_LIMIT),
+        repositories.CandidateQuery(limit=retrieve.CANDIDATE_LIMIT, lat=37.0, lng=127.0),
         preference="any",
-        near=False,
+        near=True,
     )
 
-    result = await CATALOG["category_search"].run(ctx, {})
+    result = await CATALOG["category_search"].run(placed, {"near": True})
 
     assert [row.content_id for row in result.rows] == [row.content_id for row in expected]
     assert expected
@@ -887,3 +889,36 @@ async def test_plan_itinerary_asks_for_a_region_instead_of_failing(ctx: ToolCont
 
     assert result.rows == []
     assert result.fact is not None and "어느 지역" in result.fact
+
+
+async def test_a_smalltalk_turn_never_shows_the_router_thinking_out_loud() -> None:
+    """라우터가 뱉은 텍스트를 답으로 쓰면 '도구를 부르지 않고 되묻는다' 가 화면에 나온다."""
+    response = toolloop.respond(toolloop.Trace(), lat=None, lng=None)
+
+    assert response.answer
+    assert "도구" not in "".join(segment.text for segment in response.answer)
+
+
+async def test_category_search_refuses_a_search_with_no_axis(ctx: ToolContext) -> None:
+    """조건이 하나도 없으면 전국 20곳이 무작위로 나간다."""
+    result = await CATALOG["category_search"].run(ctx, {})
+
+    assert result.rows == []
+    assert result.fact is not None and "알려주시면" in result.fact
+
+
+async def test_a_category_outside_the_travel_pool_is_refused(ctx: ToolContext) -> None:
+    """숙박·레포츠는 코드가 풀려도 여행지 풀이 빼므로 결과가 0곳이 된다."""
+    assert not categories.in_travel_pool("AC010100")
+    assert not categories.in_travel_pool("LS030100")
+    assert not categories.in_travel_pool("SH010100")
+    assert not categories.in_travel_pool("VE110100")
+    assert categories.in_travel_pool("NA010100")
+    assert categories.in_travel_pool("VE010100")
+
+
+async def test_a_refused_search_stops_the_turn(ctx: ToolContext) -> None:
+    """관찰로 부탁만 하면 모델이 지역만 남겨 다시 불러 엉뚱한 20곳이 나간다."""
+    result = await CATALOG["category_search"].run(ctx, {})
+
+    assert result.stop is True

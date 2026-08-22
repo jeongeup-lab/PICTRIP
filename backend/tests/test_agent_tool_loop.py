@@ -145,8 +145,8 @@ async def test_results_are_deduplicated_across_rounds(
     _wire(
         monkeypatch,
         ScriptedRouter(
-            Decision(calls=[_call(regions=[])]),
-            Decision(calls=[_call(indoor=False)]),
+            Decision(calls=[_call(regions=["서울"])]),
+            Decision(calls=[_call(regions=["서울"], indoor=False)]),
         ),
     )
 
@@ -221,3 +221,22 @@ async def test_a_timed_out_tool_closes_its_step(
     signals = [signal async for signal in emitter.drain()]
     assert [signal.status for signal in signals] == ["run", "done"]
     assert signals[1].badge == loop.TIMED_OUT_BADGE
+
+
+async def test_a_stopping_tool_ends_the_turn_before_the_next_call_in_the_round(
+    ctx: ToolContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """중단을 라운드 끝에서 보면 같은 라운드의 두 번째 호출이 이미 20곳을 낸 뒤다."""
+    _wire(
+        monkeypatch,
+        ScriptedRouter(
+            Decision(calls=[_call(), _call(regions=["서울"])]),
+            Decision(calls=[]),
+        ),
+    )
+
+    trace = await loop.route(ctx, "어디 갈까")
+
+    assert trace.halt is True
+    assert trace.stopped == "halted"
+    assert trace.rows == []

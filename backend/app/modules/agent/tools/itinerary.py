@@ -10,6 +10,7 @@ from app.modules.agent.schemas import MAX_KEYWORDS, MAX_REGION_HINTS, CrowdPrefe
 from app.modules.agent.services import retrieve
 from app.modules.agent.services.geo import haversine_km
 from app.modules.agent.tools.base import Tool, ToolContext, ToolResult, recoverable, strings
+from app.modules.spots.categories import in_travel_pool
 
 MAX_DAYS = 4
 PER_DAY = 3
@@ -85,9 +86,6 @@ def _crowd(args: Mapping[str, Any]) -> CrowdPreference:
     return cast(CrowdPreference, value) if value in ("quiet", "any", "popular") else "any"
 
 
-OUTSIDE_TRAVEL_POOL = ("LS", "SH")
-
-
 async def _sights(
     ctx: ToolContext, keywords: list[str], prefixes: list[str], crowd: CrowdPreference
 ) -> tuple[list[CandidateRow], list[str]]:
@@ -111,7 +109,7 @@ async def _sights(
 
 
 def _outside_pool(codes: list[str]) -> bool:
-    return all(code.startswith(OUTSIDE_TRAVEL_POOL) for code in codes)
+    return not any(in_travel_pool(code) for code in codes)
 
 
 def _meal_words(keywords: list[str]) -> list[str]:
