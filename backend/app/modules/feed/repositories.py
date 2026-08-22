@@ -316,25 +316,17 @@ _TASTE_CATEGORY_PICKS_SQL: dict[str, str] = {
     "FESTA": _taste_picks_shuffle_sql(_FESTA_CATEGORY_SQL),
 }
 
-_CURATION_SQL = f"""
-SELECT content_id, title, first_image_url, cpyrht_div_cd, category, region_name, sigungu_name,
-       lat, lng
-FROM (
-    SELECT DISTINCT ON (spots.ldong_signgu_cd)
-           {_SPOT_COLUMNS_SQL},
-           sc.concentration_rate AS rate
-    FROM spots
-    LEFT JOIN spot_concentration sc ON sc.content_id = spots.content_id
-    {_SPOT_JOINS_SQL}
-    WHERE spots.show_flag = 1
-      AND spots.first_image_url IS NOT NULL
-      AND spots.first_image_url <> ''
-      AND spots.mapx IS NOT NULL
-      AND spots.mapy IS NOT NULL
-      AND c.lcls_systm3_nm = ANY(CAST(:categories AS text[]))
-    ORDER BY spots.ldong_signgu_cd, sc.concentration_rate DESC NULLS LAST, spots.content_id
-) picks
-ORDER BY rate DESC NULLS LAST, content_id
+_CURATION_SLOT_SQL = f"""
+SELECT {_SPOT_COLUMNS_SQL}
+FROM spots
+{_SPOT_JOINS_SQL}
+LEFT JOIN spot_visual v ON v.content_id = spots.content_id
+WHERE spots.show_flag = 1
+  AND spots.first_image_url IS NOT NULL
+  AND spots.first_image_url <> ''
+  AND sg.ldong_signgu_nm = :sigungu
+  AND ({{category}})
+ORDER BY v.aesthetic_score DESC NULLS LAST, spots.content_id
 LIMIT (:lim)::int
 """
 
@@ -420,10 +412,11 @@ async def fetch_nearby_by_category(
     return [_home_spot_row(row) for row in result]
 
 
-async def fetch_curation(
-    session: AsyncSession, *, categories: list[str], limit: int
+async def fetch_curation_slot(
+    session: AsyncSession, *, sigungu: str, category: str, limit: int
 ) -> list[HomeSpotRow]:
-    result = await session.execute(text(_CURATION_SQL), {"categories": categories, "lim": limit})
+    sql = _CURATION_SLOT_SQL.format(category=category)
+    result = await session.execute(text(sql), {"sigungu": sigungu, "lim": limit})
     return [_home_spot_row(row) for row in result]
 
 

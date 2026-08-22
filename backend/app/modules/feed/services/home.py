@@ -15,12 +15,14 @@ from app.core.logging import get_logger
 from app.kto.client import KtoClient
 from app.kto.display import t1_display_url
 from app.modules.feed import repositories as repo
+from app.modules.feed.services import curation
 from app.modules.feed.services.interleave import (
     NEARBY_PATTERN,
     TRENDING_PATTERN,
     interleave,
 )
 from app.modules.spots import services as spots_services
+from app.modules.spots.categories import category_sql
 
 logger = get_logger(__name__)
 
@@ -38,12 +40,6 @@ _SEED_LIMIT = 30
 _NEIGHBOR_OVERFETCH = 3
 _CURATION_TTL = 21_600
 _CACHE_VERSION = "v4"
-
-CURATION_KICKER = "이번 주 큐레이션"
-CURATION_TITLE = "능선 위에는 다른 바람이 분다"
-CURATION_FALLBACK_SUBTITLE = "오르는 데 걸리는 시간만큼, 아래와 다른 걸 봅니다."
-CURATION_CATEGORIES = ("산, 고개, 오름, 봉우리",)
-_KOREAN_COUNTS = ("", "한", "두", "세", "네", "다섯", "여섯", "일곱", "여덟", "아홉", "열")
 
 
 @dataclass(frozen=True)
@@ -65,6 +61,12 @@ class HomeCardRow:
 class HomeRanking:
     cards: list[HomeCardRow]
     base_date: str | None
+
+
+@dataclass(frozen=True)
+class Curated:
+    program: curation.Program
+    cards: list[HomeCardRow]
 
 
 @dataclass(frozen=True)
@@ -124,32 +126,34 @@ async def load_nearby_ranked(
     return ranking
 
 
-async def load_curation(
-    session: AsyncSession, redis: Redis, *, limit: int = CURATION_COUNT
-) -> HomeRanking:
-    key = f"home:curation:{_CACHE_VERSION}:{limit}"
+async def load_curation(session: AsyncSession, redis: Redis, *, today: date) -> Curated:
+    program = curation.program_for(today)
+    key = f"home:curation:{_CACHE_VERSION}:{program.sigungu}"
     cached = await _cache_get(redis, key)
     if cached is not None:
-        return cached
+        return Curated(program=program, cards=cached.cards)
 
-    rows = await repo.fetch_curation(session, categories=list(CURATION_CATEGORIES), limit=limit)
-    ranking = HomeRanking(cards=[_card(row) for row in rows], base_date=None)
-    await _cache_set(redis, key, ranking, _CURATION_TTL if ranking.cards else _EMPTY_TTL)
-    return ranking
+    cards: list[HomeCardRow] = []
+    for slot in program.slots:
+        rows = await repo.fetch_curation_slot(
+            session,
+            sigungu=program.sigungu,
+            category=category_sql(slot.category),
+            limit=slot.count,
+        )
+        if len(rows) < slot.count:
+            logger.warning(
+                "feed.curation.slot_underfilled",
+                sigungu=program.sigungu,
+                category=slot.category.value,
+                want=slot.count,
+                got=len(rows),
+            )
+        cards.extend(_card(row) for row in rows)
 
-
-def curation_subtitle(cards: list[HomeCardRow]) -> str:
-    """편성 문구가 데이터와 어긋나지 않도록 뽑힌 곳 이름으로 채운다."""
-    if len(cards) < 2:
-        return CURATION_FALLBACK_SUBTITLE
-    return (
-        f"{cards[-1].title}에서 {cards[0].title}까지 {_korean_count(len(cards))} 곳. "
-        f"{CURATION_FALLBACK_SUBTITLE}"
-    )
-
-
-def _korean_count(count: int) -> str:
-    return _KOREAN_COUNTS[count] if 0 < count < len(_KOREAN_COUNTS) else str(count)
+    ranking = HomeRanking(cards=cards, base_date=None)
+    await _cache_set(redis, key, ranking, _CURATION_TTL if cards else _EMPTY_TTL)
+    return Curated(program=program, cards=cards)
 
 
 async def load_trending(

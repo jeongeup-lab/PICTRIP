@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Query
@@ -21,7 +22,7 @@ from app.modules.feed.schemas import (
     PostsResponse,
     RecommendationsResponse,
 )
-from app.modules.feed.services import channels, home, matching, posts
+from app.modules.feed.services import channels, curation, home, matching, posts
 from app.security.jwt import CurrentUserId
 from app.web.envelope import ok
 
@@ -160,15 +161,15 @@ def _home_card(row: home.HomeCardRow) -> HomeSpotCard:
     )
 
 
-@router.get("/home/curation", summary="이번 주 큐레이션 — 편성 규칙으로 고른 여섯 곳")
+@router.get("/home/curation", summary="이번 주 큐레이션 — 지역 하나를 코스로 묶는다")
 async def home_curation(session: DbSession, redis: RedisDep) -> dict[str, Any]:
-    ranking = await home.load_curation(session, redis)
+    curated = await home.load_curation(session, redis, today=date.today())
     return ok(
         CurationResponse(
-            kicker=home.CURATION_KICKER,
-            title=home.CURATION_TITLE,
-            subtitle=home.curation_subtitle(ranking.cards),
-            items=[_home_card(r) for r in ranking.cards],
+            kicker=curation.KICKER,
+            title=curated.program.title,
+            subtitle=curation.subtitle(curated.program, len(curated.cards)),
+            items=[_home_card(r) for r in curated.cards],
         )
     )
 

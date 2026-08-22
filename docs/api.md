@@ -26,7 +26,7 @@
 | GET | `/home/trending` | 전국 트렌드 — 혼잡도 상위 10곳 | — |
 | GET | `/home/taste-picks` | 취향 카드 후보 (시군구별 1곳, 임베딩 보유분만) | — |
 | GET | `/home/recommendations` | 저장 장소 임베딩 중심 기반 AI 추천 (3곳 미만이면 `ready=false`) | JWT |
-| GET | `/home/curation` | 이번 주 큐레이션 — 편성 규칙으로 고른 여섯 곳 | — |
+| GET | `/home/curation` | 이번 주 큐레이션 — 편성표(`services/curation.py`)가 고른 지역 하나를 명소2·맛집2·카페2 코스로 | — |
 | GET | `/home/channels` | 채널 메타 (가용성 포함) | — |
 | GET | `/home/channels/{key}` | 채널 카드 (`hidden`·`festa`·`pets`·`snap`) | — |
 | POST | `/agent/chat` | 여행 탭 대화 — SSE 스트리밍, LLM 산문 + 카드 + 출처 (아래) | — |
