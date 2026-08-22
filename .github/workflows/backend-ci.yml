@@ -5,6 +5,14 @@ on:
       - "backend/**"
       - "deploy/api-host/**"
       - ".github/workflows/backend-ci.yml"
+  # PR 에서만 돌면 머지 후 처음 깨진 걸 다음 PR 이 뒤집어쓴다. dev 에서도 돌려
+  # 어느 커밋이 깨뜨렸는지 그 자리에서 드러나게 한다.
+  push:
+    branches: [dev]
+    paths:
+      - "backend/**"
+      - "deploy/api-host/**"
+      - ".github/workflows/backend-ci.yml"
 # Successive pushes to the same PR cancel the in-flight run — only the latest
 # commit's result matters here (deploy workflows keep cancel-in-progress: false).
 concurrency:
