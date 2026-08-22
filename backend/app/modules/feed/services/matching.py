@@ -58,33 +58,19 @@ async def load_matches_by_post(
     }
 
 
-async def precompute_matches(
-    session: AsyncSession, *, limit: int | None = None, only_missing: bool = False
-) -> dict[str, int]:
+async def precompute_matches(session: AsyncSession) -> dict[str, int]:
     """탐색 피드가 매칭을 인라인으로 받으려면 행마다 pgvector 검색을 돌 수 없다.
 
-    실측(운영 덤프 2,573건): 전수 58초. only_missing 은 배포 훅용이다 — 첫 배포만
-    전수를 물고, 이후 배포는 신규 Wikidata 행만 채운다.
+    한 문장으로 전수를 다시 쓰고 한 번만 커밋한다(실측 운영 덤프 2,573건 32초).
+    부분 커밋이 보이면 `_PAGE_SQL` 의 "테이블이 비었을 때만 필터를 건너뛴다"
+    장치가 풀려, 아직 못 채운 게시물이 전부 걸러지고 피드가 말라붙는다.
     """
-    targets = await repositories.collect_match_targets(session, only_missing=only_missing)
-    if limit is not None:
-        targets = targets[:limit]
-    counters = {"targets": len(targets), "matched": 0, "empty": 0}
-    for overseas_id in targets:
-        neighbors = await repositories.find_domestic_neighbors(
-            session, overseas_id, limit=settings.MATCH_CANDIDATES
-        )
-        ranked = [
-            (content_id, distance)
-            for content_id, _image_url, distance in neighbors
-            if distance <= settings.MATCH_DISTANCE_MAX
-        ][:MATCH_COUNT]
-        await repositories.replace_matches(session, overseas_id, ranked)
-        await session.commit()
-        if ranked:
-            counters["matched"] += 1
-        else:
-            counters["empty"] += 1
+    counters = await repositories.rebuild_matches(
+        session,
+        candidates=settings.MATCH_CANDIDATES,
+        distance_max=settings.MATCH_DISTANCE_MAX,
+    )
+    await session.commit()
     logger.info("feed.match.precompute", **counters)
     return counters
 
