@@ -195,7 +195,7 @@ describe("TravelScreen 워드마크와 전송", () => {
     await finishLast();
 
     expect(input(tree).props.editable).toBe(true);
-    expect(input(tree).props.placeholder).toBe("무릉계곡에 대해 물어보세요");
+    expect(input(tree).props.placeholder).toBe(ASK_PLACEHOLDER);
   });
 
   it("delta가 오는 대로 본문이 자란다", async () => {
@@ -371,33 +371,35 @@ describe("TravelScreen 사진 첨부", () => {
 });
 
 describe("TravelScreen 초점 카드", () => {
+  function anchorTitle(tree: renderer.ReactTestRenderer): unknown {
+    return tree.root.findByProps({ testID: "travel-anchor-title" }).props.children;
+  }
+
   async function focusSecondCard(tree: renderer.ReactTestRenderer) {
     const carousel = tree.root.findByType(SpotCarousel);
     await act(async () => carousel.props.onFocusChange(1));
   }
 
-  it("초점 카드 이름이 입력창 위 알약과 플레이스홀더에 선다", async () => {
+  it("앵커 줄은 보고 있는 카드를 따라간다", async () => {
     const tree = await mount();
     await send(tree, "제주 계곡");
     await finishLast();
 
-    expect(rendered(tree)).toContain("무릉계곡");
-    expect(input(tree).props.placeholder).toBe("무릉계곡에 대해 물어보세요");
+    expect(anchorTitle(tree)).toBe("무릉계곡");
 
     await focusSecondCard(tree);
 
-    expect(input(tree).props.placeholder).toBe("천지연에 대해 물어보세요");
+    expect(anchorTitle(tree)).toBe("천지연");
   });
 
-  it("초점을 풀면 일반 질문으로 돌아간다", async () => {
+  it("카드를 건드리지 않은 질문에는 초점이 실리지 않는다", async () => {
     const tree = await mount();
     await send(tree, "제주 계곡");
     await finishLast();
 
-    await press(tree, "travel-subject-clear");
+    await send(tree, "서울은?");
 
-    expect(tree.root.findAllByProps({ testID: "travel-subject" })).toHaveLength(0);
-    expect(input(tree).props.placeholder).toBe(ASK_PLACEHOLDER);
+    expect(streams[1].input.context?.focusContentId).toBeUndefined();
   });
 
   it("타이핑한 질문에는 초점 카드가 맥락으로 실린다", async () => {

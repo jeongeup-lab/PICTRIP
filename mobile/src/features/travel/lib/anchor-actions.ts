@@ -3,7 +3,6 @@ import type { AnchorAction } from "@/features/travel/api";
 export interface FocusedSpot {
   contentId: string;
   title: string;
-  index: number;
 }
 
 export interface AnchorChoice {

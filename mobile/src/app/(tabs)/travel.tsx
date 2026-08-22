@@ -59,12 +59,10 @@ export default function TravelScreen() {
 
   const listRef = useRef<FlatList<ChatTurn>>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const [focus, setFocus] = useState<FocusedSpot | null>(null);
   const focusRef = useRef<FocusedSpot | null>(null);
 
   const holdFocus = useCallback((next: FocusedSpot | null) => {
     focusRef.current = next;
-    setFocus(next);
   }, []);
 
   const run = useCallback((id: string, seed: ChatRequestSeed) => {
@@ -295,13 +293,7 @@ export default function TravelScreen() {
       />
 
       <View style={{ paddingBottom: bottomPad }}>
-        <ChatComposer
-          streaming={streaming}
-          subject={focus}
-          onSend={submit}
-          onNotice={setToast}
-          onClearSubject={() => holdFocus(null)}
-        />
+        <ChatComposer streaming={streaming} onSend={submit} onNotice={setToast} />
       </View>
 
       <AiTransferSheet visible={askingConsent} onAgree={onAgreeAi} onDecline={onDeclineAi} />
