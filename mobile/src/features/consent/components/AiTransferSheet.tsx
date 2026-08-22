@@ -1,7 +1,6 @@
-import { Modal, Pressable, ScrollView, View, Text, StyleSheet, Linking } from "react-native";
+import { Modal, Pressable, View, Text, StyleSheet, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icon";
-import { PrimaryButton } from "@/components/PrimaryButton";
 import { AI_TRANSFER } from "@/features/consent/lib/ai-transfer";
 import { legalUrl } from "@/features/legal/constants";
 import { colors, radii, spacing } from "@/constants/theme";
@@ -19,7 +18,7 @@ export function AiTransferSheet({ visible, onAgree, onDecline }: Props) {
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onDecline}>
       <Pressable style={styles.scrim} onPress={onDecline} testID="ai-transfer-scrim">
         <Pressable
-          style={[styles.sheet, { paddingBottom: insets.bottom + spacing.xl }]}
+          style={[styles.sheet, { paddingBottom: insets.bottom + spacing.md }]}
           onPress={(event) => event.stopPropagation()}
         >
           <View style={styles.grabber} />
@@ -31,36 +30,24 @@ export function AiTransferSheet({ visible, onAgree, onDecline }: Props) {
             {AI_TRANSFER.sheetBody}
           </Text>
 
-          <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
-            {AI_TRANSFER.items.map((item) => (
-              <View key={item.key} style={styles.item} testID={`ai-transfer-${item.key}`}>
-                <View style={styles.itemIcon}>
-                  <Icon name={item.icon} size={15} color={colors.sec} strokeWidth={1.9} />
-                </View>
-                <View style={styles.itemCopy}>
-                  <Text style={styles.itemLabel}>{item.label}</Text>
-                  <Text lineBreakStrategyIOS="hangul-word" style={styles.itemValue}>
-                    {item.value}
-                  </Text>
-                </View>
+          <View style={styles.table}>
+            {AI_TRANSFER.items.map((item, index) => (
+              <View
+                key={item.key}
+                style={[styles.row, index > 0 && styles.rowDivided]}
+                testID={`ai-transfer-${item.key}`}
+              >
+                <Text style={styles.rowKey}>{item.label}</Text>
+                <Text lineBreakStrategyIOS="hangul-word" style={styles.rowValue}>
+                  {item.value}
+                </Text>
               </View>
             ))}
+          </View>
 
-            <View style={styles.notes}>
-              <View style={styles.note}>
-                <Icon name="shield-check" size={15} color={colors.sec} strokeWidth={1.9} />
-                <Text lineBreakStrategyIOS="hangul-word" style={styles.noteText}>
-                  {AI_TRANSFER.scope}
-                </Text>
-              </View>
-              <View style={styles.note}>
-                <Icon name="info" size={15} color={colors.sec} strokeWidth={1.9} />
-                <Text lineBreakStrategyIOS="hangul-word" style={styles.noteText}>
-                  {AI_TRANSFER.refuse}
-                </Text>
-              </View>
-            </View>
-          </ScrollView>
+          <Text lineBreakStrategyIOS="hangul-word" style={styles.note}>
+            {AI_TRANSFER.note}
+          </Text>
 
           <Pressable
             accessibilityRole="link"
@@ -69,21 +56,26 @@ export function AiTransferSheet({ visible, onAgree, onDecline }: Props) {
             testID="ai-transfer-policy"
           >
             <Text style={styles.policyText}>{AI_TRANSFER.policyLabel}</Text>
-            <Icon name="chevron-right" size={15} color={colors.sec} />
+            <Icon name="chevron-right" size={14} color={colors.sec} />
           </Pressable>
 
           <View style={styles.actions}>
-            <PrimaryButton
-              label={AI_TRANSFER.agreeLabel}
-              onPress={onAgree}
-              testID="ai-transfer-agree"
-            />
-            <PrimaryButton
-              label={AI_TRANSFER.declineLabel}
-              variant="secondary"
+            <Pressable
+              accessibilityRole="button"
               onPress={onDecline}
+              style={({ pressed }) => [styles.button, styles.decline, pressed && styles.pressed]}
               testID="ai-transfer-decline"
-            />
+            >
+              <Text style={styles.declineLabelText}>{AI_TRANSFER.declineLabel}</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={onAgree}
+              style={({ pressed }) => [styles.button, styles.agree, pressed && styles.pressed]}
+              testID="ai-transfer-agree"
+            >
+              <Text style={styles.agreeLabelText}>{AI_TRANSFER.agreeLabel}</Text>
+            </Pressable>
           </View>
         </Pressable>
       </Pressable>
@@ -94,7 +86,6 @@ export function AiTransferSheet({ visible, onAgree, onDecline }: Props) {
 const styles = StyleSheet.create({
   scrim: { flex: 1, justifyContent: "flex-end", backgroundColor: colors.scrim },
   sheet: {
-    maxHeight: "88%",
     backgroundColor: colors.bg,
     borderTopLeftRadius: radii.xl,
     borderTopRightRadius: radii.xl,
@@ -107,51 +98,49 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     backgroundColor: colors.line,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   title: {
-    fontSize: 20,
-    lineHeight: 28,
+    fontSize: 17,
+    lineHeight: 24,
     fontWeight: "800",
-    letterSpacing: -0.5,
+    letterSpacing: -0.4,
     color: colors.ink,
   },
-  body: {
-    marginTop: spacing.sm,
-    fontSize: 14.5,
-    lineHeight: 22,
-    letterSpacing: -0.2,
-    color: colors.sec,
+  body: { marginTop: 6, fontSize: 13, lineHeight: 19, letterSpacing: -0.2, color: colors.sec },
+  table: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radii.lg,
+    overflow: "hidden",
   },
-  list: { marginTop: spacing.md },
-  item: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: spacing.md },
-  itemIcon: { width: 22, alignItems: "center", paddingTop: 2 },
-  itemCopy: { flex: 1, minWidth: 0 },
-  itemLabel: { fontSize: 12, fontWeight: "700", letterSpacing: -0.2, color: colors.ter },
-  itemValue: {
-    marginTop: 3,
-    fontSize: 13.5,
-    lineHeight: 20,
+  row: { flexDirection: "row", gap: 10, paddingVertical: 9, paddingHorizontal: 11 },
+  rowDivided: { borderTopWidth: 1, borderTopColor: colors.line },
+  rowKey: { width: 62, fontSize: 11.5, lineHeight: 17, fontWeight: "700", color: colors.ter },
+  rowValue: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 12.5,
+    lineHeight: 17,
+    fontWeight: "500",
     letterSpacing: -0.2,
     color: colors.ink,
   },
-  notes: {
-    marginTop: spacing.xs,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-    gap: spacing.sm,
-  },
-  note: { flexDirection: "row", alignItems: "flex-start", gap: 9 },
-  noteText: { flex: 1, fontSize: 13, lineHeight: 20, color: colors.sec },
+  note: { marginTop: 10, fontSize: 12, lineHeight: 18, color: colors.sec },
   policy: {
-    marginTop: spacing.md,
+    marginTop: 9,
     flexDirection: "row",
     alignItems: "center",
     gap: 2,
     paddingVertical: spacing.xs,
   },
-  policyText: { fontSize: 13.5, fontWeight: "600", color: colors.sec },
+  policyText: { fontSize: 12.5, fontWeight: "600", color: colors.sec },
   pressed: { opacity: 0.6 },
-  actions: { marginTop: spacing.md, gap: spacing.sm },
+  actions: { marginTop: 13, flexDirection: "row", gap: 8 },
+  button: { height: 48, borderRadius: radii.md, alignItems: "center", justifyContent: "center" },
+  decline: { flex: 34, backgroundColor: colors.fillStrong },
+  agree: { flex: 66, backgroundColor: colors.accent },
+  declineLabelText: { fontSize: 15, fontWeight: "700", color: colors.ink },
+  agreeLabelText: { fontSize: 15, fontWeight: "700", color: colors.onImage },
 });

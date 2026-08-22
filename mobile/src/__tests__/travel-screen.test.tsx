@@ -454,18 +454,26 @@ describe("TravelScreen 국외 이전 동의", () => {
   beforeEach(() => storageMock.getAiTransferConsent.mockResolvedValue(false));
   afterEach(() => storageMock.getAiTransferConsent.mockResolvedValue(true));
 
-  it("동의 전에는 질문을 보내지 않고 5개 고지 항목을 띄운다", async () => {
+  it("동의 전에는 질문을 보내지 않고 고지 항목을 띄운다", async () => {
     const tree = await mount();
 
     await send(tree, "제주 조용한 바다");
 
     expect(streamChatMock).not.toHaveBeenCalled();
+    for (const key of ["who", "what", "when", "why"]) {
+      expect(tree.root.findByProps({ testID: `ai-transfer-${key}` })).toBeTruthy();
+    }
+  });
+
+  it("법인명과 이전 국가는 동의 버튼과 같은 화면에 남는다", async () => {
+    const tree = await mount();
+
+    await send(tree, "제주 조용한 바다");
+
     const shown = rendered(tree);
-    expect(shown).toContain("이전받는 자 · 국가");
-    expect(shown).toContain("이전되는 항목");
-    expect(shown).toContain("이전 시기 · 방법");
-    expect(shown).toContain("이용 목적 · 보유 기간");
-    expect(shown).toContain("DeepSeek");
+    expect(shown).toContain("항저우 딥시크 인공지능 기초기술연구");
+    expect(shown).toContain("중국");
+    expect(tree.root.findByProps({ testID: "ai-transfer-agree" })).toBeTruthy();
   });
 
   it("동의하면 기억하고 보류한 질문을 그대로 보낸다", async () => {
@@ -501,6 +509,6 @@ describe("TravelScreen 국외 이전 동의", () => {
     await press(tree, "travel-send");
 
     expect(streams[0].input.message).toBeNull();
-    expect(rendered(tree)).not.toContain("이전받는 자 · 국가");
+    expect(rendered(tree)).not.toContain("항저우 딥시크");
   });
 });
