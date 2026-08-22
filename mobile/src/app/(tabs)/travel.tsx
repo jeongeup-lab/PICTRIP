@@ -19,10 +19,12 @@ import { contextFrom } from "@/features/travel/lib/conversation-context";
 import { composeQuestion } from "@/features/travel/lib/question";
 import {
   streamChat,
+  type AnchorAction,
   type PhotoUpload,
   type RefinePatch,
   type TravelSpot,
 } from "@/features/travel/api";
+import { anchorQuestion, type FocusedSpot } from "@/features/travel/lib/anchor-actions";
 import { refineQuestion } from "@/features/travel/lib/refine-label";
 import {
   historyOf,
@@ -57,7 +59,13 @@ export default function TravelScreen() {
 
   const listRef = useRef<FlatList<ChatTurn>>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const focusedIdRef = useRef<string | null>(null);
+  const [focus, setFocus] = useState<FocusedSpot | null>(null);
+  const focusRef = useRef<FocusedSpot | null>(null);
+
+  const holdFocus = useCallback((next: FocusedSpot | null) => {
+    focusRef.current = next;
+    setFocus(next);
+  }, []);
 
   const run = useCallback((id: string, seed: ChatRequestSeed) => {
     const controller = new AbortController();
@@ -70,6 +78,7 @@ export default function TravelScreen() {
         coords: coordsRef.current,
         clientTime: new Date().toISOString(),
         context: seed.context,
+        anchor: seed.anchor,
         history: seed.history,
       },
       {
@@ -106,14 +115,42 @@ export default function TravelScreen() {
         context: contextFrom(previous, null),
         intent: previous.intent,
         patch,
+        anchor: null,
         history: historyOf(state.turns),
       };
       const id = state.nextTurnId();
       state.begin({ id, question: label, photoUri: previous.photoUri, request: seed });
-      focusedIdRef.current = null;
+      holdFocus(null);
       run(id, seed);
     },
-    [run],
+    [run, holdFocus],
+  );
+
+  const onAnchor = useCallback(
+    (target: FocusedSpot, action: AnchorAction, label: string) => {
+      const state = useChat.getState();
+      if (state.streaming) return;
+      const previous = lastDoneTurn(state.turns);
+      const seed: ChatRequestSeed = {
+        message: null,
+        photo: null,
+        context: contextFrom(previous, target.contentId),
+        intent: null,
+        patch: null,
+        anchor: { contentId: target.contentId, action },
+        history: historyOf(state.turns),
+      };
+      const id = state.nextTurnId();
+      state.begin({
+        id,
+        question: anchorQuestion(target.title, label),
+        photoUri: null,
+        request: seed,
+      });
+      holdFocus(null);
+      run(id, seed);
+    },
+    [run, holdFocus],
   );
 
   const { granted: aiGranted, decide: decideAi } = useAiTransferConsent();
@@ -130,17 +167,18 @@ export default function TravelScreen() {
       const seed: ChatRequestSeed = {
         message: text.trim() || null,
         photo,
-        context: contextFrom(previous, focusedIdRef.current),
+        context: contextFrom(previous, focusRef.current?.contentId ?? null),
         intent: null,
         patch: null,
+        anchor: null,
         history: historyOf(state.turns),
       };
       const id = state.nextTurnId();
       state.begin({ id, question, photoUri: photo?.uri ?? null, request: seed });
-      focusedIdRef.current = null;
+      holdFocus(null);
       run(id, seed);
     },
-    [run],
+    [run, holdFocus],
   );
 
   const submit = useCallback(
@@ -186,9 +224,9 @@ export default function TravelScreen() {
   const onNewChat = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
-    focusedIdRef.current = null;
+    holdFocus(null);
     useChat.getState().clear();
-  }, []);
+  }, [holdFocus]);
 
   const openSpot = useCallback((spot: TravelSpot) => {
     if (spot.saveable === false) {
@@ -197,10 +235,6 @@ export default function TravelScreen() {
       return;
     }
     router.push(`/spots/${spot.contentId}`);
-  }, []);
-
-  const onFocusSpot = useCallback((contentId: string | null) => {
-    focusedIdRef.current = contentId;
   }, []);
 
   const scrollToEnd = useCallback(() => {
@@ -219,12 +253,13 @@ export default function TravelScreen() {
           onDetail={openSpot}
           onSaveToggle={(saved) => setToast(saved ? SAVE_COMPLETE : UNSAVE_COMPLETE)}
           onNotice={(message) => setToast(message)}
-          onFocusSpot={onFocusSpot}
+          onFocusSpot={holdFocus}
           onRefine={onRefine}
+          onAnchor={onAnchor}
         />
       </View>
     ),
-    [turns.length, coords, onRetry, onFocusSpot, onRefine],
+    [turns.length, coords, onRetry, holdFocus, onRefine, onAnchor],
   );
 
   const bottomPad = keyboardPx;
@@ -260,7 +295,13 @@ export default function TravelScreen() {
       />
 
       <View style={{ paddingBottom: bottomPad }}>
-        <ChatComposer streaming={streaming} onSend={submit} onNotice={setToast} />
+        <ChatComposer
+          streaming={streaming}
+          subject={focus}
+          onSend={submit}
+          onNotice={setToast}
+          onClearSubject={() => holdFocus(null)}
+        />
       </View>
 
       <AiTransferSheet visible={askingConsent} onAgree={onAgreeAi} onDecline={onDeclineAi} />

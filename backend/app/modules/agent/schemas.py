@@ -174,6 +174,7 @@ class ChatRequest(BaseModel):
     context: AskContext | None = None
     intent: QueryIntent | None = None
     patch: RefinePatch | None = None
+    anchor: AskAnchor | None = None
     history: list[ChatHistoryItem] = Field(default_factory=list)
 
     @field_validator("history", mode="before")

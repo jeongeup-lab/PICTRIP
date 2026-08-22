@@ -86,6 +86,13 @@ export interface AskContext {
   focusContentId?: string;
 }
 
+export type AnchorAction = "food" | "cafe" | "nearby" | "crowd" | "related";
+
+export interface AskAnchor {
+  contentId: string;
+  action: AnchorAction;
+}
+
 export type SourceKind = "naver_blog" | "kto" | "kakao";
 
 export interface SourceItem {
@@ -111,7 +118,6 @@ export interface ChatStepEvent {
 export interface ChatCardsEvent {
   spots: TravelSpot[];
   tagBasis?: string | null;
-  applied?: string[];
   refinements?: Suggestion[];
 }
 
@@ -121,7 +127,6 @@ export interface ChatDoneEvent {
   sources: SourceItem[];
   intent: QueryIntent;
   totalCount: number;
-  applied?: string[];
   refinements?: Suggestion[];
   traceId?: string | null;
 }
@@ -139,6 +144,7 @@ export interface ChatInput {
   context?: AskContext | null;
   intent?: QueryIntent | null;
   patch?: RefinePatch | null;
+  anchor?: AskAnchor | null;
   history?: ChatHistoryItem[] | null;
 }
 
@@ -162,6 +168,7 @@ function chatBody(input: ChatInput): Record<string, unknown> {
   if (input.context) body.context = input.context;
   if (input.intent) body.intent = input.intent;
   if (input.patch) body.patch = input.patch;
+  if (input.anchor) body.anchor = input.anchor;
   if (input.history && input.history.length > 0) body.history = input.history;
   return body;
 }
@@ -176,6 +183,7 @@ function chatForm(input: ChatInput, photo: PhotoUpload): FormData {
   }
   if (input.clientTime) form.append("clientTime", input.clientTime);
   if (input.context) form.append("context", JSON.stringify(input.context));
+  if (input.anchor) form.append("anchor", JSON.stringify(input.anchor));
   if (input.history && input.history.length > 0)
     form.append("history", JSON.stringify(input.history));
   return form;

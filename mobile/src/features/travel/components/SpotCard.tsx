@@ -84,7 +84,7 @@ export function SpotCard({
   const external = spot.saveable === false;
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, !focused && styles.unfocused]}>
       <Pressable
         testID={`travel-card-${spot.contentId}`}
         accessibilityRole="button"
@@ -207,6 +207,7 @@ const styles = StyleSheet.create({
     borderColor: colors.glassBorder,
     backgroundColor: colors.glassFill,
   },
+  unfocused: { opacity: 0.5 },
   tap: { flex: 1, flexDirection: "row", gap: 12, padding: 10 },
   pressed: { opacity: 0.7 },
   thumb: { width: 92, height: 92 },

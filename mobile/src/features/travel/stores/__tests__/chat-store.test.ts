@@ -15,6 +15,7 @@ const seed: ChatRequestSeed = {
   context: null,
   intent: null,
   patch: null,
+  anchor: null,
   history: [],
 };
 
@@ -170,7 +171,6 @@ describe("historyOf", () => {
     text,
     spots,
     tagBasis: null,
-    applied: [],
     refinements: [],
     sources: [],
     intent: null,
@@ -222,7 +222,6 @@ describe("lastDoneTurn", () => {
       text: "",
       spots: [],
       tagBasis: null,
-      applied: [],
       refinements: [],
       sources: [],
       intent: null,

@@ -9,10 +9,13 @@ from fakeredis.aioredis import FakeRedis
 from pydantic import BaseModel, ValidationError
 
 from app.modules.agent import naver
+from app.modules.agent.emitter import Emitter
 from app.modules.agent.naver import NaverBlogPost
 from app.modules.agent.schemas import (
     AgentSpotCard,
+    AnchorAction,
     AnswerSegment,
+    AskAnchor,
     AskResponse,
     AskStep,
     ChatRequest,
@@ -227,3 +230,31 @@ def test_overlong_history_text_is_clipped() -> None:
     payload = ChatRequest.model_validate({"history": [{"role": "assistant", "text": "가" * 900}]})
 
     assert len(payload.history[0].text) == 500
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["food", "cafe", "nearby", "crowd", "related"])
+async def test_chat_hands_the_anchor_to_the_search(
+    action: AnchorAction, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """카드에서 누른 앵커는 채팅 스트림도 그대로 실어야 한다 — 안 실으면 일반 검색이 된다."""
+    seen: dict[str, Any] = {}
+
+    async def _fake_run(*_args: Any, **kwargs: Any) -> AskResponse:
+        seen.update(kwargs)
+        return _result()
+
+    monkeypatch.setattr(chat_service.search, "run", _fake_run)
+    anchor = AskAnchor(contentId="a1", action=action)
+
+    await chat_service._search(
+        None,
+        None,
+        None,
+        payload=ChatRequest(anchor=anchor),
+        image_bytes=None,
+        image_mime=None,
+        emitter=Emitter(),
+    )
+
+    assert seen["anchor"] == anchor

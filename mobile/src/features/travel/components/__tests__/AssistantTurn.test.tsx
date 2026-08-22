@@ -38,6 +38,7 @@ function turnWith(sources: SourceItem[]): ChatTurn {
       context: null,
       intent: null,
       patch: null,
+      anchor: null,
       history: [],
     },
     status: "done",
@@ -45,7 +46,6 @@ function turnWith(sources: SourceItem[]): ChatTurn {
     text: "",
     spots: [],
     tagBasis: null,
-    applied: [],
     refinements: [],
     sources,
     intent: null,
@@ -67,6 +67,7 @@ function mount(sources: SourceItem[]): renderer.ReactTestRenderer {
         onNotice={jest.fn()}
         onFocusSpot={jest.fn()}
         onRefine={jest.fn()}
+        onAnchor={jest.fn()}
       />,
     );
   });
