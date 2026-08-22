@@ -34,7 +34,7 @@ from app.modules.admin.schemas import (
     TriggerResult,
 )
 from app.modules.admin.triggers import get_collection_trigger
-from app.modules.feed.services import invalidate_all_match_cache, invalidate_match_cache
+from app.modules.feed.services import recompute_all_matches
 from app.modules.images import services as image_services
 from app.web.errors import (
     AdminHistoryNotFound,
@@ -156,12 +156,11 @@ async def _run_embed_job(
     lock: image_services.EmbeddingJobLock,
 ) -> None:
     try:
-        await invalidate_all_match_cache(redis)
         await image_services.run_embedding_job(only_failed=only_failed, limit=limit)
     except Exception:
         _logger.exception("embed.job.error")
     finally:
-        await invalidate_all_match_cache(redis)
+        await recompute_all_matches()
         try:
             await image_services.release_embedding_job_lock(lock)
         except Exception as exc:
@@ -322,7 +321,6 @@ async def set_overseas_visibility(
     if not found:
         raise AdminOverseasNotFound
     await session.commit()
-    await invalidate_match_cache(redis, overseas_id)
     _logger.info(
         "overseas.visibility",
         actor=actor,

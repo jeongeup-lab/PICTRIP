@@ -32,6 +32,13 @@ WITH scored AS (
     FROM overseas_spots
     WHERE is_hidden = false
       AND embedding IS NOT NULL
+      AND (
+          NOT EXISTS (SELECT 1 FROM overseas_spot_matches)
+          OR EXISTS (
+              SELECT 1 FROM overseas_spot_matches m
+              WHERE m.overseas_id = overseas_spots.id AND m.rank = 3
+          )
+      )
 )
 SELECT * FROM scored
 WHERE ((:cursor_key)::double precision IS NULL)
@@ -92,7 +99,7 @@ FROM (
 ) best
 WHERE EXISTS (
     SELECT 1 FROM overseas_spots o
-    WHERE o.id = :oid AND o.is_hidden = false AND o.embedding IS NOT NULL
+    WHERE o.id = :oid AND o.embedding IS NOT NULL
 )
 ORDER BY distance
 LIMIT :lim
@@ -119,34 +126,94 @@ async def find_domestic_neighbors(
     return [(r.content_id, r.image_url, r.distance) for r in result]
 
 
-async def get_cached_match_state(
-    session: AsyncSession, overseas_id: int, content_ids: list[str]
-) -> tuple[bool, dict[str, str]] | None:
-    rows = (
-        await session.execute(
-            text(
-                "SELECT o.embedding IS NOT NULL AS has_embedding, "
-                "current_spot.content_id, current_spot.first_image_url "
-                "FROM overseas_spots o "
-                "LEFT JOIN LATERAL ("
-                "SELECT spots.content_id, spots.first_image_url "
-                "FROM spots JOIN spot_embeddings e "
-                "ON e.content_id = spots.content_id AND e.image_url = spots.first_image_url "
-                "WHERE spots.content_id = ANY(CAST(:content_ids AS text[])) "
-                "AND spots.show_flag = 1 AND spots.first_image_url IS NOT NULL "
-                "AND spots.first_image_url <> '' "
-                f"AND ({_CATEGORY_SQL})"
-                ") AS current_spot ON true "
-                "WHERE o.id = :oid AND o.is_hidden = false"
-            ),
-            {"oid": overseas_id, "content_ids": content_ids},
+@dataclass(frozen=True)
+class MatchRow:
+    overseas_id: int
+    content_id: str
+    title: str
+    region_label: str
+    image_url: str
+    overview: str | None
+    cpyrht_div_cd: str | None
+
+
+_MATCHES_SQL = f"""
+SELECT m.overseas_id,
+       spots.content_id,
+       spots.title,
+       spots.first_image_url,
+       spots.cpyrht_div_cd,
+       r.ldong_regn_nm AS region_name,
+       sg.ldong_signgu_nm AS sigungu_name,
+       sd.overview AS overview
+FROM overseas_spot_matches m
+JOIN spots ON spots.content_id = m.content_id
+          AND spots.show_flag = 1
+          AND spots.first_image_url IS NOT NULL
+          AND spots.first_image_url <> ''
+          AND ({_CATEGORY_SQL})
+JOIN spot_embeddings e ON e.content_id = spots.content_id
+                      AND e.image_url = spots.first_image_url
+LEFT JOIN regions r ON r.ldong_regn_cd = spots.ldong_regn_cd
+LEFT JOIN sigungus sg ON sg.ldong_signgu_cd = spots.ldong_signgu_cd
+LEFT JOIN spot_details sd ON sd.content_id = spots.content_id
+WHERE m.overseas_id = ANY(CAST(:oids AS bigint[]))
+ORDER BY m.overseas_id, m.rank
+"""
+
+
+async def load_matches(session: AsyncSession, overseas_ids: list[int]) -> dict[int, list[MatchRow]]:
+    """spot_embeddings 조인이 신선도 검증을 겸한다 — 이미지가 바뀐 스팟은 여기서 빠진다."""
+    if not overseas_ids:
+        return {}
+    result = await session.execute(text(_MATCHES_SQL), {"oids": overseas_ids})
+    grouped: dict[int, list[MatchRow]] = {oid: [] for oid in overseas_ids}
+    for row in result:
+        grouped[row.overseas_id].append(
+            MatchRow(
+                overseas_id=row.overseas_id,
+                content_id=row.content_id,
+                title=row.title or "",
+                region_label=" ".join(part for part in (row.region_name, row.sigungu_name) if part),
+                image_url=row.first_image_url,
+                overview=row.overview,
+                cpyrht_div_cd=row.cpyrht_div_cd,
+            )
         )
-    ).all()
-    if not rows:
-        return None
-    return bool(rows[0].has_embedding), {
-        row.content_id: row.first_image_url for row in rows if row.content_id is not None
-    }
+    return grouped
+
+
+async def collect_match_targets(session: AsyncSession, *, only_missing: bool = False) -> list[int]:
+    missing_only = (
+        " AND NOT EXISTS (SELECT 1 FROM overseas_spot_matches m WHERE m.overseas_id = id)"
+        if only_missing
+        else ""
+    )
+    result = await session.execute(
+        text(f"SELECT id FROM overseas_spots WHERE embedding IS NOT NULL{missing_only} ORDER BY id")
+    )
+    return [int(row.id) for row in result]
+
+
+async def replace_matches(
+    session: AsyncSession, overseas_id: int, ranked: list[tuple[str, float]]
+) -> None:
+    await session.execute(
+        text("DELETE FROM overseas_spot_matches WHERE overseas_id = :oid"),
+        {"oid": overseas_id},
+    )
+    if not ranked:
+        return
+    await session.execute(
+        text(
+            "INSERT INTO overseas_spot_matches (overseas_id, rank, content_id, distance) "
+            "VALUES (:oid, :rank, :cid, :dist)"
+        ),
+        [
+            {"oid": overseas_id, "rank": rank, "cid": content_id, "dist": distance}
+            for rank, (content_id, distance) in enumerate(ranked, start=1)
+        ],
+    )
 
 
 async def fetch_posts_page(

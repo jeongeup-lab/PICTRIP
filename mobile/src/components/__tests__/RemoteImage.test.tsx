@@ -148,9 +148,11 @@ describe("RemoteImage", () => {
   });
 
   const KTO_HIRES = "https://tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg";
-  const KTO_MID = "https://tong.visitkorea.or.kr/cms/resource/98/3045598_image2_1.jpg";
   const PROXIED_KTO_HIRES =
     "https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg";
+  const KTO_LOW = "https://tong.visitkorea.or.kr/cms/resource/98/3045598_image3_1.jpg";
+  const PROXIED_KTO_LOW =
+    "https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/98/3045598_image3_1.jpg";
   const PROXIED_KTO_MID =
     "https://img.pictrip.org/tong.visitkorea.or.kr/cms/resource/98/3045598_image2_1.jpg";
 
@@ -176,13 +178,13 @@ describe("RemoteImage", () => {
     expect(imgs[0].props.source.uri).toBe(KTO_HIRES);
   });
 
-  it("paints a blurred KTO mid-size preview behind the hi-res original, proxied", async () => {
+  it("paints a blurred KTO thumbnail preview behind the hi-res original, proxied", async () => {
     let r: renderer.ReactTestRenderer;
     await act(async () => {
       r = renderer.create(<RemoteImage uri={KTO_HIRES} />);
     });
     const preview = allImages(r!).find((n) => !n.props.onError);
-    expect(preview?.props.source.uri).toBe(PROXIED_KTO_MID);
+    expect(preview?.props.source.uri).toBe(PROXIED_KTO_LOW);
     expect(preview?.props.blurRadius).toBe(6);
     expect(images(r!)[0].props.source.uri).toBe(PROXIED_KTO_HIRES);
   });
@@ -196,7 +198,7 @@ describe("RemoteImage", () => {
       images(r!)[0].props.onError();
     });
     const preview = allImages(r!).find((n) => !n.props.onError);
-    expect(preview?.props.source.uri).toBe(KTO_MID);
+    expect(preview?.props.source.uri).toBe(KTO_LOW);
     expect(images(r!)[0].props.source.uri).toBe(KTO_HIRES);
   });
 
@@ -259,13 +261,14 @@ describe("RemoteImage", () => {
     expect(images(r!)).toHaveLength(0);
   });
 
-  it("midSize renders the proxied KTO mid-size as the main image with no blur preview", async () => {
+  it("midSize paints the KTO thumbnail under the mid-size original", async () => {
     let r: renderer.ReactTestRenderer;
     await act(async () => {
       r = renderer.create(<RemoteImage uri={KTO_HIRES} midSize />);
     });
-    expect(allImages(r!)).toHaveLength(1);
     expect(images(r!)[0].props.source.uri).toBe(PROXIED_KTO_MID);
+    const preview = allImages(r!).find((n) => !n.props.onError);
+    expect(preview?.props.source.uri).toBe(PROXIED_KTO_LOW);
   });
 
   it("midSize on a non-KTO uri leaves it untouched", async () => {

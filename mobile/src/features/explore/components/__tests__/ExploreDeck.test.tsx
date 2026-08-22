@@ -5,13 +5,11 @@ import {
   dotWindowStart,
   slideIndexAt,
 } from "@/features/explore/components/ExploreDeck";
-import { prefetchMatches, useExploreFeed } from "@/features/explore/queries";
+import { useExploreFeed } from "@/features/explore/queries";
 import type { OverseasPost } from "@/features/explore/api";
 
 jest.mock("@/features/explore/queries", () => ({
   useExploreFeed: jest.fn(),
-  useMatches: jest.fn(() => ({ data: undefined, isPending: true })),
-  prefetchMatches: jest.fn(),
 }));
 jest.mock("expo-router", () => ({
   useScrollToTop: jest.fn(),
@@ -37,6 +35,15 @@ function posts(n: number): OverseasPost[] {
     imageLicense: null,
     imageLicenseUrl: null,
     imageSourceUrl: `https://commons.wikimedia.org/${i + 1}`,
+    matches: [
+      {
+        contentId: `c${i + 1}`,
+        title: `국내 ${i + 1}`,
+        regionLabel: "강원 속초시",
+        imageUrl: `https://tong.visitkorea.or.kr/${i + 1}_image2_1.jpg`,
+        overviewFirst: null,
+      },
+    ],
   }));
 }
 
@@ -138,29 +145,10 @@ describe("ExploreDeck", () => {
     expect(r.root.findAllByType(FlatList).length).toBe(1);
   });
 
-  it("prefetches the next post's matches so a swipe lands on ready cards", async () => {
-    setFeed();
-    await mount();
-    expect(prefetchMatches).toHaveBeenCalledWith(2);
-  });
-
-  it("prefetches one post ahead after each swipe", async () => {
+  it("renders match tiles straight from the feed page without a second request", async () => {
     setFeed();
     const r = await mount();
-    (prefetchMatches as jest.Mock).mockClear();
-    await swipeTo(r, 3);
-    expect(prefetchMatches).toHaveBeenCalledWith(5);
-  });
-
-  it("marks only the settled slide active", async () => {
-    setFeed();
-    const r = await mount();
-    await swipeTo(r, 2);
-    const list = r.root.findAllByType(FlatList)[0];
-    const active = list.props.data
-      .map((_: OverseasPost, at: number) => at)
-      .filter((at: number) => at === 2);
-    expect(active).toEqual([2]);
+    expect(pressables(r, "explore-match-c1").length).toBeGreaterThan(0);
   });
 
   it("drops the swipe hint once the user has swiped twice", async () => {

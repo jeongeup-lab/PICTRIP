@@ -198,23 +198,21 @@ async def matchable_overseas(db_session: AsyncSession) -> int:
     return int(oid)
 
 
-async def test_hide_invalidates_match_cache(
+async def test_hide_takes_effect_without_cache_invalidation(
     db_session, client, matchable_overseas, redis_client_fake
 ) -> None:
+    """숨김은 읽는 쪽 필터다 — 사전계산 테이블을 건드리지 않아도 즉시 먹는다."""
     oid = matchable_overseas
     _override(db_session)
     app.dependency_overrides[get_redis] = lambda: redis_client_fake
     try:
         primed = await client.get(f"/v1/overseas/{oid}/matches")
         assert primed.status_code == 200
-        assert await redis_client_fake.get(f"match:0:{oid}") is not None
 
         res = await client.put(
             f"/admin/api/overseas/{oid}/visibility", json={"isHidden": True}, headers=_AUTH
         )
         assert res.status_code == 200
-
-        assert await redis_client_fake.get(f"match:0:{oid}") is None
 
         stale = await client.get(f"/v1/overseas/{oid}/matches")
         assert stale.status_code == 404

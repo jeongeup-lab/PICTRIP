@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.feed import repositories
 from app.modules.feed.repositories import OverseasPostRow
-from app.modules.feed.schemas import OverseasPost
+from app.modules.feed.schemas import MatchCard, OverseasPost
+from app.modules.feed.services import matching
 from app.web.errors import ValidationFailed
 
 
@@ -19,9 +20,20 @@ class PostsPageRow:
     items: list[OverseasPostRow]
     next_cursor: str | None
     has_more: bool
+    matches: dict[int, list[matching.MatchRow]]
 
 
-def to_post(row: OverseasPostRow) -> OverseasPost:
+def to_match_card(row: matching.MatchRow) -> MatchCard:
+    return MatchCard(
+        contentId=row.content_id,
+        title=row.title,
+        regionLabel=row.region_label,
+        imageUrl=matching.display_image_url(row),
+        overviewFirst=row.overview_first,
+    )
+
+
+def to_post(row: OverseasPostRow, matches: list[matching.MatchRow]) -> OverseasPost:
     return OverseasPost(
         id=row.id,
         nameKo=row.name_ko,
@@ -33,6 +45,7 @@ def to_post(row: OverseasPostRow) -> OverseasPost:
         imageLicense=row.image_license,
         imageLicenseUrl=row.image_license_url,
         imageSourceUrl=row.image_source_url,
+        matches=[to_match_card(match) for match in matches],
     )
 
 
@@ -76,9 +89,11 @@ async def list_posts(
     page = rows[:limit]
     tail = page[-1] if page else None
     next_cursor = _encode_cursor(tail) if tail and has_more else None
+    items = _spread_countries(page)
     return PostsPageRow(
         seed=seed,
-        items=_spread_countries(page),
+        items=items,
         next_cursor=next_cursor,
         has_more=has_more,
+        matches=await matching.load_matches_by_post(session, [row.id for row in items]),
     )

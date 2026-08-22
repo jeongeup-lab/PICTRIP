@@ -5,26 +5,6 @@ from pydantic import BaseModel, field_validator
 from app.kto.client import https_kto_image
 
 
-class OverseasPost(BaseModel):
-    id: int
-    nameKo: str
-    countryCode: str
-    countryNameKo: str
-    descriptionKo: str | None
-    imageUrl: str
-    imageAuthor: str | None
-    imageLicense: str | None
-    imageLicenseUrl: str | None
-    imageSourceUrl: str
-
-
-class PostsResponse(BaseModel):
-    seed: str
-    items: list[OverseasPost]
-    nextCursor: str | None
-    hasMore: bool
-
-
 class MatchCard(BaseModel):
     contentId: str
     title: str
@@ -36,6 +16,27 @@ class MatchCard(BaseModel):
     @classmethod
     def _upgrade_image(cls, v: str) -> str:
         return https_kto_image(v) or v
+
+
+class OverseasPost(BaseModel):
+    id: int
+    nameKo: str
+    countryCode: str
+    countryNameKo: str
+    descriptionKo: str | None
+    imageUrl: str
+    imageAuthor: str | None
+    imageLicense: str | None
+    imageLicenseUrl: str | None
+    imageSourceUrl: str
+    matches: list[MatchCard] = []
+
+
+class PostsResponse(BaseModel):
+    seed: str
+    items: list[OverseasPost]
+    nextCursor: str | None
+    hasMore: bool
 
 
 class MatchesResponse(BaseModel):

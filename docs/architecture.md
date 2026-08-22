@@ -51,7 +51,7 @@ flowchart LR
   wiki[Wikidata·Commons] -->|sync-overseas 월간| ovs[(overseas_spots)]
   spots -->|CLIP 백필| emb[(spot_embeddings\n+gallery centroid)]
   ovs -->|CLIP| oemb[embedding]
-  oemb -->|"halfvec cosine ANN (<=0.32)"| match["/overseas/{id}/matches"]
+  oemb -->|"halfvec cosine ANN (<=0.36)"| match[(overseas_spot_matches)]
   emb --> match
   match -->|Redis 6h| app[mobile 피드]
   spots --> ch["/home/channels\nhot·hidden·festa·snap·pets"]
@@ -59,14 +59,24 @@ flowchart LR
 
 ### 매칭 경로
 
-`GET /explore`가 해외 게시물을 seed+커서로 내려주고, 사용자가 스와이프하면
-`GET /overseas/{id}/matches`가 ANN 검색으로 국내 3곳을 반환한다. 피드는
-`embedding IS NOT NULL`로 게이트한다 — 임베딩이 없는 게시물은 눌러도 매칭이
-0건이라 피드에 올리지 않는다. 후보는 attraction 버킷으로 게이트하고, 대표사진
-편향은 갤러리(최대 5장) centroid 임베딩으로 완화한다. 결과는
-`match:{revision}:{id}`에 6h 캐시한다. 한 건 무효화는 그 키만 지우고,
-`matching:revision` incr는 전수 무효화 전용이다 — 한 스팟 때문에 리비전을
-올리면 캐시가 늘 비어 있다.
+`GET /explore`가 해외 게시물과 **국내 매칭 3곳을 한 응답에 실어** 내려준다.
+슬라이드마다 왕복을 한 번 더 도는 구조였으나, CF 터널 왕복 바닥값이 240ms 라
+지연의 전부가 그 왕복이었다(캐시 히트 시 서버 계산은 0ms). 인라인이 가능한 것은
+매칭이 `overseas_spot_matches` 에 사전계산돼 있기 때문이다 — 행마다 pgvector
+검색을 돌 수는 없다.
+
+사전계산은 `scripts.precompute_matches` 가 쓴다(실측 2,573건 58초). 저장하는 건
+`content_id` 뿐이고 제목·이미지·지역은 읽을 때 `spots` 에 라이브 조인한다 —
+이미지가 바뀌어도 깨진 URL 이 나갈 수 없고, `spot_embeddings.image_url` 동등
+조인이 신선도 검증을 겸한다(대표사진이 교체된 스팟은 재임베딩 전까지 매칭에서
+빠진다). 임베딩 잡이 끝나면 `recompute_all_matches()` 가 이어 돈다.
+
+피드는 매칭 3칸이 다 차는 게시물만 올린다(`rank = 3` EXISTS). 사전계산 테이블이
+통째로 비어 있을 때만 필터를 건너뛴다 — 마이그레이션 직후 빈 피드를 막는
+자가치유 장치이고, 배포 스크립트가 `--only-missing` 으로 곧 채운다.
+
+후보는 attraction 버킷으로 게이트하고, 대표사진 편향은 갤러리(최대 5장) centroid
+임베딩으로 완화한다.
 
 ### 이미지 경로
 
@@ -177,6 +187,7 @@ flowchart TD
 | `spot_embeddings_gallery` | backend 잡 | 갤러리 ≤5장 centroid · 0020 트리거가 이미지 변경 시 행 삭제 |
 | `embedding_failures` | backend 잡 | 재시도 큐 (`reason`, `--only-failed` 대상) |
 | `overseas_spots` | pipeline (월간) | 해외 게시물. `wikidata_id` unique · `fame_score` · `is_hidden`(admin 토글) · embedding HNSW · 0019 트리거 |
+| `overseas_spot_matches` | backend 잡 | 해외→국내 매칭 사전계산. PK `(overseas_id, rank)` · rank 1–3 · `content_id` 만 저장하고 표시 필드는 읽을 때 `spots` 조인 |
 | `spot_concentration` | 일일 크론 | 집중률 0–100 — Hot/Hidden 채널 · agent 혼잡도 축 소스. 커버리지는 전량이 아니다(2026-07-26 실측: attraction 모수 11,575곳 중 5,323곳 = **46.0%**) |
 | `spot_concentration_daily` | 일일 크론 | 집중률 원장 — PK `(content_id, base_ymd)`. `spot_concentration` 은 최신값 캐시라 매일 덮어써 추세가 남지 않는다. 요일·주간 패턴 분석의 유일한 소스 |
 | `users` | backend | `taste_vector halfvec(512)` · email 부분 unique(`deleted_at IS NULL`) · `password_hash` 는 구 이메일 로그인 잔재로 쓰기 경로가 없다(탈퇴 시 NULL로 지움) |
@@ -203,7 +214,6 @@ AOF everysec + RDB · `noeviction` 256mb. 전부 재계산 가능한 캐시.
 | `spotdetail:v2:{contentId}` | 1h | 상세 응답 hot front. 갤러리 백필이 `spot_images`를 바꾸면 해당 키를 지운다 |
 | `spotdetail:refresh:v1:{contentId}` | 20s | 상세 백그라운드 갱신 중복 방지 락 (SET NX, 소유 토큰 compare-and-delete) |
 | `spotdetail:refresh-backoff:v1:{contentId}` | 60s | KTO 상세 갱신 실패 재시도 제한 |
-| `match:{revision}:{overseasId}` | 6h | 매칭 결과 — `matching:revision` incr로 전체 무효화 |
 | `channel:{key}:{version}` | KTO 채널 3d / 집중률 1h | 홈 채널 카드 |
 | `festival:pool:v2` | 48h (신선도는 날짜 기준) | agent 축제 축 풀 (`searchFestival2` 최근 1년 시작분 중 오늘 진행분 전량, ≤6,000) |
 | `region:{lat:.3f}:{lng:.3f}` | 1d | Kakao 역지오코딩 (null 캐시 포함) |

@@ -26,6 +26,8 @@
 | 12 | 2026-08-19 | **대화 이력은 참고 자료 — 넘치면 잘라 쓰고 턴을 거절하지 않는다** | 20장을 돌려준 턴이 다음 턴의 `spotIds`(상한 8)를 넘겨 `VALIDATION_FAILED` 로 죽었고, 재시도는 같은 시드를 재생해 영구 실패했다. 구 `v*` 빌드는 OTA 를 못 받으므로 관용은 서버 쪽에 있어야 한다 | `app/modules/agent/schemas.py` · `travel/stores/chat-store.ts` |
 | 13 | 2026-08-22 | **홈 첫 화면은 지도가 아니라 인기 순위 레일** | 지도를 상단에 두는 안을 먼저 만들어 보고 뒤집었다 — 미니맵은 세로 206px 를 먹으면서 "어디로 갈지" 를 못 좁힌다. 순위·큐레이션이 같은 `EditorialRail` 껍데기를 쓰고 순위만 `compact`(카드 156) 로 좁혀 한 화면에서 훑게 한다 | `mobile/src/app/(tabs)/index.tsx` · `home/components/CurationSection.tsx` |
 | 14 | 2026-08-22 | **큐레이션은 지역 하나를 코스로 묶고 미감으로 고른다** | 혼잡도는 명소 전용 지표였다 — 전국 커버리지가 attraction 17.7%, cafe 0.3%, **food 0%** 라 맛집·카페는 사실상 `content_id` 순으로 뽑히고 있었다. 세 버킷을 모두 덮는 신호는 `spot_visual.aesthetic_score` 뿐이고, 큐레이션은 랭킹이 아니라 편성이라 "몰리는 곳"보다 "보여줄 곳"이 맞다. 혼잡도는 `NOW TRENDING` 레일이 이미 담당한다 | `feed/services/curation.py` · `_CURATION_SLOT_SQL` |
+| 15 | 2026-08-22 | **탐색 매칭은 사전계산해 `/explore` 에 인라인한다** | 매칭이 늦게 뜨는 원인은 DB 가 아니었다 — CF 터널 왕복 바닥값이 240ms 이고 Redis 히트 시 서버 계산은 0ms 였다. 지연의 전부가 슬라이드마다 도는 두 번째 왕복과 타일 이미지 1.2MB 다. `overseas_spot_matches` 사전계산이 인라인을 가능하게 하고, Redis 캐시·이미지 정합성 재검증이 통째로 사라진다 | `overseas_spot_matches` · `scripts/precompute_matches.py` |
+| 16 | 2026-08-22 | **닮은 곳이 3칸 안 차는 게시물은 피드에서 뺀다 — 단, 임계값을 먼저 넓히고** | 0.32 에서 매칭 3건 미만은 2,489건 중 283건(11.4%)이었고 탈락자가 루브르·버킹엄 궁전·런던탑 같은 최상위 랜드마크였다(영국은 22%). 최근접 거리가 0.321–0.337 로 임계값 바로 바깥에 몰린 절벽이라 `MATCH_DISTANCE_MAX` 를 0.36 으로 넓혀 191건을 회복하고, 남은 92건(3.7%)만 뺀다 | `MATCH_DISTANCE_MAX` · `_PAGE_SQL` |
 
 ## 상세
 
