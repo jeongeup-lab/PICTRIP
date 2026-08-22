@@ -10,6 +10,7 @@ from app.core.redis import get_redis
 from app.main import app
 from app.modules.admin import services
 from app.modules.admin.security import require_admin
+from app.modules.feed.services import matching
 
 _AUTH = ("admin", "admin")
 
@@ -184,15 +185,19 @@ async def test_trigger_happy_path_schedules_job(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     calls: dict[str, object] = {}
+    recomputed = False
 
     async def fake_job(**kwargs: object) -> object:
-        assert await redis_client_fake.get("matching:revision") == "1"
         calls.update(kwargs)
-        await redis_client_fake.set("match:1:during", "cached")
         return None
 
+    async def fake_recompute() -> dict[str, int]:
+        nonlocal recomputed
+        recomputed = True
+        return {"targets": 0, "matched": 0, "empty": 0}
+
     monkeypatch.setattr(services.image_services, "run_embedding_job", fake_job)
-    await redis_client_fake.set("match:0:before", "cached")
+    monkeypatch.setattr(services, "recompute_all_matches", fake_recompute)
 
     _override(db_session, redis_client_fake)
     try:
@@ -204,8 +209,7 @@ async def test_trigger_happy_path_schedules_job(
     data = resp.json()["data"]
     assert data == {"job": "embed-failed", "scope": "failed", "accepted": True}
     assert calls.get("only_failed") is True
-    assert await redis_client_fake.get("matching:revision") == "2"
-    assert await redis_client_fake.get("match:1:during") == "cached"
+    assert recomputed is True
     assert await redis_client_fake.exists("admin:embed:running") == 0
     out = capsys.readouterr().out
     assert "embedding.trigger" in out
@@ -213,19 +217,20 @@ async def test_trigger_happy_path_schedules_job(
 
 
 @pytest.mark.asyncio
-async def test_embed_job_runs_when_match_cache_revision_bump_fails(
+async def test_embed_job_releases_lock_when_recompute_fails(
     redis_client_fake, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """재계산이 던지면 finally 안에서 잡 락 해제가 통째로 날아간다."""
     ran = False
 
-    async def broken_incr(*args: object, **kwargs: object) -> int:
-        raise ConnectionError("redis unavailable")
+    async def broken_precompute(session: object, **kwargs: object) -> dict[str, int]:
+        raise ConnectionError("database unavailable")
 
     async def fake_job(**kwargs: object) -> None:
         nonlocal ran
         ran = True
 
-    monkeypatch.setattr(redis_client_fake, "incr", broken_incr)
+    monkeypatch.setattr(matching, "precompute_matches", broken_precompute)
     monkeypatch.setattr(services.image_services, "run_embedding_job", fake_job)
     lock = await services.image_services.acquire_embedding_job_lock(redis_client_fake)
     assert lock is not None

@@ -6,11 +6,14 @@ from pgvector.sqlalchemy import HALFVEC
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
+    ForeignKey,
     Identity,
     Index,
     Integer,
+    SmallInteger,
     String,
     Text,
     func,
@@ -59,4 +62,31 @@ class OverseasSpot(Base):
             postgresql_with={"m": 16, "ef_construction": 128},
         ),
         Index("idx_overseas_spots_visible", "is_hidden", text("fame_score DESC")),
+    )
+
+
+class OverseasSpotMatch(Base):
+    """해외 게시물 → 국내 매칭 3곳의 사전계산 결과.
+
+    content_id 만 담고 제목·이미지는 읽을 때 spots 에 조인한다 — 이미지가 바뀌어도
+    깨진 URL 이 나갈 수 없고, 스팟이 숨겨지면 조인에서 그냥 빠진다.
+    """
+
+    __tablename__ = "overseas_spot_matches"
+
+    overseas_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("overseas_spots.id", ondelete="CASCADE"), primary_key=True
+    )
+    rank: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    content_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("spots.content_id", ondelete="CASCADE"), nullable=False
+    )
+    distance: Mapped[float] = mapped_column(Float, nullable=False)
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint("rank BETWEEN 1 AND 3", name="ck_overseas_spot_matches_rank_range"),
+        Index("idx_overseas_spot_matches_content", "content_id"),
     )

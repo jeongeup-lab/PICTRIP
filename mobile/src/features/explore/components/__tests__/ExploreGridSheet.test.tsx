@@ -18,6 +18,7 @@ function post(id: number, countryCode: string, countryNameKo: string): OverseasP
     imageLicense: null,
     imageLicenseUrl: null,
     imageSourceUrl: `https://commons.wikimedia.org/${id}`,
+    matches: [],
   };
 }
 

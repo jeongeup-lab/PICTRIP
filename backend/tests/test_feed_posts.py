@@ -13,6 +13,26 @@ VALUES (:qid, :name, :cc, :cn, :desc, :img, :src, :fame, :hidden,
 
 _EMBEDDING = "[" + ",".join(["0.1"] * 512) + "]"
 
+SPOT_SQL = text("""
+INSERT INTO spots (content_id, content_type_id, title, first_image_url, addr1, mapx, mapy,
+    show_flag, lcls_systm1)
+VALUES (:cid, 12, :title, :img, 'addr1', 127.0, 37.0, 1, 'NA')
+ON CONFLICT (content_id) DO NOTHING
+""")
+
+SPOT_EMBEDDING_SQL = text("""
+INSERT INTO spot_embeddings (content_id, embedding, image_url)
+VALUES (:cid, CAST(:emb AS halfvec(512)), :img)
+ON CONFLICT (content_id) DO NOTHING
+""")
+
+MATCH_SQL = text("""
+INSERT INTO overseas_spot_matches (overseas_id, rank, content_id, distance)
+SELECT id, :rank, :cid, :dist FROM overseas_spots WHERE wikidata_id = :qid
+""")
+
+_MATCH_SPOTS = ("fp_a", "fp_b", "fp_c")
+
 
 @pytest.fixture
 async def seeded(db_session):
@@ -46,6 +66,16 @@ async def seeded(db_session):
             "'https://src/QN1', 400, false)"
         )
     )
+    for cid in _MATCH_SPOTS:
+        img = f"http://kto/{cid}.jpg"
+        await db_session.execute(SPOT_SQL, {"cid": cid, "title": f"국내-{cid}", "img": img})
+        await db_session.execute(SPOT_EMBEDDING_SQL, {"cid": cid, "emb": _EMBEDDING, "img": img})
+    for qid, ranks in (("QF1", 3), ("QF2", 3), ("QJ1", 3), ("QH1", 3), ("QN1", 2)):
+        for rank in range(1, ranks + 1):
+            await db_session.execute(
+                MATCH_SQL,
+                {"qid": qid, "rank": rank, "cid": _MATCH_SPOTS[rank - 1], "dist": 0.1 * rank},
+            )
     await db_session.commit()
     app.dependency_overrides[get_db] = lambda: db_session
     yield
@@ -78,11 +108,38 @@ async def test_feed_excludes_hidden(client, seeded):
     assert "숨김" not in names and len(names) == 3
 
 
-async def test_feed_excludes_posts_that_can_never_match(client, seeded):
-    """임베딩이 없는 게시물은 눌러도 매칭이 0건이다 — 피드에 올리지 않는다."""
+async def test_feed_excludes_posts_without_three_matches(client, seeded):
+    """타일이 덜 차는 게시물은 피드에 올리지 않는다 — 매칭 3칸이 슬라이드의 본문이다."""
     res = await client.get("/v1/explore", params={"limit": 10})
     names = [i["nameKo"] for i in res.json()["data"]["items"]]
     assert "임베딩없음" not in names
+
+
+async def test_feed_inlines_matches(client, seeded):
+    """슬라이드마다 /overseas/{id}/matches 를 다시 치면 왕복이 두 번이다."""
+    res = await client.get("/v1/explore", params={"limit": 3})
+    items = res.json()["data"]["items"]
+    assert items
+    for item in items:
+        assert len(item["matches"]) == 3
+        assert {"contentId", "title", "regionLabel", "imageUrl", "overviewFirst"} <= set(
+            item["matches"][0]
+        )
+
+
+async def test_feed_drops_match_whose_image_moved(client, db_session, seeded):
+    """이미지가 바뀐 스팟은 더 이상 그 사진으로 닮은 곳이 아니다."""
+    await db_session.execute(
+        text("UPDATE spots SET first_image_url = 'http://kto/moved.jpg' WHERE content_id = 'fp_a'")
+    )
+    await db_session.commit()
+
+    res = await client.get("/v1/explore", params={"limit": 3})
+    items = res.json()["data"]["items"]
+
+    assert items
+    for item in items:
+        assert "fp_a" not in {m["contentId"] for m in item["matches"]}
 
 
 async def test_feed_cursor_no_duplicates_same_seed(client, seeded):
@@ -123,3 +180,17 @@ async def test_feed_alias_matches_explore(client, seeded):
     b = (await client.get("/v1/feed", params={"limit": 3, "seed": seed})).json()["data"]
     assert a["items"]
     assert [i["id"] for i in a["items"]] == [i["id"] for i in b["items"]]
+
+
+async def test_feed_falls_back_to_unfiltered_before_the_first_precompute(
+    client, db_session, seeded
+):
+    """마이그레이션 직후 사전계산 테이블은 비어 있다 — 그때 피드가 빈 화면이면 안 된다."""
+    await db_session.execute(text("DELETE FROM overseas_spot_matches"))
+    await db_session.commit()
+
+    res = await client.get("/v1/explore", params={"limit": 10})
+
+    names = [i["nameKo"] for i in res.json()["data"]["items"]]
+    assert sorted(names) == ["도쿄타워", "루브르", "에펠탑"]
+    assert all(item["matches"] == [] for item in res.json()["data"]["items"])

@@ -8,7 +8,7 @@ from redis.asyncio import Redis, from_url
 
 from app.config import settings
 from app.modules.feed.embedding_job import run_overseas_embedding_job
-from app.modules.feed.services import invalidate_all_match_cache
+from app.modules.feed.services import recompute_all_matches
 from app.modules.images.services import (
     acquire_embedding_job_lock,
     release_embedding_job_lock,
@@ -16,7 +16,6 @@ from app.modules.images.services import (
 
 
 async def _run_embed(redis: Redis, args: argparse.Namespace) -> dict[str, int]:
-    await invalidate_all_match_cache(redis)
     try:
         return await run_overseas_embedding_job(
             limit=args.limit,
@@ -25,7 +24,7 @@ async def _run_embed(redis: Redis, args: argparse.Namespace) -> dict[str, int]:
             download_pace=args.pace,
         )
     finally:
-        await invalidate_all_match_cache(redis)
+        await recompute_all_matches()
 
 
 async def main() -> None:

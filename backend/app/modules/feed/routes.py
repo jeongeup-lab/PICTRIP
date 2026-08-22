@@ -17,7 +17,6 @@ from app.modules.feed.schemas import (
     CurationResponse,
     HomeCardsResponse,
     HomeSpotCard,
-    MatchCard,
     MatchesResponse,
     PostsResponse,
     RecommendationsResponse,
@@ -55,26 +54,25 @@ async def explore(
     return ok(_to_response(page))
 
 
-@router.get("/overseas/{overseas_id}/matches")
+@router.get(
+    "/overseas/{overseas_id}/matches",
+    deprecated=True,
+    summary="구 매칭 조회 — /explore 응답에 인라인됨 (v0.6.0 빌드 전용)",
+)
 async def overseas_matches(
     session: DbSession,
-    redis: RedisDep,
     overseas_id: int,
 ) -> dict[str, Any]:
-    rows = await matching.find_matches(session, redis, overseas_id)
+    """OTA 를 못 받는 v0.6.0 TestFlight 빌드가 슬라이드마다 이 문을 친다.
+
+    현재 앱은 /explore 가 실어 준 matches 를 그대로 쓴다. v0.6.0 빌드
+    만료(2026-10-13) 후 삭제한다.
+    """
+    rows = await matching.find_matches(session, overseas_id)
     return ok(
         MatchesResponse(
             overseasId=overseas_id,
-            matches=[
-                MatchCard(
-                    contentId=r.content_id,
-                    title=r.title,
-                    regionLabel=r.region_label,
-                    imageUrl=matching.display_image_url(r),
-                    overviewFirst=r.overview_first,
-                )
-                for r in rows
-            ],
+            matches=[posts.to_match_card(r) for r in rows],
         )
     )
 
@@ -235,7 +233,7 @@ def _channel_card(row: channels.ChannelCardRow) -> ChannelCard:
 def _to_response(page: posts.PostsPageRow) -> PostsResponse:
     return PostsResponse(
         seed=page.seed,
-        items=[posts.to_post(r) for r in page.items],
+        items=[posts.to_post(r, page.matches.get(r.id, [])) for r in page.items],
         nextCursor=page.next_cursor,
         hasMore=page.has_more,
     )

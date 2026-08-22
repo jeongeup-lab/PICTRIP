@@ -2,27 +2,21 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { RemoteImage } from "@/components/RemoteImage";
-import { Skeleton } from "@/components/Skeleton";
 import { CreditSheet } from "@/features/explore/components/CreditSheet";
-import { useMatches } from "@/features/explore/queries";
 import type { MatchCard, OverseasPost } from "@/features/explore/api";
 import { commonsWidthFor } from "@/lib/commons-width";
 import { darkColors, spacing } from "@/constants/theme";
-
-export const MATCH_SLOTS = [0, 1, 2];
 
 interface Props {
   post: OverseasPost;
   width: number;
   height: number;
-  active: boolean;
   onOpenSpot: (contentId: string) => void;
 }
 
-export function PostSlide({ post, width, height, active, onOpenSpot }: Props) {
+export function PostSlide({ post, width, height, onOpenSpot }: Props) {
   const [creditOpen, setCreditOpen] = useState(false);
-  const { data, isPending } = useMatches(post.id, { enabled: active });
-  const matches = data?.matches ?? [];
+  const matches = post.matches;
   const credit = [post.imageAuthor?.replace(/^Author:\s*/, ""), post.imageLicense]
     .filter(Boolean)
     .join(" · ");
@@ -67,20 +61,12 @@ export function PostSlide({ post, width, height, active, onOpenSpot }: Props) {
         ) : null}
 
         <View style={styles.matches}>
-          {matches.length > 0
-            ? matches
-                .slice(0, 3)
-                .map((match) => (
-                  <MatchTile key={match.contentId} match={match} onPress={onOpenSpot} />
-                ))
-            : MATCH_SLOTS.map((slot) => (
-                <View key={slot} testID="explore-match-skeleton" style={styles.match}>
-                  <Skeleton width="100%" height={82} radius={12} />
-                </View>
-              ))}
+          {matches.slice(0, 3).map((match) => (
+            <MatchTile key={match.contentId} match={match} onPress={onOpenSpot} />
+          ))}
         </View>
 
-        {matches.length === 0 && !isPending && active ? (
+        {matches.length === 0 ? (
           <Text testID="explore-match-empty" style={styles.empty}>
             지금은 닮은 국내 여행지를 찾지 못했어요
           </Text>

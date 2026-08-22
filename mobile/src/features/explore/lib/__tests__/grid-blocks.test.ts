@@ -13,6 +13,7 @@ function posts(n: number): OverseasPost[] {
     imageLicense: null,
     imageLicenseUrl: null,
     imageSourceUrl: `https://commons.wikimedia.org/${i + 1}`,
+    matches: [],
   }));
 }
 

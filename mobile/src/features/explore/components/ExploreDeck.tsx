@@ -16,7 +16,7 @@ import { Icon } from "@/components/Icon";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ExploreGridSheet } from "@/features/explore/components/ExploreGridSheet";
 import { PostSlide } from "@/features/explore/components/PostSlide";
-import { prefetchMatches, useExploreFeed } from "@/features/explore/queries";
+import { useExploreFeed } from "@/features/explore/queries";
 import type { OverseasPost } from "@/features/explore/api";
 import { makeSeed } from "@/lib/seed";
 import { colors, darkColors, spacing } from "@/constants/theme";
@@ -54,10 +54,6 @@ export function ExploreDeck() {
     useExploreFeed(seed);
 
   const posts = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data]);
-
-  useEffect(() => {
-    prefetchMatches(posts[index + 1]?.id);
-  }, [posts, index]);
 
   const onLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
@@ -111,14 +107,8 @@ export function ExploreDeck() {
           ref={listRef}
           data={posts}
           keyExtractor={(post) => String(post.id)}
-          renderItem={({ item, index: at }) => (
-            <PostSlide
-              post={item}
-              width={box.width}
-              height={box.height}
-              active={at === index}
-              onOpenSpot={openSpot}
-            />
+          renderItem={({ item }) => (
+            <PostSlide post={item} width={box.width} height={box.height} onOpenSpot={openSpot} />
           )}
           pagingEnabled
           showsVerticalScrollIndicator={false}

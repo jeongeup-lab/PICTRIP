@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 
 import pytest
@@ -128,6 +127,8 @@ async def seeded_matching(db_session) -> Seeded:
     oid = await _insert_overseas(db_session, embedding=_CLOSE)
     await _insert_spot(db_session, "mt_a", _CLOSE, overview="첫 문장이다. 둘째 문장.")
     await _insert_spot(db_session, "mt_b", _CLOSE, overview="다른 소개문이다.")
+    await _insert_spot(db_session, "mt_c", _NEAR, overview=None)
+    await matching.precompute_matches(db_session)
     return Seeded(overseas_id=oid)
 
 
@@ -136,6 +137,7 @@ async def seeded_matching_far(db_session) -> Seeded:
     oid = await _insert_overseas(db_session, embedding=_CLOSE)
     await _insert_spot(db_session, "mt_far_a", _FAR, overview="멀리 있다.")
     await _insert_spot(db_session, "mt_far_b", _FAR, overview="멀리 있다 둘.")
+    await matching.precompute_matches(db_session)
     return Seeded(overseas_id=oid)
 
 
@@ -149,7 +151,7 @@ async def test_matches_returns_similar_domestic(client, seeded_matching):
     body = res.json()
     assert res.status_code == 200 and body["error"] is None
     matches = body["data"]["matches"]
-    assert 1 <= len(matches) <= 3
+    assert len(matches) == 3
     assert {"contentId", "title", "regionLabel", "imageUrl", "overviewFirst"} <= set(matches[0])
 
 
@@ -159,129 +161,64 @@ async def test_matches_threshold_filters_far_spots(client, seeded_matching_far):
     assert content_ids.isdisjoint({"mt_far_a", "mt_far_b"})
 
 
-async def test_matches_cached_in_redis(client, seeded_matching, redis_client_fake):
-    await client.get(f"/v1/overseas/{seeded_matching.overseas_id}/matches")
-    assert await redis_client_fake.get(f"match:0:{seeded_matching.overseas_id}") is not None
+async def test_precompute_writes_contiguous_ranks(db_session, seeded_matching):
+    rows = (
+        await db_session.execute(
+            text(
+                "SELECT rank, content_id, distance FROM overseas_spot_matches "
+                "WHERE overseas_id = :oid ORDER BY rank"
+            ),
+            {"oid": seeded_matching.overseas_id},
+        )
+    ).all()
+    assert [row.rank for row in rows] == [1, 2, 3]
+    assert [row.distance for row in rows] == sorted(row.distance for row in rows)
 
 
-async def test_stale_cached_match_is_recomputed(
-    client, db_session, seeded_matching, redis_client_fake
-):
-    first = await client.get(f"/v1/overseas/{seeded_matching.overseas_id}/matches")
-    cached_ids = {row["contentId"] for row in first.json()["data"]["matches"]}
-    stale_id = next(iter(cached_ids))
+async def test_precompute_replaces_previous_result(db_session, seeded_matching):
     await db_session.execute(
-        text(
-            "UPDATE spots SET first_image_url = 'http://kto/replaced.jpg' WHERE content_id = :cid"
-        ),
-        {"cid": stale_id},
+        text("UPDATE spots SET show_flag = 0 WHERE content_id IN ('mt_b', 'mt_c')")
     )
     await db_session.commit()
 
-    refreshed = await client.get(f"/v1/overseas/{seeded_matching.overseas_id}/matches")
+    await matching.precompute_matches(db_session)
 
-    refreshed_ids = {row["contentId"] for row in refreshed.json()["data"]["matches"]}
-    assert stale_id not in refreshed_ids
-    assert await redis_client_fake.get("matching:revision") is None
-    assert await redis_client_fake.get(f"match:0:{seeded_matching.overseas_id}") is not None
+    remaining = (
+        await db_session.execute(
+            text("SELECT content_id FROM overseas_spot_matches WHERE overseas_id = :oid"),
+            {"oid": seeded_matching.overseas_id},
+        )
+    ).scalars()
+    assert set(remaining) == {"mt_a"}
 
 
-async def test_cached_match_is_hidden_when_overseas_embedding_becomes_invalid(
-    client, db_session, seeded_matching, redis_client_fake
-):
-    first = await client.get(f"/v1/overseas/{seeded_matching.overseas_id}/matches")
-    assert first.json()["data"]["matches"]
+async def test_precompute_counts_empty_results(db_session, seeded_matching_far):
+    counters = await matching.precompute_matches(db_session)
+    assert counters["targets"] >= 1
+    assert counters["empty"] >= 1
+
+
+async def test_match_drops_when_source_image_moves(client, db_session, seeded_matching):
+    """이미지가 바뀌면 그 사진으로 맺은 유사도는 더 이상 근거가 아니다."""
     await db_session.execute(
-        text(
-            "UPDATE overseas_spots SET image_url = 'https://img/replaced', embedding = NULL "
-            "WHERE id = :oid"
-        ),
-        {"oid": seeded_matching.overseas_id},
+        text("UPDATE spots SET first_image_url = 'http://kto/moved.jpg' WHERE content_id = 'mt_a'")
     )
     await db_session.commit()
 
-    refreshed = await client.get(f"/v1/overseas/{seeded_matching.overseas_id}/matches")
+    res = await client.get(f"/v1/overseas/{seeded_matching.overseas_id}/matches")
 
-    assert refreshed.status_code == 200
-    assert refreshed.json()["data"]["matches"] == []
-    assert await redis_client_fake.get("matching:revision") is None
-    assert await redis_client_fake.get(f"match:0:{seeded_matching.overseas_id}") is None
+    content_ids = {row["contentId"] for row in res.json()["data"]["matches"]}
+    assert "mt_a" not in content_ids
 
 
-async def test_source_change_between_neighbor_search_and_hydration_is_filtered(
-    client,
-    db_session,
-    seeded_matching,
-    redis_client_fake,
-    monkeypatch: pytest.MonkeyPatch,
-):
-    await _insert_spot(db_session, "mt_race_c", _CLOSE, overview=None)
-    await _insert_spot(db_session, "mt_race_d", _CLOSE, overview=None)
-    original_hydrate = matching._hydrate
-    changed_content_id: str | None = None
+async def test_match_drops_when_spot_is_deactivated(client, db_session, seeded_matching):
+    await db_session.execute(text("UPDATE spots SET show_flag = 0 WHERE content_id = 'mt_a'"))
+    await db_session.commit()
 
-    async def change_then_hydrate(session, candidate_ids, source_by_id):
-        nonlocal changed_content_id
-        changed_content_id = candidate_ids[0]
-        await session.execute(
-            text(
-                "UPDATE spots SET first_image_url = 'http://kto/raced.jpg' WHERE content_id = :cid"
-            ),
-            {"cid": changed_content_id},
-        )
-        await session.flush()
-        return await original_hydrate(session, candidate_ids, source_by_id)
+    res = await client.get(f"/v1/overseas/{seeded_matching.overseas_id}/matches")
 
-    monkeypatch.setattr(matching, "_hydrate", change_then_hydrate)
-
-    response = await client.get(f"/v1/overseas/{seeded_matching.overseas_id}/matches")
-
-    content_ids = {row["contentId"] for row in response.json()["data"]["matches"]}
-    assert response.status_code == 200
-    assert changed_content_id is not None
-    assert changed_content_id not in content_ids
-    assert len(content_ids) == 3
-    assert await redis_client_fake.get("matching:revision") is None
-
-
-async def test_source_change_after_hydration_backfills_from_remaining_candidates(
-    client,
-    db_session,
-    seeded_matching,
-    redis_client_fake,
-    monkeypatch: pytest.MonkeyPatch,
-):
-    await _insert_spot(db_session, "mt_late_race_c", _CLOSE, overview=None)
-    await _insert_spot(db_session, "mt_late_race_d", _CLOSE, overview=None)
-    original_get_state = matching.repositories.get_cached_match_state
-    changed_content_id: str | None = None
-
-    async def change_then_get_state(session, overseas_id, content_ids):
-        nonlocal changed_content_id
-        changed_content_id = content_ids[0]
-        await session.execute(
-            text(
-                "UPDATE spots SET first_image_url = 'http://kto/late-raced.jpg' "
-                "WHERE content_id = :cid"
-            ),
-            {"cid": changed_content_id},
-        )
-        await session.flush()
-        return await original_get_state(session, overseas_id, content_ids)
-
-    monkeypatch.setattr(matching.repositories, "get_cached_match_state", change_then_get_state)
-
-    response = await client.get(f"/v1/overseas/{seeded_matching.overseas_id}/matches")
-
-    matches = response.json()["data"]["matches"]
-    content_ids = {row["contentId"] for row in matches}
-    cached = await redis_client_fake.get(f"match:0:{seeded_matching.overseas_id}")
-    assert response.status_code == 200
-    assert changed_content_id is not None
-    assert changed_content_id not in content_ids
-    assert len(content_ids) == 3
-    assert cached is not None
-    assert len(json.loads(cached)) == 3
+    content_ids = {row["contentId"] for row in res.json()["data"]["matches"]}
+    assert "mt_a" not in content_ids
 
 
 async def test_neighbor_search_excludes_inactive_spots(db_session):
@@ -364,36 +301,6 @@ async def test_neighbor_search_ignores_stale_gallery_row(db_session):
     assert rows["mt_gal_stale"] > 0.1
 
 
-async def test_cached_match_state_drops_non_attraction_spot(db_session):
-    oid = await _insert_overseas(db_session, embedding=_CLOSE)
-    await _insert_spot(db_session, "mt_state_attr", _CLOSE, overview=None, lcls1="NA")
-    await _insert_spot(db_session, "mt_state_shop", _CLOSE, overview=None, lcls1="SH")
-
-    state = await repositories.get_cached_match_state(
-        db_session, oid, ["mt_state_attr", "mt_state_shop"]
-    )
-
-    assert state is not None
-    _has_embedding, current = state
-    assert "mt_state_attr" in current
-    assert "mt_state_shop" not in current
-
-
-async def test_cached_match_state_drops_uncategorized_spot(db_session):
-    oid = await _insert_overseas(db_session, embedding=_CLOSE)
-    await _insert_spot(db_session, "mt_state_cat", _CLOSE, overview=None, lcls1="NA")
-    await _insert_spot(db_session, "mt_state_uncat", _CLOSE, overview=None, lcls1=None)
-
-    state = await repositories.get_cached_match_state(
-        db_session, oid, ["mt_state_cat", "mt_state_uncat"]
-    )
-
-    assert state is not None
-    _has_embedding, current = state
-    assert "mt_state_cat" in current
-    assert "mt_state_uncat" not in current
-
-
 async def test_neighbor_search_returns_empty_without_overseas_embedding(db_session):
     oid = await _insert_overseas(db_session, embedding=None)
     await _insert_spot(db_session, "mt_no_target_embedding", _CLOSE, overview=None)
@@ -413,21 +320,6 @@ async def test_matches_without_embedding_returns_empty(client, seeded_overseas_n
     assert res.json()["data"]["matches"] == []
 
 
-async def test_one_spots_invalidation_keeps_other_caches(
-    client, db_session, seeded_matching, redis_client_fake
-):
-    """전역 리비전을 올리면 임베딩 없는 게시물 한 건이 전체 매칭 캐시를 매번 날린다."""
-    warmed = seeded_matching.overseas_id
-    await client.get(f"/v1/overseas/{warmed}/matches")
-    assert await redis_client_fake.get(f"match:0:{warmed}") is not None
-
-    blank = await _insert_overseas(db_session, embedding=None)
-    await db_session.commit()
-    await client.get(f"/v1/overseas/{blank}/matches")
-
-    assert await redis_client_fake.get(f"match:0:{warmed}") is not None
-
-
 def _match_row(cpyrht_div_cd: str | None) -> matching.MatchRow:
     return matching.MatchRow(
         content_id="1",
@@ -439,10 +331,11 @@ def _match_row(cpyrht_div_cd: str | None) -> matching.MatchRow:
     )
 
 
-def test_display_image_url_type1_returns_signed_transform(monkeypatch) -> None:
+def test_display_image_url_type1_is_tile_sized(monkeypatch) -> None:
+    """62pt 타일에 1620px 을 내리면 슬라이드 하나가 1MB 를 넘는다."""
     monkeypatch.setattr(settings, "IMG_PROXY_T1_SECRET", "s3cret")
     url = matching.display_image_url(_match_row("Type1"))
-    assert url.startswith("https://img.pictrip.org/t1/1620/")
+    assert url.startswith("https://img.pictrip.org/t1/320/")
     assert url.endswith("/tong.visitkorea.or.kr/cms/resource/98/3045598_image1_1.jpg")
 
 

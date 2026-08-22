@@ -207,6 +207,16 @@ fi
 record_success "${NEW_TAG}" "${NEW_REVISION}"
 echo "deploy OK: ${NEW_TAG}"
 
+# 탐색 피드는 사전계산된 매칭이 있어야 게시물을 고른다. 마이그레이션에 넣으면
+# 31초가 스모크 창(60초)을 먹으므로 배포가 끝난 뒤에 채운다 — --only-missing 이라
+# 첫 배포만 전수를 물고 이후 배포는 신규 Wikidata 행만 본다.
+echo "precomputing overseas matches"
+if ! compose_with_tag "${NEW_TAG}" exec -T api \
+     timeout "${MATCH_PRECOMPUTE_TIMEOUT_SECONDS:-300}" \
+     python -m scripts.precompute_matches --only-missing; then
+  echo "match precompute skipped (non-fatal)"
+fi
+
 echo "warming channel caches"
 if ! compose_with_tag "${NEW_TAG}" exec -T api \
      timeout "${WARM_TIMEOUT_SECONDS:-120}" python -m scripts.warm_channels; then

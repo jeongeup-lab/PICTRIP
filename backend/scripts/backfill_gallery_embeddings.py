@@ -8,7 +8,7 @@ from redis.asyncio import Redis, from_url
 
 from app.config import settings
 from app.core.db import async_session_factory
-from app.modules.feed.services import invalidate_all_match_cache
+from app.modules.feed.services import recompute_all_matches
 from app.modules.images.gallery_job import (
     GalleryResult,
     collect_gallery_targets,
@@ -29,7 +29,7 @@ async def _run_backfill(redis: Redis, args: argparse.Namespace) -> GalleryResult
             redis=redis,
         )
     finally:
-        await invalidate_all_match_cache(redis)
+        await recompute_all_matches()
 
 
 async def main() -> None:

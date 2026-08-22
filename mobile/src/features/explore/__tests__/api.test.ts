@@ -1,4 +1,4 @@
-import { getExplore, getMatches } from "@/features/explore/api";
+import { getExplore } from "@/features/explore/api";
 import { api } from "@/lib/api-client";
 
 jest.mock("@/lib/api-client", () => ({ api: { get: jest.fn() } }));
@@ -28,11 +28,5 @@ describe("explore api", () => {
     });
     await getExplore({});
     expect(api.get).toHaveBeenCalledWith("/explore", { params: {} });
-  });
-
-  it("getMatches hits /overseas/{id}/matches", async () => {
-    (api.get as jest.Mock).mockResolvedValue({ overseasId: 42, matches: [] });
-    await getMatches(42);
-    expect(api.get).toHaveBeenCalledWith("/overseas/42/matches");
   });
 });

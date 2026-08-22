@@ -43,6 +43,7 @@ const RETRY_BASE_MS = 900;
 
 const KTO_HIRES = "_image1_1";
 const KTO_MID = "_image2_1";
+const KTO_LOW = "_image3_1";
 const KTO_HOST = "tong.visitkorea.or.kr";
 const isKtoUrl = (u: string): boolean => {
   const authority = /^https?:\/\/([^/?#]+)/i.exec(u);
@@ -52,6 +53,13 @@ const ktoFallback = (u: string): string | null =>
   isKtoUrl(u) && u.includes(KTO_HIRES) ? u.replace(KTO_HIRES, KTO_MID) : null;
 
 const ktoMidSizeUrl = (u: string): string => ktoFallback(u) ?? u;
+
+const ktoLowRes = (u: string): string | null => {
+  if (!isKtoUrl(u)) return null;
+  if (u.includes(KTO_HIRES)) return u.replace(KTO_HIRES, KTO_LOW);
+  if (u.includes(KTO_MID)) return u.replace(KTO_MID, KTO_LOW);
+  return null;
+};
 
 const COMMONS_HOSTS = new Set(["upload.wikimedia.org", "commons.wikimedia.org"]);
 const isCommonsUrl = (u: string): boolean => {
@@ -143,10 +151,7 @@ export function RemoteImage({
   }
   const eff = uri && degradedUri === uri ? (sourceFallback(uri) ?? uri) : uri;
   const effDirect = eff ? (unproxyUpstream(eff) ?? eff) : null;
-  const lowDirect =
-    effDirect && isKtoUrl(effDirect) && effDirect.includes(KTO_HIRES)
-      ? ktoFallback(effDirect)
-      : null;
+  const lowDirect = effDirect ? ktoLowRes(effDirect) : null;
   const lowUri = lowDirect && effDirect !== eff ? proxyUpstream(lowDirect) : lowDirect;
   useLayoutEffect(() => {
     activeUriRef.current = eff;

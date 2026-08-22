@@ -101,7 +101,7 @@ class Settings(BaseSettings):
     CLIP_MODEL_NAME: str = "openai/clip-vit-base-patch32"
     CLIP_DEVICE: Literal["cpu", "cuda", "mps"] = "cpu"
 
-    MATCH_DISTANCE_MAX: float = 0.32
+    MATCH_DISTANCE_MAX: float = 0.36
     MATCH_CANDIDATES: int = 40
 
     IMG_PROXY_ORIGIN: str = "https://img.pictrip.org"

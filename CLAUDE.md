@@ -155,7 +155,7 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
   `AgentNoResults` 로 실패한다. 구 `rlte:{contentId}` Redis 캐시는 제거됨.
 - `hnsw.ef_search = 80` is an asyncpg `server_settings` in `app/core/db.py`.
 - 해외 게시물 피드는 `GET /explore` 하나다(홈·탐색이 같은 문을 쓴다): 커서
-  페이지네이션 → 스와이프 시 `GET /overseas/{id}/matches`로 국내 매칭 3곳.
+  페이지네이션 + 국내 매칭 3곳을 `items[].matches` 로 같이 싣는다(왕복 1회).
   `/feed` 는 `/explore` 의 deprecated 별칭으로만 남는다 — OTA 를 못 받는 v0.6.0
   빌드가 아직 친다(만료 2026-10-13 후 삭제). 구 `/home/feed`·`/curations/{slug}`·
   `/taste/photo-search`는 제거됐고
@@ -163,8 +163,10 @@ ESLint `no-restricted-imports` (layer blocks in `mobile/eslint.config.js`).
   은퇴 테이블(`plans`·`travel_shorts`·`travel_shorts_spots`)은 ORM이 없으므로
   `include_object` 제외가 유일한 보호막이다.
 - `overseas_spots`는 **백엔드 Alembic 소유**, 행 적재는
-  `pipeline/` Wikidata ETL. 매칭 캐시는 Redis `match:{revision}:{overseasId}`
-  (TTL 6h, `matching:revision`으로 무효화).
+  `pipeline/` Wikidata ETL. 매칭은 `overseas_spot_matches`에 사전계산한다
+  (`scripts.precompute_matches`, PK `(overseas_id, rank)`, rank 1–3). 저장은
+  `content_id`뿐이고 표시 필드는 읽을 때 `spots` 라이브 조인 — 구 Redis
+  `match:{revision}:{overseasId}` 캐시는 제거됐다.
 - `spot_concentration`은 `pipeline-daily.yml` 의 `concentration` 잡이 적재 —
   Hot/Hidden 채널(`/home/channels`) 소스.
 - Auth = denylist-only: `denyjti:{jti}` in Redis, fail-open. No session/device
