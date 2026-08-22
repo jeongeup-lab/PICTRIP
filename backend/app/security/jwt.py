@@ -105,7 +105,7 @@ async def get_optional_user_id(
     """익명으로도 도는 화면용. 만료 토큰이 검색을 죽이면 안 된다."""
     try:
         return await get_current_user_id(authorization)
-    except AuthTokenInvalid:
+    except (AuthTokenInvalid, AuthTokenExpired):
         return None
 
 

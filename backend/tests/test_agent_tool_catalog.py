@@ -879,3 +879,11 @@ async def test_plan_itinerary_says_when_a_sight_category_found_nothing(
     )
 
     assert "박물관: 그 지역에서 찾지 못했습니다" in result.observation
+
+
+async def test_plan_itinerary_asks_for_a_region_instead_of_failing(ctx: ToolContext) -> None:
+    """지역 없이 부르면 '조건에 맞는 곳을 찾지 못했어요' 로 끝나 이유가 사라진다."""
+    result = await CATALOG["plan_itinerary"].run(ctx, {})
+
+    assert result.rows == []
+    assert result.fact is not None and "어느 지역" in result.fact

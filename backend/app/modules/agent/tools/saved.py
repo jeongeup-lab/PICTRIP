@@ -37,18 +37,21 @@ async def _from_saved(ctx: ToolContext, args: Mapping[str, Any]) -> ToolResult:
     saved, _cursor, _more = await spots_services.list_saved_spots(
         ctx.session, user_id=ctx.user_id, limit=SEED_LIMIT
     )
-    if len(saved) < MIN_SEEDS:
+    seed_ids = await repositories.embedded_ids_among(
+        ctx.session, [card.content_id for card in saved]
+    )
+    if len(seed_ids) < MIN_SEEDS:
         return ToolResult(
             rows=[],
-            observation=_TOO_FEW.format(count=len(saved), need=MIN_SEEDS),
-            fact=_TOO_FEW_FACT.format(count=len(saved), need=MIN_SEEDS),
+            observation=_TOO_FEW.format(count=len(seed_ids), need=MIN_SEEDS),
+            fact=_TOO_FEW_FACT.format(count=len(seed_ids), need=MIN_SEEDS),
         )
 
     hints = strings(args, "regions", limit=MAX_REGION_HINTS)
     prefixes = await retrieve.resolve_region_prefixes(ctx.session, hints=hints) if hints else []
     matches = await repositories.match_spots_by_centroid(
         ctx.session,
-        [card.content_id for card in saved],
+        seed_ids,
         limit=SHOWN,
         region_prefixes=prefixes or None,
     )
@@ -61,7 +64,8 @@ async def _from_saved(ctx: ToolContext, args: Mapping[str, Any]) -> ToolResult:
     rows: list[CandidateRow] = [
         briefs[match.content_id] for match in matches if match.content_id in briefs
     ]
-    seeds = " · ".join(card.title for card in saved[:3])
+    titles = {card.content_id: card.title for card in saved}
+    seeds = " · ".join(titles[cid] for cid in seed_ids[:3] if cid in titles)
     return ToolResult(
         rows=rows, observation=f"{seeds} 등 저장한 곳 기준 — {describe(rows, empty=_NO_MATCH)}"
     )

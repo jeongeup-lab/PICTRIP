@@ -145,6 +145,12 @@ def chip(cid: str, label: str, payload: dict[str, Any], **kw: Any) -> Case:
     return case(cid, "I 칩", label, payload, **kw)
 
 
+def plan(cid: str, label: str, question: str, **kw: Any) -> Case:
+    kw.setdefault("expect_spots", "some")
+    kw.setdefault("expect_tools", ("plan_itinerary",))
+    return case(cid, "N 일정", label, ask(question), **kw)
+
+
 def quality(cid: str, label: str, question: str, **kw: Any) -> Case:
     kw.setdefault("expect_images", True)
     kw.setdefault("expect_placed", True)
@@ -332,8 +338,6 @@ CASES: list[Case] = [
         ask("베트남 다낭 리조트"),
         expect_error="AGENT_OUT_OF_SCOPE",
     ),
-    cannot("E4", "일정 짜기", "통영 1박2일 일정 짜줘"),
-    cannot("E5", "코스 추천", "부산 2박3일 코스 만들어줘"),
     cannot("E6", "예약", "여기 예약해줘"),
     cannot("E7", "길찾기", "서울에서 통영 어떻게 가?"),
     cannot("E8", "교통편", "제주 가는 배편 알려줘"),
@@ -407,12 +411,50 @@ CASES: list[Case] = [
     quality("J5", "전주 안에 있나", "전주 한옥", expect_spots="some", expect_region="전북"),
     quality("J6", "인천 안에 있나", "인천 섬", expect_spots="some", expect_region="인천"),
     quality("J7", "대구 안에 있나", "대구 공원", expect_spots="some", expect_region="대구"),
-    quality("J8", "광주 안에 있나", "광주 미술관", expect_spots="some", expect_region="광주"),
+    plan("N1", "박수로 준 일수", "통영 1박2일 일정 짜줘", expect_text=("통영",)),
+    plan("N2", "코스라고 불러도", "부산 2박3일 코스 만들어줘", expect_text=("부산",)),
+    plan("N3", "맛집을 끼운 일정", "경주 2일 일정인데 맛집도 넣어줘", expect_text=("경주",)),
+    plan("N4", "일수 없이", "여수 여행 일정 짜줘", expect_text=("여수",)),
+    case(
+        "N5",
+        "N 일정",
+        "일정에 못 넣는 종류",
+        ask("부산 2일 일정인데 쇼핑도 넣어줘"),
+        expect_spots="some",
+    ),
+    case(
+        "N6",
+        "N 일정",
+        "지역 없는 일정 요구",
+        ask("2박3일 일정 짜줘"),
+        expect_spots="none",
+    ),
+    case(
+        "O1",
+        "O 저장 기준",
+        "익명은 로그인을 안내받는다",
+        ask("내가 저장한 곳이랑 비슷한 데 추천해줘"),
+        expect_spots="none",
+        expect_text=("로그인",),
+    ),
+    quality(
+        "J8",
+        "광주 안에 있나",
+        "광주 미술관",
+        expect_spots="some",
+        expect_region="전남광주통합특별시",
+    ),
     quality("J9", "울산 안에 있나", "울산 공원", expect_spots="some", expect_region="울산"),
     quality("J10", "세종 안에 있나", "세종 공원", expect_spots="some", expect_region="세종"),
     quality("J11", "충남 안에 있나", "충남 해안", expect_spots="some", expect_region="충청남도"),
     quality("J12", "경남 안에 있나", "경남 사찰", expect_spots="some", expect_region="경상남도"),
-    quality("J13", "전남 안에 있나", "전남 섬", expect_spots="some", expect_region="전라남도"),
+    quality(
+        "J13",
+        "전남 안에 있나",
+        "전남 섬",
+        expect_spots="some",
+        expect_region="전남광주통합특별시",
+    ),
     quality("J14", "경기 안에 있나", "경기도 수목원", expect_spots="some", expect_region="경기"),
     quality("J15", "충북 안에 있나", "충북 동굴", expect_spots="some", expect_region="충청북도"),
     case(
@@ -1209,10 +1251,10 @@ FLOWS: list[Flow] = [
     ),
     Flow(
         "L6",
-        "못 하는 요구가 중간에 끼어도 대화가 이어진다",
+        "일정 요구가 중간에 끼어도 대화가 이어진다",
         (
             Step("검색", "강릉 해수욕장", expect_spots="some", expect_text=("강릉",)),
-            Step("일정 요구", "이걸로 1박2일 짜줘", forbid_tools=SEARCH_TOOLS, expect_spots="none"),
+            Step("일정 요구", "이걸로 1박2일 짜줘", expect_spots="some"),
             Step("다시 검색", "근처 박물관은?", expect_spots="any"),
         ),
     ),

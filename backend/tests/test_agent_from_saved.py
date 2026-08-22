@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime, timedelta
 
+import jwt
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.agent.tools import CATALOG, ToolContext
+from app.security.jwt import _signing_key, get_optional_user_id
 
 pytestmark = pytest.mark.asyncio
 
@@ -97,3 +100,40 @@ async def test_from_saved_matches_the_centroid_without_returning_the_seeds(
     titles = [row.title for row in result.rows]
     assert titles[0] == "닮은곳"
     assert not any(title.startswith("저장") for title in titles)
+
+
+async def test_from_saved_counts_only_seeds_that_have_an_embedding(
+    db_session: AsyncSession, redis_client_fake
+) -> None:
+    """임베딩 없는 저장 항목은 centroid 에서 조용히 빠져 시드 하한을 우회한다."""
+    user_id = await _user(db_session)
+    await _spot(db_session, "fs-e1", title="벡터있음", vec=_vec(1.0, 0.0))
+    for index in range(3):
+        await _spot(db_session, f"fs-n{index}", title=f"벡터없음{index}")
+    for cid in ("fs-e1", "fs-n0", "fs-n1", "fs-n2"):
+        await _save(db_session, user_id=user_id, cid=cid)
+    await db_session.flush()
+    ctx = ToolContext(session=db_session, redis=redis_client_fake, kto=None, user_id=user_id)
+
+    result = await CATALOG["from_saved"].run(ctx, {})
+
+    assert result.rows == []
+    assert result.fact is not None and "1곳" in result.fact
+
+
+async def test_optional_auth_treats_an_expired_token_as_anonymous() -> None:
+    """만료 토큰이 401 이면 여행 채팅 전체가 죽는다 — 갱신 인터셉터가 없는 raw fetch 다."""
+    past = datetime.now(tz=UTC) - timedelta(hours=1)
+    key, algo = _signing_key()
+    expired = jwt.encode(
+        {
+            "sub": "1",
+            "iat": int(past.timestamp()),
+            "exp": int(past.timestamp()) + 60,
+            "type": "access",
+        },
+        key,
+        algorithm=algo,
+    )
+
+    assert await get_optional_user_id(f"Bearer {expired}") is None
