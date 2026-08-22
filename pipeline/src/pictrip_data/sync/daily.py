@@ -13,6 +13,9 @@ from pictrip_data.sync.upsert import upsert_spots
 
 MIN_SEEN_RATIO = 0.5
 MAX_CATCHUP_DAYS = 60
+MAX_CATCHUP_MONTHS = 12
+"""한 달 질의는 실측 ~4,851건 = 약 49페이지, sync-full 은 68,935건 = 690페이지다.
+12개월(≈588페이지)까지는 월 질의가 싸고, 그 너머는 전량이 낫다."""
 MAX_PAGES = 1000
 _PROGRESS_EVERY = 50
 _KST = ZoneInfo("Asia/Seoul")
@@ -38,16 +41,35 @@ def watermark_param(wm: str | None) -> str | None:
     return wm[:8] if wm else None
 
 
+def month_range(start: date, today: date) -> list[str]:
+    """modifiedtime 은 프리픽스 필터라 'YYYYMM' 으로 그 달 전체를 한 번에 받는다.
+
+    2026-08-22 라이브 실측: 20260701→72건, 202607→4,851건, 2026→37,223건,
+    필터없음→68,935건.
+    """
+    out: list[str] = []
+    year, month = start.year, start.month
+    while (year, month) <= (today.year, today.month):
+        out.append(f"{year}{month:02d}")
+        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
+    return out
+
+
 def sync_dates(wm: str | None, today: date | None = None) -> list[str | None]:
     today = today or datetime.now(_KST).date()
     start = watermark_param(wm)
     if start is None:
         return [None]
     day = min(datetime.strptime(start, "%Y%m%d").date(), today)
-    if (today - day).days > MAX_CATCHUP_DAYS:
-        raise WatermarkTooOld(
-            f"watermark {start} 이 {MAX_CATCHUP_DAYS}일보다 오래됐다 — sync-full 로 복구할 것"
-        )
+    gap = (today - day).days
+    if gap > MAX_CATCHUP_DAYS:
+        months = month_range(day, today)
+        if len(months) > MAX_CATCHUP_MONTHS:
+            raise WatermarkTooOld(
+                f"watermark {start} 이 {MAX_CATCHUP_MONTHS}개월보다 오래됐다 — "
+                "월 질의로도 sync-full 보다 비싸다"
+            )
+        return list(months)
     out: list[str | None] = []
     while day <= today:
         out.append(day.strftime("%Y%m%d"))
@@ -149,10 +171,17 @@ def _advanced_watermark(
     candidates = [w for w in (watermark_from,) if w]
     if max_seen is not None:
         candidates.append(max_seen.strftime("%Y%m%d%H%M%S"))
-    last_day = next((m for m in reversed(modifiedtimes) if m), None)
-    if last_day:
-        candidates.append(f"{last_day}000000")
+    last = next((m for m in reversed(modifiedtimes) if m), None)
+    if last:
+        candidates.append(_stamp(last))
     return max(candidates) if candidates else None
+
+
+def _stamp(modifiedtime: str) -> str:
+    """월 질의('202608')도 14자리 워터마크로 편다 — '20260800' 이 되면 다음 실행이
+    strptime 에서 죽는다."""
+    day = modifiedtime if len(modifiedtime) == 8 else f"{modifiedtime}01"
+    return f"{day}000000"
 
 
 def sync_daily(mode: str = "incremental", client: KtoClient | None = None, conn=None) -> dict:

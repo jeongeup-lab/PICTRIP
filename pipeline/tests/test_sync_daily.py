@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -7,9 +7,12 @@ import pytest
 from pictrip_data.kto.client import KtoServiceError, _body
 from pictrip_data.sync.audit import ensure_table
 from pictrip_data.sync.daily import (
+    MAX_CATCHUP_DAYS,
     PartialFullSync,
     TruncatedPageLoop,
     WatermarkTooOld,
+    _advanced_watermark,
+    month_range,
     _run,
     sync_daily,
     sync_dates,
@@ -167,9 +170,16 @@ def test_sync_dates_full_when_no_watermark():
     assert sync_dates(None, date(2026, 6, 29)) == [None]
 
 
-def test_sync_dates_refuses_stale_watermark():
-    with pytest.raises(WatermarkTooOld):
-        sync_dates("20260101000000", date(2026, 6, 29))
+def test_a_half_year_gap_is_recoverable_by_month_queries():
+    """예전에는 여기서 WatermarkTooOld 를 던지고 sync-full 을 기다렸다."""
+    assert sync_dates("20260101000000", date(2026, 6, 29)) == [
+        "202601",
+        "202602",
+        "202603",
+        "202604",
+        "202605",
+        "202606",
+    ]
 
 
 def test_watermark_advances_when_the_day_had_no_changes(seed_refs):
@@ -232,3 +242,42 @@ def test_kto_error_envelope_raises_instead_of_looking_empty():
 def test_kto_ok_envelope_returns_body():
     payload = {"response": {"header": {"resultCode": "0000"}, "body": {"totalCount": 3}}}
     assert _body(payload, "areaBasedSyncList2") == {"totalCount": 3}
+
+
+def test_short_gap_still_walks_day_by_day():
+    dates = sync_dates("20260818000000", date(2026, 8, 22))
+    assert dates == ["20260818", "20260819", "20260820", "20260821", "20260822"]
+
+
+def test_the_day_loop_holds_right_up_to_the_cliff():
+    edge = date(2026, 8, 22) - timedelta(days=MAX_CATCHUP_DAYS)
+    dates = sync_dates(f"{edge:%Y%m%d}000000", date(2026, 8, 22))
+    assert len(dates) == MAX_CATCHUP_DAYS + 1
+    assert all(len(d) == 8 for d in dates)
+
+
+def test_a_long_gap_switches_to_month_queries_instead_of_failing():
+    """예전에는 61일이면 WatermarkTooOld 로 sync-full(690페이지)에 넘겼다."""
+    dates = sync_dates("20260601000000", date(2026, 8, 22))
+    assert dates == ["202606", "202607", "202608"]
+
+
+def test_month_range_crosses_the_year_boundary():
+    assert month_range(date(2025, 11, 3), date(2026, 2, 9)) == [
+        "202511",
+        "202512",
+        "202601",
+        "202602",
+    ]
+
+
+def test_beyond_a_year_still_defers_to_sync_full():
+    with pytest.raises(WatermarkTooOld):
+        sync_dates("20240101000000", date(2026, 8, 22))
+
+
+def test_month_watermark_stays_parseable_by_the_next_run():
+    """'202608' 이 그대로 워터마크가 되면 [:8] 이 '20260800' 이라 다음 실행이 죽는다."""
+    wm = _advanced_watermark(None, None, ["202606", "202607", "202608"])
+    assert wm == "20260801000000"
+    assert sync_dates(wm, date(2026, 8, 22))[0] == "20260801"
