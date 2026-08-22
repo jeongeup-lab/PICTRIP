@@ -2,6 +2,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { RemoteImage } from "@/components/RemoteImage";
 import { Skeleton } from "@/components/Skeleton";
 import type { Curation, HomeSpotCard } from "@/features/home/api";
+import { SectionKicker } from "@/features/home/components/SectionKicker";
 import { colors, radii, spacing } from "@/constants/theme";
 
 export const CARD_WIDTH = 248;
@@ -56,10 +57,7 @@ export function EditorialRail({
   return (
     <View testID={testID}>
       <View style={styles.head}>
-        <View style={styles.kick}>
-          <Text style={styles.kickText}>{kicker}</Text>
-          <View style={styles.kickRule} />
-        </View>
+        <SectionKicker label={kicker} />
         <Text style={styles.title}>{title}</Text>
         {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       </View>
@@ -146,9 +144,6 @@ export function EditorialRailSkeleton({ testID }: { testID: string }) {
 
 const styles = StyleSheet.create({
   head: { paddingHorizontal: spacing.lg },
-  kick: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
-  kickText: { fontSize: 11, fontWeight: "800", letterSpacing: 0.2, color: colors.accentText },
-  kickRule: { flex: 1, height: 1, backgroundColor: colors.line },
   title: {
     fontSize: 21,
     fontWeight: "800",

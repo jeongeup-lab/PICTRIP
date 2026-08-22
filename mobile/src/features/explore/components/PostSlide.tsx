@@ -7,7 +7,7 @@ import { CreditSheet } from "@/features/explore/components/CreditSheet";
 import { useMatches } from "@/features/explore/queries";
 import type { MatchCard, OverseasPost } from "@/features/explore/api";
 import { commonsWidthFor } from "@/lib/commons-width";
-import { darkColors } from "@/constants/theme";
+import { darkColors, spacing } from "@/constants/theme";
 
 export const MATCH_SLOTS = [0, 1, 2];
 
@@ -128,7 +128,7 @@ function MatchTile({ match, onPress }: { match: MatchCard; onPress: (contentId: 
 }
 
 const styles = StyleSheet.create({
-  panel: { position: "absolute", left: 18, right: 18, bottom: 34 },
+  panel: { position: "absolute", left: spacing.lg, right: spacing.lg, bottom: 34 },
   country: {
     alignSelf: "flex-start",
     height: 22,
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
   matchTitle: { fontSize: 11.5, fontWeight: "700", letterSpacing: -0.2, color: darkColors.onImage },
   matchRegion: { marginTop: 1, fontSize: 10, fontWeight: "600", color: "rgba(255,255,255,0.5)" },
   empty: { marginTop: 10, fontSize: 12, fontWeight: "600", color: "rgba(255,255,255,0.6)" },
-  creditRow: { position: "absolute", left: 18, right: 18, bottom: 12 },
+  creditRow: { position: "absolute", left: spacing.lg, right: spacing.lg, bottom: 12 },
   creditText: { fontSize: 9.5, color: "rgba(255,255,255,0.44)" },
   pressed: { opacity: 0.72 },
 });

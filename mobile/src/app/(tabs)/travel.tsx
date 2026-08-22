@@ -3,6 +3,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Linking } from "react-native";
 import { router } from "expo-router";
+import { AppBar, WORDMARK } from "@/components/AppBar";
 import { Icon } from "@/components/Icon";
 import { Toast } from "@/components/Toast";
 import { AssistantTurn } from "@/features/travel/components/AssistantTurn";
@@ -33,7 +34,7 @@ import {
 import { AppError } from "@/lib/app-error";
 import { colors, spacing } from "@/constants/theme";
 
-export const WORDMARK = "PICTRIP";
+export { WORDMARK };
 export const NEW_CHAT_LABEL = "새 대화";
 const EXTERNAL_UNAVAILABLE = "이 장소는 카카오맵에서 볼 수 있어요";
 const SAVE_COMPLETE = "여행지를 저장했어요";
@@ -230,19 +231,20 @@ export default function TravelScreen() {
 
   return (
     <View style={styles.root}>
-      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
-        <Text style={styles.wordmark}>{WORDMARK}</Text>
-        <Pressable
-          testID="travel-new-chat"
-          accessibilityRole="button"
-          accessibilityLabel={NEW_CHAT_LABEL}
-          style={({ pressed }) => [styles.newChat, pressed && styles.pressed]}
-          hitSlop={8}
-          onPress={onNewChat}
-        >
-          <Icon name="plus" size={19} color={colors.ink} strokeWidth={2} />
-        </Pressable>
-      </View>
+      <AppBar
+        action={
+          <Pressable
+            testID="travel-new-chat"
+            accessibilityRole="button"
+            accessibilityLabel={NEW_CHAT_LABEL}
+            style={({ pressed }) => [styles.newChat, pressed && styles.pressed]}
+            hitSlop={8}
+            onPress={onNewChat}
+          >
+            <Icon name="plus" size={19} color={colors.ink} strokeWidth={2} />
+          </Pressable>
+        }
+      />
 
       <FlatList
         ref={listRef}
@@ -275,15 +277,6 @@ export default function TravelScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  header: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
-  },
-  wordmark: { fontSize: 20, fontWeight: "800", letterSpacing: -0.5, color: colors.ink },
   newChat: {
     position: "absolute",
     right: spacing.md,
