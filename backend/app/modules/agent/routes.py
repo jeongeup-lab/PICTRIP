@@ -15,7 +15,7 @@ from app.kto.client import KtoDep
 from app.modules.agent import search
 from app.modules.agent.schemas import AskRequest, ChatRequest
 from app.modules.agent.services import chat as chat_service
-from app.modules.agent.services.photo import MAX_IMAGE_BYTES
+from app.modules.agent.services.photo import MAX_IMAGE_BYTES, sniff_image_mime
 from app.security.jwt import OptionalUserId
 from app.web.envelope import ok
 from app.web.errors import ImageInvalid, ValidationFailed
@@ -109,7 +109,7 @@ async def _read_fields(request: Request) -> tuple[dict[str, Any], bytes | None, 
         image_mime = None
         if isinstance(upload, UploadFile):
             image_bytes = await _read_capped(upload)
-            image_mime = upload.content_type
+            image_mime = sniff_image_mime(image_bytes)
         fields: dict[str, Any] = {
             key: value
             for key, value in form.multi_items()
