@@ -50,6 +50,7 @@ ToolName = Literal[
     "uploaded_photo",
     "plan_itinerary",
     "from_saved",
+    "abroad",
 ]
 
 

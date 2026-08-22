@@ -7,6 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.agent import repositories, toolloop
+from app.modules.agent.errors import AgentOutOfScope
 from app.modules.agent.routing import ToolCall
 from app.modules.agent.services import retrieve
 from app.modules.agent.tools import CATALOG, ToolContext, itinerary, schemas
@@ -285,6 +286,7 @@ async def test_catalog_covers_every_real_tool() -> None:
         "uploaded_photo",
         "plan_itinerary",
         "from_saved",
+        "abroad",
     }
 
 
@@ -922,3 +924,28 @@ async def test_a_refused_search_stops_the_turn(ctx: ToolContext) -> None:
     result = await CATALOG["category_search"].run(ctx, {})
 
     assert result.stop is True
+
+
+async def test_abroad_raises_so_mobile_can_branch_on_the_code(ctx: ToolContext) -> None:
+    """관찰로 돌려주면 '조건을 넓혀 보세요' 가 되는데, 파리는 넓혀도 답이 없다."""
+    with pytest.raises(AgentOutOfScope):
+        await CATALOG["abroad"].run(ctx, {"place": "파리"})
+
+
+async def test_abroad_needs_a_place_name(ctx: ToolContext) -> None:
+    """지명 없이 부르면 모델이 '못 하는 요구' 전부를 해외로 보낸다."""
+    result = await CATALOG["abroad"].run(ctx, {})
+
+    assert result.rows == []
+    assert "해외 지명이 없습니다" in result.observation
+
+
+async def test_abroad_refuses_a_domestic_place(ctx: ToolContext, db_session: AsyncSession) -> None:
+    """'제주 날씨' 를 해외로 보내고 있었다 — 모델 판정을 지역 테이블로 검증한다."""
+    await _seed(db_session, "ab-1", title="성산일출봉", addr1="제주특별자치도 서귀포시 1")
+    await db_session.flush()
+
+    result = await CATALOG["abroad"].run(ctx, {"place": "제주"})
+
+    assert result.rows == []
+    assert "국내 지역입니다" in result.observation
