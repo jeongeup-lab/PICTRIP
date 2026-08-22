@@ -51,6 +51,22 @@ def _get(url: str, token: str) -> dict:
         return json.load(response)
 
 
+NETWORK_ERRORS = (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError, ValueError)
+
+
+def fetch_or_none(url: str, token: str) -> dict | None:
+    """알림 인프라 장애가 DAG 를 실패시키면 안 된다.
+
+    상류 잡이 전부 성공해도 Actions API 가 5xx 를 한 번 뱉으면 heartbeat 잡이
+    죽고 워크플로가 실패로 남는다. 그 가짜 실패는 다음 실행에서 잘못된
+    RECOVERED 알림으로 한 번 더 번진다.
+    """
+    try:
+        return _get(url, token)
+    except NETWORK_ERRORS:
+        return None
+
+
 def duration(started: str | None, completed: str | None) -> str:
     if not started or not completed:
         return "-"
@@ -146,13 +162,12 @@ def build_payload(dag: str, jobs: list[dict], started_at: str, footer: str, reco
 
 def previous_run_failed(repo: str, workflow: str, run_id: int, token: str) -> bool:
     """직전 완료 실행이 실패였는지 — 복구 알림을 한 번만 보내려고 본다."""
-    try:
-        data = _get(
-            f"{API}/repos/{repo}/actions/workflows/{workflow}/runs"
-            "?status=completed&per_page=5&exclude_pull_requests=true",
-            token,
-        )
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError):
+    data = fetch_or_none(
+        f"{API}/repos/{repo}/actions/workflows/{workflow}/runs"
+        "?status=completed&per_page=5&exclude_pull_requests=true",
+        token,
+    )
+    if data is None:
         return False
     for run in data.get("workflow_runs", []):
         if run.get("id") != run_id:
@@ -183,8 +198,12 @@ def main() -> int:
     always = os.environ.get("ALWAYS", "false").lower() == "true"
     self_job = os.environ.get("SELF_JOB", "heartbeat")
 
-    run = _get(f"{API}/repos/{repo}/actions/runs/{run_id}", token)
-    payload_jobs = _get(f"{API}/repos/{repo}/actions/runs/{run_id}/jobs?per_page=100", token)
+    run = fetch_or_none(f"{API}/repos/{repo}/actions/runs/{run_id}", token)
+    payload_jobs = fetch_or_none(f"{API}/repos/{repo}/actions/runs/{run_id}/jobs?per_page=100", token)
+    if run is None or payload_jobs is None:
+        print("::warning::Actions API 조회 실패 — Discord 알림 생략")
+        return 0
+
     jobs = collect_jobs(payload_jobs.get("jobs", []), self_job)
     if not jobs:
         print("::warning::잡 목록이 비었다 — Discord 알림 생략")
@@ -207,7 +226,7 @@ def main() -> int:
 
     try:
         post(webhook, payload)
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError) as exc:
+    except NETWORK_ERRORS as exc:
         print(f"::warning::Discord 전송 실패: {exc}")
         return 0
     print(f"discord sent: {dag} {status}")

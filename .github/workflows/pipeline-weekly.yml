@@ -127,7 +127,11 @@ jobs:
           url: ${{ secrets.KUMA_PUSH_PIPELINE_WEEKLY }}
           status: ${{ (needs['embed-repair'].result == 'success' && needs['gallery-repair'].result == 'success' && needs.signals.result == 'success') && 'up' || 'down' }}
           msg: "weekly embed=${{ needs['embed-repair'].result }} gallery=${{ needs['gallery-repair'].result }} signals=${{ needs.signals.result }}"
+      # always(): 앞의 heartbeat 스텝이 죽어도(Kuma 다운·타임아웃) 이건 돈다.
+      # 스텝은 암묵적으로 if: success() 라, 두 알림 경로가 한 줄에 묶여 있으면
+      # 홈서버가 나쁜 날 Kuma 도 Discord 도 안 온다.
       - uses: ./.github/actions/discord
+        if: always()
         with:
           url: ${{ secrets.DISCORD_WEBHOOK_URL }}
           dag: pipeline-weekly
