@@ -47,7 +47,7 @@ mobile(Expo) · web(CF Pages) · pipeline(ETL CLI, CT111) · deploy(IaC) ·
 
 ```mermaid
 flowchart LR
-  kto[KTO OpenAPI] -->|pipeline-daily 04:07| spots[(spots)]
+  kto[KTO OpenAPI] -->|pipeline-daily 05:07| spots[(spots)]
   wiki[Wikidata·Commons] -->|sync-overseas 월간| ovs[(overseas_spots)]
   spots -->|CLIP 백필| emb[(spot_embeddings\n+gallery centroid)]
   ovs -->|CLIP| oemb[embedding]
@@ -248,27 +248,49 @@ main = 릴리스 마커(web·CodeQL), `v*` 태그 = TestFlight(→
 
 정각(`0 * * * *`)을 피해 `:07`·`:13`·`:23` 에 건다. 스케줄 디스패치는 GitHub 이
 큐잉하고 정각은 전 세계 크론이 몰려 지연된다 — self-hosted 러너라도 트리거는 큐를 탄다.
+KTO 일일 배치가 **04:30 KST** 에 스탬프를 찍으므로(실측: `max(spots.modified_time)`
+이 매일 `04:30:00`) 그보다 이른 시각에 돌면 당일 변경분이 하루 밀린다.
 
 | 잡 | 시각 | DAG |
 |---|---|---|
-| `pipeline-daily.yml` | 매일 04:07 | `sync-kto` → {`concentration`, `detail-prewarm`, `embed`} → `warm` → `heartbeat` |
+| `pipeline-daily.yml` | 매일 05:07 | `sync-kto` → {`concentration`, `detail-prewarm`, `embed`} → `warm` → `heartbeat` |
 | `pipeline-weekly.yml` | 일요일 04:23 | `sync-full` → {`image-validate` → {`embed-repair`, `gallery-repair`}, `signals`} → `heartbeat` |
 | `pipeline-monthly.yml` | 매월 2일 03:13 | `overseas-etl` → {`embed`, `warm`} → `heartbeat` |
 
 - **`embed`가 `sync-kto`에 연쇄하는 것이 핵심.** 신규 스팟은 `UPDATE OF
   first_image_url` 트리거에 안 걸려 `embedding_failures` 에도 안 쌓인다 — 이 링크가
   없으면 새 KTO 스팟이 이미지 검색·매칭에서 영영 누락된다.
-- **증분은 워터마크 날짜부터 오늘까지 하루씩 훑는다.** KTO `modifiedtime` 은 하한이
-  아니라 그 날짜만 고르는 필터라, 하루치만 요청하면 워터마크가 그 날에 갇힌다
-  (2026-06-26 부터 54일간 실제로 그랬다 — `fetched=10 · skipped=10` 이 매일 success 로 기록).
-- **`sync-full`이 유일한 soft-delete 경로.** 일일 증분은 `modifiedtime` 필터라
-  "사라진 스팟"을 못 본다. 응답이 현재 노출분의 절반 미만이면 `PartialFullSync` 로
-  중단한다(부분 응답이 전체를 숨기는 사고 방지).
+- **`modifiedtime` 은 하한이 아니라 프리픽스 필터다.** 하루치만 요청하면 워터마크가
+  그 날에 갇힌다 (2026-06-26 부터 54일간 실제로 그랬다 — `fetched=10 · skipped=10` 이
+  매일 success 로 기록). 라이브 실측(2026-08-22): `20260701`→72건, `202607`→4,851건,
+  `2026`→37,223건, 필터없음→68,935건.
+- **증분은 갭 크기로 질의 단위를 고른다.** 60일 이내는 워터마크 날짜부터 하루씩,
+  그 너머는 `YYYYMM` 월 질의로 따라잡는다. 비용은 콜 수가 아니라 페이지 수라
+  (60일: 일 단위 ~120페이지 vs 월 단위 ~147페이지) 짧은 갭에 월 질의를 쓰면 손해다.
+  12개월(≈588페이지)을 넘으면 `sync-full`(690페이지)이 더 싸므로 `WatermarkTooOld`
+  로 넘긴다.
+- **응답이 잘리면 워터마크를 전진시키지 않는다.** `resultCode` 는 정상인데 items 만
+  짧게 오는 경우가 있다. 빈 페이지로 루프가 끊겼는데 `totalCount` 에 못 미치면
+  `TruncatedPageLoop` 로 죽는다 — 날짜 등가 필터라 한 번 건너뛴 구간은 영영 다시
+  조회되지 않는다.
+- **`sync-full` 은 soft-delete 의 2차 백스톱이지 유일한 경로가 아니다.** `showflag`
+  를 안 보내면 `areaBasedSyncList2` 는 표출·비표출을 둘 다 준다(매뉴얼상 선택 필터).
+  실측으로도 일일 증분에 `show_flag=0` 이 매일 섞여 온다(2026-08-10 23건 · 08-12
+  28건 · 08-14 22건). `sync-full` 이 잡는 것은 `modifiedtime` 갱신 없이 목록에서
+  통째로 사라진 스팟뿐이다. 응답이 현재 노출분의 절반 미만이면 `PartialFullSync`
+  로 중단한다(부분 응답이 전체를 숨기는 사고 방지).
 - 임베딩 잡 3종은 `admin:embed:running` Redis 락을 공유하므로 job-level
   `concurrency: embedding-job` 으로 워크플로를 가로질러 직렬화한다.
-- `heartbeat` 는 **CT111** Uptime-Kuma push 모니터를 때린다(→ [monitoring](../../deploy/monitoring/README.md)). 잡 실패뿐 아니라 **"아예
-  안 돌았음"**(GitHub 장애·60일 무활동 시 스케줄 자동 비활성)까지 Kuma 타임아웃으로
-  잡힌다. 푸시 URL 시크릿이 없으면 조용히 건너뛴다.
+- `heartbeat` 는 **Kuma 와 Discord 둘 다** 때린다. **Kuma**(CT111 push 모니터 →
+  [monitoring](../../deploy/monitoring/README.md))는 **"아예 안 돌았나"** 를 맡는다 — GitHub 장애·60일 무활동 시 스케줄 자동
+  비활성까지 타임아웃으로 잡히고, 이건 Discord 로는 원리상 못 잡는다(잡이 안 돌면
+  알림 액션도 안 돈다). **Discord**(`.github/actions/discord`)는 **"무슨 일이
+  있었나"** 를 맡아 잡별 결과·소요시간·실패 링크를 표로 보낸다. Discord 스텝은
+  `if: always()` 라 Kuma 전송이 실패해도 따로 나간다. 일일은 실패·복구일 때만,
+  주간·월간은 매번 보낸다 — 매일 초록 카드를 쏘면 무시하는 습관이 붙는다.
+  월간은 Kuma 하트비트 상한(24일)이 30일 주기를 못 덮어 **Discord 와
+  `check_data_freshness`(overseas 45일 임계)가 유일한 감시**다.
+  두 알림 모두 시크릿이 없으면 조용히 건너뛴다.
 
 ### 그 밖의 타이머 (CT112 systemd)
 
