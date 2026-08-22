@@ -169,9 +169,9 @@ const texts = (r: renderer.ReactTestRenderer) =>
     .filter((c): c is string => typeof c === "string");
 
 describe("HomeScreen", () => {
-  it("leads with the ranking rail instead of a wordmark", async () => {
+  it("stamps the wordmark above the ranking rail", async () => {
     const r = await mount();
-    expect(r.root.findAllByProps({ children: "PICTRIP" })).toHaveLength(0);
+    expect(texts(r)).toContain("PICTRIP");
     expect(r.root.findAllByProps({ testID: "home-rank-rail" }).length).toBeGreaterThan(0);
   });
 

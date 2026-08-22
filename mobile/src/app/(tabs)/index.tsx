@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useScrollToTop } from "expo-router";
+import { AppBar } from "@/components/AppBar";
 import { Icon } from "@/components/Icon";
 import { ChannelChips } from "@/features/channels/components/ChannelChips";
 import { AiSection } from "@/features/home/components/AiSection";
@@ -29,6 +29,7 @@ import { colors, spacing } from "@/constants/theme";
 
 export const RANK_LIMIT = 10;
 const RANK_KICKER = "NOW TRENDING";
+const SECTION_GAP = 40;
 export const LOCATION_CTA = "위치를 켜면 지금 주변 인기 장소를 보여드려요";
 
 type HomeScope = "nearby" | "national";
@@ -90,7 +91,8 @@ export default function HomeScreen() {
   }, [effectiveScope, coords, request]);
 
   return (
-    <SafeAreaView style={styles.root} edges={["top"]}>
+    <View style={styles.root}>
+      <AppBar />
       <ScrollView
         ref={listRef}
         showsVerticalScrollIndicator={false}
@@ -118,16 +120,6 @@ export default function HomeScreen() {
               <Icon name="chevron-down" size={20} color={colors.ter} strokeWidth={1.9} />
             </Pressable>
           </View>
-          <Pressable
-            testID="home-profile"
-            accessibilityRole="button"
-            accessibilityLabel="마이 페이지"
-            hitSlop={8}
-            style={({ pressed }) => pressed && styles.pressed}
-            onPress={() => router.push("/(tabs)/profile")}
-          >
-            <Icon name="person" size={20} color={colors.ink} strokeWidth={1.9} />
-          </Pressable>
         </View>
 
         {locationDenied && scope === "nearby" ? (
@@ -168,7 +160,7 @@ export default function HomeScreen() {
 
         {curation.isLoading || curation.data?.items.length ? (
           <>
-            <View style={styles.divider} />
+            <View style={styles.sectionGap} />
             <CurationSection
               data={curation.data}
               isLoading={curation.isLoading}
@@ -177,7 +169,7 @@ export default function HomeScreen() {
           </>
         ) : null}
 
-        <View style={styles.divider} />
+        <View style={styles.sectionGap} />
 
         <View style={styles.channels}>
           <ChannelChips coords={coords} onOpen={(key) => router.push(`/channels?start=${key}`)} />
@@ -191,7 +183,7 @@ export default function HomeScreen() {
           onRetry={() => void recommendations.refetch()}
         />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -210,20 +202,14 @@ function findCard(
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   content: { paddingTop: spacing.xs, paddingBottom: spacing.xxl },
-  header: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
-  },
+  header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: 22 },
   headerCopy: { flex: 1, minWidth: 0 },
   kicker: { fontSize: 11.5, fontWeight: "700", color: colors.ter },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6 },
   title: { fontSize: 26, fontWeight: "800", letterSpacing: -0.9, color: colors.ink },
   gap: { height: spacing.xl },
-  divider: { height: 8, backgroundColor: colors.inset, marginTop: spacing.xl },
-  channels: { paddingTop: spacing.lg, paddingBottom: spacing.xs },
+  sectionGap: { height: SECTION_GAP },
+  channels: { paddingBottom: spacing.xs },
   expand: {
     marginHorizontal: spacing.lg,
     marginTop: spacing.md,

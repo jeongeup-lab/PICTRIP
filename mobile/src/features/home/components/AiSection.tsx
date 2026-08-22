@@ -17,6 +17,8 @@ interface Props {
   onRetry: () => void;
 }
 
+const AI_KICKER = "FOR YOU";
+
 export function AiSection({ displayName, data, isLoading, isError, onRetry }: Props) {
   const requireAuth = useAuthGate();
   const ready = data?.ready === true && data.items.length > 0;
@@ -29,7 +31,11 @@ export function AiSection({ displayName, data, isLoading, isError, onRetry }: Pr
 
   return (
     <View style={styles.section}>
-      <SectionHead title="님을 위한 AI 추천 장소" highlight={displayName ?? "여행자"} />
+      <SectionHead
+        kicker={AI_KICKER}
+        title="님을 위한 AI 추천 장소"
+        highlight={displayName ?? "여행자"}
+      />
       {isLoading ? (
         <GridSkeleton />
       ) : isError ? (

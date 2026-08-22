@@ -19,9 +19,10 @@ import { PostSlide } from "@/features/explore/components/PostSlide";
 import { prefetchMatches, useExploreFeed } from "@/features/explore/queries";
 import type { OverseasPost } from "@/features/explore/api";
 import { makeSeed } from "@/lib/seed";
-import { colors, darkColors } from "@/constants/theme";
+import { colors, darkColors, spacing } from "@/constants/theme";
 
 export const DECK_BACKGROUND = "#0E1013";
+const DOT_TOP = 18;
 export const HINT_TEXT = "위로 밀어 다음 사진";
 export const LOAD_FAILED = "사진을 불러오지 못했어요.";
 const HINT_SWIPES = 2;
@@ -153,7 +154,7 @@ export function ExploreDeck() {
       </View>
 
       {ready ? (
-        <View style={[styles.dots, { top: insets.top + 12 }]} pointerEvents="none">
+        <View style={[styles.dots, { top: insets.top + DOT_TOP }]} pointerEvents="none">
           {Array.from({ length: Math.min(DOT_WINDOW, posts.length) }, (_, slot) => (
             <View key={slot} style={[styles.dot, dotStart + slot === index && styles.dotOn]} />
           ))}
@@ -194,7 +195,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: 18,
+    paddingHorizontal: spacing.lg,
     paddingBottom: 26,
     flexDirection: "row",
     alignItems: "center",

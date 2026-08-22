@@ -1,16 +1,19 @@
 import { StyleSheet, Text, View } from "react-native";
+import { SectionKicker } from "@/features/home/components/SectionKicker";
 import { colors, spacing } from "@/constants/theme";
 
 interface Props {
+  kicker?: string;
   title: string;
   highlight?: string | null;
   caption?: string | null;
   note?: string | null;
 }
 
-export function SectionHead({ title, highlight, caption, note }: Props) {
+export function SectionHead({ kicker, title, highlight, caption, note }: Props) {
   return (
     <View style={styles.head}>
+      {kicker ? <SectionKicker label={kicker} /> : null}
       <View style={styles.row}>
         <View style={styles.titleRow}>
           {highlight ? (
