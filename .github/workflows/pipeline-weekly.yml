@@ -4,9 +4,11 @@ name: pipeline-weekly
 #   sync-full ─┬─ image-validate ─ embed-repair ─ gallery-repair ─┐
 #              └─ signals ──────────────────────────────────────────┴─ heartbeat
 #
-# sync-full 이 유일한 soft-delete 경로다. 일일 증분(modifiedtime 필터)은
-# "사라진 스팟"을 볼 수 없어서, 전량 재조정 없이는 폐업·비공개 전환된 스팟이
-# 영구히 show_flag=1 로 서빙된다.
+# sync-full 은 soft-delete 의 2차 백스톱이지 유일한 경로가 아니다. showflag 를
+# 안 보내면 areaBasedSyncList2 는 표출·비표출을 둘 다 준다(공식 매뉴얼상 showflag
+# 는 선택 필터다). 실측으로도 일일 증분에 show_flag=0 이 매일 섞여 들어온다
+# (2026-08-10 23건 · 08-12 28건 · 08-14 22건). sync-full 이 잡는 것은 modifiedtime
+# 갱신 없이 목록에서 통째로 사라진 스팟뿐이다.
 #
 # image-validate 가 죽은 원본을 교체하면 0020 트리거가 spot_embeddings /
 # spot_embeddings_gallery 행을 지우고 embedding_failures 에 source_changed 로
@@ -46,9 +48,12 @@ jobs:
   # NOTE: CT111 발 프로브는 tong.visitkorea.or.kr 엣지 차이로 삭제 이미지도 200 을
   # 받는다(2026-07-16 실측, 4.3만 장 전수에서 사망 0건). 사용자 시점 판정이 아니다.
   # 판정을 고치려면 프로브를 img.pictrip.org 경유로 바꿔야 한다 — 별건.
+  # cancelled 도 막는다: 잡 타임아웃은 failure 가 아니라 cancelled 로 찍힌다
+  # (2026-08-18 월간 ETL 이 timeout-minutes: 120 에 걸려 cancelled 였다). 반쯤
+  # 끊긴 전량 동기화 뒤에 6.8만 장 프로브를 그대로 돌릴 이유가 없다.
   image-validate:
     needs: sync-full
-    if: always() && needs.sync-full.result != 'failure'
+    if: always() && needs.sync-full.result != 'failure' && needs.sync-full.result != 'cancelled'
     runs-on: [self-hosted, ct111]
     timeout-minutes: 60
     steps:

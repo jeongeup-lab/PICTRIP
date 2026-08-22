@@ -85,6 +85,16 @@ def record_run(conn: psycopg.Connection, mode: str) -> Iterator[dict]:
         conn.commit()
 
 
+def format_counters(job: str, counters: dict) -> str:
+    """CLI 가 stdout 에 한 줄도 안 남기던 것을 메운다.
+
+    수집 결과가 sync_runs 에만 있으면 CI 로그로는 무엇이 들어왔는지 영영 알 수 없다
+    (2026-08-18 해외 ETL 이 2시간 돌다 죽었을 때 몇 개국까지 갔는지 못 봤다).
+    """
+    fields = " ".join(f"{k}={v}" for k, v in counters.items() if v is not None)
+    return f"[{job}] {fields}"
+
+
 def last_success_watermark(conn: psycopg.Connection) -> str | None:
     cur = conn.cursor()
     cur.execute(

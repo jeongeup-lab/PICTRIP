@@ -22,6 +22,11 @@ def test_thresholds_leave_room_for_the_job_cadence() -> None:
     assert by_name["overseas_spots.updated_at"] > 24 * 31
 
 
+def test_overseas_threshold_catches_a_single_missed_monthly_run() -> None:
+    by_name = {c.name: c.max_age_hours for c in CHECKS}
+    assert by_name["overseas_spots.updated_at"] < 24 * 60
+
+
 def test_overseas_check_uses_the_oldest_row() -> None:
     check = next(c for c in CHECKS if c.name == "overseas_spots.updated_at")
     assert "min(updated_at)" in check.sql

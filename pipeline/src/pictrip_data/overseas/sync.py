@@ -23,28 +23,32 @@ def sync_overseas(
     countries: list[Country] | None = None,
     limit: int | None = None,
     dry_run: bool = False,
-) -> None:
+) -> dict:
     wikidata = wikidata or WikidataClient()
     commons = commons or CommonsClient()
     wikipedia = wikipedia or WikipediaClient()
     countries = countries if countries is not None else COUNTRIES
     if conn is not None:
-        _run(wikidata, commons, wikipedia, conn, countries, limit, dry_run)
-        return
+        return _run(wikidata, commons, wikipedia, conn, countries, limit, dry_run)
     with connect() as owned:
-        _run(wikidata, commons, wikipedia, owned, countries, limit, dry_run)
+        return _run(wikidata, commons, wikipedia, owned, countries, limit, dry_run)
 
 
 def _process(wikidata, commons, wikipedia, conn, countries, counters, limit, dry_run) -> None:
     total = 0
     failed: list[str] = []
-    for country in countries:
+    for index, country in enumerate(countries, 1):
         try:
             spots = wikidata.fetch_country(country)
         except Exception as exc:
             conn.rollback()
             failed.append(f"{country.code}({type(exc).__name__})")
+            print(f"[overseas] ({index}/{len(countries)}) {country.code} FAILED {exc}", flush=True)
             continue
+        print(
+            f"[overseas] ({index}/{len(countries)}) {country.code} spots={len(spots)}",
+            flush=True,
+        )
         counters["api_calls"] += 1
         if limit is not None:
             spots = spots[: max(limit - total, 0)]
@@ -72,14 +76,15 @@ def _process(wikidata, commons, wikipedia, conn, countries, counters, limit, dry
         raise PartialOverseasSync(f"{len(failed)}/{len(countries)} 국가 실패: {', '.join(failed)}")
 
 
-def _run(wikidata, commons, wikipedia, conn, countries, limit, dry_run) -> None:
+def _run(wikidata, commons, wikipedia, conn, countries, limit, dry_run) -> dict:
     ensure_table(conn)
     if dry_run:
-        counters = {"api_calls": 0, "fetched": 0, "inserted": 0, "updated": 0}
+        counters: dict = {"api_calls": 0, "fetched": 0, "inserted": 0, "updated": 0}
         try:
             _process(wikidata, commons, wikipedia, conn, countries, counters, limit, dry_run)
         finally:
             conn.rollback()
-        return
+        return counters
     with record_run(conn, mode="overseas") as counters:
         _process(wikidata, commons, wikipedia, conn, countries, counters, limit, dry_run)
+    return counters
