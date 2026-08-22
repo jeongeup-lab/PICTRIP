@@ -26,6 +26,7 @@ const DOT_TOP = 18;
 export const HINT_TEXT = "위로 밀어 다음 사진";
 export const LOAD_FAILED = "사진을 불러오지 못했어요.";
 const HINT_SWIPES = 2;
+const HINT_TIMEOUT_MS = 4000;
 const DOT_WINDOW = 7;
 
 export function slideIndexAt(offsetY: number, height: number, count: number): number {
@@ -43,6 +44,7 @@ export function ExploreDeck() {
   const [box, setBox] = useState({ width: 0, height: 0 });
   const [index, setIndex] = useState(0);
   const [swipes, setSwipes] = useState(0);
+  const [hintExpired, setHintExpired] = useState(false);
   const [gridOpen, setGridOpen] = useState(false);
   const listRef = useRef<FlatList<OverseasPost>>(null);
 
@@ -91,6 +93,12 @@ export function ExploreDeck() {
   }, []);
 
   const ready = box.height > 0 && posts.length > 0;
+
+  useEffect(() => {
+    if (!ready) return;
+    const timer = setTimeout(() => setHintExpired(true), HINT_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [ready]);
   const dotStart = dotWindowStart(index, posts.length);
 
   return (
@@ -161,7 +169,7 @@ export function ExploreDeck() {
         </View>
       ) : null}
 
-      {ready && swipes < HINT_SWIPES ? (
+      {ready && swipes < HINT_SWIPES && !hintExpired ? (
         <View testID="explore-hint" style={styles.hint} pointerEvents="none">
           <Icon name="arrow-up" size={18} color={darkColors.onDim} strokeWidth={2} />
           <Text style={styles.hintText}>{HINT_TEXT}</Text>
@@ -215,7 +223,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
-    bottom: 214,
+    bottom: 268,
     alignItems: "center",
     gap: 2,
   },

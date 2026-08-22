@@ -100,15 +100,7 @@ export default function ProfileTab() {
         <SectionTitle title="설정" />
         <ListGroup>
           {isAuthenticated ? (
-            <>
-              <ListRow icon="person" title="계정" chevron onPress={() => router.push("/account")} />
-              <ListRow
-                icon="sparkle"
-                title="취향 카드 고르기"
-                chevron
-                onPress={() => router.push("/taste")}
-              />
-            </>
+            <ListRow icon="person" title="계정" chevron onPress={() => router.push("/account")} />
           ) : null}
           <ListRow
             icon="settings"
