@@ -2,7 +2,7 @@ import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Icon } from "@/components/Icon";
-import { colors } from "@/constants/theme";
+import { colors, spacing } from "@/constants/theme";
 import type { RefinePatch, Suggestion } from "@/features/travel/api";
 
 interface Props {
@@ -49,6 +49,7 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 6,
     alignItems: "center",
+    paddingHorizontal: spacing.md,
   },
   on: {
     paddingVertical: 5,
