@@ -3,7 +3,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "r
 import { router, useScrollToTop } from "expo-router";
 import { AppBar } from "@/components/AppBar";
 import { Icon } from "@/components/Icon";
-import { ChannelChips } from "@/features/channels/components/ChannelChips";
+import { ChannelStories } from "@/features/channels/components/ChannelStories";
 import { AiSection } from "@/features/home/components/AiSection";
 import {
   CurationSection,
@@ -122,6 +122,10 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        <View style={styles.channels}>
+          <ChannelStories coords={coords} onOpen={(key) => router.push(`/channels?start=${key}`)} />
+        </View>
+
         {locationDenied && scope === "nearby" ? (
           <Pressable
             testID="home-location-cta"
@@ -171,10 +175,6 @@ export default function HomeScreen() {
 
         <View style={styles.sectionGap} />
 
-        <View style={styles.channels}>
-          <ChannelChips coords={coords} onOpen={(key) => router.push(`/channels?start=${key}`)} />
-        </View>
-
         <AiSection
           displayName={displayName}
           data={recommendations.data}
@@ -202,14 +202,14 @@ function findCard(
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   content: { paddingTop: spacing.xs, paddingBottom: spacing.xxl },
-  header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: 22 },
+  header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: 16 },
   headerCopy: { flex: 1, minWidth: 0 },
   kicker: { fontSize: 11.5, fontWeight: "700", color: colors.ter },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6 },
   title: { fontSize: 26, fontWeight: "800", letterSpacing: -0.9, color: colors.ink },
   gap: { height: spacing.xl },
   sectionGap: { height: SECTION_GAP },
-  channels: { paddingBottom: spacing.xs },
+  channels: { paddingBottom: SECTION_GAP },
   expand: {
     marginHorizontal: spacing.lg,
     marginTop: spacing.md,

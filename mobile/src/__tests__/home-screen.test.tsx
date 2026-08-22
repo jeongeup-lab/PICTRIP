@@ -28,13 +28,13 @@ jest.mock("@/features/home/queries", () => ({
   useRegionLabel: jest.fn(),
   useRecommendations: jest.fn(),
 }));
-jest.mock("@/features/channels/components/ChannelChips", () => {
+jest.mock("@/features/channels/components/ChannelStories", () => {
   const React = require("react");
   const { Pressable } = require("react-native");
   return {
-    ChannelChips: ({ onOpen }: { onOpen: (k: string) => void }) =>
+    ChannelStories: ({ onOpen }: { onOpen: (k: string) => void }) =>
       React.createElement(Pressable, {
-        testID: "channel-chips",
+        testID: "channel-stories",
         onPress: () => onOpen("hidden"),
       }),
   };
@@ -232,10 +232,10 @@ describe("HomeScreen", () => {
     expect(ranks(r).props.accessibilityHint.split(",")).toHaveLength(RANK_LIMIT);
   });
 
-  it("keeps the channel viewer reachable from the chip rail", async () => {
+  it("keeps the channel viewer reachable from the story rail", async () => {
     const r = await mount();
     await act(async () => {
-      r.root.findByProps({ testID: "channel-chips" }).props.onPress();
+      r.root.findByProps({ testID: "channel-stories" }).props.onPress();
     });
     expect(router.push).toHaveBeenCalledWith("/channels?start=hidden");
   });
