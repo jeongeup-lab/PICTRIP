@@ -191,9 +191,11 @@ def call_from_intent(intent: QueryIntent) -> ToolCall:
     return ToolCall(name=tool, args=args)
 
 
-def opening_turns(question: str, context: AskContext | None) -> list[Turn]:
+def opening_turns(question: str, context: AskContext | None, note: str | None = None) -> list[Turn]:
     """직전 결과를 contentId 와 함께 준다 — 그래야 "그 근처" 가 도구 인자가 된다."""
     lines: list[str] = []
+    if note:
+        lines.append(note)
     if context is not None:
         if context.intent is not None:
             lines.append(f"직전 조건: {context.intent.model_dump_json(exclude_defaults=True)}")
@@ -216,12 +218,13 @@ async def route(
     context: AskContext | None = None,
     emitter: Emitter | None = None,
     opening: ToolCall | None = None,
+    note: str | None = None,
 ) -> Trace:
     """모델이 도구를 고르고, 코드가 상한을 건다."""
     trace = Trace(emitter=emitter)
     started = monotonic()
     deadline = started + TOTAL_BUDGET_SECONDS
-    turns: list[Turn] = opening_turns(question, context)
+    turns: list[Turn] = opening_turns(question, context, note)
     fired: set[str] = set()
     if opening is not None:
         turns.append(Turn(role="call", calls=[opening]))

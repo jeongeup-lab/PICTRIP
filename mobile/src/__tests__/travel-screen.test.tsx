@@ -9,7 +9,12 @@ import {
   type TravelSpot,
 } from "@/features/travel/api";
 import { FAIL_TITLE } from "@/features/travel/components/AssistantTurn";
-import { ASK_PLACEHOLDER, STREAMING_PLACEHOLDER } from "@/features/travel/components/ChatComposer";
+import {
+  ASK_PLACEHOLDER,
+  ATTACH_NOTICE,
+  PHOTO_PLACEHOLDER,
+  STREAMING_PLACEHOLDER,
+} from "@/features/travel/components/ChatComposer";
 import { SpotCarousel } from "@/features/travel/components/SpotCarousel";
 import { PHOTO_ONLY_QUESTION } from "@/features/travel/lib/question";
 import { useChat } from "@/features/travel/stores/chat-store";
@@ -354,6 +359,23 @@ describe("TravelScreen 사진 첨부", () => {
     expect(streams[0].input.photo).toEqual(PHOTO);
     expect(useChat.getState().turns[0].question).toBe(PHOTO_ONLY_QUESTION);
     expect(useChat.getState().turns[0].photoUri).toBe(PHOTO.uri);
+  });
+
+  it("사진을 붙이면 입력창이 질문을 유도하고 저장 안 함을 알린다", async () => {
+    pickTravelPhoto.mockResolvedValueOnce(PHOTO);
+    chooseAttach(1);
+    const tree = await mount();
+
+    expect(input(tree).props.placeholder).toBe(ASK_PLACEHOLDER);
+
+    await press(tree, "travel-attach");
+
+    expect(input(tree).props.placeholder).toBe(PHOTO_PLACEHOLDER);
+    expect(rendered(tree)).toContain(ATTACH_NOTICE);
+
+    await press(tree, "travel-attach-clear");
+
+    expect(input(tree).props.placeholder).toBe(ASK_PLACEHOLDER);
   });
 
   it("텍스트와 사진을 함께 보내면 둘 다 나간다", async () => {

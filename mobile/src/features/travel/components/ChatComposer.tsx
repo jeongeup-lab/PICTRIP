@@ -8,9 +8,9 @@ import type { PhotoUpload } from "@/features/travel/api";
 import { colors, radii, spacing } from "@/constants/theme";
 
 export const ASK_PLACEHOLDER = "PICTRIP에게 물어보세요";
+export const PHOTO_PLACEHOLDER = "사진과 함께 물어보세요";
 export const STREAMING_PLACEHOLDER = "답변을 만드는 중…";
-export const ATTACH_HEADLINE = "이 사진 같은 분위기로 찾아요";
-export const ATTACH_NOTICE = "사진은 저장하지 않아요";
+export const ATTACH_NOTICE = "사진은 저장하지 않아요 · 지역을 함께 쓰면 그 안에서 찾아요";
 export const ATTACH_SHOOT_LABEL = "촬영";
 export const ATTACH_PICK_LABEL = "앨범에서 선택";
 export const ATTACH_CANCEL_LABEL = "취소";
@@ -70,31 +70,35 @@ export function ChatComposer({ streaming, onSend, onNotice }: Props) {
   return (
     <View style={styles.root} pointerEvents="box-none">
       {photo ? (
-        <View style={styles.attach} testID="travel-attach-banner">
-          <Image source={{ uri: photo.uri }} style={styles.attachThumb} contentFit="cover" />
-          <View style={styles.attachCopy}>
-            <Text style={styles.attachTitle}>{ATTACH_HEADLINE}</Text>
-            <Text style={styles.attachNote}>{ATTACH_NOTICE}</Text>
-          </View>
-          <Pressable
-            testID="travel-attach-clear"
-            accessibilityRole="button"
-            accessibilityLabel="첨부 사진 제거"
-            hitSlop={8}
-            onPress={() => setPhoto(null)}
-          >
-            <Icon name="close" size={16} color={colors.ter} strokeWidth={2} />
-          </Pressable>
-        </View>
+        <Text testID="travel-attach-banner" style={styles.notice}>
+          {ATTACH_NOTICE}
+        </Text>
       ) : null}
 
       <View style={styles.field}>
+        {photo ? (
+          <View style={styles.attached}>
+            <Image source={{ uri: photo.uri }} style={styles.attachedThumb} contentFit="cover" />
+            <Pressable
+              testID="travel-attach-clear"
+              accessibilityRole="button"
+              accessibilityLabel="첨부 사진 제거"
+              hitSlop={10}
+              style={styles.attachedClear}
+              onPress={() => setPhoto(null)}
+            >
+              <Icon name="close" size={9} color={colors.bg} strokeWidth={3.2} />
+            </Pressable>
+          </View>
+        ) : null}
         <TextInput
           testID="travel-input"
           style={styles.input}
           value={draft}
           onChangeText={setDraft}
-          placeholder={streaming ? STREAMING_PLACEHOLDER : ASK_PLACEHOLDER}
+          placeholder={
+            streaming ? STREAMING_PLACEHOLDER : photo ? PHOTO_PLACEHOLDER : ASK_PLACEHOLDER
+          }
           placeholderTextColor={colors.ter}
           returnKeyType="send"
           submitBehavior="blurAndSubmit"
@@ -136,28 +140,33 @@ export function ChatComposer({ streaming, onSend, onNotice }: Props) {
 
 const styles = StyleSheet.create({
   root: { paddingHorizontal: spacing.md, paddingBottom: 12 },
-  attach: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 9,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: "rgba(255,59,83,0.32)",
-    backgroundColor: colors.accentFill,
+  notice: {
+    marginBottom: 8,
+    marginLeft: 4,
+    fontSize: 11.5,
+    lineHeight: 16,
+    letterSpacing: -0.1,
+    color: colors.ter,
   },
-  attachThumb: { width: 46, height: 46, borderRadius: 11 },
-  attachCopy: { flex: 1 },
-  attachTitle: { fontSize: 13.5, fontWeight: "700", letterSpacing: -0.2, color: colors.ink },
-  attachNote: { marginTop: 3, fontSize: 11.5, color: colors.sec },
+  attached: { width: 30, height: 30, marginBottom: 2 },
+  attachedThumb: { width: 30, height: 30, borderRadius: 8 },
+  attachedClear: {
+    position: "absolute",
+    top: -5,
+    right: -5,
+    width: 15,
+    height: 15,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.ink,
+  },
   field: {
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 9,
     minHeight: 46,
-    paddingLeft: 15,
+    paddingLeft: 13,
     paddingRight: 6,
     paddingVertical: 6,
     borderRadius: 23,

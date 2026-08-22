@@ -6,7 +6,7 @@ import pytest
 from PIL import Image
 from starlette.requests import Request
 
-from app.modules.agent import routes, search
+from app.modules.agent import routes, search, toolloop
 from app.modules.agent.schemas import QueryIntent, RefinePatch
 
 PHOTO = b"\xff\xd8\xff\xe0"
@@ -92,3 +92,19 @@ async def test_a_format_we_do_not_accept_gets_no_mime() -> None:
 
     assert image_bytes is not None
     assert image_mime is None
+
+
+def test_a_photo_with_words_tells_the_model_the_photo_is_there() -> None:
+    """사진만 온 턴은 코드가 도구를 정하지만, 말을 얹으면 지역이 인자로 가야 한다."""
+    assert search.photo_note("제주에서 이런 곳", PHOTO) == search.PHOTO_NOTE
+    assert search.photo_note(None, PHOTO) is None
+    assert search.photo_note("   ", PHOTO) is None
+    assert search.photo_note("제주에서 이런 곳", None) is None
+
+
+def test_the_note_rides_in_the_opening_turn() -> None:
+    turns = toolloop.opening_turns("제주에서 이런 곳", None, search.PHOTO_NOTE)
+
+    assert len(turns) == 1
+    assert search.PHOTO_NOTE in turns[0].text
+    assert "제주에서 이런 곳" in turns[0].text

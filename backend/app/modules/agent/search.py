@@ -61,9 +61,23 @@ async def run(
         context=context,
         emitter=emitter,
         opening=_opening(anchor, image_bytes, intent, patch),
+        note=photo_note(question, image_bytes),
     )
     logger.info("agent.search.routed", calls=trace.calls, stopped=trace.stopped)
     return toolloop.respond(trace, lat=lat, lng=lng)
+
+
+PHOTO_NOTE = (
+    "질문에 사진이 첨부돼 있다. 사진과 닮은 곳은 uploaded_photo 로 찾는다 — "
+    "질문에 지역이 있으면 regions 를 채워 부른다."
+)
+
+
+def photo_note(question: str | None, image_bytes: bytes | None) -> str | None:
+    """사진만 온 턴은 코드가 이미 도구를 정한다 — 말을 얹은 턴에서만 모델이 지역을 실어야 한다."""
+    if not image_bytes or not (question or "").strip():
+        return None
+    return PHOTO_NOTE
 
 
 def _implied_question(
