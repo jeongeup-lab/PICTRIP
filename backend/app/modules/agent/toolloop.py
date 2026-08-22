@@ -17,6 +17,7 @@ from typing import Any, get_args
 from app.core.logging import get_logger
 from app.modules.agent import llm
 from app.modules.agent.emitter import Emitter, StepSignal
+from app.modules.agent.errors import AgentIntentUnavailable
 from app.modules.agent.repositories import CandidateRow
 from app.modules.agent.routing import ToolCall, Turn
 from app.modules.agent.schemas import (
@@ -237,7 +238,12 @@ async def route(
             trace.stopped = "budget"
             break
 
-        decision = await client.decide(system=SYSTEM, turns=turns, tools=declared)
+        try:
+            decision = await client.decide(system=SYSTEM, turns=turns, tools=declared)
+        except AgentIntentUnavailable:
+            logger.warning("agent.router.llm_down", calls=trace.calls, rounds=trace.rounds)
+            trace.stopped = "llm_down"
+            break
         if decision.done:
             break
 
@@ -293,7 +299,7 @@ def intent_of(calls: list[ToolCall]) -> QueryIntent:
     """
     searched = [call for call in calls if call.name in _SEARCHES]
     if not searched:
-        return QueryIntent()
+        return QueryIntent(regionHints=_last_regions(calls))
     last = searched[-1]
     args = last.args
     return QueryIntent(
@@ -323,6 +329,15 @@ def _axes(trace: Trace, intent: QueryIntent) -> frozenset[DropAxis]:
     if trace.calls_made and trace.calls_made[-1].name == "from_saved":
         return _NO_AXES
     return _PLAN_AXES if intent.days is not None else suggest_service.ALL_AXES
+
+
+def _last_regions(calls: list[ToolCall]) -> list[str]:
+    """지역 도구만 돈 턴도 어디를 봤는지는 남는다 — 없으면 답이 '조건에 맞는 곳' 이 된다."""
+    for call in reversed(calls):
+        regions = _texts(call.args, "regions")
+        if regions:
+            return regions
+    return []
 
 
 def _fact_segments(trace: Trace) -> list[AnswerSegment]:

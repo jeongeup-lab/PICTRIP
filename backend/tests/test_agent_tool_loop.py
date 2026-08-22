@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from app.modules.agent import toolloop as loop
+from app.modules.agent.errors import AgentIntentUnavailable
 from app.modules.agent.routing import Decision, ToolCall
 from app.modules.agent.tools import ToolContext
 
@@ -240,3 +241,55 @@ async def test_a_stopping_tool_ends_the_turn_before_the_next_call_in_the_round(
     assert trace.halt is True
     assert trace.stopped == "halted"
     assert trace.rows == []
+
+
+async def test_a_dead_router_llm_still_answers(
+    ctx: ToolContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """라우터가 죽었다고 턴을 에러로 끝내면 '요청을 처리하지 못했어요' 가 뜬다."""
+
+    class Dead:
+        async def decide(self, **_kwargs: Any) -> Decision:
+            raise AgentIntentUnavailable
+
+    monkeypatch.setattr(loop.llm, "get_routing_client", lambda: Dead())
+
+    trace = await loop.route(ctx, "가" * 480)
+
+    assert trace.stopped == "llm_down"
+    assert trace.rows == []
+    response = loop.respond(trace, lat=None, lng=None)
+    assert "어디로 갈지" in "".join(segment.text for segment in response.answer)
+
+
+async def test_a_router_that_dies_midway_keeps_what_it_found(
+    ctx: ToolContext, monkeypatch: pytest.MonkeyPatch, db_session
+) -> None:
+    """이미 찾은 결과를 버리면 도구를 부른 의미가 없다."""
+    from sqlalchemy import text as sql
+
+    await db_session.execute(
+        sql(
+            "INSERT INTO spots (content_id, content_type_id, title, addr1, first_image_url, "
+            "show_flag, lcls_systm1, mapx, mapy) "
+            "VALUES ('ld-1', 12, '한곳', '서울특별시 중구 1', 'http://k/i.jpg', 1, 'NA', 127.0, 37.0)"
+        )
+    )
+    await db_session.flush()
+
+    class DiesLater:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def decide(self, **_kwargs: Any) -> Decision:
+            self.calls += 1
+            if self.calls == 1:
+                return Decision(calls=[_call(regions=["서울"])])
+            raise AgentIntentUnavailable
+
+    monkeypatch.setattr(loop.llm, "get_routing_client", lambda: DiesLater())
+
+    trace = await loop.route(ctx, "서울 볼만한 곳")
+
+    assert trace.stopped == "llm_down"
+    assert [row.content_id for row in trace.rows] == ["ld-1"]
