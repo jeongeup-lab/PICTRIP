@@ -98,11 +98,11 @@ async def admin_overseas(request: Request) -> Response:
     return _page("overseas.html")
 
 
-@router.get("/agent")
-async def admin_agent(request: Request) -> Response:
+@router.get("/console")
+async def admin_console(request: Request) -> Response:
     if not _logged_in(request):
         return RedirectResponse("/admin/login", status_code=303)
-    return _page("agent.html")
+    return _page("console.html")
 
 
 @router.get("/api/agent/router")

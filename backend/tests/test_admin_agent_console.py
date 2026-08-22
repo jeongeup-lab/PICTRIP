@@ -30,7 +30,7 @@ async def _login(client: AsyncClient) -> None:
 
 async def test_console_is_behind_the_admin_session(client: AsyncClient) -> None:
     """콘솔은 토큰을 발급하므로 로그인 밖에 두면 누구나 남의 계정이 된다."""
-    resp = await client.get("/admin/agent")
+    resp = await client.get("/admin/console")
 
     assert resp.status_code == 303
     assert resp.headers["location"] == "/admin/login"
@@ -39,7 +39,7 @@ async def test_console_is_behind_the_admin_session(client: AsyncClient) -> None:
 async def test_console_page_loads_after_login(client: AsyncClient) -> None:
     await _login(client)
 
-    resp = await client.get("/admin/agent")
+    resp = await client.get("/admin/console")
 
     assert resp.status_code == 200
     assert "에이전트 콘솔" in resp.text
