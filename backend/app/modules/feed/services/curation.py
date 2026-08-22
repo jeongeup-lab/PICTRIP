@@ -37,8 +37,8 @@ _COURSE = (
 PROGRAMS = (
     Program(
         sigungu="정읍시",
-        title="정읍, 저수지 끼고 한 바퀴",
-        lead="물가에서 시작해 한우와 찻집으로 닫는 하루.",
+        title="정읍을 소개합니다",
+        lead="제가 직접 골랐어요.",
         slots=_COURSE,
     ),
 )
@@ -46,7 +46,3 @@ PROGRAMS = (
 
 def program_for(today: date) -> Program:
     return PROGRAMS[today.isocalendar().week % len(PROGRAMS)]
-
-
-def subtitle(program: Program, found: int) -> str:
-    return f"{program.sigungu} {found}곳. {program.lead}"

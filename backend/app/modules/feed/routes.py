@@ -168,7 +168,7 @@ async def home_curation(session: DbSession, redis: RedisDep) -> dict[str, Any]:
         CurationResponse(
             kicker=curation.KICKER,
             title=curated.program.title,
-            subtitle=curation.subtitle(curated.program, len(curated.cards)),
+            subtitle=curated.program.lead,
             items=[_home_card(r) for r in curated.cards],
         )
     )
