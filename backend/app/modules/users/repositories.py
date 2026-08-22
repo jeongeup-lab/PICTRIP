@@ -153,3 +153,40 @@ async def upsert_consent(
 
 async def get_consent(session: AsyncSession, user_id: int) -> UserConsent | None:
     return await session.get(UserConsent, user_id)
+
+
+async def upsert_ai_transfer_consent(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    granted: bool,
+    version: str,
+) -> Any:
+    """위치·약관 동의를 건드리지 않는다 — 그쪽은 포커스마다 전체 PUT 으로 덮어써진다."""
+    decided_at = func.now() if granted else None
+    stmt = (
+        pg_insert(UserConsent)
+        .values(
+            user_id=user_id,
+            ai_transfer_consent=granted,
+            ai_transfer_version=version if granted else None,
+            ai_transfer_consented_at=decided_at,
+        )
+        .on_conflict_do_update(
+            index_elements=[UserConsent.user_id],
+            set_={
+                "ai_transfer_consent": granted,
+                "ai_transfer_version": version if granted else None,
+                "ai_transfer_consented_at": decided_at,
+            },
+        )
+        .returning(
+            UserConsent.location_consent,
+            UserConsent.terms_version,
+            UserConsent.consented_at,
+            UserConsent.ai_transfer_consent,
+            UserConsent.ai_transfer_version,
+            UserConsent.ai_transfer_consented_at,
+        )
+    )
+    return (await session.execute(stmt)).one()

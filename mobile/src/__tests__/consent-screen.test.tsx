@@ -20,13 +20,17 @@ jest.mock("expo-location", () => ({
   getForegroundPermissionsAsync: jest.fn(async () => ({ granted: true })),
 }));
 jest.mock("@/lib/storage", () => ({
-  getAiOptOut: jest.fn(async () => false),
-  setAiOptOut: jest.fn(async () => {}),
+  getAiTransferConsent: jest.fn(async () => false),
+  setAiTransferConsent: jest.fn(async () => {}),
 }));
+jest.mock("@/features/consent/api", () => ({ putAiTransferConsent: jest.fn(async () => ({})) }));
 
 const storageMock = jest.requireMock("@/lib/storage") as {
-  getAiOptOut: jest.Mock;
-  setAiOptOut: jest.Mock;
+  getAiTransferConsent: jest.Mock;
+  setAiTransferConsent: jest.Mock;
+};
+const apiMock = jest.requireMock("@/features/consent/api") as {
+  putAiTransferConsent: jest.Mock;
 };
 
 const useConsentsMock = jest.requireMock<{ useConsents: jest.Mock }>(
@@ -45,13 +49,16 @@ const USER: User = {
 let holder: renderer.ReactTestRenderer | null = null;
 
 beforeEach(() => {
-  storageMock.getAiOptOut.mockResolvedValue(false);
+  storageMock.getAiTransferConsent.mockResolvedValue(false);
   useAuthStore.setState({ user: USER, isAuthenticated: true, accessToken: "token" });
   useConsentsMock.mockReturnValue({
     data: {
       locationConsent: true,
       termsVersion: "2026-06-22",
       consentedAt: "2026-03-14T09:00:00Z",
+      aiTransferConsent: false,
+      aiTransferVersion: null,
+      aiTransferConsentedAt: null,
     },
     isLoading: false,
     isError: false,
@@ -102,7 +109,14 @@ describe("ConsentScreen", () => {
 
   it("shows an unavailable status without exposing version or date copy", async () => {
     useConsentsMock.mockReturnValue({
-      data: { locationConsent: false, termsVersion: null, consentedAt: null },
+      data: {
+        locationConsent: false,
+        termsVersion: null,
+        consentedAt: null,
+        aiTransferConsent: false,
+        aiTransferVersion: null,
+        aiTransferConsentedAt: null,
+      },
       isLoading: false,
       isError: false,
       refetch: jest.fn(),
@@ -152,11 +166,12 @@ describe("ConsentScreen", () => {
     holder = tree.tree;
 
     const row = tree.tree.root.findByProps({ testID: "consent-ai" });
-    expect(row.findAllByType(Text).map((node) => node.props.children)).toContain("사용 중");
-    expect(tree.tree.root.findByProps({ testID: "consent-ai-switch" }).props.value).toBe(true);
+    expect(row.findAllByType(Text).map((node) => node.props.children)).toContain("동의 안 함");
+    expect(tree.tree.root.findByProps({ testID: "consent-ai-switch" }).props.value).toBe(false);
   });
 
-  it("stores the opt-out when the switch is turned off", async () => {
+  it("sends the withdrawal to the server when the switch is turned off", async () => {
+    storageMock.getAiTransferConsent.mockResolvedValue(true);
     const tree: { tree: renderer.ReactTestRenderer | null } = { tree: null };
     await act(async () => {
       tree.tree = renderer.create(<ConsentScreen />);
@@ -169,12 +184,16 @@ describe("ConsentScreen", () => {
       toggle.props.onValueChange(false);
     });
 
-    expect(storageMock.setAiOptOut).toHaveBeenCalledWith(true);
+    expect(storageMock.setAiTransferConsent).toHaveBeenCalledWith(false);
+    expect(apiMock.putAiTransferConsent).toHaveBeenCalledWith({
+      granted: false,
+      version: "2026-08-22",
+    });
     expect(
       tree.tree.root
         .findByProps({ testID: "consent-ai" })
         .findAllByType(Text)
         .map((node) => node.props.children),
-    ).toContain("끔");
+    ).toContain("동의 안 함");
   });
 });

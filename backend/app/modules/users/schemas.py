@@ -50,11 +50,18 @@ class ConsentIn(BaseModel):
     termsVersion: str
 
 
+class AiTransferConsentIn(BaseModel):
+    """국외 이전 동의는 시점과 고지 버전이 함께 남아야 증빙이 된다."""
+
+    granted: bool
+    version: str = Field(min_length=1, max_length=16)
+
+
 class ConsentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     locationConsent: bool
-    termsVersion: str
+    termsVersion: str | None
     consentedAt: datetime
 
 
@@ -62,3 +69,6 @@ class ConsentState(BaseModel):
     locationConsent: bool = False
     termsVersion: str | None = None
     consentedAt: datetime | None = None
+    aiTransferConsent: bool = False
+    aiTransferVersion: str | None = None
+    aiTransferConsentedAt: datetime | None = None

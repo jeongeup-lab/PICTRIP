@@ -4,7 +4,7 @@ import { File, Paths } from "expo-file-system";
 const REFRESH_KEY = "refresh_token";
 const ONBOARDING_KEY = "onboarding_seen";
 const SEEN_CHANNELS_KEY = "seen_channels";
-const AI_OPT_OUT_KEY = "ai_opt_out";
+const AI_TRANSFER_CONSENT_KEY = "ai_transfer_consent";
 const INSTALL_MARKER = "install.marker";
 
 const refreshOptions = {
@@ -31,13 +31,13 @@ export async function setOnboardingSeen(): Promise<void> {
   await SecureStore.setItemAsync(ONBOARDING_KEY, "1");
 }
 
-export async function getAiOptOut(): Promise<boolean> {
-  return (await SecureStore.getItemAsync(AI_OPT_OUT_KEY)) === "1";
+export async function getAiTransferConsent(): Promise<boolean> {
+  return (await SecureStore.getItemAsync(AI_TRANSFER_CONSENT_KEY)) === "1";
 }
 
-export async function setAiOptOut(optedOut: boolean): Promise<void> {
-  if (optedOut) await SecureStore.setItemAsync(AI_OPT_OUT_KEY, "1");
-  else await SecureStore.deleteItemAsync(AI_OPT_OUT_KEY);
+export async function setAiTransferConsent(granted: boolean): Promise<void> {
+  if (granted) await SecureStore.setItemAsync(AI_TRANSFER_CONSENT_KEY, "1");
+  else await SecureStore.deleteItemAsync(AI_TRANSFER_CONSENT_KEY);
 }
 
 export async function getSeenChannelsRaw(): Promise<string | null> {
