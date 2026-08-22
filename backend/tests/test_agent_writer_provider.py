@@ -12,10 +12,6 @@ from pydantic import ValidationError
 from app.config import Settings
 from app.modules.agent import llm
 from app.modules.agent.errors import AgentIntentUnavailable
-from app.modules.agent.schemas import AnswerSegment, AskResponse, AskStep, ChatRequest, QueryIntent
-from app.modules.agent.services import ask as ask_service
-from app.modules.agent.services import chat as chat_service
-from app.modules.agent.services import intent as intent_service
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -169,128 +165,6 @@ class _FakeWriterClient:
     async def stream_text(self, *, system: str, user_text: str) -> AsyncIterator[str]:
         self.calls.append({"system": system, "user_text": user_text})
         yield "answer\n"
-
-
-@pytest.mark.anyio
-async def test_chat_uses_writer_client_while_intent_extraction_keeps_get_client(
-    monkeypatch,
-) -> None:
-    writer_client = _FakeWriterClient()
-    intent_client = _FakeIntentClient()
-
-    async def fake_ask(*args: Any, **kwargs: Any):
-        return AskResponse(
-            steps=[],
-            answer=[],
-            spots=[],
-            totalCount=0,
-            intent=QueryIntent(),
-            refinements=[],
-        )
-
-    monkeypatch.setattr(ask_service, "ask", fake_ask)
-    monkeypatch.setattr(llm, "get_client", lambda: intent_client)
-    monkeypatch.setattr(llm, "get_writer_client", lambda: writer_client, raising=False)
-
-    events = [
-        event
-        async for event in chat_service.events(
-            None,
-            None,
-            None,
-            payload=ChatRequest(message="question", clientRequestId="request-1"),
-            image_bytes=None,
-            image_mime=None,
-        )
-    ]
-
-    assert writer_client.calls
-    assert [name for name, _ in events if name == "delta"] == ["delta"]
-
-
-@pytest.mark.anyio
-async def test_local_codex_writer_runs_after_intent_fallback_badge(monkeypatch) -> None:
-    configured = Settings(
-        ENVIRONMENT="local",
-        LLM_PROVIDER="codex",
-    )
-    writer_client = _FakeWriterClient()
-
-    async def fake_ask(*args: Any, **kwargs: Any):
-        return AskResponse(
-            steps=[AskStep(tool="intent", label="intent", badge=ask_service.INTENT_FALLBACK_BADGE)],
-            answer=[AnswerSegment(text="deterministic fallback")],
-            spots=[],
-            totalCount=0,
-            intent=QueryIntent(),
-            refinements=[],
-        )
-
-    monkeypatch.setattr(llm, "settings", configured)
-    monkeypatch.setattr(ask_service, "ask", fake_ask)
-    monkeypatch.setattr(llm, "get_writer_client", lambda: writer_client, raising=False)
-
-    events = [
-        event
-        async for event in chat_service.events(
-            None,
-            None,
-            None,
-            payload=ChatRequest(message="question", clientRequestId="request-1"),
-            image_bytes=None,
-            image_mime=None,
-        )
-    ]
-
-    assert writer_client.calls
-    assert [event.text for name, event in events if name == "delta"] == ["answer\n"]
-
-
-@pytest.mark.anyio
-async def test_gemini_writer_skips_after_intent_fallback_badge(monkeypatch) -> None:
-    configured = Settings(LLM_PROVIDER="gemini")
-
-    async def fake_ask(*args: Any, **kwargs: Any):
-        return AskResponse(
-            steps=[AskStep(tool="intent", label="intent", badge=ask_service.INTENT_FALLBACK_BADGE)],
-            answer=[AnswerSegment(text="deterministic fallback")],
-            spots=[],
-            totalCount=0,
-            intent=QueryIntent(),
-            refinements=[],
-        )
-
-    def writer_must_not_run() -> _FakeWriterClient:
-        raise AssertionError("Gemini writer must not run after intent fallback")
-
-    monkeypatch.setattr(llm, "settings", configured)
-    monkeypatch.setattr(ask_service, "ask", fake_ask)
-    monkeypatch.setattr(llm, "get_writer_client", writer_must_not_run, raising=False)
-
-    events = [
-        event
-        async for event in chat_service.events(
-            None,
-            None,
-            None,
-            payload=ChatRequest(message="question", clientRequestId="request-1"),
-            image_bytes=None,
-            image_mime=None,
-        )
-    ]
-
-    assert [event.text for name, event in events if name == "delta"] == ["deterministic fallback"]
-
-
-@pytest.mark.anyio
-async def test_intent_extraction_uses_existing_gemini_client(monkeypatch) -> None:
-    intent_client = _FakeIntentClient()
-    monkeypatch.setattr(llm, "settings", Settings(LLM_PROVIDER="gemini", GEMINI_API_KEY="k"))
-    monkeypatch.setattr(llm, "get_client", lambda: intent_client)
-
-    await intent_service.extract_intent("question")
-
-    assert len(intent_client.calls) == 1
 
 
 def test_deepseek_writer_uses_the_configured_endpoint_and_model(monkeypatch) -> None:

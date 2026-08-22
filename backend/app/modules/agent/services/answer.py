@@ -68,6 +68,10 @@ def _token_hits(token: str, address: list[str]) -> bool:
     return any(part.startswith(form) for part in address for form in forms)
 
 
+BLANK_ANSWER = "어디로 갈지 한 줄만 알려주세요. 지역 · 분위기 · 사진 아무거나 좋아요."
+NO_AXIS_ANSWER = "어느 지역으로 찾아볼까요? 지역이나 분위기를 알려주시면 바로 찾아드릴게요."
+INTENT_FALLBACK_BADGE = "사전 매칭"
+
 PLACES_BASIS = "블로그 언급 기준"
 RELATED_BASIS = "분위기 유사도 기준"
 PHOTO_BASIS = "사진 유사도 기준"

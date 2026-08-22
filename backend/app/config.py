@@ -89,7 +89,6 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-flash-latest"
     GEMINI_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta"
     LLM_PROVIDER: Literal["gemini", "codex", "deepseek"] = "deepseek"
-    AGENT_ROUTER: Literal["branches", "tools"] = "branches"
     CODEX_BASE_URL: Literal["http://127.0.0.1:18787/v1"] = "http://127.0.0.1:18787/v1"
     CODEX_MODEL: Literal["gpt-5.4-mini"] = "gpt-5.4-mini"
     DEEPSEEK_API_KEY: str = ""
