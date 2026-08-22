@@ -8,8 +8,9 @@ export const AI_TRANSFER_VERSION = "2026-08-22";
 export const AI_TRANSFER = {
   version: AI_TRANSFER_VERSION,
 
-  sheetTitle: "질문이 국외로 전송돼요",
-  sheetBody: "여행 질문을 이해하려면 질문 문장을 국외 AI 사업자에게 보내야 해요.",
+  sheetTitle: "이 항목에 아직 동의하지 않으셨어요",
+  sheetBody: "시작할 때 넘기신 항목이에요. 지금 동의하면 바로 물어볼 수 있어요.",
+  rowLabel: "AI 질문 처리 (개인정보 국외 이전)",
 
   items: [
     {
